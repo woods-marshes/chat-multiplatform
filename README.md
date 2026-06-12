@@ -12,8 +12,8 @@
 │  features/*  (auth, chat, contacts, conversations,   │
 │               profile, search, settings)             │
 ├──────────────┬───────────────────────────────────────┤
-│  core/*       │  server (Ktor + Netty)               │
-│  UI / Data   │  REST API + WebSocket + JWT          │
+│  core/*      │  server (Ktor + Netty)                │
+│  UI / Data   │  REST API + WebSocket + JWT           │
 │  Network     │  Exposed ORM + PostgreSQL / H2        │
 │  Database    │                                       │
 └──────────────┴───────────────────────────────────────┘
@@ -42,7 +42,7 @@
 ## 功能特性
 
 - **用户认证** — 注册/登录，JWT Token 认证
-- **即时通讯** — 一对一 / 群聊，WebSocket 实时推送
+- **即时通讯** — 多人聊天，WebSocket 实时推送
 - **会话管理** — 会话列表、置顶、已读状态
 - **联系人** — 好友管理，在线状态
 - **搜索** — 消息/联系人搜索
