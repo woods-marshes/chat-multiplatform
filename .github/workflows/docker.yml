@@ -38,6 +38,5 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          no-cache: true  # 临时：首次跑通后删掉这行
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

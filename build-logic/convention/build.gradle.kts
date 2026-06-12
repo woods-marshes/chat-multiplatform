@@ -1,7 +1,5 @@
 plugins {
-    // Gradle 9.5.1's kotlin-dsl version mapping is broken on Plugin Portal.
-    // embedded-kotlin is a Gradle core plugin — never needs external download.
-    `embedded-kotlin`
+    `kotlin-dsl`
 }
 
 group = "com.github.woodsmarshes.chat.buildlogic"
