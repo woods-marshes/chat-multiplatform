@@ -42,3 +42,6 @@ jobs:
 
       - name: Run server tests
         run: gradle :server:test --no-daemon
+        env:
+          JWT_SECRET: "test-secret-key"
+          KTOR_DEVELOPMENT: "true"
