@@ -135,9 +135,3 @@ dependencies {
     implementation(libs.kotlin.result)
     implementation(libs.kotlin.result.coroutines)
 }
-
-val wsTest by tasks.registering(JavaExec::class) {
-    description = "Run WebSocket messaging integration test"
-    classpath = sourceSets.test.get().runtimeClasspath
-    mainClass = "com.github.woodsmarshes.chat.WsMainKt"
-}
