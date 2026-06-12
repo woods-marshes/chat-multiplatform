@@ -42,7 +42,7 @@
 ## 功能特性
 
 - **用户认证** — 注册/登录，JWT Token 认证
-- **即时通讯** — 一对一聊天，WebSocket 实时推送
+- **即时通讯** — 一对一 / 群聊，WebSocket 实时推送
 - **会话管理** — 会话列表、置顶、已读状态
 - **联系人** — 好友管理，在线状态
 - **搜索** — 消息/联系人搜索
@@ -149,30 +149,32 @@ docker compose up -d
 
 查看日志：`docker compose logs -f server`
 
-### 自动构建（GitHub Actions + GHCR）
+### 自动构建（GitHub Actions + Docker Hub）
 
-项目可配置 GitHub Actions 在每次推送时自动构建镜像并推送到 GitHub Container Registry：
+推送代码后，GitHub Actions 自动编译、构建镜像并推送到 [Docker Hub](https://hub.docker.com/r/woodsmarshes/chat-server)：
 
-```yaml
-# .github/workflows/docker.yml
-name: Build and Push
-on:
-  push:
-    branches: [main]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build & push
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          tags: ghcr.io/woodsmarshes/chat-server:latest
+| Workflow | 触发条件 | 作用 |
+|---|---|---|
+| `ci.yml` | push / PR to `main` | 客户端编译检查 + 服务端测试 |
+| `docker.yml` | push to `main` / 打 `v*` tag | 构建 Docker 镜像，推送到 Docker Hub |
+
+用户在任意机器上只需：
+
+```bash
+wget https://raw.githubusercontent.com/woods-marshes/chat-multiplatform/main/compose.yml
+wget https://raw.githubusercontent.com/woods-marshes/chat-multiplatform/main/.env
+vim .env   # 修改密码和密钥
+docker compose up -d
 ```
 
-用户拉取预构建镜像即可部署，无需本地安装 JDK 或 Gradle。
+**首次部署需要配置 Docker Hub 密钥：**
 
+在 GitHub 仓库 `Settings → Secrets and variables → Actions` 中添加：
+
+| Secret | 说明 |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub 用户名 |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token（[创建地址](https://hub.docker.com/settings/security)） |
 
 ## 配置说明
 
