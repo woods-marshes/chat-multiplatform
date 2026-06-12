@@ -9,13 +9,8 @@ import com.github.woodsmarshes.chat.app.ChatApp
 import com.github.woodsmarshes.chat.app.di.initKoin
 import com.github.woodsmarshes.chat.core.common.di.DesktopContext
 import com.github.woodsmarshes.chat.core.common.di.PlatformContext
-import com.github.woodsmarshes.chat.core.database.di.createDatabase
-import com.github.woodsmarshes.chat.core.database.di.provideDbDriver
 import com.github.woodsmarshes.chat.resources.Res
-import com.github.woodsmarshes.chat.resources.allDrawableResources
 import com.github.woodsmarshes.chat.resources.app_icon
-import com.github.woodsmarshes.chat.resources.icon
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.painterResource
 import org.koin.dsl.module
 

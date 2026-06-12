@@ -40,9 +40,14 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-include(":server")
-include(":web")
+val excludeWeb = providers.gradleProperty("excludeWeb").orNull?.toBoolean() ?: false
+if (!excludeWeb) {
+    include(":web")
+} else {
+    println("⚠️ Skipping ':web' module due to 'excludeWeb' property")
+}
 
+include(":server")
 include(":composeApp")
 include(":androidApp")
 
