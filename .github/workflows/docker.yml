@@ -6,7 +6,7 @@ on:
     tags: ['v*']
 
 env:
-  IMAGE_NAME: woodsmarshes/chat-server
+  IMAGE_NAME: quuui/chat-server
 
 jobs:
   build-and-push:
