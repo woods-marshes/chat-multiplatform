@@ -32,9 +32,9 @@ COPY features/profile/build.gradle.kts /home/gradle/src/features/profile/
 COPY features/search/build.gradle.kts /home/gradle/src/features/search/
 COPY features/settings/build.gradle.kts /home/gradle/src/features/settings/
 
-# 预下载依赖（|| true 作为网络瞬时故障的兜底）
+# 预下载依赖
 WORKDIR /home/gradle/src
-RUN gradle :server:dependencies --no-daemon || true
+RUN gradle :server:dependencies --no-daemon
 
 # =============================================================
 # Stage 2: 构建 Fat JAR
