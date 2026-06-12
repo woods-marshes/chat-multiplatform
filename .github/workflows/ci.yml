@@ -20,6 +20,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Compile client
         run: ./gradlew :composeApp:jvmMainClasses --no-daemon
 
@@ -35,6 +38,9 @@ jobs:
           java-version: '25'
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Run server tests
         run: ./gradlew :server:test --no-daemon
