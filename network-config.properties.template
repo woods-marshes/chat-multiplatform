@@ -1,0 +1,12 @@
+# Network configuration
+# Copy this file to network-config.properties and adjust for your environment.
+# network-config.properties is gitignored — do NOT commit it.
+
+# Server hostname or IP address
+host=127.0.0.1
+
+# Server port
+port=9051
+
+# Use HTTPS (true/false)
+useTls=false

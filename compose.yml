@@ -1,0 +1,86 @@
+# ============================================================
+# Chat Multiplatform — Docker Compose 部署配置
+# ============================================================
+#
+# 启动（.env 已内置 demo 默认值，可直接运行）：
+#   docker compose up -d
+#
+# 生产部署前请编辑 .env 修改密码和密钥：
+#   vim .env
+#
+# 查看日志：
+#   docker compose logs -f server
+#
+# ============================================================
+
+services:
+  # ─────────────────────────────────────
+  # Ktor 服务端  (REST API + WebSocket)
+  # ─────────────────────────────────────
+  server:
+    # 从 GitHub Container Registry 拉取预构建镜像
+    image: ghcr.io/woodsmarshes/chat-server:latest
+    # 开发者本地构建：注释掉 image，取消下面两行注释
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: chat-server
+    ports:
+      - "9051:9051"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - KTOR_DEVELOPMENT=false
+      - DATABASE_TYPE=postgres
+      - POSTGRES_URL=jdbc:postgresql://db:5432/chat_db
+      - POSTGRES_USERNAME=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=chat-server
+      - JWT_AUDIENCE=API
+      - JWT_REALM=chat
+    volumes:
+      - uploads_data:/app/uploads
+    restart: unless-stopped
+    networks:
+      - chat-net
+
+  # ─────────────────────────────────────
+  # PostgreSQL 数据库
+  # ─────────────────────────────────────
+  db:
+    image: postgres:17-alpine
+    container_name: chat-db
+    restart: unless-stopped
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: chat_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # 仅开发调试时暴露端口，生产环境建议注释掉
+    # ports:
+    #   - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chat_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - chat-net
+
+# ─────────────────────────────────────
+# 持久化存储
+# ─────────────────────────────────────
+volumes:
+  pg_data:
+  uploads_data:
+
+# ─────────────────────────────────────
+# 内部网络
+# ─────────────────────────────────────
+networks:
+  chat-net:
+    driver: bridge

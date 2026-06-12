@@ -1,0 +1,113 @@
+import com.github.woodsmarshes.chat.core.model.ConversationRole;
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+CREATE TABLE ParticipantEntity (
+    conversation_id BLOB AS Uuid NOT NULL,
+    user_id BLOB AS Uuid NOT NULL,
+    role TEXT AS ConversationRole NOT NULL, -- OWNER, ADMIN, MEMBER
+    last_read_message_id BLOB AS Uuid,
+    joined_at INTEGER AS Instant NOT NULL,
+    muted_until INTEGER AS Instant,
+    settings TEXT AS ParticipantSettings NOT NULL, -- JSON 字符串
+    PRIMARY KEY (conversation_id, user_id),
+    FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES UserEntity(id) ON DELETE CASCADE
+);
+
+-- 添加成员（或更新现有成员信息）
+insertParticipant:
+INSERT OR REPLACE INTO ParticipantEntity(
+    conversation_id, user_id, role, last_read_message_id, joined_at, muted_until, settings
+) VALUES ?;
+
+upsertParticipant:
+INSERT INTO ParticipantEntity(
+    conversation_id,
+    user_id,
+    role,
+    last_read_message_id,
+    joined_at,
+    muted_until,
+    settings
+)
+VALUES ?
+ON CONFLICT(conversation_id, user_id) DO UPDATE SET
+    role                 = COALESCE(excluded.role, role),
+    last_read_message_id = COALESCE(excluded.last_read_message_id, last_read_message_id),
+    joined_at            = COALESCE(excluded.joined_at, joined_at),
+    muted_until          = COALESCE(excluded.muted_until, muted_until),
+    settings             = COALESCE(excluded.settings, settings);
+
+-- 获取某个会话的所有成员
+getParticipantsByConversationId:
+SELECT * FROM ParticipantEntity
+WHERE conversation_id = :conversationId
+ORDER BY joined_at ASC;
+
+-- 获取某个会话的所有成员及其详细用户信息
+getParticipantsWithUserInfo:
+SELECT
+    P.*,
+    U.username,
+    U.display_name,
+    U.avatar,
+    C.nickname
+FROM ParticipantEntity AS P
+INNER JOIN UserEntity AS U ON P.user_id = U.id
+LEFT JOIN ContactEntity AS C ON P.user_id = C.contact_id
+WHERE P.conversation_id = :conversationId;
+
+-- 获取某个特定成员在会话中的状态
+getParticipant:
+SELECT * FROM ParticipantEntity
+WHERE conversation_id = :conversationId AND user_id = :userId;
+
+-- 用途：例如批量获取多个单聊会话的对方用户信息，排除当前用户
+-- 参数：
+--   :conversationIds - 会话ID列表
+--   :excludeUserId   - 要排除的用户ID（如当前用户ID）
+getParticipantsExcludingUser:
+SELECT
+    P.conversation_id,
+    U.*
+FROM ParticipantEntity AS P
+INNER JOIN UserEntity AS U ON P.user_id = U.id
+WHERE P.conversation_id IN :conversationIds
+  AND P.user_id != :excludeUserId
+ORDER BY P.conversation_id, P.joined_at;
+
+-- 更新成员角色 (如提升为管理员)
+updateRole:
+UPDATE ParticipantEntity
+SET role = :role
+WHERE conversation_id = :conversationId AND user_id = :userId;
+
+-- 更新已读位置
+updateLastReadMessage:
+UPDATE ParticipantEntity
+SET last_read_message_id = :lastMessageId
+WHERE conversation_id = :conversationId AND user_id = :userId;
+
+-- 设置禁言状态
+updateMuteStatus:
+UPDATE ParticipantEntity
+SET muted_until = :mutedUntil
+WHERE conversation_id = :conversationId AND user_id = :userId;
+
+-- 更新成员偏好设置 (JSON)
+updateSettings:
+UPDATE ParticipantEntity
+SET settings = :settings
+WHERE conversation_id = :conversationId AND user_id = :userId;
+
+-- 移除成员 (退出群聊或被踢出)
+removeParticipant:
+DELETE FROM ParticipantEntity
+WHERE conversation_id = :conversationId AND user_id = :userId;
+
+-- 清空某个会话的所有成员
+removeAllParticipantsFromConversation:
+DELETE FROM ParticipantEntity
+WHERE conversation_id = :conversationId;

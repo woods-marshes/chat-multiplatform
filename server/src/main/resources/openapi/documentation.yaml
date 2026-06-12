@@ -1,0 +1,1877 @@
+openapi: "3.1.0"
+info:
+  title: "chat_multiplatform API"
+  description: "chat_multiplatform API"
+  version: "1.0.0"
+servers:
+  - url: "https://chat_multiplatform"
+paths:
+  /protected/route/basic:
+    get:
+      description: ""
+      responses:
+        "200":
+          description: "OK"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+  /protected/route/form:
+    get:
+      description: ""
+      responses:
+        "200":
+          description: "OK"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+  /session/increment:
+    get:
+      description: ""
+      responses:
+        "200":
+          description: "OK"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+  /articles:
+    get:
+      description: "Static plugin. Try to access `/static/index.html` <br> staticResources(\"\
+        /static\", \"static\")"
+      parameters:
+        - name: "sort"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "OK <br> Get all articles ..."
+          content:
+            '*/*':
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+  /double-receive:
+    post:
+      description: ""
+      responses:
+        "200":
+          description: "OK"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+  /v1/auth/login:
+    post:
+      description: ""
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /v1/auth/refresh:
+    post:
+      description: ""
+  /v1/auth/register:
+    post:
+      description: ""
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /v1/contacts:
+    get:
+      description: "获取好友列表"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Pair"
+    post:
+      description: "发起好友请求"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddContactRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+                Example#5:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/contacts/{id}:
+    delete:
+      description: "删除好友"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/contacts/{id}/block:
+    post:
+      description: "拉黑"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/contacts/{id}/unblock:
+    post:
+      description: "解除拉黑"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/contacts/{id}/update:
+    put:
+      description: "更新联系人昵称和备注"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContactRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/contacts/requests:
+    get:
+      description: "获取好友请求列表"
+      parameters:
+        - name: "type"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "ALL"
+              - "SENT"
+              - "RECEIVED"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/ContactRequest"
+  /v1/contacts/requests/{contactRequestId}:
+    post:
+      description: "处理好友请求"
+      parameters:
+        - name: "type"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "ALL"
+              - "SENT"
+              - "RECEIVED"
+        - name: "contactRequestId"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HandleContactRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+                Example#5:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations:
+    post:
+      description: "创建会话 (单聊或群聊)"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Conversation"
+  /v1/conversations/{id}:
+    delete:
+      description: "解散或删除会话"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+    get:
+      description: "获取会话详情"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ConversationResponse"
+  /v1/conversations/{id}/invite:
+    post:
+      description: "邀请单个用户到群组"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteUserRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+                Example#5:
+                  value: ""
+                Example#6:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/{id}/invite-users:
+    post:
+      description: "批量邀请用户到群组"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteUsersRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/{id}/join:
+    post:
+      description: "主动加入群组"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinGroupRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+                Example#5:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/{id}/leave:
+    post:
+      description: "退出群组"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/{id}/messages:
+    get:
+      description: "获取消息历史"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+        - name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+        - name: "beforeId"
+          in: "query"
+          required: false
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Unit"
+  /v1/conversations/{id}/messages/search:
+    get:
+      description: "搜索消息"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+        - name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+        - name: "beforeId"
+          in: "query"
+          required: false
+          schema:
+            type: "object"
+        - name: "keyword"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Message"
+  /v1/conversations/{id}/messages/sync:
+    get:
+      description: "增量同步消息"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+        - name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+        - name: "beforeId"
+          in: "query"
+          required: false
+          schema:
+            type: "object"
+        - name: "afterId"
+          in: "query"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Message"
+  /v1/conversations/{id}/participants:
+    get:
+      description: "获取成员列表"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Pair"
+  /v1/conversations/{id}/read:
+    post:
+      description: "上报已读"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadReportRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/{id}/settings/group:
+    put:
+      description: "更新群设置"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateConversationSettingsRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/{id}/settings/personal:
+    put:
+      description: "更新个人设置"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParticipantSettings"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/check:
+    get:
+      description: ""
+      parameters:
+        - name: "handle"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/requests:
+    get:
+      description: "获取该群的申请列表 (管理员视角)"
+      parameters:
+        - name: "parent"
+          in: "query"
+          required: true
+          schema:
+            $ref: "#/components/schemas/Id"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+        - name: "page"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+        - name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/GroupGroupJoinRequest"
+    post:
+      description: "处理群申请 (审批/拒绝)"
+      parameters:
+        - name: "parent"
+          in: "query"
+          required: true
+          schema:
+            $ref: "#/components/schemas/Id"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+        - name: "page"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+        - name: "limit"
+          in: "query"
+          required: false
+          schema:
+            type: "integer"
+            format: "int32"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "array"
+              items:
+                $ref: "#/components/schemas/HandleGroupRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+                Example#5:
+                  value: ""
+                Example#6:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/conversations/search:
+    get:
+      description: "搜索群组"
+      parameters:
+        - name: "keyword"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/GroupProfile"
+  /v1/users/{id}:
+    get:
+      description: "获取他人资料"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/User"
+  /v1/users/{id}/role:
+    put:
+      description: "修改用户角色 (管理员专用)"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          schema:
+            type: "object"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeRoleRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/users/check:
+    get:
+      description: "检查是否存在，不需要权限"
+      parameters:
+        - name: "email"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+        - name: "username"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Map_String"
+  /v1/users/me:
+    get:
+      description: "获取自己的资料"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      description: "修改自己的资料"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/User"
+  /v1/users/me/conversations:
+    get:
+      description: "获取我的会话列表"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/ConversationResponse"
+  /v1/users/me/group-requests:
+    get:
+      description: "获取群组申请"
+      parameters:
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/GroupGroupJoinRequest"
+  /v1/users/me/group-requests/incoming:
+    get:
+      description: "获取收到的群申请"
+      parameters:
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/GroupGroupJoinRequest"
+  /v1/users/me/group-requests/sent:
+    get:
+      description: "获取发出的群申请"
+      parameters:
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+        - name: "status"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum:
+              - "PENDING"
+              - "ACCEPTED"
+              - "REJECTED"
+              - "CANCELED"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/GroupGroupJoinRequest"
+  /v1/users/me/settings:
+    get:
+      description: ""
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserSetting"
+    put:
+      description: ""
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserSettingsRequest"
+        required: true
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "boolean"
+  /v1/users/search:
+    get:
+      description: "搜索用户"
+      parameters:
+        - name: "keyword"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            '*/*':
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/User"
+  /ws:
+    get:
+      description: ""
+      parameters:
+        - name: "Connection"
+          in: "header"
+          required: true
+          description: "Websocket Connection parameter"
+          schema:
+            type: "string"
+        - name: "Upgrade"
+          in: "header"
+          required: true
+          description: "Websocket Upgrade parameter"
+          schema:
+            type: "string"
+        - name: "Sec-WebSocket-Key"
+          in: "header"
+          required: true
+          description: "Websocket Sec-WebSocket-Key parameter"
+          schema:
+            type: "string"
+      responses:
+        "500":
+          description: "Internal Server Error"
+          content:
+            text/plain:
+              schema:
+                type: "string"
+              examples:
+                Example#1:
+                  value: ""
+                Example#2:
+                  value: ""
+                Example#3:
+                  value: ""
+                Example#4:
+                  value: ""
+                Example#5:
+                  value: ""
+                Example#6:
+                  value: ""
+                Example#7:
+                  value: ""
+                Example#8:
+                  value: ""
+                Example#9:
+                  value: ""
+                Example#10:
+                  value: ""
+                Example#11:
+                  value: ""
+                Example#12:
+                  value: ""
+                Example#13:
+                  value: ""
+                Example#14:
+                  value: ""
+                Example#15:
+                  value: ""
+                Example#16:
+                  value: ""
+                Example#17:
+                  value: ""
+        "101":
+          description: "Switching Protocols"
+          headers:
+            Connection:
+              required: true
+              schema:
+                type: "string"
+            Upgrade:
+              required: true
+              schema:
+                type: "string"
+            Sec-WebSocket-Accept:
+              required: true
+              schema:
+                type: "string"
+components:
+  schemas:
+    LoginRequest:
+      type: "object"
+      properties:
+        email:
+          type: "string"
+        password:
+          type: "string"
+      required:
+        - "email"
+        - "password"
+    User:
+      type: "object"
+      properties:
+        username:
+          type: "string"
+        email:
+          type: "string"
+          nullable: true
+        displayName:
+          type: "string"
+          nullable: true
+        avatarUrl:
+          type: "string"
+          nullable: true
+        bio:
+          type: "string"
+          nullable: true
+        role:
+          type: "string"
+          enum:
+            - "ADMIN"
+            - "MEMBER"
+            - "GUEST"
+            - "BOT"
+      required:
+        - "username"
+        - "role"
+    AuthResponse:
+      type: "object"
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        accessToken:
+          type: "string"
+      required:
+        - "user"
+        - "accessToken"
+    RegisterRequest:
+      type: "object"
+      properties:
+        username:
+          type: "string"
+        email:
+          type: "string"
+        password:
+          type: "string"
+      required:
+        - "username"
+        - "email"
+        - "password"
+    Pair:
+      type: "object"
+      properties: { }
+    AddContactRequest:
+      type: "object"
+      properties:
+        message:
+          type: "string"
+          nullable: true
+    Map:
+      type: "object"
+      properties: { }
+    Map_String:
+      type: "string"
+    UpdateContactRequest:
+      type: "object"
+      properties:
+        nickname:
+          type: "string"
+          nullable: true
+        alias:
+          type: "string"
+          nullable: true
+    ContactRequest:
+      type: "object"
+      properties:
+        message:
+          type: "string"
+          nullable: true
+        status:
+          type: "string"
+          enum:
+            - "PENDING"
+            - "ACCEPTED"
+            - "REJECTED"
+            - "CANCELED"
+      required:
+        - "status"
+    HandleContactRequest:
+      type: "object"
+      properties:
+        action:
+          type: "string"
+          enum:
+            - "APPROVE"
+            - "REJECT"
+            - "CANCEL"
+        remark:
+          type: "string"
+          nullable: true
+      required:
+        - "action"
+    CreateConversationRequest:
+      type: "object"
+      properties: { }
+    ConversationMetadata:
+      type: "object"
+      properties: { }
+    Conversation:
+      type: "object"
+      properties:
+        type:
+          type: "string"
+          enum:
+            - "GROUP"
+            - "PRIVATE"
+        metadata:
+          nullable: true
+          $ref: "#/components/schemas/ConversationMetadata"
+      required:
+        - "type"
+    SimpleUser:
+      type: "object"
+      properties:
+        username:
+          type: "string"
+        displayName:
+          type: "string"
+          nullable: true
+        avatarUrl:
+          type: "string"
+          nullable: true
+        role:
+          type: "string"
+          enum:
+            - "ADMIN"
+            - "MEMBER"
+            - "GUEST"
+            - "BOT"
+      required:
+        - "username"
+        - "role"
+    MessageContent:
+      type: "object"
+      properties: { }
+    MessageSenderContext:
+      type: "object"
+      properties:
+        conversationRole:
+          type: "string"
+          enum:
+            - "OWNER"
+            - "ADMIN"
+            - "MEMBER"
+            - "PARTICIPANT"
+            - "UNKNOWN"
+        bubbleColor:
+          type: "string"
+          nullable: true
+      required:
+        - "conversationRole"
+    SimpleMessage:
+      type: "object"
+      properties:
+        sender:
+          nullable: true
+          $ref: "#/components/schemas/SimpleUser"
+        category:
+          type: "string"
+          enum:
+            - "NORMAL"
+            - "SYSTEM"
+        content:
+          $ref: "#/components/schemas/MessageContent"
+        senderContext:
+          nullable: true
+          $ref: "#/components/schemas/MessageSenderContext"
+      required:
+        - "category"
+        - "content"
+    ParticipantSettings:
+      type: "object"
+      properties:
+        nickname:
+          type: "string"
+          nullable: true
+        alias:
+          type: "string"
+          nullable: true
+        backgroundImage:
+          type: "string"
+          nullable: true
+        enableNotification:
+          type: "boolean"
+        bubbleColor:
+          type: "string"
+          nullable: true
+      required:
+        - "enableNotification"
+    ConversationParticipant:
+      type: "object"
+      properties:
+        role:
+          type: "string"
+          enum:
+            - "OWNER"
+            - "ADMIN"
+            - "MEMBER"
+            - "PARTICIPANT"
+            - "UNKNOWN"
+        settings:
+          $ref: "#/components/schemas/ParticipantSettings"
+      required:
+        - "role"
+        - "settings"
+    ConversationInfo:
+      type: "object"
+      properties: { }
+    ConversationResponse:
+      type: "object"
+      properties:
+        type:
+          type: "string"
+          enum:
+            - "GROUP"
+            - "PRIVATE"
+        lastMessage:
+          nullable: true
+          $ref: "#/components/schemas/SimpleMessage"
+        metadata:
+          nullable: true
+          $ref: "#/components/schemas/ConversationMetadata"
+        participant:
+          $ref: "#/components/schemas/ConversationParticipant"
+        conversationInfo:
+          $ref: "#/components/schemas/ConversationInfo"
+      required:
+        - "type"
+        - "participant"
+        - "conversationInfo"
+    InviteUserRequest:
+      type: "object"
+      properties: { }
+    InviteUsersRequest:
+      type: "object"
+      properties: { }
+    JoinGroupRequest:
+      type: "object"
+      properties:
+        message:
+          type: "string"
+          nullable: true
+    Unit:
+      type: "object"
+      properties: { }
+    Message:
+      type: "object"
+      properties:
+        sender:
+          nullable: true
+          $ref: "#/components/schemas/SimpleUser"
+        category:
+          type: "string"
+          enum:
+            - "NORMAL"
+            - "SYSTEM"
+        replyTo:
+          nullable: true
+          $ref: "#/components/schemas/Message"
+        content:
+          $ref: "#/components/schemas/MessageContent"
+        senderContext:
+          nullable: true
+          $ref: "#/components/schemas/MessageSenderContext"
+      required:
+        - "category"
+        - "content"
+    ReadReportRequest:
+      type: "object"
+      properties: { }
+    GroupSettings:
+      type: "object"
+      properties:
+        joinApprovalRequired:
+          type: "boolean"
+        allowMemberInvite:
+          type: "boolean"
+        allowBotJoin:
+          type: "boolean"
+        muteAll:
+          type: "boolean"
+      required:
+        - "joinApprovalRequired"
+        - "allowMemberInvite"
+        - "allowBotJoin"
+        - "muteAll"
+    UpdateConversationSettingsRequest:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+          nullable: true
+        handle:
+          type: "string"
+          nullable: true
+        description:
+          type: "string"
+          nullable: true
+        avatarUrl:
+          type: "string"
+          nullable: true
+        settings:
+          nullable: true
+          $ref: "#/components/schemas/GroupSettings"
+    GroupGroupJoinRequest:
+      type: "object"
+      properties:
+        message:
+          type: "string"
+          nullable: true
+        status:
+          type: "string"
+          enum:
+            - "PENDING"
+            - "ACCEPTED"
+            - "REJECTED"
+            - "CANCELED"
+      required:
+        - "status"
+    HandleGroupRequest:
+      type: "object"
+      properties:
+        action:
+          type: "string"
+          enum:
+            - "APPROVE"
+            - "REJECT"
+        reason:
+          type: "string"
+          nullable: true
+      required:
+        - "action"
+    GroupProfile:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+        handle:
+          type: "string"
+          nullable: true
+        description:
+          type: "string"
+          nullable: true
+        avatarUrl:
+          type: "string"
+          nullable: true
+        settings:
+          $ref: "#/components/schemas/GroupSettings"
+      required:
+        - "name"
+        - "settings"
+    ChangeRoleRequest:
+      type: "object"
+      properties:
+        newRole:
+          type: "string"
+          enum:
+            - "ADMIN"
+            - "MEMBER"
+            - "GUEST"
+            - "BOT"
+      required:
+        - "newRole"
+    UpdateProfileRequest:
+      type: "object"
+      properties:
+        displayName:
+          type: "string"
+          nullable: true
+        avatarUrl:
+          type: "string"
+          nullable: true
+        bio:
+          type: "string"
+          nullable: true
+    PrivacySetting:
+      type: "object"
+      properties:
+        allowSearch:
+          type: "boolean"
+        friendRequestPolicy:
+          type: "string"
+          enum:
+            - "NEED_APPROVAL"
+            - "AUTO_ACCEPT"
+            - "DENY_ANY"
+        showOnlineStatus:
+          type: "boolean"
+        profileVisibility:
+          type: "string"
+          enum:
+            - "PUBLIC"
+            - "FRIENDS"
+            - "PRIVATE"
+        allowStrangerChat:
+          type: "boolean"
+      required:
+        - "allowSearch"
+        - "friendRequestPolicy"
+        - "showOnlineStatus"
+        - "profileVisibility"
+        - "allowStrangerChat"
+    UserPreference:
+      type: "object"
+      properties:
+        themeMode:
+          type: "string"
+          default: "SYSTEM"
+        notificationSound:
+          type: "boolean"
+      required:
+        - "themeMode"
+        - "notificationSound"
+    UserSetting:
+      type: "object"
+      properties:
+        privacy:
+          $ref: "#/components/schemas/PrivacySetting"
+        preferences:
+          $ref: "#/components/schemas/UserPreference"
+      required:
+        - "privacy"
+        - "preferences"
+    UpdateUserSettingsRequest:
+      type: "object"
+      properties:
+        privacy:
+          nullable: true
+          $ref: "#/components/schemas/PrivacySetting"
+        preferences:
+          nullable: true
+          $ref: "#/components/schemas/UserPreference"

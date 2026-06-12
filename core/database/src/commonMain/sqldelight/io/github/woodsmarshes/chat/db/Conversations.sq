@@ -1,0 +1,112 @@
+import com.github.woodsmarshes.chat.core.model.ConversationMetadata;
+import com.github.woodsmarshes.chat.core.model.ConversationType;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+CREATE TABLE ConversationEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    type TEXT AS ConversationType NOT NULL,
+    last_message_id BLOB AS Uuid,
+    metadata TEXT AS ConversationMetadata,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    deleted_at INTEGER AS Instant
+);
+
+-- 索引：用于会话列表按时间倒序排列
+CREATE INDEX idx_conversation_update_time ON ConversationEntity(updated_at DESC);
+
+-- 插入或覆盖会话信息
+insertConversation:
+INSERT OR REPLACE INTO ConversationEntity(
+    id, type, last_message_id, metadata, created_at, updated_at, deleted_at
+) VALUES ?;
+
+upsertConversation:
+INSERT INTO ConversationEntity(
+    id,
+    type,
+    last_message_id,
+    metadata,
+    created_at,
+    updated_at,
+    deleted_at
+)
+VALUES ?
+ON CONFLICT(id) DO UPDATE SET
+    last_message_id = excluded.last_message_id,
+    metadata        = COALESCE(excluded.metadata, metadata),
+    updated_at      = excluded.updated_at,
+    deleted_at      = excluded.deleted_at;
+
+-- 获取所有活跃会话（用于会话列表界面）
+-- 排除已软删除的，按更新时间排序
+getAllActiveConversations:
+SELECT * FROM ConversationEntity
+WHERE deleted_at IS NULL
+ORDER BY updated_at DESC;
+
+-- 获取单个会话详情
+getConversationById:
+SELECT * FROM ConversationEntity
+WHERE id = :id;
+
+-- 更新最后一条消息（当收到新消息时调用）
+-- 同时更新 updated_at 以便会话置顶
+updateLastMessage:
+UPDATE ConversationEntity
+SET last_message_id = :lastMessageId,
+    updated_at = :updatedAt
+WHERE id = :id;
+
+-- 更新元数据（如会话背景、扩展字段等）
+updateMetadata:
+UPDATE ConversationEntity
+SET metadata = :metadata,
+    updated_at = :updatedAt
+WHERE id = :id;
+
+-- 软删除会话（在列表里隐藏，但在数据库保留）
+softDeleteConversation:
+UPDATE ConversationEntity
+SET deleted_at = :deletedAt
+WHERE id = :id;
+
+-- 物理删除会话（谨慎使用，会触发 Message 和 Participant 的级联删除）
+hardDeleteConversation:
+DELETE FROM ConversationEntity
+WHERE id = :id;
+
+-- 获取会话列表及其最后一条消息的文本内容
+getConversationListView:
+SELECT
+    C.id AS conversation_id,
+    C.type AS conversation_type,
+    C.metadata AS conversation_metadata,
+    C.last_message_id AS conversation_last_message_id,
+    C.created_at AS conversation_created_at,
+    C.updated_at AS conversation_updated_at,
+
+    P.last_read_message_id AS participant_last_read_message_id,
+    P.settings AS participant_settings,
+    P.muted_until AS participant_muted_until,
+
+    M.id AS last_message_id,
+    M.content AS last_message_content,
+    M.render_type AS last_message_render_type,
+    M.user_id AS last_message_sender_id,
+    M.created_at AS last_message_created_at,
+
+    U.display_name AS last_message_sender_display_name,
+    U.username AS last_message_sender_username,
+    U.avatar AS last_message_sender_avatar,
+
+    P2.role AS last_message_sender_role,
+    P2.settings AS last_message_sender_participant_settings
+FROM ConversationEntity AS C
+LEFT JOIN ParticipantEntity AS P ON C.id = P.conversation_id AND P.user_id = :currentUserId
+LEFT JOIN MessageEntity AS M ON C.last_message_id = M.id
+LEFT JOIN UserEntity AS U ON M.user_id = U.id
+LEFT JOIN ParticipantEntity AS P2 ON C.id = P2.conversation_id AND P2.user_id = M.user_id
+WHERE C.deleted_at IS NULL
+ORDER BY C.updated_at DESC;

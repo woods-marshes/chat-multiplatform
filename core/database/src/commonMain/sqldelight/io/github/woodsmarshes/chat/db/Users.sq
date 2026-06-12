@@ -1,0 +1,88 @@
+import com.github.woodsmarshes.chat.core.model.UserRole;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+CREATE TABLE UserEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT UNIQUE,
+    display_name TEXT,
+    avatar TEXT,
+    bio TEXT,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    deleted_at INTEGER AS Instant,
+    role TEXT AS UserRole NOT NULL
+);
+
+-- 插入或替换
+insertOrReplaceUser:
+INSERT OR REPLACE INTO UserEntity(
+    id, username, email, display_name, avatar, bio, created_at, updated_at, role
+) VALUES ?;
+
+-- 插入或更新
+upsertUser:
+INSERT INTO UserEntity(
+    id, username, email, display_name, avatar, bio, created_at, updated_at, role
+)
+VALUES ?
+ON CONFLICT(id) DO UPDATE SET
+    username     = COALESCE(excluded.username, username),
+    email        = COALESCE(excluded.email, email),
+    display_name = COALESCE(excluded.display_name, display_name),
+    avatar       = COALESCE(excluded.avatar, avatar),
+    bio          = COALESCE(excluded.bio, bio),
+    created_at   = COALESCE(excluded.created_at, created_at),
+    updated_at   = COALESCE(excluded.updated_at, updated_at),
+    role         = COALESCE(excluded.role, UserEntity.role);
+
+-- 通过 ID 获取单个用户
+getUserById:
+SELECT * FROM UserEntity
+WHERE id = :id AND deleted_at IS NULL;
+
+-- 通过用户名获取
+getUserByUsername:
+SELECT * FROM UserEntity
+WHERE username = :username AND deleted_at IS NULL;
+
+-- 批量获取用户
+getUsersByIds:
+SELECT * FROM UserEntity
+WHERE id IN :ids;
+
+-- 更新个人基本资料
+updateProfile:
+UPDATE UserEntity
+SET display_name = :displayName,
+    avatar = :avatar,
+    bio = :bio,
+    updated_at = :updatedAt
+WHERE id = :id;
+
+-- 更新用户角色
+updateRole:
+UPDATE UserEntity
+SET role = :role,
+    updated_at = :updatedAt
+WHERE id = :id;
+
+-- 软删除
+softDeleteUser:
+UPDATE UserEntity
+SET deleted_at = :deletedAt
+WHERE id = :id;
+
+-- 硬删除
+hardDeleteUser:
+DELETE FROM UserEntity
+WHERE id = :id;
+
+deleteAllUser:
+DELETE FROM UserEntity;
+
+-- 统计用户总数
+countUsers:
+SELECT COUNT(*) FROM UserEntity WHERE deleted_at IS NULL;
+

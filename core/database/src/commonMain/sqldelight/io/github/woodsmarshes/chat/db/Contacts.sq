@@ -1,0 +1,97 @@
+import com.github.woodsmarshes.chat.core.model.ContactStatus;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+CREATE TABLE ContactEntity (
+    contact_id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    status TEXT AS ContactStatus NOT NULL,
+    nickname TEXT,
+    alias TEXT,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    FOREIGN KEY (contact_id) REFERENCES UserEntity(id) ON DELETE CASCADE
+);
+
+-- 索引：加速状态过滤（如只查好友或只查黑名单）
+CREATE INDEX idx_contact_status ON ContactEntity(status);
+
+-- 【增/同步】插入或更新联系人
+insertContact:
+INSERT OR REPLACE INTO ContactEntity(
+    contact_id, status, nickname, alias, created_at, updated_at
+) VALUES ?;
+
+upsertContact:
+INSERT INTO ContactEntity(
+    contact_id,
+    status,
+    nickname,
+    alias,
+    created_at,
+    updated_at
+)
+VALUES ?
+ON CONFLICT(contact_id) DO UPDATE SET
+    status     = excluded.status,
+    nickname   = COALESCE(excluded.nickname, nickname),
+    alias      = COALESCE(excluded.alias, alias),
+    updated_at = excluded.updated_at;
+
+
+-- 【查】获取所有好友及其基础资料 (JOIN UserEntity)
+-- 优先显示备注 (alias)，其次是昵称 (nickname)，最后是服务器显示名 (display_name)
+getAllContactsWithUserInfo:
+SELECT
+    C.*,
+    U.username,
+    U.display_name,
+    U.avatar
+FROM ContactEntity AS C
+JOIN UserEntity AS U ON C.contact_id = U.id
+WHERE C.status = 'FRIEND'
+ORDER BY
+    COALESCE(C.alias, C.nickname, U.display_name, U.username) ASC;
+
+-- 【查】获取特定联系人详情
+getContactById:
+SELECT * FROM ContactEntity WHERE contact_id = :contactId;
+
+-- 【查】获取黑名单列表
+getBlockedContacts:
+SELECT * FROM ContactEntity WHERE status = 'BLOCKED';
+
+-- 【查】搜索联系人 (模糊查询备注、昵称或用户名)
+searchContacts:
+SELECT
+    C.*,
+    U.display_name,
+    U.username
+FROM ContactEntity AS C
+JOIN UserEntity AS U ON C.contact_id = U.id
+WHERE
+    C.alias LIKE ('%' || :query || '%') OR
+    C.nickname LIKE ('%' || :query || '%') OR
+    U.display_name LIKE ('%' || :query || '%') OR
+    U.username LIKE ('%' || :query || '%');
+
+-- 【改】更新备注名
+updateAlias:
+UPDATE ContactEntity
+SET alias = :alias,
+    updated_at = :updatedAt
+WHERE contact_id = :contactId;
+
+-- 【改】更新联系人状态 (例如：拉黑、恢复好友、删除)
+updateStatus:
+UPDATE ContactEntity
+SET status = :status,
+    updated_at = :updatedAt
+WHERE contact_id = :contactId;
+
+-- 【删】删除联系人 (物理删除)
+deleteContact:
+DELETE FROM ContactEntity WHERE contact_id = :contactId;
+
+-- 【统计】统计好友总数
+countFriends:
+SELECT COUNT(*) FROM ContactEntity WHERE status = 'FRIEND';

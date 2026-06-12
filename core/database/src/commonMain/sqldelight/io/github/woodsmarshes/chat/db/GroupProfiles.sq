@@ -1,0 +1,95 @@
+import com.github.woodsmarshes.chat.core.model.GroupSettings;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+CREATE TABLE GroupProfileEntity (
+    conversation_id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    handle TEXT UNIQUE,
+    description TEXT,
+    avatar_url TEXT,
+    owner_id BLOB AS Uuid NOT NULL,
+    settings TEXT AS GroupSettings NOT NULL, -- JSON
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_id) REFERENCES UserEntity(id) ON DELETE RESTRICT
+);
+
+-- 插入或覆盖群组信息
+insertGroupProfile:
+INSERT OR REPLACE INTO GroupProfileEntity(
+    conversation_id, name, handle, description, avatar_url, owner_id, settings, created_at, updated_at
+) VALUES ?;
+
+upsertGroupProfile:
+INSERT INTO GroupProfileEntity(
+    conversation_id,
+    name,
+    handle,
+    description,
+    avatar_url,
+    owner_id,
+    settings,
+    created_at,
+    updated_at
+)
+VALUES ?
+ON CONFLICT(conversation_id) DO UPDATE SET
+    name        = excluded.name,
+    handle      = excluded.handle,
+    description = COALESCE(excluded.description, description),
+    avatar_url  = COALESCE(excluded.avatar_url, avatar_url),
+    owner_id    = excluded.owner_id,
+    settings    = excluded.settings,
+    updated_at  = excluded.updated_at;
+
+-- 获取群组详情
+getGroupProfile:
+SELECT * FROM GroupProfileEntity
+WHERE conversation_id = :conversationId;
+
+getGroupProfiles:
+SELECT * FROM GroupProfileEntity
+WHERE conversation_id IN :conversationIds;
+
+-- 通过 Handle 搜索群组 (类似于 Telegram 的 @handle)
+getGroupByHandle:
+SELECT * FROM GroupProfileEntity
+WHERE handle = :handle;
+
+-- 更新基本信息
+updateGroupInfo:
+UPDATE GroupProfileEntity
+SET name = :name,
+    description = :description,
+    avatar_url = :avatarUrl,
+    updated_at = :updatedAt
+WHERE conversation_id = :conversationId;
+
+-- 更新群设置 (JSON)
+updateGroupSettings:
+UPDATE GroupProfileEntity
+SET settings = :settings,
+    updated_at = :updatedAt
+WHERE conversation_id = :conversationId;
+
+-- 转让群主
+transferOwnership:
+UPDATE GroupProfileEntity
+SET owner_id = :newOwnerId,
+    updated_at = :updatedAt
+WHERE conversation_id = :conversationId;
+
+-- 手动删除 (注：通常随会话 CASCADE 删除)
+deleteGroupProfile:
+DELETE FROM GroupProfileEntity
+WHERE conversation_id = :conversationId;
+
+-- 获取群组信息及其对应的最后一条消息概要 (需要 JOIN 会话表)
+getGroupWithLastMessage:
+SELECT
+    G.*,
+    C.last_message_id
+FROM GroupProfileEntity AS G
+JOIN ConversationEntity AS C ON G.conversation_id = C.id;

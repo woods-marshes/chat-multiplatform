@@ -1,0 +1,256 @@
+import com.github.woodsmarshes.chat.core.model.MessageCategory;
+import com.github.woodsmarshes.chat.core.model.MessageContent;
+import com.github.woodsmarshes.chat.core.model.MessageRenderType;
+import com.github.woodsmarshes.chat.core.model.MessageStatus;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+CREATE TABLE MessageEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    conversation_id BLOB AS Uuid NOT NULL,
+    user_id BLOB AS Uuid NOT NULL,
+    category TEXT AS MessageCategory NOT NULL, -- TEXT, IMAGE, VIDEO 等
+    render_type TEXT AS MessageRenderType NOT NULL,
+    content TEXT AS MessageContent NOT NULL, -- JSON 内容
+    reply_to_message_id BLOB AS Uuid,
+    created_at INTEGER AS Instant NOT NULL,
+    revoked_at INTEGER AS Instant,
+    local_send_status TEXT AS MessageStatus,
+    FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES UserEntity(id) ON DELETE RESTRICT,
+    FOREIGN KEY (reply_to_message_id) REFERENCES MessageEntity(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_message_conversation_time ON MessageEntity(conversation_id, created_at DESC);
+CREATE INDEX idx_message_pagination ON MessageEntity(conversation_id, id DESC);
+
+-- 插入新消息（同步或本地发送）
+insertMessage:
+INSERT OR REPLACE INTO MessageEntity(
+    id, conversation_id, user_id, category, render_type, content,
+    reply_to_message_id, created_at, revoked_at, local_send_status
+) VALUES ?;
+
+upsertMessage:
+INSERT INTO MessageEntity(
+    id,
+    conversation_id,
+    user_id,
+    category,
+    render_type,
+    content,
+    reply_to_message_id,
+    created_at,
+    revoked_at,
+    local_send_status
+)
+VALUES ?
+ON CONFLICT(id) DO UPDATE SET
+    content            = excluded.content,
+    revoked_at         = COALESCE(excluded.revoked_at, revoked_at),
+    local_send_status  = COALESCE(excluded.local_send_status, local_send_status);
+
+-- 分页查询：获取某个会话中早于某个时间点的消息（用于下拉加载更多）
+getMessagesPaged:
+SELECT * FROM MessageEntity
+WHERE conversation_id = :conversationId AND created_at < :beforeTimestamp
+ORDER BY created_at DESC
+LIMIT :limit;
+
+-- 边界计算查询:
+messageBoundaries:
+SELECT t.id
+FROM (
+  SELECT
+    id,
+    CASE
+      WHEN ((row_number() OVER (ORDER BY id DESC) - 1) % CAST(:limit AS INTEGER)) = 0 THEN 1
+      WHEN id = :referenceId THEN 1
+      ELSE 0
+    END AS page_boundary
+  FROM MessageEntity
+  WHERE conversation_id = :conversationId
+  ORDER BY id DESC
+) AS t
+WHERE page_boundary = 1;
+
+-- 区间查询(uuid v7):
+keyedMessages:
+SELECT * FROM MessageEntity
+WHERE conversation_id = :conversationId
+  AND id <= :beginInclusive
+  AND (id > :endExclusive OR :endExclusive IS NULL)
+ORDER BY id DESC;
+
+
+keyedMessagesWithRelations:
+SELECT m.*,
+    u.username AS senderUsername,
+    u.avatar AS senderAvatar,
+    u.display_name AS senderDisplayName,
+
+    par.role AS senderRole,
+    par.settings AS senderParticipantSettings,
+
+    reply_target.id AS reply_id,
+    reply_target.conversation_id AS reply_conversation_id,
+    reply_target.user_id AS reply_user_id,
+    reply_target.category AS reply_category,
+    reply_target.render_type AS reply_render_type,
+    reply_target.content AS reply_content,
+    reply_target.reply_to_message_id AS reply_reply_to_message_id,
+    reply_target.created_at AS reply_created_at,
+    reply_target.revoked_at AS reply_revoked_at,
+    reply_target.local_send_status AS reply_local_send_status,
+
+    reply_user.username AS reply_senderUsername,
+    reply_user.avatar AS reply_senderAvatar,
+    reply_user.display_name AS reply_senderDisplayName,
+
+    reply_par.role AS reply_senderRole,
+    reply_par.settings AS reply_senderParticipantSettings
+FROM MessageEntity AS m
+LEFT JOIN UserEntity AS u ON m.user_id = u.id
+LEFT JOIN ParticipantEntity AS par ON u.id = par.user_id AND par.conversation_id = m.conversation_id
+LEFT JOIN MessageEntity AS reply_target ON m.reply_to_message_id = reply_target.id
+LEFT JOIN UserEntity AS reply_user ON reply_target.user_id = reply_user.id
+LEFT JOIN ParticipantEntity AS reply_par
+    ON reply_user.id = reply_par.user_id
+    AND reply_par.conversation_id = m.conversation_id
+WHERE m.conversation_id = :conversationId
+  AND m.id <= :beginInclusive
+  AND (m.id > :endExclusive OR :endExclusive IS NULL)
+ORDER BY m.id DESC;
+
+
+-- 分页获取消息
+getMessagesWithAllRelationsByPage:
+SELECT m.*,
+    u.username AS senderUsername,
+    u.avatar AS senderAvatar,
+    u.display_name AS senderDisplayName,
+
+    par.role AS senderRole,
+    par.settings AS senderParticipantSettings,
+
+    reply_target.id AS reply_id,
+    reply_target.conversation_id AS reply_conversation_id,
+    reply_target.user_id AS reply_user_id,
+    reply_target.category AS reply_category,
+    reply_target.render_type AS reply_render_type,
+    reply_target.content AS reply_content,
+    reply_target.reply_to_message_id AS reply_reply_to_message_id,
+    -- 即使回复消息本身又是回复，也拉取
+    reply_target.created_at AS reply_created_at,
+    reply_target.revoked_at AS reply_revoked_at,
+    reply_target.local_send_status AS reply_local_send_status,
+
+    reply_user.username AS reply_senderUsername,
+    reply_user.avatar AS reply_senderAvatar,
+    reply_user.display_name AS reply_senderDisplayName,
+
+    reply_par.role AS reply_senderRole,
+    reply_par.settings AS reply_senderParticipantSettings
+FROM MessageEntity AS m
+LEFT JOIN UserEntity AS u ON m.user_id = u.id
+LEFT JOIN ParticipantEntity AS par ON u.id = par.user_id AND par.conversation_id = m.conversation_id
+LEFT JOIN MessageEntity AS reply_target ON m.reply_to_message_id = reply_target.id
+LEFT JOIN UserEntity AS reply_user ON reply_target.user_id = reply_user.id
+LEFT JOIN ParticipantEntity AS reply_par
+    ON reply_user.id = reply_par.user_id
+    AND reply_par.conversation_id = m.conversation_id
+WHERE m.conversation_id = :conversationId AND (:beforeId IS NULL OR m.id < :beforeId)
+ORDER BY m.id DESC
+LIMIT :limit;
+
+-- 批量获取被回复的消息详情
+getMessagesWithAllRelationsByIds:
+SELECT m.*,
+    u.username AS senderUsername,
+    u.avatar AS senderAvatar,
+    u.display_name AS senderDisplayName,
+
+    par.role AS senderRole,
+    par.settings AS senderParticipantSettings
+FROM MessageEntity AS m
+LEFT JOIN UserEntity AS u ON m.user_id = u.id
+LEFT JOIN ParticipantEntity AS par ON u.id = par.user_id AND par.conversation_id = m.conversation_id
+WHERE m.id IN :ids;
+
+-- 最新消息：获取会话的最后一条消息（用于消息列表预览）
+getLatestMessage:
+SELECT m.*,
+    u.username AS senderUsername,
+    u.avatar AS senderAvatar,
+    u.display_name AS senderDisplayName,
+    par.role AS senderRole,
+    par.settings AS senderParticipantSettings
+FROM MessageEntity AS m
+LEFT JOIN UserEntity AS u ON m.user_id = u.id
+LEFT JOIN ParticipantEntity AS par ON m.conversation_id = par.conversation_id AND m.user_id = par.user_id
+WHERE m.conversation_id = :conversationId
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT 1;
+
+getLatestMessages:
+SELECT m.*,
+    u.username AS senderUsername,
+    u.avatar AS senderAvatar,
+    u.display_name AS senderDisplayName,
+    par.role AS senderRole,
+    par.settings AS senderParticipantSettings
+FROM ConversationEntity AS c
+JOIN MessageEntity AS m ON c.last_message_id = m.id
+LEFT JOIN UserEntity AS u ON m.user_id = u.id
+LEFT JOIN ParticipantEntity AS par ON m.conversation_id = par.conversation_id AND m.user_id = par.user_id
+WHERE c.id IN :conversationIds;
+
+-- 单条消息详情
+getMessageById:
+SELECT m.*,
+   u.username AS senderUsername,
+   u.avatar AS senderAvatar,
+   u.display_name AS senderDisplayName,
+
+   par.role AS senderRole,
+   par.settings AS senderParticipantSettings
+FROM MessageEntity AS m
+LEFT JOIN UserEntity AS u ON m.user_id = u.id
+LEFT JOIN ParticipantEntity AS par ON u.id = par.user_id AND par.conversation_id = m.conversation_id
+WHERE m.id = :id;
+
+-- 获取某条消息的所有回复（简单二级关联）
+getRepliesToMessage:
+SELECT * FROM MessageEntity
+WHERE reply_to_message_id = :messageId
+ORDER BY created_at ASC;
+
+-- 更新发送状态（本地发送成功后，从 SENDING 改为 SENT）
+updateMessageStatus:
+UPDATE MessageEntity
+SET local_send_status = :status,
+    created_at = :createdAt,
+    id = :newId -- 如果服务器返回了正式 ID，可以替换本地生成的临时 ID
+WHERE id = :oldId;
+
+-- 撤回消息
+revokeMessage:
+UPDATE MessageEntity
+SET revoked_at = :revokedAt
+WHERE id = :id;
+
+-- 删除单条消息（本地删除）
+deleteMessage:
+DELETE FROM MessageEntity WHERE id = :id;
+
+-- 清空会话历史记录
+clearConversationHistory:
+DELETE FROM MessageEntity WHERE conversation_id = :conversationId;
+
+-- 计算会话中的未读数
+-- 配合 ParticipantEntity 中的 last_read_message_id 使用，此处示例为计算某个时间点之后的消息数
+countUnreadAfter:
+SELECT COUNT(*) FROM MessageEntity
+WHERE conversation_id = :conversationId
+AND user_id != :myUserId
+AND created_at > :lastReadTimestamp;
