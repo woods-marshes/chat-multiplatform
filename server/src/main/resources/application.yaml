@@ -16,4 +16,4 @@ jwt:
   issuer: ${JWT_ISSUER:"chat-server"}
   audience: ${JWT_AUDIENCE:"API"}
   realm: "Ktor Server"
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:"my-local-test-secret-key-change-in-prod"}
