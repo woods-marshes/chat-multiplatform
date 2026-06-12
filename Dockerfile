@@ -5,6 +5,7 @@ FROM gradle:9.5.1-jdk25 AS cache
 ENV GRADLE_USER_HOME=/home/gradle/.gradle
 
 # 复制构建脚本和版本目录（不复制源码，充分利用 Docker 缓存层）
+COPY gradlew /home/gradle/src/
 COPY gradle/ /home/gradle/src/gradle/
 COPY settings.gradle.kts settings.gradle.kts /home/gradle/src/
 COPY build.gradle.kts gradle.properties* /home/gradle/src/
@@ -14,6 +15,7 @@ COPY build-logic/ /home/gradle/src/build-logic/
 COPY server/build.gradle.kts /home/gradle/src/server/
 COPY web/build.gradle.kts /home/gradle/src/web/
 COPY composeApp/build.gradle.kts /home/gradle/src/composeApp/
+COPY androidApp/build.gradle.kts /home/gradle/src/androidApp/
 COPY core/model/build.gradle.kts /home/gradle/src/core/model/
 COPY core/network/build.gradle.kts /home/gradle/src/core/network/
 COPY core/common/build.gradle.kts /home/gradle/src/core/common/
@@ -34,7 +36,8 @@ COPY features/settings/build.gradle.kts /home/gradle/src/features/settings/
 
 # 预下载依赖
 WORKDIR /home/gradle/src
-RUN gradle :server:dependencies --no-daemon
+RUN chmod +x gradlew
+RUN ./gradlew :server:dependencies --no-daemon
 
 # =============================================================
 # Stage 2: 构建 Fat JAR
@@ -49,7 +52,7 @@ COPY --chown=gradle:gradle . /home/gradle/src
 WORKDIR /home/gradle/src
 
 # 构建 server 模块的 fat JAR
-RUN gradle :server:buildFatJar --no-daemon
+RUN ./gradlew :server:buildFatJar --no-daemon
 
 # =============================================================
 # Stage 3: 精简运行时镜像
