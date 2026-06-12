@@ -7,7 +7,6 @@ CLAUDE.local.md
 # Gradle files
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
 
 ### STS ###
 .apt_generated
@@ -106,3 +105,6 @@ server/uploads/
 uploads/
 
 pmeCR9e.jpg
+
+# Re-include Gradle wrapper jar (overrides *.jar above)
+!gradle/wrapper/gradle-wrapper.jar
