@@ -37,7 +37,7 @@ COPY features/settings/build.gradle.kts /home/gradle/src/features/settings/
 # 预下载依赖
 WORKDIR /home/gradle/src
 RUN chmod +x gradlew
-RUN ./gradlew :server:dependencies --no-daemon
+RUN ./gradlew :server:dependencies --no-daemon -x :web:dependencies
 
 # =============================================================
 # Stage 2: 构建 Fat JAR
