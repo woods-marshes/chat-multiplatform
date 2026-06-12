@@ -37,7 +37,7 @@
 | **数据库（服务端）** | Exposed ORM + PostgreSQL（生产）/ H2（开发） |
 | **图片加载** | Coil 3.5 |
 | **国际化** | Lyricist |
-| **构建** | Gradle 8.12 + Kotlin 2.3.21 + Version Catalog |
+| **构建** | Gradle 9.5.1 + Kotlin 2.3.21 + Version Catalog |
 
 ## 功能特性
 
