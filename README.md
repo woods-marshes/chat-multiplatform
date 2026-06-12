@@ -12,8 +12,8 @@
 │  features/*  (auth, chat, contacts, conversations,   │
 │               profile, search, settings)             │
 ├──────────────┬───────────────────────────────────────┤
-│  core/*       │  server (Ktor + Netty)               │
-│  UI / Data   │  REST API + WebSocket + JWT          │
+│  core/*      │  server (Ktor + Netty)                │
+│  UI / Data   │  REST API + WebSocket + JWT           │
 │  Network     │  Exposed ORM + PostgreSQL / H2        │
 │  Database    │                                       │
 └──────────────┴───────────────────────────────────────┘
