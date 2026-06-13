@@ -33,6 +33,10 @@ ktor {
         onlyCommented = false
         debug = false
     }
+
+    fatJar {
+        archiveFileName.set("fat.jar")
+    }
 }
 
 //tasks.withType<ProcessResources> {
@@ -109,6 +113,7 @@ dependencies {
     implementation(libs.logback.classic)
     implementation(libs.ktor.server.config.yaml)
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.ktor.client.content.negotiation)
 
