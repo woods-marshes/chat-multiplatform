@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ConversationSkeleton
@@ -52,7 +53,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
-    onConversationClick: (String) -> Unit,
+    onConversationClick: (conversationId: String, isGroup: Boolean) -> Unit,
     onMenuClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: ConversationsViewModel = koinViewModel(),
@@ -127,7 +128,12 @@ fun ConversationsScreen(
                         ) { conv ->
                             ConversationItem(
                                 conversation = conv,
-                                onClick = { onConversationClick(conv.id.toString()) },
+                                onClick = {
+                                    onConversationClick(
+                                        conv.id.toString(),
+                                        conv.type == ConversationType.GROUP
+                                    )
+                                },
                             )
                         }
                     }

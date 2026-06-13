@@ -157,7 +157,9 @@ private fun MainContent(
 //            navigator.navigate(ConversationsNavKey)
 //        })
         conversationsEntry(
-            onNavigateToChat = { navigator.navigate(ChatNavKey(it)) },
+            onNavigateToChat = { conversationId, isGroup ->
+                navigator.navigate(ChatNavKey(conversationId , isGroup))
+            },
             onMenuClick = { scope.launch { drawerState.open() } },
             metadata = listPaneMeta,
         )

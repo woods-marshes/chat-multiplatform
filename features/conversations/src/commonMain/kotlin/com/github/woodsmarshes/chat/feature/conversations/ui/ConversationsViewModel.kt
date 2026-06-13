@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
+import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.feature.conversations.model.ConversationsUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ class ConversationsViewModel(
 
     init {
         loadConversations()
+        refresh()
     }
 
     // ---------------- Conversation list ----------------

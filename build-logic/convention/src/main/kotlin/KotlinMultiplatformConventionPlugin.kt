@@ -30,6 +30,8 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
                     minSdk = sdkVersions.minSdk
 
                     androidResources.enable = true
+
+                    withHostTest {}
                 }
 
                 jvm()

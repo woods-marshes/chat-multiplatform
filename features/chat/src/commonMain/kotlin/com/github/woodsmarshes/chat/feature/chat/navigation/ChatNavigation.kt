@@ -9,7 +9,10 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @Serializable
-data class ChatNavKey(val conversationId: String) : NavKey
+data class ChatNavKey(
+    val conversationId: String,
+    val isGroup: Boolean,
+) : NavKey
 
 fun EntryProviderScope<NavKey>.chatEntry(
     onBack: () -> Unit,
@@ -20,7 +23,7 @@ fun EntryProviderScope<NavKey>.chatEntry(
         ChatScreen(
             viewModel = koinViewModel(
                 key = "chat_${key.conversationId}",
-                parameters = { parametersOf(key.conversationId) },
+                parameters = { parametersOf(key.conversationId, key.isGroup) },
             ),
             onProfileClick = onNavigateToProfile,
             onBack = onBack,

@@ -22,8 +22,6 @@ kotlin {
 
         withJava()
 
-        withHostTest {}
-
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
         }

@@ -29,6 +29,7 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(
     conversationId: String,
+    isGroup: Boolean,
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
 ) : ViewModel() {
@@ -61,7 +62,7 @@ class ChatViewModel(
             messageRepository.getMessages(
                 ownUserId = uid,
                 conversationId = conversationUuid,
-                isGroup = false,
+                isGroup = isGroup,
             )
         }
         .onEach {

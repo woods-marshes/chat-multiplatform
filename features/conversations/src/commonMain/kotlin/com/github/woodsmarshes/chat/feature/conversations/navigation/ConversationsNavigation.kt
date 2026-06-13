@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 data object ConversationsNavKey : NavKey
 
 fun EntryProviderScope<NavKey>.conversationsEntry(
-    onNavigateToChat: (conversationId: String) -> Unit,
+    onNavigateToChat: (conversationId: String, isGroup: Boolean) -> Unit,
     onMenuClick: (() -> Unit)? = null,
     metadata: Map<String, Any> = emptyMap(),
 ) {
