@@ -1,6 +1,12 @@
 package com.github.woodsmarshes.chat.feature.auth.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.ArcMode
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -52,17 +58,20 @@ fun AuthScreen(
         }
     }
 
-    AuthScreenContent(
-        uiState = uiState,
-        windowSizeClass = windowSizeClass,
-        onModeChange = viewModel::setMode,
-        onNameChange = viewModel::updateName,
-        onEmailChange = viewModel::updateEmail,
-        onPasswordChange = viewModel::updatePassword,
-        onConfirmPasswordChange = viewModel::updateConfirmPassword,
-        onSubmit = viewModel::submit,
-        snackbarHostState = snackbarHostState
-    )
+    SharedTransitionLayout {
+        AuthScreenContent(
+            uiState = uiState,
+            windowSizeClass = windowSizeClass,
+            onModeChange = viewModel::setMode,
+            onNameChange = viewModel::updateName,
+            onEmailChange = viewModel::updateEmail,
+            onPasswordChange = viewModel::updatePassword,
+            onConfirmPasswordChange = viewModel::updateConfirmPassword,
+            onSubmit = viewModel::submit,
+            snackbarHostState = snackbarHostState,
+            sharedTransitionScope = this
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -76,39 +85,93 @@ private fun AuthScreenContent(
     onPasswordChange: (String) -> Unit,
     onConfirmPasswordChange: (String) -> Unit,
     onSubmit: () -> Unit,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    sharedTransitionScope: SharedTransitionScope
 ) {
-        // 使用 androidx.window.core.layout.WindowSizeClass 提供的断点判断方法
-        // WIDTH_DP_MEDIUM_LOWER_BOUND = 600
-        val isDesktopOrTablet = windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+    // 使用 androidx.window.core.layout.WindowSizeClass 提供的断点判断方法
+    // WIDTH_DP_MEDIUM_LOWER_BOUND = 600
+    val isDesktopOrTablet = windowSizeClass
+        .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isDesktopOrTablet) {
+    val brandingBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
+        keyframes {
+            durationMillis = 600
+            initialBounds at 0 using ArcMode.ArcAbove using FastOutSlowInEasing
+            targetBounds at 600
+        }
+    }
+
+    val formBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
+        keyframes {
+            durationMillis = 600
+            initialBounds at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
+            targetBounds at 600
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedContent(
+            targetState = isDesktopOrTablet,
+            label = "Auth-LayoutTransition",
+            transitionSpec = {
+                fadeIn(animationSpec = tween(500)) togetherWith
+                        fadeOut(animationSpec = tween(500))
+            }
+        ) { targetIsDesktopOrTablet ->
+
+            if (targetIsDesktopOrTablet) {
                 Row(
                     modifier = Modifier.fillMaxWidth(0.8f).height(IntrinsicSize.Min),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(48.dp)
                 ) {
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        AuthBrandingSection()
+                        with(sharedTransitionScope) {
+                            AuthBrandingSection(
+                                modifier =  Modifier
+                                    .sharedBounds(
+                                        sharedContentState = rememberSharedContentState(key = "branding_section"),
+                                        animatedVisibilityScope = this@AnimatedContent,
+                                        boundsTransform = brandingBoundsTransform,
+                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                    ).skipToLookaheadSize()
+                            )
+                        }
                     }
                     Card(
-                        modifier = Modifier.weight(1.2f),
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .then(
+                                with(sharedTransitionScope) {
+                                    Modifier
+                                        .sharedBounds(
+                                            sharedContentState = rememberSharedContentState(key = "form_container"),
+                                            animatedVisibilityScope = this@AnimatedContent,
+                                            boundsTransform = formBoundsTransform,
+                                            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                        )
+                                }
+                            ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        AuthFormContent(
-                            uiState = uiState,
-                            onModeChange = onModeChange,
-                            onNameChange = onNameChange,
-                            onEmailChange = onEmailChange,
-                            onPasswordChange = onPasswordChange,
-                            onConfirmPasswordChange = onConfirmPasswordChange,
-                            onSubmit = onSubmit
-                        )
+                        with(sharedTransitionScope) {
+                            Box(modifier = Modifier.skipToLookaheadSize()) {
+                                AuthFormContent(
+                                    uiState = uiState,
+                                    onModeChange = onModeChange,
+                                    onNameChange = onNameChange,
+                                    onEmailChange = onEmailChange,
+                                    onPasswordChange = onPasswordChange,
+                                    onConfirmPasswordChange = onConfirmPasswordChange,
+                                    onSubmit = onSubmit
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -120,26 +183,61 @@ private fun AuthScreenContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    AuthBrandingSection()
+                    with(sharedTransitionScope) {
+                        AuthBrandingSection(
+                            modifier = Modifier
+                                .sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "branding_section"),
+                                    animatedVisibilityScope = this@AnimatedContent,
+                                    boundsTransform = brandingBoundsTransform,
+                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                )
+                                .skipToLookaheadSize()
+                        )
+                    }
                     Spacer(modifier = Modifier.height(32.dp))
-                    AuthFormContent(
-                        uiState = uiState,
-                        onModeChange = onModeChange,
-                        onNameChange = onNameChange,
-                        onEmailChange = onEmailChange,
-                        onPasswordChange = onPasswordChange,
-                        onConfirmPasswordChange = onConfirmPasswordChange,
-                        onSubmit = onSubmit
-                    )
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        modifier = Modifier.then(
+                            with(sharedTransitionScope) {
+                                Modifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "form_container"),
+                                    animatedVisibilityScope = this@AnimatedContent,
+                                    boundsTransform = formBoundsTransform,
+                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                )
+                            }
+                        )
+                    ) {
+                        with(sharedTransitionScope) {
+                            Box(modifier = Modifier.skipToLookaheadSize()) {
+                                AuthFormContent(
+                                    uiState = uiState,
+                                    onModeChange = onModeChange,
+                                    onNameChange = onNameChange,
+                                    onEmailChange = onEmailChange,
+                                    onPasswordChange = onPasswordChange,
+                                    onConfirmPasswordChange = onConfirmPasswordChange,
+                                    onSubmit = onSubmit
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
-
+    }
 }
 
 @Composable
-private fun AuthBrandingSection() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun AuthBrandingSection(
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.Chat,
             contentDescription = null,
@@ -199,82 +297,137 @@ private fun AuthFormContent(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        AnimatedVisibility(
-            visible = uiState.mode == AuthMode.Register,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            OutlinedTextField(
-                value = uiState.name,
-                onValueChange = onNameChange,
-                label = { Text(LocalStrings.current.nameLabel) },
-                modifier = Modifier.fillMaxWidth(),
-                isError = uiState.nameError != null,
-                supportingText = uiState.nameError?.let { { Text(it) } },
-                leadingIcon = { Icon(Icons.Default.Person, null) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
-            )
-        }
-
-        OutlinedTextField(
-            value = uiState.email,
-            onValueChange = onEmailChange,
-            label = { Text(LocalStrings.current.emailLabel) },
-            modifier = Modifier.fillMaxWidth(),
-            isError = uiState.emailError != null,
-            supportingText = uiState.emailError?.let { { Text(it) } },
-            leadingIcon = { Icon(Icons.Default.Email, null) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-            keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
-        )
-
-        var passwordVisible by remember { mutableStateOf(false) }
-        OutlinedTextField(
-            value = uiState.password,
-            onValueChange = onPasswordChange,
-            label = { Text(LocalStrings.current.passwordLabel) },
-            modifier = Modifier.fillMaxWidth(),
-            isError = uiState.passwordError != null,
-            supportingText = uiState.passwordError?.let { { Text(it) } },
-            leadingIcon = { Icon(Icons.Default.Lock, null) },
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
-                }
+        AnimatedContent(
+            targetState = uiState.mode,
+            transitionSpec = {
+                if (targetState == AuthMode.Register) {
+                    // 登录 -> 注册：向左滑动（新页面从右侧滑入，旧页面向左侧滑出）
+                    (slideInHorizontally { width -> width / 2 }
+                            + fadeIn(animationSpec = tween(300))) togetherWith
+                            (slideOutHorizontally { width -> -width / 2 }
+                                    + fadeOut(animationSpec = tween(300)))
+                } else {
+                    // 注册 -> 登录：向右滑动（新页面从左侧滑入，旧页面向右侧滑出）
+                    (slideInHorizontally { width -> -width / 2 }
+                            + fadeIn(animationSpec = tween(300))) togetherWith
+                            (slideOutHorizontally { width -> width / 2 }
+                                    + fadeOut(animationSpec = tween(300)))
+                }.using(
+                    SizeTransform(clip = true)
+                )
             },
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = if (uiState.mode == AuthMode.Login) ImeAction.Done else ImeAction.Next
-            ),
-            keyboardActions = KeyboardActions(
-                onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                onDone = { if (uiState.canSubmit) onSubmit() }
-            )
-        )
+            label = "FormFieldsTransition"
+        ) { mode ->
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                var passwordVisible by remember { mutableStateOf(false) }
+                if (mode == AuthMode.Login) {
+                    OutlinedTextField(
+                        value = uiState.email,
+                        onValueChange = onEmailChange,
+                        label = { Text(LocalStrings.current.emailLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.emailError != null,
+                        supportingText = uiState.emailError?.let { { Text(it) } },
+                        leadingIcon = { Icon(Icons.Default.Email, null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                    )
 
-        AnimatedVisibility(
-            visible = uiState.mode == AuthMode.Register,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            OutlinedTextField(
-                value = uiState.confirmPassword,
-                onValueChange = onConfirmPasswordChange,
-                label = { Text(LocalStrings.current.confirmPasswordLabel) },
-                modifier = Modifier.fillMaxWidth(),
-                isError = uiState.confirmPasswordError != null,
-                supportingText = uiState.confirmPasswordError?.let { { Text(it) } },
-                leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (uiState.canSubmit) onSubmit() })
-            )
+                    OutlinedTextField(
+                        value = uiState.password,
+                        onValueChange = onPasswordChange,
+                        label = { Text(LocalStrings.current.passwordLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.passwordError != null,
+                        supportingText = uiState.passwordError?.let { { Text(it) } },
+                        leadingIcon = { Icon(Icons.Default.Lock, null) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = if (uiState.mode == AuthMode.Login) ImeAction.Done else ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            onDone = { if (uiState.canSubmit) onSubmit() }
+                        )
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = uiState.name,
+                        onValueChange = onNameChange,
+                        label = { Text(LocalStrings.current.nameLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.nameError != null,
+                        supportingText = uiState.nameError?.let { { Text(it) } },
+                        leadingIcon = { Icon(Icons.Default.Person, null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                    )
+
+                    OutlinedTextField(
+                        value = uiState.email,
+                        onValueChange = onEmailChange,
+                        label = { Text(LocalStrings.current.emailLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.emailError != null,
+                        supportingText = uiState.emailError?.let { { Text(it) } },
+                        leadingIcon = { Icon(Icons.Default.Email, null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                    )
+
+                    OutlinedTextField(
+                        value = uiState.password,
+                        onValueChange = onPasswordChange,
+                        label = { Text(LocalStrings.current.passwordLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.passwordError != null,
+                        supportingText = uiState.passwordError?.let { { Text(it) } },
+                        leadingIcon = { Icon(Icons.Default.Lock, null) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = if (uiState.mode == AuthMode.Login) ImeAction.Done else ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            onDone = { if (uiState.canSubmit) onSubmit() }
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = uiState.confirmPassword,
+                        onValueChange = onConfirmPasswordChange,
+                        label = { Text(LocalStrings.current.confirmPasswordLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = uiState.confirmPasswordError != null,
+                        supportingText = uiState.confirmPasswordError?.let { { Text(it) } },
+                        leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { if (uiState.canSubmit) onSubmit() })
+                    )
+                }
+            }
         }
 
         Button(
@@ -303,48 +456,5 @@ private fun AuthFormContent(
                 )
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview
-@Composable
-private fun AuthScreenLoginPreview() {
-    AppTheme {
-        AuthScreenContent(
-            uiState = AuthUiState(
-                mode = AuthMode.Login,
-                email = "test@example.com"
-            ),
-            windowSizeClass = WindowSizeClass(400, 800),
-            onModeChange = {},
-            onNameChange = {},
-            onEmailChange = {},
-            onPasswordChange = {},
-            onConfirmPasswordChange = {},
-            onSubmit = {}
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Preview
-@Composable
-private fun AuthScreenRegisterPreview() {
-    AppTheme {
-        AuthScreenContent(
-            uiState = AuthUiState(
-                mode = AuthMode.Register,
-                name = "Test User",
-                email = "test@example.com"
-            ),
-            windowSizeClass = WindowSizeClass(1000, 800),
-            onModeChange = {},
-            onNameChange = {},
-            onEmailChange = {},
-            onPasswordChange = {},
-            onConfirmPasswordChange = {},
-            onSubmit = {}
-        )
     }
 }
