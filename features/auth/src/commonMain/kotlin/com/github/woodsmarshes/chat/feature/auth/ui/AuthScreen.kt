@@ -125,51 +125,60 @@ private fun AuthScreenContent(
         ) { targetIsDesktopOrTablet ->
 
             if (targetIsDesktopOrTablet) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(0.8f).height(IntrinsicSize.Min),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(48.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        with(sharedTransitionScope) {
-                            AuthBrandingSection(
-                                modifier =  Modifier
-                                    .sharedBounds(
-                                        sharedContentState = rememberSharedContentState(key = "branding_section"),
-                                        animatedVisibilityScope = this@AnimatedContent,
-                                        boundsTransform = brandingBoundsTransform,
-                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                    ).skipToLookaheadSize()
-                            )
-                        }
-                    }
-                    Card(
-                        modifier = Modifier
-                            .weight(1.2f)
-                            .then(
-                                with(sharedTransitionScope) {
-                                    Modifier
-                                        .sharedBounds(
-                                            sharedContentState = rememberSharedContentState(key = "form_container"),
-                                            animatedVisibilityScope = this@AnimatedContent,
-                                            boundsTransform = formBoundsTransform,
-                                            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                        )
-                                }
-                            ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(0.8f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(48.dp)
                     ) {
-                        with(sharedTransitionScope) {
-                            Box(modifier = Modifier.skipToLookaheadSize()) {
-                                AuthFormContent(
-                                    uiState = uiState,
-                                    onModeChange = onModeChange,
-                                    onNameChange = onNameChange,
-                                    onEmailChange = onEmailChange,
-                                    onPasswordChange = onPasswordChange,
-                                    onConfirmPasswordChange = onConfirmPasswordChange,
-                                    onSubmit = onSubmit
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            with(sharedTransitionScope) {
+                                AuthBrandingSection(
+                                    modifier =  Modifier
+                                        .sharedBounds(
+                                            sharedContentState = rememberSharedContentState(key = "branding_section"),
+                                            animatedVisibilityScope = this@AnimatedContent,
+                                            boundsTransform = brandingBoundsTransform,
+                                            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                        ).skipToLookaheadSize()
                                 )
+                            }
+                        }
+                        Card(
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .then(
+                                    with(sharedTransitionScope) {
+                                        Modifier
+                                            .sharedBounds(
+                                                sharedContentState = rememberSharedContentState(key = "form_container"),
+                                                animatedVisibilityScope = this@AnimatedContent,
+                                                boundsTransform = formBoundsTransform,
+                                                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
+                                            )
+                                    }
+                                ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            with(sharedTransitionScope) {
+                                Box(modifier = Modifier.skipToLookaheadSize()) {
+                                    AuthFormContent(
+                                        uiState = uiState,
+                                        onModeChange = onModeChange,
+                                        onNameChange = onNameChange,
+                                        onEmailChange = onEmailChange,
+                                        onPasswordChange = onPasswordChange,
+                                        onConfirmPasswordChange = onConfirmPasswordChange,
+                                        onSubmit = onSubmit
+                                    )
+                                }
                             }
                         }
                     }
