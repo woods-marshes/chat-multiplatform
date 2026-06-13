@@ -118,6 +118,23 @@ fun ConversationResponse.toGroupProfileEntity(): GroupProfileEntity? {
     )
 }
 
+fun ConversationResponse.toGroupOwnerUserEntity(): UserEntity? {
+    val groupInfo = this.conversationInfo as? GroupInfo ?: return null
+    val userInfo = groupInfo.userInfo
+    return UserEntity(
+        id = userInfo.id,
+        username = userInfo.username,
+        email = userInfo.email,
+        display_name = userInfo.displayName,
+        avatar = userInfo.avatarUrl,
+        bio = userInfo.bio,
+        created_at = userInfo.createdAt,
+        updated_at = userInfo.updatedAt,
+        deleted_at = userInfo.deletedAt,
+        role = userInfo.role
+    )
+}
+
 private fun SimpleMessage.getRenderType(): MessageRenderType {
     return when (this.content) {
         is TextContent -> MessageRenderType.TEXT

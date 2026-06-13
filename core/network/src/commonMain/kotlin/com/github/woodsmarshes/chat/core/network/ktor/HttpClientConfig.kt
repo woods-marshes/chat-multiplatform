@@ -159,7 +159,7 @@ suspend inline fun <reified E : DomainError> Throwable.toDomainError(
         Err(fallback(this.message))
     }
 }
-
+val log = KotlinLogging.logger {}
 suspend inline fun <T, reified E : DomainError> CoroutineBindingScope<E>.bindApi(
     noinline fallback: (String?) -> E,
     crossinline block: suspend () -> T
@@ -167,6 +167,7 @@ suspend inline fun <T, reified E : DomainError> CoroutineBindingScope<E>.bindApi
     return runSuspendCatching {
         block()
     }.onErr { throwable ->
+        log.info { "[bindApi] => ${throwable.message}" }
         throwable.toDomainError(fallback).bind()
     }.getOrThrow { IllegalStateException("bindApi: unreachable error state") }
 }

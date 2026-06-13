@@ -52,7 +52,8 @@ data class GroupInfo(
     @ProtoNumber(6) val settings: GroupSettings,
     @ProtoNumber(7) val createdAt: Instant,
     @ProtoNumber(8) val updatedAt: Instant,
-    @ProtoNumber(9) val deletedAt: Instant?
+    @ProtoNumber(9) val deletedAt: Instant?,
+    @ProtoNumber(10) val userInfo: UserInfo,
 ) : ConversationInfo
 
 @Serializable
@@ -83,7 +84,10 @@ fun User.toUserInfo() = UserInfo(
     role = role,
 )
 
-fun GroupProfile.toGroupInfo(deletedAt: Instant? = null) = GroupInfo(
+fun GroupProfile.toGroupInfo(
+    deletedAt: Instant? = null,
+    userInfo: UserInfo,
+) = GroupInfo(
     name = name,
     handle = handle,
     description = description,
@@ -93,5 +97,6 @@ fun GroupProfile.toGroupInfo(deletedAt: Instant? = null) = GroupInfo(
     createdAt = createdAt,
     updatedAt = updatedAt,
     deletedAt = deletedAt,
+    userInfo = userInfo
 )
 

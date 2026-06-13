@@ -99,7 +99,7 @@ kotlin {
             implementation(compose.desktop.currentOs)
             implementation(libs.compose.ui.tooling)
             implementation(libs.kotlinx.coroutines.swing)
-            implementation(libs.slf4j.simple)
+            implementation(libs.logback.classic)
         }
         webMain.dependencies {
             implementation(npm("@cashapp/sqldelight-sqljs-worker", libs.versions.sqlDelight.get()))

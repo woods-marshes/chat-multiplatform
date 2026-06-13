@@ -1,10 +1,10 @@
 package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.michaelbull.result.Result
-import com.github.michaelbull.result.combine
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.data.model.toConversation
 import com.github.woodsmarshes.chat.core.data.model.toEntity
+import com.github.woodsmarshes.chat.core.data.model.toGroupOwnerUserEntity
 import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
 import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
 import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
@@ -26,21 +26,17 @@ import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.LastMessageInfo
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
-import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.network.dto.conversation.CreateGroupRequest
 import com.github.woodsmarshes.chat.core.network.dto.conversation.CreatePrivateRequest
 import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
-import com.github.woodsmarshes.chat.core.network.ktor.HttpEventBus
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlin.collections.emptyList
 import kotlin.collections.map
 import kotlin.uuid.Uuid
@@ -85,19 +81,18 @@ class ConversationRepositoryImpl(
                         val groups = groups.associateBy { it.conversation_id }
                         val c2Cs = c2Cs.associateBy { it.conversation_id }
                         entities.map { entity ->
-                            val lastMessage = if (
-                                entity.last_message_id != null
-                            ) {
-                                LastMessageInfo(
-                                    id = entity.last_message_id!!,
-                                    content = entity.last_message_content!!,
-                                    renderType = entity.last_message_render_type!!,
-                                    senderName = entity.last_message_sender_participant_settings?.nickname ?: entity.last_message_sender_username,
-                                    senderAvatar = entity.last_message_sender_avatar,
-                                    createdAt = entity.last_message_created_at!!,
-                                    isOwnMessage = currentUser.id == entity.last_message_sender_id
-                                )
-                            } else null
+                            val lastMessage =
+                                if (entity.last_message_id != null) {
+                                    LastMessageInfo(
+                                        id = entity.last_message_id!!,
+                                        content = entity.last_message_content!!,
+                                        renderType = entity.last_message_render_type!!,
+                                        senderName = entity.last_message_sender_participant_settings?.nickname ?: entity.last_message_sender_username,
+                                        senderAvatar = entity.last_message_sender_avatar,
+                                        createdAt = entity.last_message_created_at!!,
+                                        isOwnMessage = currentUser.id == entity.last_message_sender_id
+                                    )
+                                } else null
                             log.info { "[ConversationRepositoryImpl] lastMessage is ${lastMessage.toString()}" }
                             when (entity.conversation_type) {
                                 ConversationType.GROUP -> {
@@ -140,8 +135,11 @@ class ConversationRepositoryImpl(
         }.also { responses ->
             conversationDao.insertConversations(responses.map { it.toConversation().toEntity() })
             val (groupResponses, privateResponses) = responses.partition { it.type == ConversationType.GROUP }
+            userDao.insertUsers(
+                privateResponses.mapNotNull { it.toUserEntity() }
+                        + groupResponses.mapNotNull { it.toGroupOwnerUserEntity() }
+            )
             groupProfileDao.insertGroupProfiles(groupResponses.mapNotNull { it.toGroupProfileEntity() })
-            userDao.insertUsers(privateResponses.mapNotNull { it.toUserEntity() })
             participantDao.insertParticipants(responses.map { it.toParticipantEntity() })
             messageDao.insertMessages(responses.mapNotNull { it.toMessageEntity() })
         }

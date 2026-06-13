@@ -6,6 +6,7 @@ import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.feature.conversations.model.ConversationsUiState
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,7 @@ import kotlin.uuid.Uuid
 class ConversationsViewModel(
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
+    private val log = KotlinLogging.logger {}
 
     private val _uiState = MutableStateFlow(ConversationsUiState())
     val uiState: StateFlow<ConversationsUiState> = _uiState.asStateFlow()
@@ -138,6 +140,7 @@ class ConversationsViewModel(
         val id = try {
             Uuid.parse(idStr)
         } catch (_: Exception) {
+            log.info { "[ConversationsViewModel]: joinGroup(), not parse" }
             _uiState.value = _uiState.value.copy(joinError = "无效的群组 ID")
             return
         }
@@ -145,8 +148,10 @@ class ConversationsViewModel(
         _uiState.value = _uiState.value.copy(isJoining = true, joinError = null)
         viewModelScope.launch {
             conversationRepository.joinGroup(id).onErr {
+                log.info { "[ConversationsViewModel]: joinGroup() => $it" }
                 _uiState.value = _uiState.value.copy(isJoining = false, joinError = "加入失败，请检查 ID 是否正确")
             }.onOk {
+                log.info { "[ConversationsViewModel]: joinGroup() => success" }
                 _uiState.value = _uiState.value.copy(showJoinGroup = false, isJoining = false)
                 refresh()
             }

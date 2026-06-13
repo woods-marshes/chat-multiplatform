@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class RealtimeApi(
     private val client: HttpClient,
@@ -92,7 +93,7 @@ class RealtimeApi(
                     _connectionState.value = ConnectionState.Disconnected("Error: ${e.message}", e)
 
                     log.info { "Retrying in ${currentDelay}ms..." }
-                    delay(currentDelay)
+                    delay(currentDelay.milliseconds)
                     currentDelay = (currentDelay * 2).coerceAtMost(maxDelay)
                 }
             }

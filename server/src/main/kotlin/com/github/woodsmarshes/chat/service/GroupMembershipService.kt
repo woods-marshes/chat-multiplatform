@@ -60,16 +60,24 @@ class GroupMembershipService(
     }
 
     suspend fun joinGroup(conversationId: Uuid, userId: Uuid, message: String?): Result<Unit, ConversationError> = coroutineBinding {
-        val (conversation, groupProfile) = conversationRepository.getConversationWithGroupProfile(conversationId)
+        val (conversation, groupProfile) =
+            conversationRepository.getConversationWithGroupProfile(conversationId)
             ?: Err(ConversationError.NotFound).bind()
-        val existingParticipant = conversationParticipantRepository.getConversationParticipant(conversationId = conversationId, userId = userId)
+        val existingParticipant =
+            conversationParticipantRepository.getConversationParticipant(
+                conversationId = conversationId,
+                userId = userId
+            )
         if (existingParticipant != null) {
             Err(ConversationError.UserAlreadyMember).bind()
         }
         if (groupProfile.settings.joinApprovalRequired) {
-            val request = groupJoinRequestRepository.insertGroupJoinRequest(
-                conversationId = conversationId, applicantId = userId, message = message
-            ) ?: Err(ConversationError.RequestAlreadyPending).bind()
+            val request = groupJoinRequestRepository
+                .insertGroupJoinRequest(
+                    conversationId = conversationId,
+                    applicantId = userId,
+                    message = message
+                ) ?: Err(ConversationError.RequestAlreadyPending).bind()
             eventBus.publishConversationEvent(
                 ConversationEvent.GroupJoinRequest(
                     requestId = request.id, conversationId = conversationId,
@@ -80,9 +88,12 @@ class GroupMembershipService(
         } else {
             conversationParticipantRepository.insertConversationParticipant(
                 ConversationParticipant(
-                    conversationId = conversationId, userId = userId,
-                    role = ConversationRole.MEMBER, lastReadMessageId = null,
-                    joinedAt = Clock.System.now(), settings = ParticipantSettings()
+                    conversationId = conversationId,
+                    userId = userId,
+                    role = ConversationRole.MEMBER,
+                    lastReadMessageId = null,
+                    joinedAt = Clock.System.now(),
+                    settings = ParticipantSettings()
                 )
             ) ?: Err(ConversationError.OperationFailed).bind()
             eventBus.publishConversationEvent(

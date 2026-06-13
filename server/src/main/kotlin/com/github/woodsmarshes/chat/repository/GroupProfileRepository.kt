@@ -2,8 +2,10 @@ package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.GroupSettings
+import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
+import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.eq
@@ -43,7 +45,9 @@ interface GroupProfileRepository {
 
     suspend fun getGroupProfile(conversationId: Uuid): GroupProfile?
 
-    suspend fun getGroupProfiles(conversationIds: List<Uuid>): List<GroupProfile>
+    suspend fun getGroupProfileWithUser(conversationId: Uuid): Pair<GroupProfile, User>?
+
+    suspend fun getGroupProfilesWithUsers(conversationIds: List<Uuid>): List<Pair<GroupProfile, User>>
 
     suspend fun searchGroup(keyword: String): List<GroupProfile>
 
@@ -108,11 +112,23 @@ class GroupProfileDataSourceImpl : GroupProfileRepository {
             ?.toGroupProfile()
     }
 
-    override suspend fun getGroupProfiles(conversationIds: List<Uuid>): List<GroupProfile> = dbQuery {
-        GroupProfiles
+    override suspend fun getGroupProfileWithUser(conversationId: Uuid): Pair<GroupProfile, User>? = dbQuery {
+        (GroupProfiles innerJoin Users)
+            .selectAll()
+            .where { GroupProfiles.conversationId eq conversationId }
+            .map {
+                it.toGroupProfile() to it.toUser()
+            }
+            .singleOrNull()
+    }
+
+    override suspend fun getGroupProfilesWithUsers(conversationIds: List<Uuid>): List<Pair<GroupProfile, User>> = dbQuery {
+        (GroupProfiles innerJoin Users)
             .selectAll()
             .where { GroupProfiles.conversationId inList conversationIds }
-            .map { it.toGroupProfile() }
+            .map {
+                it.toGroupProfile() to it.toUser()
+            }
     }
 
     override suspend fun searchGroup(keyword: String): List<GroupProfile> = dbQuery {

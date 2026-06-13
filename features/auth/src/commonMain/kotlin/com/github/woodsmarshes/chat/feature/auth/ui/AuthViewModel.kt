@@ -10,12 +10,14 @@ import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.auth.model.AuthMode
 import com.github.woodsmarshes.chat.feature.auth.model.AuthScreenState
 import com.github.woodsmarshes.chat.feature.auth.model.AuthUiState
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class AuthViewModel(
     private val authRepository: AuthRepository,
 ) : ViewModel() {
+    private val log = KotlinLogging.logger {}
 
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -44,9 +46,11 @@ class AuthViewModel(
     fun resetScreenState() = _uiState.update { it.copy(screenState = AuthScreenState.Idle) }
 
     fun submit() {
+        log.info { "[AuthViewModel]: submit()" }
         if (!validateAll()) return
 
         val s = _uiState.value
+        log.info { "[AuthViewModel]: s -> $s" }
         _uiState.update { it.copy(screenState = AuthScreenState.Loading) }
 
         viewModelScope.launch {
@@ -58,6 +62,7 @@ class AuthViewModel(
             result.onOk { user ->
                 _uiState.update { it.copy(screenState = AuthScreenState.Success(user)) }
             }.onErr { error ->
+                log.info { "[AuthViewModel]: error -> $error" }
                 _uiState.update { it.copy(screenState = AuthScreenState.Error(error.toMessage())) }
             }
         }

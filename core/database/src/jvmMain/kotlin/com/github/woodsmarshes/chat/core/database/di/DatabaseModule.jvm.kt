@@ -13,9 +13,31 @@ actual suspend fun provideDbDriver(
     dbName: String,
 ): SqlDriver {
     val databaseUrl = "jdbc:sqlite:$dbName"
-    return JdbcSqliteDriver(
+    val driver = JdbcSqliteDriver(
         url = databaseUrl,
-        properties = Properties().apply { put("foreign_keys", "true") }
+        properties = Properties().apply {
+            put("foreign_keys", "true")
+        }
     )
-        .also { schema.create(it).await() }
+
+    val isDatabaseEmpty = try {
+        driver.executeQuery(
+            identifier = null,
+            sql = "SELECT count(*) FROM sqlite_master WHERE type='table'",
+            mapper = { cursor ->
+                QueryResult.Value(if (cursor.next().value) cursor.getLong(0) == 0L else false)
+            },
+            parameters = 0
+        ).value
+
+    } catch (e: Exception) {
+        true // 如果查询出错，假设是空的
+    }
+
+    if (isDatabaseEmpty) {
+        schema.create(driver).await()
+    } else {
+        schema.migrate(driver, schema.version - 1, schema.version).await()
+    }
+    return driver
 }

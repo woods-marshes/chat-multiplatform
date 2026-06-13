@@ -133,9 +133,9 @@ class ConversationLifecycleService(
         ) ?: Err(ConversationError.NotParticipant).bind()
         val conversationInfo = when (conversation.type) {
             ConversationType.GROUP -> {
-                val groupProfile = groupProfileRepository.getGroupProfile(conversationId)
+                val (groupProfile, user) = groupProfileRepository.getGroupProfileWithUser(conversationId)
                     ?: Err(ConversationError.DataIntegrityError).bind()
-                groupProfile.toGroupInfo(conversation.deletedAt)
+                groupProfile.toGroupInfo(conversation.deletedAt, user.toUserInfo())
             }
             ConversationType.PRIVATE -> {
                 val participants = conversationParticipantRepository.getPrivateConversationOtherParticipantsWithUser(
@@ -154,9 +154,12 @@ class ConversationLifecycleService(
         )
     }
 
-    suspend fun getUserConversations(userId: Uuid): Result<List<ConversationResponse>, ConversationError> = coroutineBinding {
-        val conversationParticipant = conversationParticipantRepository.getConversationParticipantByUserId(userId)
-        val conversations = conversationRepository.getConversations(conversationParticipant.map { it.conversationId })
+    suspend fun getUserConversations(userId: Uuid): Result<List<ConversationResponse>, ConversationError>
+    = coroutineBinding {
+        val conversationParticipant =
+            conversationParticipantRepository.getConversationParticipantByUserId(userId)
+        val conversations =
+            conversationRepository.getConversations(conversationParticipant.map { it.conversationId })
         val groupIdList = mutableListOf<Uuid>()
         val userIdList = mutableListOf<Uuid>()
         conversations.forEach { (conversation, _) ->
@@ -165,18 +168,30 @@ class ConversationLifecycleService(
                 ConversationType.PRIVATE -> userIdList.add(conversation.id)
             }
         }
-        val userMap = userRepository.getPrivateConversationOtherUser(userId = userId, conversationIds = userIdList)
+        val userMap = userRepository
+            .getPrivateConversationOtherUser(
+                userId = userId,
+                conversationIds = userIdList
+            )
             .associateBy { it.id }
-        val groupMap = groupProfileRepository.getGroupProfiles(groupIdList)
-            .associateBy { it.conversationId }
+
+        val groupMap = groupProfileRepository
+            .getGroupProfilesWithUsers(groupIdList)
+            .associateBy { (group, _) ->
+                group.conversationId
+            }
+
         conversationParticipant.mapNotNull { participant ->
             val (conversation, lastMessage) = conversations.find {
                 it.first.id == participant.conversationId
             } ?: return@mapNotNull null
             val conversationInfo = when (conversation.type) {
                 ConversationType.GROUP -> {
-                    val groupProfile = groupMap[conversation.id] ?: return@mapNotNull null
-                    groupProfile.toGroupInfo(conversation.deletedAt)
+                    val (groupProfile, user) = groupMap[conversation.id] ?: return@mapNotNull null
+                    groupProfile.toGroupInfo(
+                        conversation.deletedAt,
+                        user.toUserInfo()
+                    )
                 }
                 ConversationType.PRIVATE -> {
                     val otherUser = userMap[conversation.id] ?: return@mapNotNull null

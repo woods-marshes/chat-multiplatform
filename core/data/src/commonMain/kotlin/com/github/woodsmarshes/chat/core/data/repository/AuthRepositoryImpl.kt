@@ -13,6 +13,7 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,8 @@ class AuthRepositoryImpl(
     private val authApi: AuthApi,
     private val databaseHolder: DatabaseHolder
 ) : AuthRepository {
+    private val log = KotlinLogging.logger {}
+
     override fun observeIsLoggedIn(): Flow<Boolean> {
         return authTokenDataSource.jwtToken.map { jwt ->
             val hasToken = !jwt.isNullOrEmpty()
@@ -66,6 +69,7 @@ class AuthRepositoryImpl(
             authApi.register(username, email, password)
         }
             .also { resp ->
+                log.info { "[AuthRepositoryImpl]: register -> ${resp.toString()}" }
                 userSettingDataSource.setUser(resp.user)
                 databaseHolder.getOrCreateDatabase(resp.user.id)
                 userDao.insertUser(resp.user.toUserEntity())
