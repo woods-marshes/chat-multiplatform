@@ -8,6 +8,7 @@ import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor
  * @param {function} onChange - 用户在编辑器输入修改时，回传给 Kotlin 协程的事件
  */
 export function TiptapEditorBridge({ content, onChange }) {
+  const initialValue = content || { type: 'doc', content: [] };
   return (
     <SimpleEditor
       initialContent={content}
