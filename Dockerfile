@@ -6,7 +6,6 @@ FROM gradle:9.5.1-jdk25 AS build
 USER root
 RUN apt update && \
     apt install -y nodejs npm && \
-    npm install -g yarn && \
     rm -rf /var/lib/apt/lists/*
 USER gradle
 
@@ -22,14 +21,9 @@ COPY --chown=gradle:gradle . .
 # 安装tiptap-bridge依赖
 RUN cd tiptap-bridge && npm install
 
-RUN ./gradlew :web:jsBrowserDistribution --no-daemon --rerun-tasks --no-build-cache --no-configuration-cache
-
-# 验证文件是否生成
-RUN ls -la /home/gradle/src/web/build/dist/js/productionExecutable/
-
 # uid=1000/gid=1000 确保 gradle 用户对挂载的缓存目录有读写权限
-# 构建 fat JAR
-RUN ./gradlew :server:buildFatJar --no-daemon
+RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
+    ./gradlew :server:buildFatJar --no-daemon
 
 RUN jar tf /home/gradle/src/server/build/libs/fat.jar | grep -E '\.(html|css|js)$' | head -20
 
