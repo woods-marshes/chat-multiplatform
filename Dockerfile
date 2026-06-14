@@ -20,7 +20,9 @@ COPY --chown=gradle:gradle . .
 
 # 安装tiptap-bridge依赖
 RUN --mount=type=cache,target=/home/gradle/src/tiptap-bridge/node_modules,uid=1000,gid=1000 \
-    cd tiptap-bridge && npm install
+    cd tiptap-bridge && \
+    npm install && \
+    npm install --no-save vite
 
 # uid=1000/gid=1000 确保 gradle 用户对挂载的缓存目录有读写权限
 RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
