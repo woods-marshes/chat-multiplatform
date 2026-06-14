@@ -39,6 +39,8 @@ fun main() {
 fun loadJsNetworkConfig(): NetworkConfig {
     val hostname = window.location.hostname.takeIf { it.isNotEmpty() } ?: "127.0.0.1"
 
+    println("=== DEBUG: loadJsNetworkConfig resolved hostname = $hostname ===")
+
     val protocolString = window.location.protocol
     val isTls = protocolString.startsWith("https", ignoreCase = true)
 
