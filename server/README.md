@@ -20,12 +20,12 @@ graph TB
   end
   :server[server]:::unknown
 
-  :core:datastore -.->|commonMainImplementation| :core:common
-  :core:datastore -.->|commonMainImplementation| :core:model
-  :core:model -.->|commonMainImplementation| :core:common
-  :core:network -.->|commonMainImplementation| :core:common
-  :core:network -.->|commonMainImplementation| :core:datastore
-  :core:network -.->|commonMainImplementation| :core:model
+  :core:datastore -.-> :core:common
+  :core:datastore -.-> :core:model
+  :core:model -.-> :core:common
+  :core:network -.-> :core:common
+  :core:network -.-> :core:datastore
+  :core:network -.-> :core:model
   :server -.-> :core:model
   :server -.-> :core:network
 

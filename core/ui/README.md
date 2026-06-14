@@ -14,10 +14,13 @@ graph TB
   subgraph :core
     direction TB
     :core:common[common]:::kotlin-multiplatform
+    :core:model[model]:::kotlin-multiplatform
     :core:ui[ui]:::compose-multiplatform
   end
 
-  :core:ui -.->|commonMainImplementation| :core:common
+  :core:model -.-> :core:common
+  :core:ui -.-> :core:common
+  :core:ui --> :core:model
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;

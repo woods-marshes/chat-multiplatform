@@ -21,19 +21,19 @@ graph TB
     :core:network[network]:::kotlin-multiplatform
   end
 
-  :core:data -.->|commonMainImplementation| :core:common
-  :core:data -.->|commonMainImplementation| :core:database
-  :core:data -.->|commonMainImplementation| :core:datastore
-  :core:data -.->|commonMainImplementation| :core:model
-  :core:data -.->|commonMainImplementation| :core:network
-  :core:database -.->|commonMainImplementation| :core:common
-  :core:database -.->|commonMainImplementation| :core:model
-  :core:datastore -.->|commonMainImplementation| :core:common
-  :core:datastore -.->|commonMainImplementation| :core:model
-  :core:model -.->|commonMainImplementation| :core:common
-  :core:network -.->|commonMainImplementation| :core:common
-  :core:network -.->|commonMainImplementation| :core:datastore
-  :core:network -.->|commonMainImplementation| :core:model
+  :core:data -.-> :core:common
+  :core:data -.-> :core:database
+  :core:data -.-> :core:datastore
+  :core:data -.-> :core:model
+  :core:data -.-> :core:network
+  :core:database -.-> :core:common
+  :core:database -.-> :core:model
+  :core:datastore -.-> :core:common
+  :core:datastore -.-> :core:model
+  :core:model -.-> :core:common
+  :core:network -.-> :core:common
+  :core:network -.-> :core:datastore
+  :core:network -.-> :core:model
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;

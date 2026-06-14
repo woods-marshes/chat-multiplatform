@@ -11,7 +11,25 @@ config:
     nodePlacementStrategy: SIMPLE
 ---
 graph TB
+  subgraph :core
+    direction TB
+    :core:common[common]:::kotlin-multiplatform
+    :core:datastore[datastore]:::kotlin-multiplatform
+    :core:model[model]:::kotlin-multiplatform
+    :core:network[network]:::kotlin-multiplatform
+  end
   :web[web]:::unknown
+
+  :core:datastore -.-> :core:common
+  :core:datastore -.-> :core:model
+  :core:model -.-> :core:common
+  :core:network -.-> :core:common
+  :core:network -.-> :core:datastore
+  :core:network -.-> :core:model
+  :web -.-> :core:common
+  :web -.-> :core:datastore
+  :web -.-> :core:model
+  :web -.-> :core:network
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;

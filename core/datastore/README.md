@@ -18,9 +18,9 @@ graph TB
     :core:model[model]:::kotlin-multiplatform
   end
 
-  :core:datastore -.->|commonMainImplementation| :core:common
-  :core:datastore -.->|commonMainImplementation| :core:model
-  :core:model -.->|commonMainImplementation| :core:common
+  :core:datastore -.-> :core:common
+  :core:datastore -.-> :core:model
+  :core:model -.-> :core:common
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;

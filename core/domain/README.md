@@ -15,9 +15,12 @@ graph TB
     direction TB
     :core:common[common]:::kotlin-multiplatform
     :core:domain[domain]:::kotlin-multiplatform
+    :core:model[model]:::kotlin-multiplatform
   end
 
-  :core:domain -.->|commonMainImplementation| :core:common
+  :core:domain -.-> :core:common
+  :core:domain -.-> :core:model
+  :core:model -.-> :core:common
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;

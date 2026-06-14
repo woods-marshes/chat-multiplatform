@@ -3,6 +3,12 @@
 # =============================================================
 FROM gradle:9.5.1-jdk25 AS build
 
+USER root
+RUN apt-get update && \
+    apt-get install -y nodejs npm && \
+    rm -rf /var/lib/apt/lists/*
+USER gradle
+
 WORKDIR /home/gradle/src
 
 COPY --chown=gradle:gradle gradlew /home/gradle/src/
