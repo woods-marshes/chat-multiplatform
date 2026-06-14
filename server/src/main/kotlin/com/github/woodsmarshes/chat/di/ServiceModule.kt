@@ -7,6 +7,7 @@ import com.github.woodsmarshes.chat.service.ConversationSettingsService
 import com.github.woodsmarshes.chat.service.FileService
 import com.github.woodsmarshes.chat.service.GroupMembershipService
 import com.github.woodsmarshes.chat.service.MessageService
+import com.github.woodsmarshes.chat.service.ArticleService
 import com.github.woodsmarshes.chat.service.RealtimeService
 import com.github.woodsmarshes.chat.service.UserService
 import org.koin.core.module.dsl.singleOf
@@ -21,5 +22,6 @@ val serviceModule = module {
     singleOf(::FileService)
     singleOf(::MessageService)
     singleOf(::UserService)
+    singleOf(::ArticleService)
     singleOf(::RealtimeService)
 }

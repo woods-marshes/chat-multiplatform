@@ -36,7 +36,7 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
 
                 jvm()
 
-                js(IR) {
+                js {
                     browser()
                     compilerOptions {
                         this.target.set("es2015")

@@ -7,19 +7,22 @@ import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ConversationsNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
+import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
+import kotlinx.serialization.modules.subclass
 
 val navConfiguration = SavedStateConfiguration {
     serializersModule = SerializersModule {
         polymorphic(NavKey::class) {
-            subclass(ConversationsNavKey::class, ConversationsNavKey.serializer())
-            subclass(ContactsNavKey::class, ContactsNavKey.serializer())
-            subclass(SettingsNavKey::class, SettingsNavKey.serializer())
-            subclass(ChatNavKey::class, ChatNavKey.serializer())
-            subclass(ProfileNavKey::class, ProfileNavKey.serializer())
-            subclass(AuthNavKey::class, AuthNavKey.serializer())
+            subclass(ConversationsNavKey::class)
+            subclass(ContactsNavKey::class)
+            subclass(SettingsNavKey::class)
+            subclass(ChatNavKey::class)
+            subclass(ProfileNavKey::class)
+            subclass(AuthNavKey::class)
+            subclass(SearchNavKey::class)
         }
     }
 }

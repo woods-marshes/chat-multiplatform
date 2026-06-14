@@ -55,6 +55,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ConversationsScreen(
     onConversationClick: (conversationId: String, isGroup: Boolean) -> Unit,
     onMenuClick: (() -> Unit)? = null,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ConversationsViewModel = koinViewModel(),
 ) {
@@ -67,7 +68,7 @@ fun ConversationsScreen(
                 showMenuButton = onMenuClick != null,
                 onMenuClick = onMenuClick,
                 actions = {
-                    IconButton(onClick = { /* TODO: search */ }) {
+                    IconButton(onClick = onSearchClick) {
                         Icon(Icons.Default.Search, contentDescription = LocalStrings.current.searchCd)
                     }
                 },

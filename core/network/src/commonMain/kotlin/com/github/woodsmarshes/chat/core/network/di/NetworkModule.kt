@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.core.network.di
 
+import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
 import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
@@ -33,6 +34,7 @@ val networkModule = module {
     singleOf(::ConversationApi)
     singleOf(::UserApi)
     singleOf(::FileApi)
+    singleOf(::ArticleApi)
     singleOf(::RealtimeApi)
 
 }

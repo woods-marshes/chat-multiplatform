@@ -6,12 +6,24 @@ import com.github.woodsmarshes.chat.feature.search.ui.SearchScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
-data object SearchNavKey : NavKey
+data class SearchNavKey(
+    val type: SearchType,
+) : NavKey
+
+enum class SearchType {
+    CONVERSATION,
+    CONTACT,
+    SETTING,
+}
 
 fun EntryProviderScope<NavKey>.searchEntry(
     onBack: () -> Unit,
+    metadata: Map<String, Any> = emptyMap(),
 ) {
-    entry<SearchNavKey> {
-        SearchScreen(onBack = onBack)
+    entry<SearchNavKey>(metadata = metadata) { key ->
+        SearchScreen(
+            onBack = onBack,
+            type = key.type
+        )
     }
 }

@@ -14,7 +14,7 @@ COPY --chown=gradle:gradle . .
 
 # uid=1000/gid=1000 确保 gradle 用户对挂载的缓存目录有读写权限
 RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
-    ./gradlew :server:buildFatJar --no-daemon -PexcludeWeb=true
+    ./gradlew :server:buildFatJar --no-daemon
 
 FROM eclipse-temurin:25-jre-alpine AS runtime
 

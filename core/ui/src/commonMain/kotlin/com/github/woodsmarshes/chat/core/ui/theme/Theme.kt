@@ -19,31 +19,31 @@ import com.github.woodsmarshes.chat.resources.MiSans_Normal
 import com.github.woodsmarshes.chat.resources.MiSans_Regular
 import com.github.woodsmarshes.chat.resources.Res
 import org.jetbrains.compose.resources.Font
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.TextStyles
-import top.yukonga.miuix.kmp.theme.ThemeController
-import top.yukonga.miuix.kmp.theme.defaultTextStyles
+//import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+//import top.yukonga.miuix.kmp.theme.MiuixTheme
+//import top.yukonga.miuix.kmp.theme.TextStyles
+//import top.yukonga.miuix.kmp.theme.ThemeController
+//import top.yukonga.miuix.kmp.theme.defaultTextStyles
 
-fun getMiuixTextStyles(fontFamily: FontFamily): TextStyles {
-    val default = defaultTextStyles()
-    return default.copy(
-        main = default.main.copy(fontFamily = fontFamily),
-        paragraph = default.paragraph.copy(fontFamily = fontFamily),
-        body1 = default.body1.copy(fontFamily = fontFamily),
-        body2 = default.body2.copy(fontFamily = fontFamily),
-        button = default.button.copy(fontFamily = fontFamily),
-        footnote1 = default.footnote1.copy(fontFamily = fontFamily),
-        footnote2 = default.footnote2.copy(fontFamily = fontFamily),
-        headline1 = default.headline1.copy(fontFamily = fontFamily),
-        headline2 = default.headline2.copy(fontFamily = fontFamily),
-        subtitle = default.subtitle.copy(fontFamily = fontFamily),
-        title1 = default.title1.copy(fontFamily = fontFamily),
-        title2 = default.title2.copy(fontFamily = fontFamily),
-        title3 = default.title3.copy(fontFamily = fontFamily),
-        title4 = default.title4.copy(fontFamily = fontFamily),
-    )
-}
+//fun getMiuixTextStyles(fontFamily: FontFamily): TextStyles {
+//    val default = defaultTextStyles()
+//    return default.copy(
+//        main = default.main.copy(fontFamily = fontFamily),
+//        paragraph = default.paragraph.copy(fontFamily = fontFamily),
+//        body1 = default.body1.copy(fontFamily = fontFamily),
+//        body2 = default.body2.copy(fontFamily = fontFamily),
+//        button = default.button.copy(fontFamily = fontFamily),
+//        footnote1 = default.footnote1.copy(fontFamily = fontFamily),
+//        footnote2 = default.footnote2.copy(fontFamily = fontFamily),
+//        headline1 = default.headline1.copy(fontFamily = fontFamily),
+//        headline2 = default.headline2.copy(fontFamily = fontFamily),
+//        subtitle = default.subtitle.copy(fontFamily = fontFamily),
+//        title1 = default.title1.copy(fontFamily = fontFamily),
+//        title2 = default.title2.copy(fontFamily = fontFamily),
+//        title3 = default.title3.copy(fontFamily = fontFamily),
+//        title4 = default.title4.copy(fontFamily = fontFamily),
+//    )
+//}
 
 private val defaultM3Typography = Typography()
 fun getM3Typography(fontFamily: FontFamily) = Typography(
@@ -83,7 +83,7 @@ fun AppTheme(
         Font(Res.font.MiSans_Bold, FontWeight.Bold)
     )
 
-    val miuixTextStyles = remember(appFontFamily) { getMiuixTextStyles(appFontFamily) }
+    // val miuixTextStyles = remember(appFontFamily) { getMiuixTextStyles(appFontFamily) }
     val m3Typography = remember(appFontFamily) { getM3Typography(appFontFamily) }
 
     val contentWithFontFallback = @Composable {
@@ -95,34 +95,34 @@ fun AppTheme(
 
 
     when (themeConfig.themeBrand) {
-        ThemeBrand.MIUIX, ThemeBrand.DEFAULT,
-        ThemeBrand.ANDROID, ThemeBrand.IOS, ThemeBrand.DESKTOP -> {
-            val mode = when (themeConfig.darkThemeConfig) {
-                DarkThemeConfig.LIGHT -> ColorSchemeMode.Light
-                DarkThemeConfig.DARK -> ColorSchemeMode.Dark
-                DarkThemeConfig.FOLLOW_SYSTEM -> ColorSchemeMode.System
-            }
-            val controller = remember(themeConfig.darkThemeConfig) {
-                ThemeController(mode)
-            }
-            MiuixTheme(
-                controller = controller,
-                textStyles = miuixTextStyles
-            ) {
-                val bubbleColors = BubbleDefaults.miuixColors()
-                val bubbleShapes = BubbleDefaults.miuixShapes()
-                val colorTokens = if (isDark) ColorTokens.dark() else ColorTokens.light()
-                CompositionLocalProvider(
-                    LocalThemeConfig provides themeConfig,
-                    LocalBubbleColors provides bubbleColors,
-                    LocalBubbleShapes provides bubbleShapes,
-                    LocalColorTokens provides colorTokens,
-                    LocalShapeTokens provides ShapeDefaults.Default,
-                    content = contentWithFontFallback,
-                )
-            }
-        }
-        ThemeBrand.MATERIAL3 -> {
+//        ThemeBrand.MIUIX, ThemeBrand.DEFAULT,
+//        ThemeBrand.ANDROID, ThemeBrand.IOS, ThemeBrand.DESKTOP -> {
+//            val mode = when (themeConfig.darkThemeConfig) {
+//                DarkThemeConfig.LIGHT -> ColorSchemeMode.Light
+//                DarkThemeConfig.DARK -> ColorSchemeMode.Dark
+//                DarkThemeConfig.FOLLOW_SYSTEM -> ColorSchemeMode.System
+//            }
+//            val controller = remember(themeConfig.darkThemeConfig) {
+//                ThemeController(mode)
+//            }
+//            MiuixTheme(
+//                controller = controller,
+//                textStyles = miuixTextStyles
+//            ) {
+//                val bubbleColors = BubbleDefaults.miuixColors()
+//                val bubbleShapes = BubbleDefaults.miuixShapes()
+//                val colorTokens = if (isDark) ColorTokens.dark() else ColorTokens.light()
+//                CompositionLocalProvider(
+//                    LocalThemeConfig provides themeConfig,
+//                    LocalBubbleColors provides bubbleColors,
+//                    LocalBubbleShapes provides bubbleShapes,
+//                    LocalColorTokens provides colorTokens,
+//                    LocalShapeTokens provides ShapeDefaults.Default,
+//                    content = contentWithFontFallback,
+//                )
+//            }
+//        }
+        else -> {
             val colorScheme = if (isDark) m3DarkColorScheme else m3LightColorScheme
             MaterialTheme(
                 colorScheme = colorScheme,

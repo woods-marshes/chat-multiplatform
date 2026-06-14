@@ -65,6 +65,8 @@ import com.github.woodsmarshes.chat.feature.conversations.navigation.Conversatio
 import com.github.woodsmarshes.chat.feature.conversations.navigation.conversationsEntry
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.profileEntry
+import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
+import com.github.woodsmarshes.chat.feature.search.navigation.SearchType
 import com.github.woodsmarshes.chat.feature.search.navigation.searchEntry
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
@@ -161,6 +163,9 @@ private fun MainContent(
                 navigator.navigate(ChatNavKey(conversationId , isGroup))
             },
             onMenuClick = { scope.launch { drawerState.open() } },
+            onSearchClick = {
+                navigator.navigate(SearchNavKey(SearchType.CONVERSATION))
+            },
             metadata = listPaneMeta,
         )
         contactsEntry(
@@ -178,7 +183,10 @@ private fun MainContent(
             onBack = { navigator.goBack() },
             metadata = detailPaneMeta + extraPaneMeta,
         )
-        searchEntry(onBack = { navigator.goBack() })
+        searchEntry(
+            onBack = { navigator.goBack() },
+            metadata = listPaneMeta,
+        )
     }
 
     val isMediumOrLarger = windowAdaptiveInfo.windowSizeClass

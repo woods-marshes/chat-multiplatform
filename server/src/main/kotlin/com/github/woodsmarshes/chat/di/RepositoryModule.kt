@@ -1,5 +1,7 @@
 package com.github.woodsmarshes.chat.di
 
+import com.github.woodsmarshes.chat.repository.ArticleDataSourceImpl
+import com.github.woodsmarshes.chat.repository.ArticleRepository
 import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestSourceImpl
@@ -57,6 +59,10 @@ val repositoryModule = module {
 
     singleOf(::ContactRequestSourceImpl) {
         bind<ContactRequestRepository>()
+    }
+
+    singleOf(::ArticleDataSourceImpl) {
+        bind<ArticleRepository>()
     }
 
 }

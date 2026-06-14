@@ -11,12 +11,14 @@ data object ConversationsNavKey : NavKey
 fun EntryProviderScope<NavKey>.conversationsEntry(
     onNavigateToChat: (conversationId: String, isGroup: Boolean) -> Unit,
     onMenuClick: (() -> Unit)? = null,
+    onSearchClick: () -> Unit,
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<ConversationsNavKey>(metadata = metadata) {
         ConversationsScreen(
             onConversationClick = onNavigateToChat,
             onMenuClick = onMenuClick,
+            onSearchClick = onSearchClick,
         )
     }
 }

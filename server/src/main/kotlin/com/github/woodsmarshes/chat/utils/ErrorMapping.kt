@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.utils
 
+import com.github.woodsmarshes.chat.core.model.error.ArticleError
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.model.error.ContactError
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
@@ -15,6 +16,7 @@ fun DomainError.toHttpStatusCode(): HttpStatusCode = when (this) {
     is FileError -> this.mapToStatus()
     is MessageError -> this.mapToStatus()
     is UserError -> this.mapToStatus()
+    is ArticleError -> this.mapToStatus()
     is ConversationError -> this.mapToStatus()
     else -> HttpStatusCode.BadRequest
 }
@@ -77,6 +79,13 @@ fun UserError.mapToStatus(): HttpStatusCode = when (this) {
     UserError.InvalidRequest -> HttpStatusCode.BadRequest
     UserError.UpdateFailed -> HttpStatusCode.InternalServerError
     is UserError.Unknown -> HttpStatusCode.InternalServerError
+}
+
+fun ArticleError.mapToStatus(): HttpStatusCode = when (this) {
+    ArticleError.NotFound -> HttpStatusCode.NotFound
+    ArticleError.PermissionDenied -> HttpStatusCode.Forbidden
+    ArticleError.OperationFailed -> HttpStatusCode.InternalServerError
+    is ArticleError.Unknown -> HttpStatusCode.InternalServerError
 }
 
 fun ConversationError.mapToStatus(): HttpStatusCode = when (this) {

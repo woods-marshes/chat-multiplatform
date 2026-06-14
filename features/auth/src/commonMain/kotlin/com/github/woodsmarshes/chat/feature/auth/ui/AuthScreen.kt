@@ -3,9 +3,7 @@ package com.github.woodsmarshes.chat.feature.auth.ui
 import androidx.compose.animation.*
 import androidx.compose.animation.core.ArcMode
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,11 +25,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
+import com.github.woodsmarshes.chat.core.ui.components.ScreenEdgeGlow
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
-import com.github.woodsmarshes.chat.core.ui.theme.AppTheme
+import com.github.woodsmarshes.chat.core.ui.utils.rememberScreenCornerRadius
 import com.github.woodsmarshes.chat.feature.auth.model.AuthMode
 import com.github.woodsmarshes.chat.feature.auth.model.AuthScreenState
 import com.github.woodsmarshes.chat.feature.auth.model.AuthUiState
@@ -115,6 +112,12 @@ private fun AuthScreenContent(
             .imePadding(),
         contentAlignment = Alignment.Center
     ) {
+        if (!isDesktopOrTablet && uiState.screenState == AuthScreenState.Loading) {
+            ScreenEdgeGlow(
+                enabled = true,
+                cornerRadius = rememberScreenCornerRadius(),
+            )
+        }
         AnimatedContent(
             targetState = isDesktopOrTablet,
             label = "Auth-LayoutTransition",
@@ -277,6 +280,10 @@ private fun AuthFormContent(
     onSubmit: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val onSubmitWithClearFocus: () -> Unit = {
+        focusManager.clearFocus()
+        onSubmit()
+    }
 
     Column(
         modifier = Modifier.padding(24.dp),
@@ -342,8 +349,15 @@ private fun AuthFormContent(
                         supportingText = uiState.emailError?.let { { Text(it) } },
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                focusManager.moveFocus(FocusDirection.Down)
+                            }
+                        )
                     )
 
                     OutlinedTextField(
@@ -356,18 +370,24 @@ private fun AuthFormContent(
                         leadingIcon = { Icon(Icons.Default.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
+                                Icon(
+                                    imageVector = if (passwordVisible) {
+                                        Icons.Default.Visibility
+                                    } else {
+                                        Icons.Default.VisibilityOff
+                                    },
+                                    contentDescription = null
+                                )
                             }
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
-                            imeAction = if (uiState.mode == AuthMode.Login) ImeAction.Done else ImeAction.Next
+                            imeAction = ImeAction.Done
                         ),
                         keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                            onDone = { if (uiState.canSubmit) onSubmit() }
+                            onDone = { if (uiState.canSubmit) onSubmitWithClearFocus() }
                         )
                     )
                 } else {
@@ -381,7 +401,11 @@ private fun AuthFormContent(
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                focusManager.moveFocus(FocusDirection.Down)
+                            }
+                        )
                     )
 
                     OutlinedTextField(
@@ -393,8 +417,15 @@ private fun AuthFormContent(
                         supportingText = uiState.emailError?.let { { Text(it) } },
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                focusManager.moveFocus(FocusDirection.Down)
+                            }
+                        )
                     )
 
                     OutlinedTextField(
@@ -414,11 +445,10 @@ private fun AuthFormContent(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
-                            imeAction = if (uiState.mode == AuthMode.Login) ImeAction.Done else ImeAction.Next
+                            imeAction = ImeAction.Next
                         ),
                         keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                            onDone = { if (uiState.canSubmit) onSubmit() }
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
                         )
                     )
 
@@ -432,8 +462,13 @@ private fun AuthFormContent(
                         leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { if (uiState.canSubmit) onSubmit() })
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = {
+                            if (uiState.canSubmit) onSubmitWithClearFocus()
+                        })
                     )
                 }
             }
@@ -442,7 +477,7 @@ private fun AuthFormContent(
         Button(
             onClick = {
                 if (uiState.screenState !is AuthScreenState.Loading) {
-                    onSubmit()
+                    onSubmitWithClearFocus()
                 }
             },
             modifier = Modifier.fillMaxWidth().height(56.dp),

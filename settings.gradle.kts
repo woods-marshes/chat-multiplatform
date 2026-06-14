@@ -26,6 +26,14 @@ dependencyResolutionManagement {
                 includeGroupAndSubgroups("com.google")
             }
         }
+
+        versionCatalogs {
+            create("kotlinWrappers") {
+                val wrappersVersion = "2026.5.7"
+                from("org.jetbrains.kotlin-wrappers:kotlin-wrappers-catalog:$wrappersVersion")
+            }
+        }
+
         mavenCentral()
         maven("https://packages.confluent.io/maven/")
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/kotlin-js-wrappers")
@@ -40,13 +48,7 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-val excludeWeb = providers.gradleProperty("excludeWeb").orNull?.toBoolean() ?: false
-if (!excludeWeb) {
-    include(":web")
-} else {
-    println("⚠️ Skipping ':web' module due to 'excludeWeb' property")
-}
-
+include(":web")
 include(":server")
 include(":composeApp")
 include(":androidApp")

@@ -39,14 +39,14 @@ ktor {
     }
 }
 
-//tasks.withType<ProcessResources> {
-//    dependsOn(":web:jsBrowserDistribution")
-//
-//    val jsOutput = file("../web/build/dist/js/productionExecutable")
-//    if (jsOutput.exists()) {
-//        inputs.dir(jsOutput)
-//    }
-//
+tasks.withType<ProcessResources> {
+    dependsOn(":web:jsBrowserDistribution")
+
+    val jsOutput = file("../web/build/dist/js/productionExecutable")
+    if (jsOutput.exists()) {
+        inputs.dir(jsOutput)
+    }
+
 //    from(jsOutput.resolve("public")) {
 //        into("web")
 //    }
@@ -54,15 +54,15 @@ ktor {
 //    from(jsOutput.resolve("markdown")) {
 //        into("web")
 //    }
-//
-//    from(jsOutput) {
-//        into("web")
-//        include("*.js", "*.js.LICENSE.txt", "*.wasm")
-//        exclude("*.js.map", "kobweb/**", "markdown/**", "public/**")
-//    }
-//
-//    duplicatesStrategy = DuplicatesStrategy.WARN
-//}
+
+    from(jsOutput) {
+        into("static")
+        include("*.html", "*.css", "*.js", "*.js.LICENSE.txt", "*.wasm")
+        exclude("*.js.map", "kobweb/**", "markdown/**", "public/**")
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.WARN
+}
 
 dependencies {
     implementation(projects.core.model)
@@ -78,10 +78,6 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.serialization.kotlinx.protobuf)
     implementation(libs.ktor.server.content.negotiation)
-    implementation(libs.exposed.core)
-    implementation(libs.exposed.jdbc)
-    implementation(libs.h2)
-    implementation(libs.postgresql)
     implementation(libs.ktor.server.websockets)
     implementation(libs.koin.ktor)
     implementation(libs.koin.logger.slf4j)
@@ -117,8 +113,14 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.ktor.client.content.negotiation)
 
+    implementation(libs.h2)
+    implementation(libs.postgresql)
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.jdbc)
     implementation(libs.exposed.kotlin.datetime)
     implementation(libs.exposed.json)
+    implementation(libs.exposed.migration.jdbc)
+    implementation(libs.exposed.migration.core)
 
     //Commons Codec - Password Hash
     implementation(libs.commons.codec)

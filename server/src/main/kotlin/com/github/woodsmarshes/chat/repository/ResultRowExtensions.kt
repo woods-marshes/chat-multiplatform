@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.*
+import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.repository.database.schema.ContactRequests
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
@@ -10,6 +11,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
+import com.github.woodsmarshes.chat.repository.database.schema.Articles
 import org.jetbrains.exposed.v1.core.ResultRow
 import kotlin.time.Clock
 
@@ -100,6 +102,18 @@ fun ResultRow.toMessage(user: SimpleUser? = null, replyTo: Message? = null): Mes
     createdAt = this[Messages.createdAt],
     revokedAt = this[Messages.revokedAt],
     senderContext = null
+)
+
+fun ResultRow.toArticle(user: SimpleUser? = null): Article = Article(
+    id = this[Articles.id].value,
+    title = this[Articles.title],
+    content = this[Articles.content],
+    author = user ?: toSimpleUser(),
+    status = this[Articles.status],
+    excerpt = this[Articles.excerpt],
+    createdAt = this[Articles.createdAt],
+    updatedAt = this[Articles.updatedAt],
+    publishedAt = this[Articles.publishedAt],
 )
 
 fun ResultRow.toSimpleUser() = SimpleUser(

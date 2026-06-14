@@ -3,7 +3,7 @@ package com.github.woodsmarshes.chat.core.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+//import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * CompositionLocals for bubble-specific theme tokens.
@@ -44,28 +44,28 @@ object BubbleDefaultTokens {
  */
 object BubbleDefaults {
 
-    @Composable
-    fun miuixColors(): BubbleColorTokens = with(MiuixTheme.colorScheme) {
-        BubbleColorTokens(
-            ownBackground = primary,
-            ownContent = onPrimary,
-            otherBackground = secondaryContainer,
-            otherContent = onSecondaryContainer,
-            timestampColor = disabledOnSecondaryVariant,
-            senderNameColor = onSecondaryContainer,
-            iconTint = onSecondaryContainer,
-            inputBarBackground = surface.copy(alpha = 0.95f),
-            inputFieldBackground = secondaryContainer,
-            inputFieldContent = onSecondaryContainer,
-            inputFieldPlaceholder = disabledOnSecondaryVariant,
-            inputIconTint = onSecondaryContainer,
-            inputSendIconTint = primary,
-            panelBackground = surface,
-            errorColor = error,
-            surfaceColor = surface,
-            onSurfaceColor = onSurface,
-        )
-    }
+//    @Composable
+//    fun miuixColors(): BubbleColorTokens = with(MiuixTheme.colorScheme) {
+//        BubbleColorTokens(
+//            ownBackground = primary,
+//            ownContent = onPrimary,
+//            otherBackground = secondaryContainer,
+//            otherContent = onSecondaryContainer,
+//            timestampColor = disabledOnSecondaryVariant,
+//            senderNameColor = onSecondaryContainer,
+//            iconTint = onSecondaryContainer,
+//            inputBarBackground = surface.copy(alpha = 0.95f),
+//            inputFieldBackground = secondaryContainer,
+//            inputFieldContent = onSecondaryContainer,
+//            inputFieldPlaceholder = disabledOnSecondaryVariant,
+//            inputIconTint = onSecondaryContainer,
+//            inputSendIconTint = primary,
+//            panelBackground = surface,
+//            errorColor = error,
+//            surfaceColor = surface,
+//            onSurfaceColor = onSurface,
+//        )
+//    }
 
     fun material3Colors(isDark: Boolean): BubbleColorTokens =
         if (isDark) ColorTokens.dark().bubble else ColorTokens.light().bubble

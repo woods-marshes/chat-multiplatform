@@ -6,6 +6,7 @@ import com.github.woodsmarshes.chat.base.jwt.TokenConfig
 import com.github.woodsmarshes.chat.di.MainModule
 import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
+import com.github.woodsmarshes.chat.repository.database.schema.Articles
 import com.github.woodsmarshes.chat.repository.database.schema.ContactRequests
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
@@ -65,7 +66,7 @@ private fun Application.configureSchema(database: Database) {
         SchemaUtils.create(
             Users, Conversations, UserSettings, GroupProfiles,
             Messages, GroupJoinRequests, ConversationParticipants,
-            Contacts, ContactRequests
+            Contacts, ContactRequests, Articles
         )
     }
 }

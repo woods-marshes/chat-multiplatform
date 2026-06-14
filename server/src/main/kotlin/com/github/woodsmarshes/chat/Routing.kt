@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat
 
 import com.github.woodsmarshes.chat.exceptions.AppException
+import com.github.woodsmarshes.chat.routes.articleRoutes
 import com.github.woodsmarshes.chat.routes.authRoutes
 import com.github.woodsmarshes.chat.routes.contactRoutes
 import com.github.woodsmarshes.chat.routes.conversationRoutes
@@ -9,17 +10,16 @@ import com.github.woodsmarshes.chat.routes.realtimeRoutes
 import com.github.woodsmarshes.chat.routes.userRoutes
 import com.github.woodsmarshes.chat.utils.toHttpStatusCode
 import io.ktor.http.*
-import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
 import io.ktor.server.plugins.autohead.*
+import java.io.File
 import io.ktor.server.plugins.doublereceive.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.resources.Resources
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.io.File
 
 fun Application.configureRouting() {
     install(DoubleReceive)
@@ -47,6 +47,7 @@ fun Application.configureRouting() {
 
     routing {
         authRoutes()
+        articleRoutes()
         userRoutes()
         conversationRoutes()
         authenticate {
@@ -101,5 +102,10 @@ fun Application.configureRouting() {
             }
         }
 
+        // Serve web module SPA from classpath resources (copied via processResources)
+        singlePageApplication {
+            useResources = true
+            filesPath = "static"
+        }
     }
 }
