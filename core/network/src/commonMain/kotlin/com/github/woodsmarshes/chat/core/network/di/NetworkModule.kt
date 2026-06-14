@@ -18,9 +18,12 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
+val networkConfig = module {
+    single<NetworkConfig> { loadNetworkConfig() }
+}
+
 val networkModule = module {
     singleOf(::HttpEventBusImpl) bind HttpEventBus::class
-    single<NetworkConfig> { loadNetworkConfig() }
     single<HttpClient> {
         createHttpClient(
             httpClientEngine = httpEngine().create(),

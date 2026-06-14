@@ -5,6 +5,7 @@ import com.github.woodsmarshes.chat.core.common.di.WebContext
 import com.github.woodsmarshes.chat.core.common.di.commonModule
 import com.github.woodsmarshes.chat.core.datastore.di.dataStoreModule
 import com.github.woodsmarshes.chat.core.network.di.networkModule
+import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
 import com.github.woodsmarshes.web.wrapper.createRoot
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -21,6 +22,7 @@ fun main() {
         modules(
             module {
                 single<PlatformContext> { platformContext }
+                single<NetworkConfig> { loadJsNetworkConfig() }
             },
             commonModule,
             dataStoreModule,
@@ -32,4 +34,28 @@ fun main() {
         val container = document.getElementById("root")
         createRoot(container).render(App.create())
     })
+}
+
+fun loadJsNetworkConfig(): NetworkConfig {
+    val hostname = window.location.hostname.takeIf { it.isNotEmpty() } ?: "127.0.0.1"
+
+    val protocolString = window.location.protocol
+    val isTls = protocolString.startsWith("https", ignoreCase = true)
+
+    val portString = window.location.port
+    var port = if (portString.isNotEmpty()) {
+        portString.toIntOrNull() ?: if (isTls) 443 else 80
+    } else {
+        if (isTls) 443 else 80
+    }
+
+    if (hostname == "localhost" && port == 8080) {
+        port = 9051
+    }
+
+    return NetworkConfig(
+        host = hostname,
+        port = port,
+        useTls = isTls
+    )
 }
