@@ -11,7 +11,7 @@ export function TiptapEditorBridge({ content, onChange }) {
   const initialValue = content || { type: 'doc', content: [] };
   return (
     <SimpleEditor
-      initialContent={content}
+      initialContent={initialValue}
       onUpdate={({ editor }) => {
         if (onChange) {
           onChange(editor.getJSON()); // 状态实时回传给 Kotlin/JS

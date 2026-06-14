@@ -183,7 +183,12 @@ const MobileToolbarContent = ({
   </>
 )
 
-export function SimpleEditor() {
+interface SimpleEditorProps {
+  initialContent?: any
+  onUpdate?: (args: { editor: any }) => void
+}
+
+export function SimpleEditor({ initialContent, onUpdate }: SimpleEditorProps) {
   const isMobile = useIsBreakpoint()
   const { height } = useWindowSize()
   const [mobileView, setMobileView] = useState<"main" | "highlighter" | "link">(
@@ -228,8 +233,22 @@ export function SimpleEditor() {
         onError: (error) => console.error("Upload failed:", error),
       }),
     ],
-    content,
+    content: initialContent !== undefined ? initialContent : { type: "doc", content: [] },
+    onUpdate: (args) => {
+      if (onUpdate) {
+        onUpdate(args)
+      }
+    }
   })
+
+  useEffect(() => {
+    if (editor && initialContent && !editor.isDestroyed) {
+      const currentJson = editor.getJSON()
+      if (JSON.stringify(currentJson) !== JSON.stringify(initialContent)) {
+        editor.commands.setContent(initialContent, false)
+      }
+    }
+  }, [editor, initialContent])
 
   const rect = useCursorVisibility({
     editor,

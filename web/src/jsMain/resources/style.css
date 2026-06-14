@@ -525,3 +525,19 @@ body {
 .auth-toggle a:hover {
     text-decoration: underline;
 }
+
+.simple-editor-wrapper {
+    width: 100% !important;       /* 限制为父容器的 100% 宽度，不再使用 100vw */
+    height: auto !important;       /* 高度自适应，不再强行占满 100vh */
+    overflow: visible !important;  /* 避免容器内出现繁琐的双滚动条 */
+}
+
+.simple-editor-content {
+    max-width: 100% !important;   /* 撑满我们的 800px 布局宽度 */
+    margin: 0 !important;         /* 移除 margin: 0 auto 导致的右偏移 */
+    height: auto !important;
+}
+
+.simple-editor-content .tiptap.ProseMirror.simple-editor {
+    padding: 16px 0 !important;   /* 将默认的巨大内边距（3rem 3rem 30vh）修改为贴合你页面的标准内边距 */
+}
