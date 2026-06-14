@@ -4,8 +4,8 @@
 FROM gradle:9.5.1-jdk25 AS build
 
 USER root
-RUN apt-get update && \
-    apt-get install -y nodejs npm && \
+RUN apt update && \
+    apt install -y nodejs npm && \
     rm -rf /var/lib/apt/lists/*
 USER gradle
 
@@ -17,6 +17,10 @@ COPY --chown=gradle:gradle settings.gradle.kts build.gradle.kts gradle.propertie
 COPY --chown=gradle:gradle build-logic/ /home/gradle/src/build-logic/
 
 COPY --chown=gradle:gradle . .
+
+# 安装tiptap-bridge依赖
+RUN --mount=type=cache,target=/home/gradle/src/tiptap-bridge/node_modules \
+    cd tiptap-bridge && npm install
 
 # uid=1000/gid=1000 确保 gradle 用户对挂载的缓存目录有读写权限
 RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
