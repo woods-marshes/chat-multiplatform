@@ -23,13 +23,15 @@ RUN cd tiptap-bridge && npm install
 
 RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
     rm -rf /home/gradle/src/web/build && \
-    ./gradlew :web:jsBrowserDistribution --no-daemon --rerun-tasks
+    ./gradlew :web:jsBrowserProductionWebpack --no-daemon --rerun-tasks --no-build-cache
 
-RUN ls -la /home/gradle/src/web/build/dist/js/productionExecutable/ || echo "Directory missing"
+RUN ls -la /home/gradle/src/web/build/dist/js/productionExecutable/ || echo "Missing output"
 
 # uid=1000/gid=1000 确保 gradle 用户对挂载的缓存目录有读写权限
 RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
     ./gradlew :server:buildFatJar --no-daemon
+
+RUN jar tf /home/gradle/src/server/build/libs/fat.jar | grep -E '\.(html|css|js)$' | head -20
 
 FROM eclipse-temurin:25-jre-alpine AS runtime
 
