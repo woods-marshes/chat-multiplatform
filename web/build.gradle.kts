@@ -78,10 +78,6 @@ tasks.matching { it.name == "jsDevelopmentExecutableCompileSync" }.configureEach
     dependsOn("copyTiptapJsToBuild")
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpack>().configureEach {
-    outputs.upToDateWhen { false }
-}
-
 kotlin {
     sourceSets.all {
         languageSettings.optIn("kotlin.time.ExperimentalTime")

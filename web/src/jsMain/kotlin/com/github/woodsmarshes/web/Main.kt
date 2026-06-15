@@ -51,7 +51,7 @@ fun loadJsNetworkConfig(): NetworkConfig {
         if (isTls) 443 else 80
     }
 
-    if (hostname == "localhost" && port == 8080) {
+    if ((hostname == "localhost" || hostname == "127.0.0.1") && port != 9051) {
         port = 9051
     }
 

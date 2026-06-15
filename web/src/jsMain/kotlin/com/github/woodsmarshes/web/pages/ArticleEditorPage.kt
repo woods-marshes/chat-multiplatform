@@ -48,7 +48,7 @@ val ArticleEditorPage = FC<Props> {
     val (error, setError) = useState<String?>(null)
     val (existingArticle, setExistingArticle) = useState<Article?>(null)
 
-    // 🟢 核心状态：用一个 JS dynamic 变量存储编辑器的 JSON 内容数据流
+    // 核心状态：用一个 JS dynamic 变量存储编辑器的 JSON 内容数据流
     val (editorJson, setEditorJson) = useState<dynamic>(null)
 
     useEffectOnce {
@@ -59,7 +59,7 @@ val ArticleEditorPage = FC<Props> {
                     setTitle(article.title)
                     setExistingArticle(article)
 
-                    // 🟢 将旧文章的 JsonElement 转化为 JS 识别的动态 JSON 树
+                    // 将旧文章的 JsonElement 转化为 JS 识别的动态 JSON 树
                     val serializedStr = ProjectJson.encodeToString(JsonElement.serializer(), article.content)
                     val jsJson = JSON.parse<dynamic>(serializedStr)
                     setEditorJson(jsJson)
@@ -76,7 +76,7 @@ val ArticleEditorPage = FC<Props> {
     val handleSave = { newStatus: ArticleStatus ->
         val scope = MainScope()
         scope.launch {
-            // 🟢 保存时，将动态 JS 运行时的 json 树安全转换为 Kotlin 类型的 JsonElement
+            // 保存时，将动态 JS 运行时的 json 树安全转换为 Kotlin 类型的 JsonElement
             val contentElement: JsonElement = if (editorJson != null) {
                 val stringified = JSON.stringify(editorJson)
                 ProjectJson.parseToJsonElement(stringified)
@@ -138,18 +138,11 @@ val ArticleEditorPage = FC<Props> {
         div {
             className = ClassName("editor-page")
 
-            // 标题输入
-            input {
-                className = ClassName("editor-title-input")
-                placeholder = "Article title..."
-                this.value = title
-                onChange = { event -> setTitle(event.target.value.unsafeCast<String>()) }
-            }
-
-            // 🟢 极其干净的核心渲染：
             // 新建文章（editorJson为null）或者编辑文章（且editorJson已在useEffect中异步加载完）时挂载
             if (!isEditing || editorJson != null) {
                 TiptapEditorBridge {
+                    this.title = title
+                    this.onTitleChange = { newTitle -> setTitle(newTitle) }
                     this.content = editorJson
                     this.onChange = { newJson ->
                         setEditorJson(newJson) // 实时捕获编辑器变更
@@ -171,7 +164,7 @@ val ArticleEditorPage = FC<Props> {
 
                 if (isEditing) {
                     button {
-                        className = ClassName("btn btn-danger btn-sm")
+                        className = ClassName("btn btn-danger")
                         onClick = {
                             if (existingArticle != null) {
                                 val delScope = MainScope()

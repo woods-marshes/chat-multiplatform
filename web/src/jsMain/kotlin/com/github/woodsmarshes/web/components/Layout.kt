@@ -5,24 +5,43 @@ import web.cssom.ClassName
 import react.FC
 import react.PropsWithChildren
 import react.dom.html.ReactHTML.a
+import react.dom.html.ReactHTML.div
 import react.dom.html.ReactHTML.main
 import react.dom.html.ReactHTML.nav
 
 val Layout = FC<PropsWithChildren> { props ->
+    val path = Router.currentPath()
+    val isHome = path == "/" || path.isEmpty()
+
     nav {
-        className = ClassName("app-nav") // 🟢 恢复强类型安全的 className
-        a {
-            href = "#/"
-            onClick = { event -> // 🟢 恢复强类型的事件监听
-                event.preventDefault()
-                Router.navigate("/")
+        className = ClassName("app-nav")
+        div {
+            className = ClassName("app-nav-container")
+            // 返回按钮：仅在非首页显示，调用浏览器历史回退
+            if (!isHome) {
+                a {
+                    href = "#"
+                    className = ClassName("app-nav-back")
+                    onClick = { event ->
+                        event.preventDefault()
+                        Router.back()
+                    }
+                    +("← Back")
+                }
             }
-            +"Writing Platform"
+            a {
+                href = "#/"
+                className = ClassName("app-nav-title")
+                onClick = { event ->
+                    event.preventDefault()
+                    Router.navigate("/")
+                }
+                +"Writing Platform"
+            }
         }
     }
     main {
         className = ClassName("app-main")
-        // 🟢 声明式地渲染子级，告别 asDynamic()
         +props.children
     }
 }

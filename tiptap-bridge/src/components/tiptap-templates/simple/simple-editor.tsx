@@ -184,11 +184,13 @@ const MobileToolbarContent = ({
 )
 
 interface SimpleEditorProps {
+  title?: string
+  onTitleChange?: (newTitle: string) => void
   initialContent?: any
   onUpdate?: (args: { editor: any }) => void
 }
 
-export function SimpleEditor({ initialContent, onUpdate }: SimpleEditorProps) {
+export function SimpleEditor({ title, onTitleChange, initialContent, onUpdate }: SimpleEditorProps) {
   const isMobile = useIsBreakpoint()
   const { height } = useWindowSize()
   const [mobileView, setMobileView] = useState<"main" | "highlighter" | "link">(
@@ -266,6 +268,7 @@ export function SimpleEditor({ initialContent, onUpdate }: SimpleEditorProps) {
       <EditorContext.Provider value={{ editor }}>
         <Toolbar
           ref={toolbarRef}
+          className="tiptap-sticky-toolbar"
           style={{
             ...(isMobile
               ? {
@@ -288,11 +291,26 @@ export function SimpleEditor({ initialContent, onUpdate }: SimpleEditorProps) {
           )}
         </Toolbar>
 
-        <EditorContent
-          editor={editor}
-          role="presentation"
-          className="simple-editor-content"
-        />
+        {/* 文章标题 */}
+        <div className="simple-editor-content">
+          <input
+            type="text"
+            className="simple-editor-title-input"
+            placeholder="Article title..."
+            value={title || ""}
+            onChange={(e) => {
+              if (onTitleChange) {
+                onTitleChange(e.target.value)
+              }
+            }}
+          />
+
+          <EditorContent
+            editor={editor}
+            role="presentation"
+            className="simple-editor-editor"
+          />
+        </div>
       </EditorContext.Provider>
     </div>
   )

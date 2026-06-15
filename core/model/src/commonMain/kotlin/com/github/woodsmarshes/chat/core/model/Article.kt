@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.core.model
 
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.protobuf.ProtoNumber
@@ -21,7 +22,9 @@ enum class ArticleStatus {
 data class Article(
     @ProtoNumber(1) val id: Uuid,
     @ProtoNumber(2) val title: String,
-    @ProtoNumber(3) val content: JsonElement,
+    @ProtoNumber(3)
+    @Contextual
+    val content: JsonElement,
     @ProtoNumber(4) val author: SimpleUser,
     @ProtoNumber(5) val status: ArticleStatus = ArticleStatus.DRAFT,
     @ProtoNumber(6) val excerpt: String? = null,

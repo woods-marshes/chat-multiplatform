@@ -52,19 +52,21 @@ body,
 
 .tiptap.ProseMirror {
   font-family: "DM Sans", sans-serif;
+  caret-color: var(--tt-theme-text, #1a1a1a);
+  cursor: text;
 }
 
 .simple-editor-wrapper {
-  width: 100vw;
-  height: 100vh;
-  overflow: auto;
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
 
 .simple-editor-content {
-  max-width: 648px;
+  max-width: 850px;
   width: 100%;
   margin: 0 auto;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -72,11 +74,41 @@ body,
 
 .simple-editor-content .tiptap.ProseMirror.simple-editor {
   flex: 1;
-  padding: 3rem 3rem 30vh;
+  padding: 16px 0 20vh 0;
 }
 
 @media screen and (max-width: 480px) {
   .simple-editor-content .tiptap.ProseMirror.simple-editor {
-    padding: 1rem 1.5rem 30vh;
+    padding: 1rem 1.5rem 20vh;
   }
+}
+
+.simple-editor-title-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--tt-toolbar-border-color);
+  padding: 24px 0 12px 0;
+  font-size: 32px;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  background: transparent;
+  color: var(--tt-theme-text);
+  margin-bottom: 16px;
+}
+
+.simple-editor-title-input::placeholder {
+  color: #ccc;
+}
+
+.tiptap-sticky-toolbar {
+  position: sticky;
+  top: 56px;
+  z-index: 100;
+  background: var(--tt-toolbar-bg-color);
+  border-bottom: 1px solid var(--tt-toolbar-border-color);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }

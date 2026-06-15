@@ -17,12 +17,14 @@ import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.dto.events.SocketErrorResponse
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 import kotlinx.serialization.modules.subclassesOfSealed
 
 val ProjectSerializersModule = SerializersModule {
+    contextual(JsonElement::class, JsonElementSerializer)
     polymorphic(MessageContent::class) {
         subclass(TextContent::class)
         subclass(ImageContent::class)

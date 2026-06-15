@@ -3,7 +3,7 @@ package com.github.woodsmarshes.web.pages
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.web.Router
-import com.github.woodsmarshes.web.components.ProseMirrorRenderer
+import com.github.woodsmarshes.web.components.ArticleContentRenderer
 import com.github.woodsmarshes.web.storage.ArticleRepository
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -12,7 +12,6 @@ import kotlinx.datetime.toLocalDateTime
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.a
-import react.dom.html.ReactHTML.button
 import react.dom.html.ReactHTML.div
 import react.dom.html.ReactHTML.h1
 import react.dom.html.ReactHTML.p
@@ -67,16 +66,6 @@ val ArticleViewPage = FC<Props> {
         } else {
             val a = article!!
 
-            div {
-                className = ClassName("toolbar")
-                div { className = ClassName("toolbar-spacer") }
-                button {
-                    className = ClassName("btn")
-                    onClick = { Router.navigate("/articles/${a.id}/edit") }
-                    +"Edit"
-                }
-            }
-
             h1 { +a.title }
 
             div {
@@ -90,9 +79,19 @@ val ArticleViewPage = FC<Props> {
                 }
                 span { +(a.author.displayName ?: a.author.username) }
                 span { +formatTimestamp(a.updatedAt) }
+                // 编辑入口：右对齐的小文本链接，不占用独立工具栏行
+                a {
+                    href = "#/articles/${a.id}/edit"
+                    className = ClassName("article-edit-link")
+                    onClick = { event ->
+                        event.preventDefault()
+                        Router.navigate("/articles/${a.id}/edit")
+                    }
+                    +"Edit"
+                }
             }
 
-            ProseMirrorRenderer.invoke {
+            ArticleContentRenderer.invoke {
                 content = a.content
             }
         }

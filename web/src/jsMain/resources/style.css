@@ -45,7 +45,7 @@
     --color-draft: #f59e0b;
     --color-published: #22c55e;
     --radius: 8px;
-    --max-width: 800px;
+    --max-width: 900px;
 }
 
 body {
@@ -68,7 +68,18 @@ body {
     align-items: center;
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 50;
+}
+
+.app-nav-container {
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    position: relative;
 }
 
 .app-nav a {
@@ -82,16 +93,72 @@ body {
     color: var(--color-primary);
 }
 
+/* 返回按钮：绝对定位在导航栏左侧，不干扰标题居中 */
+.app-nav-back {
+    position: absolute;
+    left: 0;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: var(--color-text-secondary) !important;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    transition: background 0.15s, color 0.15s;
+}
+
+.app-nav-back:hover {
+    color: var(--color-primary) !important;
+    background: var(--color-primary);
+    color: #fff !important;
+}
+
+/* 标题保持居中 */
+.app-nav-title {
+    color: var(--color-text);
+}
+
 .app-main {
     max-width: var(--max-width);
     margin: 0 auto;
     padding: 32px 24px;
+    transition: max-width 0.2s ease-in-out;
+}
+
+/* 当页面中出现编辑器时，主容器自动拓宽至 1100px；并用纵向 flex 撑满视口，
+   使空文档/短文档时底部操作栏也能贴在视口底部。 */
+body:has(.editor-page) #root {
+    display: flex;
+    flex-direction: column;
+}
+
+body:has(.editor-page) .app-main {
+    max-width: 1100px;
+    min-height: calc(100vh - 56px);
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+}
+
+/* 统一对齐：非编辑器页保持 900px，但 nav 始终用 1100px 避免左右跳动 */
+body:not(:has(.editor-page)) .app-nav-container {
+    max-width: var(--max-width);
+}
+
+/* 编辑器页：滚动时只保留工具栏。
+   - nav 取消 sticky，随页面滚走（避免顶部两栏重叠不美观）。
+   - 工具栏上移到 top:0，直接贴视口顶部。 */
+body:has(.editor-page) .app-nav {
+    position: static;
+}
+
+body:has(.editor-page) .tiptap-sticky-toolbar {
+    top: 0;
 }
 
 /* === Buttons === */
 .btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     padding: 8px 16px;
     border: 1px solid var(--color-border);
@@ -144,75 +211,6 @@ body {
 
 .toolbar-spacer {
     flex: 1;
-}
-
-/* === Editor Toolbar (Tiptap-style) === */
-.editor-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 0.125rem;
-    padding: 0.25rem 0.5rem;
-    min-height: var(--tt-toolbar-height);
-    background: var(--tt-toolbar-bg-color);
-    border-bottom: 1px solid var(--tt-toolbar-border-color);
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    flex-wrap: nowrap;
-}
-
-.editor-toolbar::-webkit-scrollbar {
-    display: none;
-}
-
-/* Tiptap-style toolbar button */
-.toolbar-btn {
-    font-family: inherit;
-    font-size: 0.875rem;
-    font-weight: 500;
-    font-feature-settings: "salt" on, "cv01" on;
-    line-height: 1.15;
-    height: 2rem;
-    min-width: 2rem;
-    border: none;
-    padding: 0.5rem;
-    gap: 0.25rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--tt-radius-lg);
-    background-color: var(--tt-button-default-bg-color);
-    color: var(--tt-button-default-text-color);
-    cursor: pointer;
-    transition-property: background, color, opacity;
-    transition-duration: var(--tt-transition-duration-default);
-    transition-timing-function: var(--tt-transition-easing-default);
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.toolbar-btn:hover {
-    background-color: var(--tt-button-hover-bg-color);
-    color: var(--tt-button-hover-text-color);
-}
-
-/* Active state using data attribute (matches Tiptap's pattern) */
-.toolbar-btn[data-active-state="on"] {
-    background-color: var(--tt-button-active-bg-color);
-    color: var(--tt-button-active-text-color);
-}
-
-/* === Editor Actions (bottom bar) === */
-.editor-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 0;
-    border-top: 1px solid var(--color-border);
-    flex-wrap: wrap;
 }
 
 /* === Article Card === */
@@ -281,115 +279,35 @@ body {
 .editor-page {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 56px - 64px);
-}
-
-.editor-title-input {
-    width: 100%;
-    border: none;
-    border-bottom: 1px solid var(--color-border);
-    padding: 16px 0;
-    font-size: 28px;
-    font-weight: 700;
-    font-family: inherit;
-    outline: none;
-    background: transparent;
-    color: var(--color-text);
-}
-
-.editor-title-input::placeholder {
-    color: #ccc;
-}
-
-.editor-content {
     flex: 1;
-    overflow-y: auto;
-    padding: 16px 0;
+    min-height: calc(100vh - 56px);
 }
 
-/* === TipTap Editor Styles === */
-.ProseMirror {
-    outline: none;
-    min-height: 300px;
-    font-size: 16px;
-    line-height: 1.8;
-    font-family: "DM Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.ProseMirror p {
-    margin-bottom: 0.8em;
-}
-
-.ProseMirror h1 { font-size: 2em; font-weight: 700; margin: 0.8em 0 0.4em; }
-.ProseMirror h2 { font-size: 1.5em; font-weight: 700; margin: 0.7em 0 0.35em; }
-.ProseMirror h3 { font-size: 1.25em; font-weight: 700; margin: 0.6em 0 0.3em; }
-.ProseMirror h4 { font-size: 1.1em; font-weight: 700; margin: 0.5em 0 0.25em; }
-.ProseMirror h5 { font-size: 1em; font-weight: 700; margin: 0.4em 0 0.2em; }
-.ProseMirror h6 { font-size: 0.9em; font-weight: 700; margin: 0.3em 0 0.15em; }
-
-.ProseMirror ul, .ProseMirror ol {
-    padding-left: 1.5em;
-    margin-bottom: 0.8em;
-}
-
-.ProseMirror li {
-    margin-bottom: 0.2em;
-}
-
-.ProseMirror blockquote {
-    border-left: 3px solid var(--color-border);
-    padding-left: 16px;
-    margin: 0.8em 0;
-    color: var(--color-text-secondary);
-}
-
-.ProseMirror code {
-    background: #f0f0f0;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-    font-family: "SF Mono", "Fira Code", monospace;
-}
-
-.ProseMirror pre {
-    background: #f5f5f5;
-    border-radius: var(--radius);
-    padding: 16px;
-    overflow-x: auto;
-    margin: 0.8em 0;
-}
-
-.ProseMirror pre code {
-    background: none;
-    padding: 0;
-}
-
-.ProseMirror hr {
-    border: none;
+.editor-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 60;
+    background: var(--color-surface);
     border-top: 1px solid var(--color-border);
-    margin: 1.5em 0;
-}
-
-.ProseMirror a {
-    color: var(--color-primary);
-    text-decoration: underline;
-}
-
-.ProseMirror img {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--radius);
-}
-
-.ProseMirror p.is-editor-empty:first-child::before {
-    color: #adb5bd;
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
+    max-width: 850px;
+    width: 100%;
+    /* 水平居中 + 在纵向 flex 容器内推到底部。
+       空文档时：margin-top:auto 把它顶到视口底部；
+       长文档时：内容足够高，sticky bottom:0 让它跟随滚动贴底。 */
+    margin: auto auto 0 auto;
+    padding: 12px 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
 }
 
 /* === Article View === */
+.article-view {
+    max-width: 850px; /* 让阅读页面与编辑写作区域维持完全一致的舒适视野 */
+    margin: 0 auto;
+}
+
 .article-view h1 {
     font-size: 32px;
     font-weight: 800;
@@ -406,9 +324,130 @@ body {
     gap: 12px;
 }
 
+/* 文章内编辑入口：右对齐的小文本链接，不占独立工具栏行 */
+.article-view .article-edit-link {
+    margin-left: auto;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.article-view .article-edit-link:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: #f0f6ff;
+}
+
 .article-view .article-content {
     font-size: 17px;
     line-height: 1.9;
+}
+
+/* 静态渲染器输出的是裸 HTML 元素（无 .simple-editor/ProseMirror 包裹），
+   在此补齐基础排版，使其观感与编辑器一致。 */
+.article-view .article-content > :first-child {
+    margin-top: 0;
+}
+
+.article-view .article-content h1,
+.article-view .article-content h2,
+.article-view .article-content h3,
+.article-view .article-content h4,
+.article-view .article-content h5,
+.article-view .article-content h6 {
+    line-height: 1.3;
+    margin: 1.8em 0 0.6em;
+    font-weight: 700;
+}
+
+.article-view .article-content h1 { font-size: 1.8em; }
+.article-view .article-content h2 { font-size: 1.5em; }
+.article-view .article-content h3 { font-size: 1.25em; }
+.article-view .article-content h4 { font-size: 1.1em; }
+.article-view .article-content h5,
+.article-view .article-content h6 { font-size: 1em; }
+
+.article-view .article-content p {
+    margin: 0.8em 0;
+}
+
+.article-view .article-content ul,
+.article-view .article-content ol {
+    padding-left: 1.5em;
+    margin: 0.8em 0;
+}
+
+.article-view .article-content ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+}
+
+.article-view .article-content li {
+    margin: 0.25em 0;
+}
+
+.article-view .article-content li > p {
+    margin: 0;
+}
+
+.article-view .article-content blockquote {
+    border-left: 3px solid var(--color-border, #e5e4e7);
+    padding-left: 1em;
+    margin: 1.2em 0;
+    color: var(--color-text-secondary);
+}
+
+.article-view .article-content pre {
+    background: var(--color-code-bg, #f4f3ec);
+    border-radius: 6px;
+    padding: 0.9em 1.1em;
+    overflow-x: auto;
+    margin: 1.2em 0;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.9em;
+}
+
+.article-view .article-content pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+}
+
+.article-view .article-content code {
+    background: var(--color-code-bg, #f4f3ec);
+    border-radius: 4px;
+    padding: 0.15em 0.35em;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.88em;
+}
+
+.article-view .article-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 1em 0;
+}
+
+.article-view .article-content hr {
+    border: none;
+    border-top: 1px solid var(--color-border, #e5e4e7);
+    margin: 2em 0;
+}
+
+.article-view .article-content a {
+    color: var(--color-primary, #aa3bff);
+    text-decoration: underline;
+}
+
+.article-view .article-content mark {
+    background: #ffe066;
+    border-radius: 2px;
+    padding: 0 0.15em;
 }
 
 /* === States === */
@@ -524,20 +563,4 @@ body {
 
 .auth-toggle a:hover {
     text-decoration: underline;
-}
-
-.simple-editor-wrapper {
-    width: 100% !important;       /* 限制为父容器的 100% 宽度，不再使用 100vw */
-    height: auto !important;       /* 高度自适应，不再强行占满 100vh */
-    overflow: visible !important;  /* 避免容器内出现繁琐的双滚动条 */
-}
-
-.simple-editor-content {
-    max-width: 100% !important;   /* 撑满我们的 800px 布局宽度 */
-    margin: 0 !important;         /* 移除 margin: 0 auto 导致的右偏移 */
-    height: auto !important;
-}
-
-.simple-editor-content .tiptap.ProseMirror.simple-editor {
-    padding: 16px 0 !important;   /* 将默认的巨大内边距（3rem 3rem 30vh）修改为贴合你页面的标准内边距 */
 }
