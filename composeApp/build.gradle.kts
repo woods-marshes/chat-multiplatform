@@ -123,18 +123,20 @@ compose.desktop {
         mainClass = "com.github.woodsmarshes.chat.MainKt"
 
         nativeDistributions {
+            jvmArgs.add("--add-exports=java.base/sun.misc=ALL-UNNAMED")
+            jvmArgs.add("--add-exports=java.base/sun.nio.ch=ALL-UNNAMED")
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.github.woodsmarshes.chat"
             packageVersion = "1.0.0"
 
             macOS {
-                iconFile.set(project.file("composeApp/icons/icon.icns"))
+                iconFile.set(project.file("icons/icon.icns"))
             }
             windows {
-                iconFile.set(project.file("composeApp/icons/icon.ico"))
+                iconFile.set(project.file("icons/icon.ico"))
             }
             linux {
-                iconFile.set(project.file("composeApp/icons/icon.png"))
+                iconFile.set(project.file("icons/icon.png"))
             }
         }
     }

@@ -88,6 +88,7 @@
     <!-- Chat Bubble -->
     <string name="sending">发送中</string>
     <string name="send_failed">发送失败</string>
+    <string name="send_completed">✔</string>
     <string name="read_status">已读</string>
     <string name="failed_cd">失败</string>
 

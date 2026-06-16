@@ -294,7 +294,7 @@ fun MessageTimestamp(
     val statusStr = when (sendStatus) {
         is MessageState.Sending -> LocalStrings.current.sending
         is MessageState.SendFailed -> LocalStrings.current.sendFailed
-        is MessageState.Completed -> if (isOwnMessage) LocalStrings.current.readStatus else ""
+        is MessageState.Completed -> if (isOwnMessage) LocalStrings.current.sendCompleted else ""
     }
 
     Row(

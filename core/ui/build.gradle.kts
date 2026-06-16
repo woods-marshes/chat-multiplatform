@@ -14,6 +14,8 @@ kotlin {
             dependencies {
                 implementation(projects.core.common)
 
+                api(libs.kotlinx.datetime)
+
                 api(libs.lyricist)
 
                 api(libs.compose.runtime)

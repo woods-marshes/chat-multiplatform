@@ -1,63 +1,50 @@
 package com.github.woodsmarshes.chat.core.ui.utils
 
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
 
 private val strings get() = getLocaleStrings()
 
 fun formatMessageTime(instant: Instant): String {
-    val now = Clock.System.now()
-    val msgEpoch = instant.epochSeconds
-    val curEpoch = now.epochSeconds
+    val timeZone = TimeZone.currentSystemDefault()
+    val msgLocal = instant.toLocalDateTime(timeZone)
+    val nowLocal = Clock.System.now().toLocalDateTime(timeZone)
 
-    val secondsInDay = (msgEpoch % 86400 + 86400) % 86400
-    val hour = ((secondsInDay / 3600) % 24).toInt()
-    val minute = ((secondsInDay % 3600) / 60).toInt()
-    val timeStr = "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
+    val msgDate = msgLocal.date
+    val nowDate = nowLocal.date
+    val daysDiff = msgDate.daysUntil(nowDate) // 消息日期距今天多少天（正数表示过去）
 
-    val msgDay = msgEpoch / 86400
-    val curDay = curEpoch / 86400
-    val dayDiff = (curDay - msgDay).toInt()
+    val hour = msgLocal.time.hour.toString().padStart(2, '0')
+    val minute = msgLocal.time.minute.toString().padStart(2, '0')
+    val timeStr = "$hour:$minute"
 
-    return when {
-        dayDiff == 0 -> timeStr
-        dayDiff == 1 -> strings.yesterdayFormat(timeStr)
-        dayDiff in 2..6 -> {
-            val dow = ((msgDay + 3) % 7 + 7) % 7
-            val dayLabel = when (dow.toInt()) {
-                0 -> strings.monday
-                1 -> strings.tuesday
-                2 -> strings.wednesday
-                3 -> strings.thursday
-                4 -> strings.friday
-                5 -> strings.saturday
-                6 -> strings.sunday
-                else -> ""
+    return when (daysDiff) {
+        0 -> timeStr
+        1 -> strings.yesterdayFormat(timeStr)
+        in 2..6 -> {
+            val dayLabel = when (msgDate.dayOfWeek) {
+                DayOfWeek.MONDAY -> strings.monday
+                DayOfWeek.TUESDAY -> strings.tuesday
+                DayOfWeek.WEDNESDAY -> strings.wednesday
+                DayOfWeek.THURSDAY -> strings.thursday
+                DayOfWeek.FRIDAY -> strings.friday
+                DayOfWeek.SATURDAY -> strings.saturday
+                DayOfWeek.SUNDAY -> strings.sunday
             }
             "$dayLabel $timeStr"
         }
         else -> {
-            val (month, day) = approximateMonthDay(msgDay)
-            "$month/$day $timeStr"
+            // 使用 monthDay 格式化月份和日期
+            val month = msgDate.month.number.toString()
+            val day = msgDate.day.toString()
+            "${strings.monthDay(month, day)} $timeStr"
         }
     }
-}
-
-internal fun approximateMonthDay(msgDaysSinceEpoch: Long): Pair<Int, Int> {
-    // Algorithm: convert days since epoch to approximate month/day
-    // Works for dates 1970-2100 (ignores leap year adjustments for simplicity)
-    val daysInYear = 365L
-    val year = 1970 + (msgDaysSinceEpoch / daysInYear).toInt()
-    val dayInYear = msgDaysSinceEpoch - (year - 1970).toLong() * daysInYear
-
-    val months = listOf(31L, 28L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L)
-    var remaining = dayInYear
-    var month = 1
-    for (days in months) {
-        if (remaining <= days) break
-        remaining -= days
-        month++
-    }
-    return month.coerceIn(1, 12) to (remaining + 1).toInt()
 }
