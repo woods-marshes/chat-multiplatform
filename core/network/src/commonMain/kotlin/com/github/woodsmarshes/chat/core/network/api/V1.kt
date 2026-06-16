@@ -194,6 +194,12 @@ class V1 {
     class Articles(val parent: V1 = V1(), val offset: Long = 0, val limit: Int = 50) {
         @Resource("/{id}")
         class Id(val parent: Articles = Articles(), val id: Uuid)
+
+        @Resource("/my")
+        class My(val parent: Articles = Articles()) {
+            @Resource("/{id}")
+            class Id(val parent: My = My(), val id: Uuid)
+        }
     }
 
     @Resource("/files")

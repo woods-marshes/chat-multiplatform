@@ -20,8 +20,11 @@ fun Route.articleRoutes() {
     val articleService by inject<ArticleService>()
 
     // Public: list and view articles
-    get<V1.Articles> {
-        val articles = articleService.listArticles().getOrThrow()
+    get<V1.Articles> { params ->
+        val articles = articleService.listArticles(
+            offset = params.offset,
+            limit = params.limit
+        ).getOrThrow()
         call.respond(articles)
     }
 
@@ -32,6 +35,21 @@ fun Route.articleRoutes() {
 
     // Protected: create, update, delete
     authenticate {
+        get<V1.Articles.My> { params ->
+            val userId = call.extractUserId()
+            val articles = articleService.listMyArticles(
+                userId = userId,
+                offset = params.parent.offset,
+                limit = params.parent.limit
+            ).getOrThrow()
+            call.respond(articles)
+        }
+
+        get<V1.Articles.My.Id> { params ->
+            val userId = call.extractUserId()
+            val article = articleService.getMyArticle(params.id, userId).getOrThrow()
+            call.respond(article)
+        }
         post<V1.Articles> {
             val userId = call.extractUserId()
             val req = call.receive<CreateArticleRequest>()

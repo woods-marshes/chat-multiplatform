@@ -52,7 +52,10 @@ val ArticleViewPage = FC<Props> {
             div {
                 className = ClassName("error-message")
                 h1 { +"Article Not Found" }
-                p { +"The article you're looking for doesn't exist or has been deleted." }
+                p {
+                    className = ClassName("auth-text")
+                    +"The article you're looking for doesn't exist or has been deleted."
+                }
                 a {
                     href = "#/"
                     className = ClassName("btn")

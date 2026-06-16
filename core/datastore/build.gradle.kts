@@ -14,6 +14,7 @@ kotlin {
                 implementation(projects.core.common)
                 implementation(projects.core.model)
 
+                implementation(libs.androidx.datastore.core)
                 implementation(libs.androidx.datastore.core.okio)
                 implementation(libs.androidx.datastore.preferences.core)
 

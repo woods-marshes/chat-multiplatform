@@ -21,7 +21,6 @@ val HomePage = FC<Props> {
     useEffectOnce{
         val result = ArticleRepository.listAll()
         articles = result
-            .filter { it.deletedAt == null }
             .sortedByDescending { it.updatedAt }
         loading = false
     }

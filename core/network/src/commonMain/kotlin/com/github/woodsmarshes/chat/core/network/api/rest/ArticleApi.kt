@@ -28,6 +28,17 @@ class ArticleApi(
         return client.get(V1.Articles.Id(id = id)).body()
     }
 
+    suspend fun listMyArticles(
+        offset: Long = 0,
+        limit: Int = 50
+    ): List<Article> {
+        return client.get(V1.Articles.My(parent = V1.Articles(offset = offset, limit = limit))).body()
+    }
+
+    suspend fun getMyArticle(id: Uuid): Article {
+        return client.get(V1.Articles.My.Id(id = id)).body()
+    }
+
     suspend fun saveArticle(
         id: Uuid,
         request: UpdateArticleRequest

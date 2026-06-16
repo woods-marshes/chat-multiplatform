@@ -564,3 +564,7 @@ body:has(.editor-page) .tiptap-sticky-toolbar {
 .auth-toggle a:hover {
     text-decoration: underline;
 }
+
+.auth-text {
+    margin-bottom: 1.5rem;
+}

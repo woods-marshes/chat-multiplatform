@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.web.pages
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
+import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.koinInject
@@ -53,12 +54,15 @@ val AuthPage = FC<Props> {
             try {
                 val authApi = koinInject<AuthApi>()
                 val tokenDs = koinInject<AuthTokenDataSource>()
+                val userSettingDs = koinInject<UserSettingDataSource>()
                     if (isLogin) {
                         val resp = authApi.login(email, password)
                         tokenDs.setJwtToken(resp.accessToken)
+                        userSettingDs.setUser(resp.user)
                     } else {
                         val resp = authApi.register(username, email, password)
                         tokenDs.setJwtToken(resp.accessToken)
+                        userSettingDs.setUser(resp.user)
                     }
                 Router.navigate(returnUrl)
             } catch (e: Exception) {

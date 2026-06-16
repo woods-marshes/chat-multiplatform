@@ -57,12 +57,28 @@ class ArticleService(
 
     suspend fun getArticle(id: Uuid): Result<Article, ArticleError> = coroutineBinding {
         articleRepository.getById(id)
+            .let {
+                if (it?.deletedAt == null && it?.status == ArticleStatus.PUBLISHED) it else null
+            }
             ?: Err(ArticleError.NotFound).bind()
     }
 
     suspend fun listArticles(offset: Long = 0, limit: Int = 50): Result<List<Article>, ArticleError> = coroutineBinding {
         articleRepository.listAll(offset, limit)
     }
+
+    suspend fun getMyArticle(id: Uuid, userId: Uuid): Result<Article, ArticleError> = coroutineBinding {
+        articleRepository.getById(id)
+            .let {
+                if (it?.deletedAt == null && it?.id == userId) it else null
+            }
+            ?: Err(ArticleError.NotFound).bind()
+    }
+
+    suspend fun listMyArticles(offset: Long = 0, limit: Int = 50, userId: Uuid): Result<List<Article>, ArticleError> = coroutineBinding {
+        articleRepository.listAll(offset, limit)
+    }
+
 
 
     suspend fun saveArticle(

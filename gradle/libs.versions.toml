@@ -234,6 +234,7 @@ room3-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version = "2
 android-desugarJdkLibs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androidDesugarJdkLibs" }
 # AndroidX
 androidx-datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "androidx-datastore"}
+androidx-datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "androidx-datastore"}
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidx-datastore"}
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 androidx-testExt-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-testExt" }

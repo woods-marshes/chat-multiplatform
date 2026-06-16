@@ -7,8 +7,10 @@ import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.coalesce
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.datetime.timestampParam
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -31,7 +33,8 @@ interface ArticleRepository {
 
     suspend fun listAll(
         offset: Long,
-        limit: Int
+        limit: Int,
+        userId: Uuid? = null,
     ): List<Article>
 
     suspend fun update(
@@ -92,21 +95,41 @@ class ArticleDataSourceImpl : ArticleRepository {
     override suspend fun getById(id: Uuid): Article? = dbQuery {
         (Articles innerJoin Users)
             .selectAll()
-            .where { Articles.id eq id }
+            .where {
+                Articles.id eq id
+            }
             .map { it.toArticle() }
             .singleOrNull()
     }
 
     override suspend fun listAll(
         offset: Long,
-        limit: Int
+        limit: Int,
+        userId: Uuid?,
     ): List<Article> = dbQuery {
-        (Articles innerJoin Users)
-            .selectAll()
-            .orderBy(Articles.createdAt, SortOrder.DESC)
-            .limit(limit)
-            .offset(offset)
-            .map { it.toArticle() }
+        return@dbQuery if (userId == null) {
+            (Articles innerJoin Users)
+                .selectAll()
+                .where {
+                    Articles.deletedAt.isNull() and
+                            (Articles.status eq ArticleStatus.PUBLISHED)
+                }
+                .orderBy(Articles.createdAt, SortOrder.DESC)
+                .limit(limit)
+                .offset(offset)
+                .map { it.toArticle() }
+        } else {
+            (Articles innerJoin Users)
+                .selectAll()
+                .where {
+                    (Articles.authorId eq userId) and
+                            (Articles.deletedAt.isNull())
+                }
+                .orderBy(Articles.createdAt, SortOrder.DESC)
+                .limit(limit)
+                .offset(offset)
+                .map { it.toArticle() }
+        }
     }
 
     override suspend fun update(
