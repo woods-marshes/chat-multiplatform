@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.web.components
 
-import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
+import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
 import com.github.woodsmarshes.web.Router
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
@@ -14,7 +14,7 @@ import react.dom.html.ReactHTML.span
 import web.cssom.ClassName
 
 external interface ArticleCardProps : Props {
-    var article: Article
+    var article: ArticleListResponse
 }
 
 val ArticleCard = FC<ArticleCardProps> { props ->

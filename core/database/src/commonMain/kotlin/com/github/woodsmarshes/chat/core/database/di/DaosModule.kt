@@ -1,6 +1,8 @@
 package com.github.woodsmarshes.chat.core.database.di
 
 import com.github.woodsmarshes.chat.core.common.AppDispatchers
+import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
+import com.github.woodsmarshes.chat.core.database.dao.ArticleDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ContactDao
 import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
@@ -42,6 +44,12 @@ val daosModule = module {
     }
     single<ConversationDao> {
         ConversationDaoImpl(
+            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+            ioContext = get<AppDispatchers>().io
+        )
+    }
+    single<ArticleDao> {
+        ArticleDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
             ioContext = get<AppDispatchers>().io
         )

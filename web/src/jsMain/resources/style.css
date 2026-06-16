@@ -111,6 +111,14 @@ body {
     color: #fff !important;
 }
 
+/* 用户菜单容器：与左侧 Back 对称，绝对定位在导航栏右端 */
+.app-nav-right {
+    position: absolute;
+    right: 0;
+    display: flex;
+    align-items: center;
+}
+
 /* 标题保持居中 */
 .app-nav-title {
     color: var(--color-text);
@@ -567,4 +575,396 @@ body:has(.editor-page) .tiptap-sticky-toolbar {
 
 .auth-text {
     margin-bottom: 1.5rem;
+}
+
+/* =========================================================================
+   双栏布局（侧栏 + 主区）
+   与编辑器页一样，当页面包含 .layout-with-sidebar 时把主容器拓宽，
+   避免侧栏 + 文章内容挤在 900px 里。
+   ========================================================================= */
+body:has(.layout-with-sidebar) .app-main {
+    max-width: 1200px;
+}
+
+.layout-with-sidebar {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+}
+
+/* 窄屏：侧栏下沉到主区下方，恢复单列阅读体验 */
+@media (max-width: 900px) {
+    .layout-with-sidebar {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        position: static !important;
+    }
+}
+
+.layout-main {
+    flex: 1;
+    min-width: 0; /* 允许 flex 子项收缩，避免内容撑破布局 */
+}
+
+/* ArticleViewPage 现在是双栏里的主区，取消它原本的居中约束，
+   改由父级 .layout-main 控制宽度。 */
+.layout-with-sidebar .layout-main.article-view {
+    max-width: none;
+    margin: 0;
+}
+
+/* =========================================================================
+   头像 Avatar
+   ========================================================================= */
+.avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #e5e7eb;
+    color: #6b7280;
+    flex-shrink: 0;
+    font-weight: 600;
+    user-select: none;
+}
+
+.avatar-sm {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+}
+
+.avatar-md {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+}
+
+.avatar-lg {
+    width: 64px;
+    height: 64px;
+    font-size: 24px;
+}
+
+.avatar-xl {
+    width: 96px;
+    height: 96px;
+    font-size: 36px;
+}
+
+.avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+}
+
+/* =========================================================================
+   用户菜单（导航栏「我的」下拉）
+   ========================================================================= */
+.user-menu {
+    position: relative;
+}
+
+.user-menu-login {
+    /* 复用 .btn .btn-primary，仅微调 */
+}
+
+.user-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    transition: background 0.15s;
+    font-family: inherit;
+}
+
+.user-menu-trigger:hover {
+    background: var(--tt-button-hover-bg-color);
+}
+
+.user-menu-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 180px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--tt-shadow-elevated-md);
+    padding: 6px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-menu-item {
+    display: block;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--color-text);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.user-menu-item:hover {
+    background: var(--tt-button-hover-bg-color);
+    color: var(--color-primary);
+}
+
+.user-menu-item-danger {
+    color: var(--color-danger);
+}
+
+.user-menu-item-danger:hover {
+    background: #fef2f2;
+    color: var(--color-danger-hover);
+}
+
+.user-menu-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 6px 4px;
+}
+
+/* =========================================================================
+   侧栏 Sidebar
+   ========================================================================= */
+.sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 72px; /* nav 高度 56 + 间距 */
+    align-self: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.sidebar-not-logged-in {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.sidebar-not-logged-in p {
+    margin: 0;
+}
+
+.sidebar-not-logged-in-hint {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.sidebar-user-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.sidebar-user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sidebar-user-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+.sidebar-user-username {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.sidebar-user-bio {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+    line-height: 1.5;
+}
+
+.sidebar-my-articles {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.sidebar-my-articles h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+}
+
+.sidebar-loading,
+.sidebar-empty {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    padding: 8px 0;
+}
+
+.sidebar-article-item {
+    display: block;
+    padding: 10px 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--color-text);
+    transition: background 0.12s;
+    margin: 0 -8px;
+}
+
+.sidebar-article-item:hover {
+    background: var(--tt-button-hover-bg-color);
+}
+
+.sidebar-article-item + .sidebar-article-item {
+    border-top: 1px solid var(--color-border);
+}
+
+.sidebar-article-title {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.sidebar-article-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+}
+
+/* =========================================================================
+   Profile 页 / Settings 页
+   ========================================================================= */
+.profile-page {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+}
+
+.profile-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 40px;
+    width: 100%;
+    max-width: 520px;
+    text-align: center;
+}
+
+.profile-name {
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: 16px;
+    margin-bottom: 4px;
+}
+
+.profile-username {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-bottom: 24px;
+}
+
+.profile-field {
+    text-align: left;
+    padding: 14px 0;
+    border-top: 1px solid var(--color-border);
+}
+
+.profile-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.profile-field-value {
+    font-size: 15px;
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+.settings-page {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+}
+
+.settings-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 60px 40px;
+    width: 100%;
+    max-width: 520px;
+    text-align: center;
+}
+
+.settings-card h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.settings-placeholder {
+    color: var(--color-text-secondary);
+    font-size: 15px;
 }

@@ -5,12 +5,15 @@ import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlSchema
 import com.github.woodsmarshes.chat.core.common.di.PlatformContext
+import com.github.woodsmarshes.chat.core.database.utils.articleStatsAdapter
 import com.github.woodsmarshes.chat.core.database.utils.conversationMetadataAdapter
 import com.github.woodsmarshes.chat.core.database.utils.groupSettingsAdapter
 import com.github.woodsmarshes.chat.core.database.utils.instantAdapter
+import com.github.woodsmarshes.chat.core.database.utils.jsonElementAdapter
 import com.github.woodsmarshes.chat.core.database.utils.messageContentAdapter
 import com.github.woodsmarshes.chat.core.database.utils.participantSettingsAdapter
 import com.github.woodsmarshes.chat.core.database.utils.uuidAdapter
+import io.github.woodsmarshes.chat.db.Article
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ContactEntity
 import io.github.woodsmarshes.chat.db.ConversationEntity
@@ -30,6 +33,17 @@ suspend fun createDatabase(driverFactory: suspend (SqlSchema<QueryResult.AsyncVa
     val driver = driverFactory(ChatDatabase.Schema)
     return ChatDatabase(
         driver = driver,
+        ArticleAdapter = Article.Adapter(
+            idAdapter = uuidAdapter,
+            contentAdapter = jsonElementAdapter,
+            author_idAdapter = uuidAdapter,
+            statusAdapter = EnumColumnAdapter(),
+            created_atAdapter = instantAdapter,
+            updated_atAdapter = instantAdapter,
+            published_atAdapter = instantAdapter,
+            deleted_atAdapter = instantAdapter,
+            statsAdapter = articleStatsAdapter,
+        ),
         ContactEntityAdapter = ContactEntity.Adapter(
             contact_idAdapter = uuidAdapter,
             statusAdapter = EnumColumnAdapter(),

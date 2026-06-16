@@ -1,0 +1,148 @@
+import com.github.woodsmarshes.chat.core.model.ArticleStats;
+import com.github.woodsmarshes.chat.core.model.ArticleStatus;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+import kotlinx.serialization.json.JsonElement;
+
+CREATE TABLE Article (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT AS JsonElement,
+    author_id BLOB AS Uuid NOT NULL,
+    status TEXT AS ArticleStatus NOT NULL,
+    excerpt TEXT,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    published_at INTEGER AS Instant,
+    cover_image TEXT,
+    deleted_at INTEGER AS Instant,
+    slug TEXT,
+    stats TEXT AS ArticleStats,
+    FOREIGN KEY (author_id) REFERENCES UserEntity(id) ON DELETE RESTRICT
+);
+
+upsertArticle:
+INSERT INTO Article(
+    id, title, content, author_id, status, excerpt,
+    created_at, updated_at, published_at, cover_image,
+    deleted_at, slug, stats
+)
+VALUES ?
+ON CONFLICT(id) DO UPDATE SET
+    title        = COALESCE(excluded.title, title),
+    content      = COALESCE(excluded.content, content),
+    status       = COALESCE(excluded.status, status),
+    excerpt      = COALESCE(excluded.excerpt, excerpt),
+    updated_at   = excluded.updated_at,
+    published_at = COALESCE(excluded.published_at, published_at),
+    cover_image  = COALESCE(excluded.cover_image, cover_image),
+    deleted_at   = COALESCE(excluded.deleted_at, deleted_at),
+    slug         = COALESCE(excluded.slug, slug),
+    stats        = COALESCE(excluded.stats, stats);
+
+getArticleById:
+SELECT * FROM Article WHERE id = ? AND deleted_at IS NULL;
+
+listAllArticlesWithAuthor:
+SELECT
+    A.*,
+    U.id            AS author_user_id,
+    U.username,
+    U.email,
+    U.display_name,
+    U.avatar,
+    U.bio,
+    U.created_at    AS author_created_at,
+    U.updated_at    AS author_updated_at,
+    U.deleted_at    AS author_deleted_at,
+    U.role
+FROM Article AS A
+JOIN UserEntity AS U ON A.author_id = U.id
+WHERE A.status = 'PUBLISHED' AND A.deleted_at IS NULL
+ORDER BY A.published_at DESC
+LIMIT :limit OFFSET :offset;
+
+listArticlesByAuthorWithAuthor:
+SELECT
+    A.*,
+    U.id            AS author_user_id,
+    U.username,
+    U.email,
+    U.display_name,
+    U.avatar,
+    U.bio,
+    U.created_at    AS author_created_at,
+    U.updated_at    AS author_updated_at,
+    U.deleted_at    AS author_deleted_at,
+    U.role
+FROM Article AS A
+JOIN UserEntity AS U ON A.author_id = U.id
+WHERE A.author_id = ? AND A.deleted_at IS NULL
+ORDER BY A.updated_at DESC
+LIMIT :limit OFFSET :offset;
+
+listArticlesByAuthorAndStatusWithAuthor:
+SELECT
+    A.*,
+    U.id            AS author_user_id,
+    U.username,
+    U.email,
+    U.display_name,
+    U.avatar,
+    U.bio,
+    U.created_at    AS author_created_at,
+    U.updated_at    AS author_updated_at,
+    U.deleted_at    AS author_deleted_at,
+    U.role
+FROM Article AS A
+JOIN UserEntity AS U ON A.author_id = U.id
+WHERE A.author_id = ? AND A.status = ? AND A.deleted_at IS NULL
+ORDER BY A.updated_at DESC
+LIMIT :limit OFFSET :offset;
+
+softDeleteArticle:
+UPDATE Article SET deleted_at = ? WHERE id = ?;
+
+hardDeleteArticle:
+DELETE FROM Article WHERE id = ?;
+
+-- Paging: boundaries (optional author filter)
+articleBoundaries:
+SELECT t.id
+FROM (
+  SELECT
+    id,
+    CASE
+      WHEN ((row_number() OVER (ORDER BY id DESC) - 1) % CAST(:limit AS INTEGER)) = 0 THEN 1
+      WHEN id = :referenceId THEN 1
+      ELSE 0
+    END AS page_boundary
+  FROM Article
+  WHERE deleted_at IS NULL
+    AND (:authorId IS NULL OR author_id = :authorId)
+  ORDER BY id DESC
+) AS t
+WHERE page_boundary = 1;
+
+-- Paging: keyed range with author info (optional author filter)
+keyedArticlesWithAuthor:
+SELECT
+    A.*,
+    U.id            AS author_user_id,
+    U.username,
+    U.email,
+    U.display_name,
+    U.avatar,
+    U.bio,
+    U.created_at    AS author_created_at,
+    U.updated_at    AS author_updated_at,
+    U.deleted_at    AS author_deleted_at,
+    U.role
+FROM Article AS A
+JOIN UserEntity AS U ON A.author_id = U.id
+WHERE A.id <= :beginInclusive
+  AND (A.id > :endExclusive OR :endExclusive IS NULL)
+  AND (:authorId IS NULL OR A.author_id = :authorId)
+  AND A.deleted_at IS NULL
+ORDER BY A.id DESC;
+

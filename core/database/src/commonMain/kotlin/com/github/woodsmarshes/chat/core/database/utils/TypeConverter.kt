@@ -1,11 +1,14 @@
 package com.github.woodsmarshes.chat.core.database.utils
 
 import app.cash.sqldelight.ColumnAdapter
+import com.github.woodsmarshes.chat.core.model.ArticleStats
+import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -67,5 +70,24 @@ val messageContentAdapter = object : ColumnAdapter<MessageContent, String> {
     override fun encode(value: MessageContent): String {
         return Json.encodeToString(value)
     }
+}
 
+val jsonElementAdapter = object : ColumnAdapter<JsonElement, String> {
+    override fun decode(databaseValue: String): JsonElement {
+        return Json.decodeFromString(databaseValue)
+    }
+
+    override fun encode(value: JsonElement): String {
+        return Json.encodeToString(value)
+    }
+}
+
+val articleStatsAdapter = object : ColumnAdapter<ArticleStats, String> {
+    override fun decode(databaseValue: String): ArticleStats {
+        return Json.decodeFromString(databaseValue)
+    }
+
+    override fun encode(value: ArticleStats): String {
+        return Json.encodeToString(value)
+    }
 }

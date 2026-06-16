@@ -9,8 +9,8 @@ import com.github.woodsmarshes.chat.app.ChatApp
 import com.github.woodsmarshes.chat.app.di.initKoin
 import com.github.woodsmarshes.chat.core.common.di.DesktopContext
 import com.github.woodsmarshes.chat.core.common.di.PlatformContext
-import com.github.woodsmarshes.chat.resources.Res
-import com.github.woodsmarshes.chat.resources.app_icon
+import com.github.woodsmarshes.chat.resources.composeApp.Res
+import com.github.woodsmarshes.chat.resources.composeApp.app_icon
 import org.jetbrains.compose.resources.painterResource
 import org.koin.dsl.module
 

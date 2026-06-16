@@ -38,6 +38,12 @@ val Layout = FC<PropsWithChildren> { props ->
                 }
                 +"Writing Platform"
             }
+            // 右侧：当前用户菜单（头像 + 下拉）
+            // 与左侧 Back 按钮对称，绝对定位在容器右端
+            div {
+                className = ClassName("app-nav-right")
+                UserMenu.invoke()
+            }
         }
     }
     main {

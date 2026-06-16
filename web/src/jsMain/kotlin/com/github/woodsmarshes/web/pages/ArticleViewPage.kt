@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.components.ArticleContentRenderer
+import com.github.woodsmarshes.web.components.Sidebar
 import com.github.woodsmarshes.web.storage.ArticleRepository
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -40,62 +41,69 @@ val ArticleViewPage = FC<Props> {
         loading = false
     }
 
+    // 双栏布局：左栏显示当前查看者信息与文章列表，右栏显示文章正文
     div {
-        className = ClassName("article-view")
+        className = ClassName("layout-with-sidebar")
 
-        if (loading) {
-            div {
-                className = ClassName("loading-container")
-                div { className = ClassName("loading-spinner") }
-            }
-        } else if (article == null) {
-            div {
-                className = ClassName("error-message")
-                h1 { +"Article Not Found" }
-                p {
-                    className = ClassName("auth-text")
-                    +"The article you're looking for doesn't exist or has been deleted."
+        Sidebar.invoke()
+
+        div {
+            className = ClassName("layout-main article-view")
+
+            if (loading) {
+                div {
+                    className = ClassName("loading-container")
+                    div { className = ClassName("loading-spinner") }
                 }
-                a {
-                    href = "#/"
-                    className = ClassName("btn")
-                    onClick = { event: dynamic ->
-                        event.preventDefault()
-                        Router.navigate("/")
+            } else if (article == null) {
+                div {
+                    className = ClassName("error-message")
+                    h1 { +"Article Not Found" }
+                    p {
+                        className = ClassName("auth-text")
+                        +"The article you're looking for doesn't exist or has been deleted."
                     }
-                    +"Back to Articles"
-                }
-            }
-        } else {
-            val a = article!!
-
-            h1 { +a.title }
-
-            div {
-                className = ClassName("article-meta")
-                span {
-                    className = when (a.status) {
-                        ArticleStatus.DRAFT -> ClassName("badge badge-draft")
-                        ArticleStatus.PUBLISHED -> ClassName("badge badge-published")
+                    a {
+                        href = "#/"
+                        className = ClassName("btn")
+                        onClick = { event: dynamic ->
+                            event.preventDefault()
+                            Router.navigate("/")
+                        }
+                        +"Back to Articles"
                     }
-                    +(if (a.status == ArticleStatus.DRAFT) "Draft" else "Published")
                 }
-                span { +(a.author.displayName ?: a.author.username) }
-                span { +formatTimestamp(a.updatedAt) }
-                // 编辑入口：右对齐的小文本链接，不占用独立工具栏行
-                a {
-                    href = "#/articles/${a.id}/edit"
-                    className = ClassName("article-edit-link")
-                    onClick = { event ->
-                        event.preventDefault()
-                        Router.navigate("/articles/${a.id}/edit")
-                    }
-                    +"Edit"
-                }
-            }
+            } else {
+                val a = article!!
 
-            ArticleContentRenderer.invoke {
-                content = a.content
+                h1 { +a.title }
+
+                div {
+                    className = ClassName("article-meta")
+                    span {
+                        className = when (a.status) {
+                            ArticleStatus.DRAFT -> ClassName("badge badge-draft")
+                            ArticleStatus.PUBLISHED -> ClassName("badge badge-published")
+                        }
+                        +(if (a.status == ArticleStatus.DRAFT) "Draft" else "Published")
+                    }
+                    span { +(a.author.displayName ?: a.author.username) }
+                    span { +formatTimestamp(a.updatedAt) }
+                    // 编辑入口：右对齐的小文本链接，不占用独立工具栏行
+                    a {
+                        href = "#/articles/${a.id}/edit"
+                        className = ClassName("article-edit-link")
+                        onClick = { event ->
+                            event.preventDefault()
+                            Router.navigate("/articles/${a.id}/edit")
+                        }
+                        +"Edit"
+                    }
+                }
+
+                ArticleContentRenderer.invoke {
+                    content = a.content
+                }
             }
         }
     }

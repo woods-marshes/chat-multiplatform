@@ -76,6 +76,8 @@ kotlin-result = "2.3.1"
 miuix = "0.9.2"
 coil = "3.5.0"
 
+composewebview = "1.0.0-beta-02"
+
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin-version" }
 kotlin-css = { module = "org.jetbrains.kotlin-wrappers:kotlin-css-jvm", version.ref = "kotlin-css-version" }
@@ -289,6 +291,9 @@ kotlin-result-coroutines = { module = "com.michael-bull.kotlin-result:kotlin-res
 lyricist = { module = "dev.skaldebane:lyricist", version.ref = "lyricist" }
 lyricist-processor = { module = "dev.skaldebane:lyricist-processor", version.ref = "lyricist" }
 lyricist-processor-xml = { module = "dev.skaldebane:lyricist-processor-xml", version.ref = "lyricist" }
+
+#composewebview
+composewebview = { module = "io.github.kdroidfilter:composewebview", version.ref = "composewebview"}
 
 # Build logic dependencies
 android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }

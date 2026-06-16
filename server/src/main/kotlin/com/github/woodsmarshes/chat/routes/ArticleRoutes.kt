@@ -22,8 +22,9 @@ fun Route.articleRoutes() {
     // Public: list and view articles
     get<V1.Articles> { params ->
         val articles = articleService.listArticles(
-            offset = params.offset,
-            limit = params.limit
+            beforeId = params.beforeId,
+            limit = params.limit,
+            authorId = params.authorId,
         ).getOrThrow()
         call.respond(articles)
     }
@@ -39,7 +40,7 @@ fun Route.articleRoutes() {
             val userId = call.extractUserId()
             val articles = articleService.listMyArticles(
                 userId = userId,
-                offset = params.parent.offset,
+                beforeId = params.parent.beforeId,
                 limit = params.parent.limit
             ).getOrThrow()
             call.respond(articles)

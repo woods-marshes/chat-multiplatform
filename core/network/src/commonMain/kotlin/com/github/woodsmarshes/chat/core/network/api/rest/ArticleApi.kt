@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.network.api.rest
 
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.network.api.V1
+import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
 import com.github.woodsmarshes.chat.core.network.dto.article.CreateArticleRequest
 import com.github.woodsmarshes.chat.core.network.dto.article.UpdateArticleRequest
 import io.ktor.client.HttpClient
@@ -18,10 +19,17 @@ class ArticleApi(
 ) {
 
     suspend fun listArticles(
-        offset: Long = 0,
-        limit: Int = 50
-    ): List<Article> {
-        return client.get(V1.Articles(offset = offset, limit = limit)).body()
+        beforeId: Uuid? = null,
+        limit: Int = 50,
+        authorId: Uuid? = null,
+    ): List<ArticleListResponse> {
+        return client.get(
+            V1.Articles(
+                beforeId = beforeId,
+                limit = limit,
+                authorId = authorId
+            )
+        ).body()
     }
 
     suspend fun getArticle(id: Uuid): Article {
@@ -29,10 +37,10 @@ class ArticleApi(
     }
 
     suspend fun listMyArticles(
-        offset: Long = 0,
+        beforeId: Uuid? = null,
         limit: Int = 50
-    ): List<Article> {
-        return client.get(V1.Articles.My(parent = V1.Articles(offset = offset, limit = limit))).body()
+    ): List<ArticleListResponse> {
+        return client.get(V1.Articles.My(parent = V1.Articles(beforeId = beforeId, limit = limit))).body()
     }
 
     suspend fun getMyArticle(id: Uuid): Article {

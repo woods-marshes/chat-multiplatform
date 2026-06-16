@@ -1,6 +1,5 @@
 package com.github.woodsmarshes.web.pages
 
-import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
@@ -9,6 +8,7 @@ import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.storage.ArticleRepository
 import com.github.woodsmarshes.web.koinInject
+import com.github.woodsmarshes.web.state.useCurrentContext
 import com.github.woodsmarshes.web.wrapper.tiptap.TiptapEditorBridge
 import kotlin.uuid.Uuid
 import react.FC
@@ -34,13 +34,7 @@ val ArticleEditorPage = FC<Props> {
         null
     }
     val isEditing = rawId != null
-    val (loggedIn, setLoggedIn) = useState(false)
-
-    useEffectOnce {
-        koinInject<AuthTokenDataSource>().authToken.collect { token ->
-            setLoggedIn(token.jwtToken != null)
-        }
-    }
+    val loggedIn = useCurrentContext().isLoggedIn
 
 
     val (title, setTitle) = useState("")

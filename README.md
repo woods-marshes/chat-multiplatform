@@ -1,6 +1,6 @@
 # Chat Multiplatform
 
-基于 **Kotlin Multiplatform + Compose Multiplatform + Ktor** 的全栈即时通讯应用。一套 Kotlin 代码同时编译到 Android、Desktop（JVM）、Web（Wasm/JS）客户端，后端使用 Ktor + PostgreSQL，通过 WebSocket 实现实时消息推送。
+基于 **Kotlin Multiplatform + Compose Multiplatform + Ktor** 的全栈应用。一套 Kotlin 代码同时编译到 Android、Desktop（JVM）、Web（Wasm/JS）客户端，后端使用 Ktor + PostgreSQL，通过 WebSocket 实现实时消息推送。同时内置**文章写作平台**，使用 Tiptap 富文本编辑器。
 
 ## 架构概览
 
@@ -9,35 +9,43 @@
 │                    composeApp                        │
 │  Android  │  Desktop (JVM)  │  Web (Wasm/JS)         │
 ├──────────────────────────────────────────────────────┤
-│  features/*  (auth, chat, contacts, conversations,   │
-│               profile, search, settings)             │
-├──────────────┬───────────────────────────────────────┤
-│  core/*      │  server (Ktor + Netty)                │
-│  UI / Data   │  REST API + WebSocket + JWT           │
-│  Network     │  Exposed ORM + PostgreSQL / H2        │
-│  Database    │                                       │
-└──────────────┴───────────────────────────────────────┘
+│  features/*  (article, article-editor, auth, chat,   │
+│               contacts, conversations, profile,      │
+│               search, settings)                      │
+├──────────────────────────────────────────────────────┤
+│  core/*                                              │
+│  UI / Data / Model / Network / Database / Datastore  │
+├──────────────────────────────────────────────────────┤
+│  web (Kotlin/JS + React + Tiptap)                    │
+├──────────────────────────┬───────────────────────────┤
+│  tiptap-bridge (React)   │  server (Ktor + Netty)    │
+│  UMD 编辑器 & 静态渲染    │  REST API + WebSocket     │
+│                          │  Exposed ORM + PG / H2    │
+└──────────────────────────┴───────────────────────────┘
 ```
 
 - **客户端** (`composeApp`) 依赖 `core/*` 和 `features/*`，按需引入平台特定实现
 - **服务端** (`server`) 依赖 `core:model` 和 `core:network`，可独立部署
-- **Web 前端** (`web`) 基于 Kobweb（Compose HTML），直接引用 `core/*` 公共模块
+- **Web 前端** (`web`) 基于 Kotlin/JS + React + Tiptap，通过 Koin 注入 `core/*` 公共模块
+- **Tiptap 桥接** (`tiptap-bridge`) React 组件库，打包为 UMD 供 Kotlin/JS 调用
 
 ## 技术栈
 
 | 层 | 技术 |
 |---|---|
 | **UI 框架** | Compose Multiplatform 1.12 + Material 3 Adaptive |
+| **Web 前端** | Kotlin/JS (ES2015) + React + Tiptap 3.x (富文本编辑器) |
 | **主题** | Miuix (MIUI 风格) |
 | **导航** | Jetpack Navigation 3（Scene + NavEntry，支持自适应布局） |
 | **DI** | Koin 4.2（ViewModel → `viewModelOf`，Repository → `single`） |
 | **网络** | Ktor 3.5（Client + Server），REST API + WebSocket |
 | **序列化** | kotlinx-serialization (JSON + Protobuf) |
-| **数据库（客户端）** | SQLDelight 2.3（跨平台本地存储） |
+| **数据库（客户端）** | SQLDelight 2.3（7 表，跨平台本地存储） |
 | **数据库（服务端）** | Exposed ORM + PostgreSQL（生产）/ H2（开发） |
 | **图片加载** | Coil 3.5 |
 | **国际化** | Lyricist |
 | **构建** | Gradle 9.5.1 + Kotlin 2.3.21 + Version Catalog |
+| **WebView（多平台）** | ComposeNativeWebView 1.0.0-beta-02（计划用于 Article Compose 客户端） |
 
 ## 功能特性
 
@@ -48,6 +56,9 @@
 - **搜索** — 消息/联系人搜索
 - **个人设置** — 头像、昵称、密码修改
 - **自适应布局** — 手机/平板/桌面不同窗口尺寸自动适配 ListDetail 模式
+- **文章写作** ✨ — Tiptap 富文本编辑器，所见即所得，支持 Markdown 快捷键
+- **文章浏览** ✨ — 文章列表、详情查看、静态渲染
+- **文章管理** ✨ — 草稿/发布、编辑、软删除
 
 ## 项目结构
 
@@ -56,14 +67,15 @@ chat-multiplatform/
 ├── composeApp/          # 跨平台客户端入口（Android / Desktop / Web）
 ├── androidApp/          # Android 壳工程
 ├── server/              # Ktor 服务端（REST API + WebSocket）
-├── web/                 # Kobweb 前端（Compose HTML）
+├── web/                 # Kotlin/JS + React + Tiptap 前端
+├── tiptap-bridge/       # React 组件库（UMD 打包，供 web 模块调用）
 │
 ├── core/
-│   ├── common/          # 公共工具（Dispatchers, Koin 模块）
-│   ├── model/           # 领域模型、Error 密封类、UiState
+│   ├── common/          # 公共工具（Dispatchers, Koin 模块, PlatformContext）
+│   ├── model/           # 领域模型、Error 密封类、UiState、Article
 │   ├── data/            # Repository 接口与实现（编排数据源）
-│   ├── network/         # Ktor HttpClient / REST API / DTO / WebSocket
-│   ├── database/        # SQLDelight 数据库（6 表）+ DAO
+│   ├── network/         # Ktor HttpClient / REST API (ArticleApi) / DTO / WebSocket
+│   ├── database/        # SQLDelight 数据库（7 表，含 Article）+ DAO
 │   ├── database-room/   # Room 3.0 KMP 数据库（替代方案）
 │   ├── datastore/       # Key-Value 存储（Token / 偏好设置）
 │   ├── domain/          # 预留：未来业务逻辑 UseCase
@@ -71,6 +83,8 @@ chat-multiplatform/
 │   └── navigation/      # Navigation 3 路由定义
 │
 ├── features/
+│   ├── article/         # 🆕 文章浏览（空壳，COMING SOON）
+│   ├── article-editor/  # 🆕 文章编辑器（空壳，COMING SOON）
 │   ├── auth/            # 登录 & 注册
 │   ├── chat/            # 聊天界面
 │   ├── contacts/        # 联系人列表
@@ -81,6 +95,7 @@ chat-multiplatform/
 │
 ├── build-logic/         # Gradle 构建逻辑（自定义插件 & 约定）
 ├── gradle/              # Gradle Wrapper & Version Catalog
+├── notes/               # 详细开发文档（CLAUDE.md 引用）
 ├── compose.yml          # Docker Compose（Server + PostgreSQL）
 └── Dockerfile           # 服务端多阶段构建
 ```
@@ -92,6 +107,7 @@ chat-multiplatform/
 - **JDK** 21（服务端）/ JDK 17+（Android）
 - **Android Studio** (推荐最新 Canary) — 如需编译 Android 目标
 - **Docker Desktop** — 如需容器化部署
+- **Node.js** — tiptap-bridge 构建需要 npm
 
 ### 1. 配置网络
 
@@ -117,6 +133,12 @@ cp network-config.properties.template network-config.properties
 # Desktop 客户端
 ./gradlew :composeApp:run
 
+# Web 前端（开发模式）
+./gradlew :web:jsBrowserDevelopmentRun
+
+# Web 前端（生产构建）
+./gradlew :web:jsBrowserDistribution
+
 # Android 客户端（需要模拟器或真机）
 ./gradlew :androidApp:installDebug
 ```
@@ -128,6 +150,9 @@ cp network-config.properties.template network-config.properties
 | 编译检查 | `./gradlew :composeApp:jvmMainClasses` |
 | 全部测试 | `./gradlew check` |
 | 服务端测试 | `./gradlew :server:test` |
+| Web 开发运行 | `./gradlew :web:jsBrowserDevelopmentRun` |
+| Web 生产构建 | `./gradlew :web:jsBrowserDistribution` |
+| Tiptap 构建 | `./gradlew :web:buildAndCopyTiptap` |
 | 列出所有任务 | `./gradlew tasks` |
 
 > **注意**：配置缓存已启用，遇到异常行为时加 `--no-configuration-cache`。
@@ -194,12 +219,13 @@ docker compose up -d
 
 ## 开发约定
 
-- **Git Commit**：`<scope>: <summary>`，scope 可选 `client`/`server`/`web`/`core`/`features`/`build`/`deps`
+- **Git Commit**：`<scope>: <summary>`，scope 可选 `client`/`server`/`web`/`core`/`features`/`build`/`deps`/`tiptap`
 - **代码风格**：Kotlin Official Style，4 空格缩进，显式 import
 - **JVM 目标**：composeApp/Android → 17，composeApp/Desktop → 25，server → 25
+- **JS 目标**：web → ES2015
 - **依赖管理**：`gradle/libs.versions.toml` 为唯一版本来源
 
-详见 `CLAUDE.md` 和 `@notes/` 下的详细文档。
+详见 `CLAUDE.md` 和 `notes/` 下的详细文档。
 
 ## License
 

@@ -106,6 +106,12 @@ kotlin {
     }
 }
 
+compose.resources {
+    publicResClass = false
+    packageOfResClass = "com.github.woodsmarshes.chat.resources.composeApp"
+    generateResClass = always
+}
+
 dependencies {
     "androidRuntimeClasspath"(libs.compose.ui.tooling)
 }
