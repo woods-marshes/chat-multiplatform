@@ -10,6 +10,7 @@ import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.data.model.toArticleListUiModel
+import com.github.woodsmarshes.chat.core.data.model.toCoreArticle
 import com.github.woodsmarshes.chat.core.data.model.toDBArticle
 import com.github.woodsmarshes.chat.core.data.paging.ArticleRemoteMediator
 import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -41,12 +43,43 @@ class OfflineFirstArticleRepositoryImpl(
 ) : ArticleRepository, KoinComponent {
     private val log = KotlinLogging.logger {}
 
-    private val _invalidationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val invalidationEvents: Flow<Unit>
-        get() = _invalidationEvents.asSharedFlow()
+    override suspend fun getArticle(
+        getMyArticle: Boolean,
+        articleId: Uuid
+    ): Flow<Result<Article?, ArticleError>> = flow {
+        var fetchedFromNetwork = false
+
+        articleDao.getByIdWithAuthor(articleId).collect { row ->
+            if (row?.content != null) {
+                // DB has content — emit immediately
+                emit(Ok(row.toCoreArticle()))
+            } else if (!fetchedFromNetwork) {
+                // No content cached — emit null, then fetch from network
+                emit(Ok(null))
+                fetchedFromNetwork = true
+
+                try {
+                    val networkArticle = if (getMyArticle) {
+                        articleApi.getMyArticle(articleId)
+                    } else {
+                        articleApi.getArticle(articleId)
+                    }
+                    // Upsert to DB — will trigger re-emit via the collect
+                    articleDao.upsert(networkArticle.toDBArticle())
+                } catch (e: Exception) {
+                    log.error(e) { "Failed to fetch article $articleId: ${e.message}" }
+                    emit(Err(ArticleError.NotFound))
+                }
+            }
+            // else: content is still null after network — stay silent (article doesn't exist)
+        }
+    }
+//    override val invalidationEvents: Flow<Unit>
+//        get() = _invalidationEvents.asSharedFlow()
 
     @OptIn(ExperimentalPagingApi::class)
     override fun getArticles(
+        getMyArticle: Boolean,
         limit: Int,
         authorId: Uuid?
     ): Flow<PagingData<ArticleListUiModel>> {
@@ -56,27 +89,13 @@ class OfflineFirstArticleRepositoryImpl(
                 enablePlaceholders = false,
             ),
             remoteMediator = get<ArticleRemoteMediator> {
-                parametersOf(authorId != null, authorId)
+                parametersOf(getMyArticle, authorId)
             },
             pagingSourceFactory = {
-                val source = articleDao.pagingSource(
+                articleDao.pagingSource(
                     pageSize = limit.toLong(),
                     authorId = authorId
                 )
-
-                val job = scope.launch {
-                    invalidationEvents.collect {
-                        if (!source.invalid) {
-                            source.invalidate()
-                        }
-                    }
-                }
-
-                source.registerInvalidatedCallback {
-                    job.cancel()
-                }
-
-                source
             }
         ).flow.map { pagingData ->
             pagingData.map { it.toArticleListUiModel() }
@@ -102,14 +121,12 @@ class OfflineFirstArticleRepositoryImpl(
             )
         }
         articleDao.upsert(article.toDBArticle())
-        _invalidationEvents.tryEmit(Unit)
     }
 
     override suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError> = coroutineBinding {
         bindApi(ArticleError::Unknown) {
             articleApi.deleteArticle(id)
         }.also {
-            _invalidationEvents.tryEmit(Unit)
             articleDao.softDelete(
                 id = id,
                 deletedAt = Clock.System.now()

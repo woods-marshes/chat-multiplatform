@@ -8,6 +8,9 @@ import com.github.woodsmarshes.web.storage.ArticleRepository
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlin.uuid.Uuid
 import react.FC
 import react.Key
 import react.Props
@@ -21,36 +24,70 @@ import react.useEffectOnce
 import react.useState
 import web.cssom.ClassName
 
+external interface SidebarProps : Props {
+    /** null → shows current user's own articles; non-null → shows this author's articles. */
+    var authorId: Uuid?
+}
+
 /**
- * 复用左栏：
- * - 未登录：提示未登录 + 跳转登录按钮。
- * - 已登录：顶部用户卡片（头像、名字、简介）+ 我的文章列表（点击跳转到文章查看页）。
- *
- * 内部通过 [useCurrentContext] 读取用户，并各自加载一次我的文章。
+ * Left sidebar:
+ * - If [authorId] is set → list articles by that author.
+ * - Otherwise, when logged in → list the current user's own articles.
+ * - Not logged in and no authorId → show login prompt.
  */
-val Sidebar = FC<Props> {
+val Sidebar = FC<SidebarProps> { props ->
     val user = useCurrentContext().user
     val loggedIn = useCurrentContext().isLoggedIn
+
     var articles: List<ArticleListResponse> by useState(emptyList())
     var loading: Boolean by useState(true)
+    var lastId: Uuid? by useState(null)
+    var hasMore: Boolean by useState(false)
 
-    useEffectOnce {
-        // 只有登录态才去拉取我的文章，避免 401 噪音
-        if (loggedIn) {
-            articles = try {
-                ArticleRepository.listMy().sortedByDescending { it.updatedAt }
-            } catch (e: Exception) {
+    val loadPage: (Uuid?) -> Unit = { cursor ->
+        val scope = MainScope()
+        scope.launch {
+            loading = true
+            val result = if (props.authorId != null) {
+                ArticleRepository.listByAuthor(
+                    authorId = props.authorId!!,
+                    beforeId = cursor,
+                    limit = 10,
+                )
+            } else if (loggedIn) {
+                ArticleRepository.listMy(
+                    beforeId = cursor,
+                    limit = 10,
+                )
+            } else {
                 emptyList()
             }
+            if (cursor == null) {
+                articles = result
+            } else {
+                articles = articles + result
+            }
+            lastId = result.lastOrNull()?.id
+            hasMore = result.size >= 10
+            loading = false
         }
-        loading = false
     }
+
+    useEffectOnce {
+        if (props.authorId != null || loggedIn) {
+            loadPage(null)
+        } else {
+            loading = false
+        }
+    }
+
+    val sidebarTitle = if (props.authorId != null) "作者的其他文章" else "我的文章"
 
     div {
         className = ClassName("sidebar")
 
-        if (user == null) {
-            // 未登录卡片
+        if (user == null && props.authorId == null) {
+            // 未登录且无指定作者 — 登录卡片
             div {
                 className = ClassName("sidebar-not-logged-in")
                 p { +"未登录" }
@@ -65,37 +102,39 @@ val Sidebar = FC<Props> {
                 }
             }
         } else {
-            // 用户卡片
-            div {
-                className = ClassName("sidebar-user-card")
-                Avatar.invoke {
-                    this.user = user
-                    this.sizeClass = "avatar-lg"
-                }
+            // 用户卡片（仅登录 + 无指定作者时展示自己的信息）
+            if (props.authorId == null && user != null) {
                 div {
-                    className = ClassName("sidebar-user-info")
-                    div {
-                        className = ClassName("sidebar-user-name")
-                        +(user.displayName ?: user.username)
+                    className = ClassName("sidebar-user-card")
+                    Avatar.invoke {
+                        this.user = user!!
+                        this.sizeClass = "avatar-lg"
                     }
                     div {
-                        className = ClassName("sidebar-user-username")
-                        +("@${user.username}")
-                    }
-                    if (!user.bio.isNullOrBlank()) {
+                        className = ClassName("sidebar-user-info")
                         div {
-                            className = ClassName("sidebar-user-bio")
-                            +user.bio!!
+                            className = ClassName("sidebar-user-name")
+                            +(user!!.displayName ?: user!!.username)
+                        }
+                        div {
+                            className = ClassName("sidebar-user-username")
+                            +("@${user!!.username}")
+                        }
+                        if (!user!!.bio.isNullOrBlank()) {
+                            div {
+                                className = ClassName("sidebar-user-bio")
+                                +user!!.bio!!
+                            }
                         }
                     }
                 }
             }
 
-            // 我的文章列表
+            // 文章列表
             div {
                 className = ClassName("sidebar-my-articles")
-                h3 { +"我的文章" }
-                if (loading) {
+                h3 { +sidebarTitle }
+                if (loading && articles.isEmpty()) {
                     div {
                         className = ClassName("sidebar-loading")
                         +"加载中..."
@@ -130,6 +169,17 @@ val Sidebar = FC<Props> {
                                 }
                                 span { +formatSidebarTimestamp(article.updatedAt) }
                             }
+                        }
+                    }
+
+                    if (hasMore) {
+                        a {
+                            className = ClassName("sidebar-load-more")
+                            onClick = { event ->
+                                event.preventDefault()
+                                loadPage(lastId)
+                            }
+                            +"加载更多"
                         }
                     }
                 }

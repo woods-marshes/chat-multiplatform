@@ -70,9 +70,9 @@ class OfflineFirstMessageRepositoryImpl(
 
     private var messageConsumptionJob: Job? = null
 
-    private val _invalidationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val invalidationEvents: Flow<Unit>
-        get() = _invalidationEvents.asSharedFlow()
+//    private val _invalidationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+//    override val invalidationEvents: Flow<Unit>
+//        get() = _invalidationEvents.asSharedFlow()
 
     init {
         startMessageConsumption()
@@ -95,28 +95,10 @@ class OfflineFirstMessageRepositoryImpl(
                 parametersOf(ownUserId, conversationId, isGroup)
             },
             pagingSourceFactory = {
-                log.info { "[getMessages] pagingSourceFactory creating source for conversationId=$conversationId" }
-
-                val source = messageDao.pagingSource(
+                messageDao.pagingSource(
                     conversationId = conversationId,
                     pageSize = limit.toLong()
                 )
-
-                val job = scope.launch {
-                    invalidationEvents.collect {
-                        if (!source.invalid) {
-                            log.info { "[getMessages] invalidation event collected, invalidating source" }
-                            source.invalidate()
-                        }
-                    }
-                }
-
-                source.registerInvalidatedCallback {
-                    log.info { "[getMessages] source invalidated, cancelling collection job" }
-                    job.cancel()
-                }
-
-                source
             }
         ).flow
             .onEach {
@@ -176,7 +158,7 @@ class OfflineFirstMessageRepositoryImpl(
                     updatedAt = Clock.System.now()
                 )
             }
-            _invalidationEvents.tryEmit(Unit)
+//            _invalidationEvents.tryEmit(Unit)
             log.info { "[sendMessage] local insert done, requestId=$requestId" }
             Ok(Unit)
         } catch (e: Exception) {
@@ -284,7 +266,7 @@ class OfflineFirstMessageRepositoryImpl(
                 )
             }
             log.info { "[handleReceived] db transaction done" }
-            _invalidationEvents.tryEmit(Unit)
+//            _invalidationEvents.tryEmit(Unit)
         } catch (e: Exception) {
             log.error(e) { "[handleReceived] error: ${e.message}" }
         }
@@ -293,9 +275,9 @@ class OfflineFirstMessageRepositoryImpl(
     private suspend fun handleWithdrawnMessage(event: MessageEventResponse.Withdrawn) {
         try {
             messageDao.revokeMessage(event.messageId, event.timestamp)
-                .also {
-                    _invalidationEvents.tryEmit(Unit)
-                }
+//                .also {
+//                    _invalidationEvents.tryEmit(Unit)
+//                }
         } catch (e: Exception) {
             log.error(e) { "Error handling withdrawn message" }
         }

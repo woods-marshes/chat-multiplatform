@@ -6,8 +6,9 @@
 
 ## 核心约束
 
-- **Koin DI**：ViewModel → `viewModelOf(::X)`，Repository → `single<Interface> { Impl(get()) }`。Repository 接口和实现均在 `core:data`。禁止 nullable 构造函数依赖。ViewModel 直接注入 Repository，不在 domain 中建无意义的转发 UseCase。详见 `@notes/koin-di.md`
+- **Koin DI**：ViewModel → `viewModelOf(::X)` 或 `viewModel { (params) -> X(get(), params) }`。Repository → `single<Interface> { Impl(get()) }`。Repository 接口和实现均在 `core:data`。禁止 nullable 构造函数依赖。ViewModel 直接注入 Repository，不在 domain 中建无意义的转发 UseCase。详见 `@notes/koin-di.md`
 - **版本目录**：`gradle/libs.versions.toml` 是依赖版本的唯一来源。添加依赖时先加到 catalog，再通过 `libs.<alias>` 引用。完整版本清单见 `@notes/versions.md`
+- **平台分离**：composewebview 库不支持 Kotlin/JS，需用 `expect`/`actual` 分离。非 JS 平台依赖加在 `jvmMain`/`androidMain`/`wasmJsMain` 的 `dependencies` 块中。KMP 不支持 JVM+Android 共享源集，需各自独立 `actual`。
 
 ## 架构速览
 
@@ -20,39 +21,40 @@
 | Common | `core:common` | AppDispatchers, Koin commonModule, PlatformContext |
 | Model | `core:model` | 领域模型、Error 密封类、UiState、Article/ArticleStatus（纯数据，仅依赖 kotlinx-serialization） |
 | Domain | `core:domain` | 预留：未来有真实业务逻辑的 UseCase（当前 module{} 空壳） |
-| Data | `core:data` | 仓库接口 + 实现，编排 network ↔ database ↔ datastore |
-| Network | `core:network` | Ktor HttpClient, REST API (ArticleApi 等), WebSocket, DTOs, Ktor Resources 路由定义 (V1) |
-| Database | `core:database` | SQLDelight（7 表，含 Article）+ DAO；`core:database-room` 为 Room 3.0 替代 |
+| Data | `core:data` | 仓库接口 + 实现，编排 network ↔ database ↔ datastore，ArticleRepository（离线优先），RemoteMediator |
+| Network | `core:network` | Ktor HttpClient, REST API (ArticleApi), WebSocket, DTOs (ArticleListResponse 等), Ktor Resources 路由 (V1) |
+| Database | `core:database` | SQLDelight（7 表，含 Article）+ DAO + QueryPagingSource；`core:database-room` 为 Room 3.0 替代 |
 | Datastore | `core:datastore` | Key-value 存储（token、偏好设置） |
-| UI | `core:ui` | Compose Multiplatform 组件, Material 3 (Miuix), i18n (Lyricist) |
+| UI | `core:ui` | Compose Multiplatform 组件, Material 3 (Miuix), i18n (Lyricist), ArticleCardItem |
 | Navigation | `core:navigation` | Navigation3 路由 |
 | Features | `features/*` | 每个 feature 含 model/ui/di/navigation 四层 |
 | Server | `server/` | Ktor + Netty, Exposed ORM (9 表), JWT auth, WebSocket, Ktor Resources 路由 |
-| Web 前端 | `web/` | Kotlin/JS (ES2015) + React + Tiptap 富文本编辑器，通过 Koin 注入 core 模块 |
-| Tiptap 桥接 | `tiptap-bridge/` | React 组件库，打包为 UMD 供 Kotlin/JS 调用，含编辑器 (SimpleEditor) 和静态渲染器 (renderArticleContent) |
+| Web 前端 | `web/` | Kotlin/JS (ES2015) + React + Tiptap，通过 Koin 注入 core 模块 |
+| Tiptap 桥接 | `tiptap-bridge/` | React 组件库：UMD 打包供 web 调用 + Vite 自包含 HTML 供 ComposeNativeWebView 加载 |
 
 **DI 注册顺序**：`commonModule → dataStoreModule → serializersModule → daosModule → networkModule → dataModule → domainModule → feature ViewModel modules`
 
 ## 文章系统概览
 
 ```
-tiptap-bridge (React/TS) ──UMD──▶ web (Kotlin/JS) ──ArticleApi (Ktor)──▶ server (Ktor/Exposed)
-                                        │
-                                        ▼
-                               core:network (ArticleApi, DTOs)
-                                        │
-                                        ▼
-                               core:model (Article, ArticleStatus, ArticleStats)
-                                        │
-                                        ▼
-                               core:database (Article.sq → ArticleEntity)
+tiptap-bridge (React/Vite)
+├── UMD 构建 ──▶ web (Kotlin/JS) ──▶ 浏览器直接渲染
+└── 自包含 HTML ──▶ ComposeNativeWebView ──▶ Desktop/Android 原生 WebView
+                           │
+                    features/article (浏览) + features/article-editor (编辑)
+                           │
+                    ArticleRepository (离线优先: DB → API → Paging)
+                           │
+                    core:network (ArticleApi, UUIDv7 游标分页)
+                           │
+                    server (ArticleService → ArticleRepository → Exposed ORM)
 ```
 
-- **web 模块**：使用 `@file:JsModule("./tiptap-editor-bridge.umd.js")` 外部声明调用 Tiptap 编辑器和静态渲染器
-- **ArticleRepository**（web/storage）：封装 ArticleApi 调用，在浏览器端做数据存取
-- **server**：ArticleService → ArticleRepository（Exposed ORM），完整的 REST CRUD（含软删除、excerpt 自动生成）
-- **features/article** + **features/article-editor**：空壳模块，等待 Compose Multiplatform 实现（通过 ComposeNativeWebView）
-- **ComposeNativeWebView**：`io.github.kdroidfilter:composewebview:1.0.0-beta-02` 已在版本目录中
+- **web 模块**：使用 `@file:JsModule` 声明调用 UMD，列表 + 详情 + 编辑均已实现分页
+- **Compose 客户端**：features/article（列表 + 详情 WebView）+ features/article-editor（Tiptap 编辑器 WebView）
+- **server**：UUIDv7 游标分页（`beforeId`），完整 REST CRUD
+- **ComposeNativeWebView**：`io.github.kdroidfilter:composewebview:1.0.0-beta-02`，支持 jvm/android/wasmJs，不支持 js
+- **JS Bridge 通信**：Base64 编码传 JSON，`rememberUpdatedState` 防闭包过期，"一次性初始化"防白屏重载
 
 ## 常用命令
 
@@ -65,7 +67,7 @@ tiptap-bridge (React/TS) ──UMD──▶ web (Kotlin/JS) ──ArticleApi (Kt
 | 服务端测试 | `./gradlew :server:test` |
 | Web 开发构建 | `./gradlew :web:jsBrowserDevelopmentRun` |
 | Web 生产构建 | `./gradlew :web:jsBrowserDistribution` |
-| Tiptap 构建 + 复制 | `./gradlew :web:buildAndCopyTiptap` |
+| Tiptap WebView 构建 | `npm run build:webview`（在 tiptap-bridge/ 下） |
 | 列出所有任务 | `./gradlew tasks` |
 
 **注意**：配置缓存已启用，遇到异常行为用 `--no-configuration-cache`。JVM daemon: `-Xmx3072M`。代理: `127.0.0.1:10808`（`gradle.properties`）。更多命令和测试详情见 `@notes/testing.md`。
@@ -74,14 +76,13 @@ tiptap-bridge (React/TS) ──UMD──▶ web (Kotlin/JS) ──ArticleApi (Kt
 
 - **Git Commit**：`<scope>: <summary>`，scope 可选 `client`/`server`/`web`/`core`/`features`/`build`/`deps`/`tiptap`，主题 ≤72 字符，英文
 - **代码风格**：Kotlin official style，4 空格缩进，显式 import（不用通配符），英文标识符和注释
-- **Compose**：参数顺序 → required callbacks, `Modifier`, flags, visual params, content lambda 最后。颜色用 `MiuixTheme.colorScheme.*`。图标优先用 `MiuixIcons.*`（basic）或 `top.yukonga.miuix.kmp.icon.extended.*`（仅当 Miuix 无等价物时回退 `Icons.Default.*`）。不确定 API 用法时用 `WebFetch` 查官方文档，禁止猜测
+- **Compose**：参数顺序 → required callbacks, `Modifier`, flags, visual params, content lambda 最后。颜色用 `MiuixTheme.colorScheme.*`。不确定 API 用法时用 `WebFetch` 查官方文档，禁止猜测
 - **JVM 目标**：composeApp/Android → JVM 17，composeApp/Desktop → JVM 25，server → JVM 25
 - **JS 目标**：web 模块 → ES2015，browser 平台
 - **API 基址**：`http://127.0.0.1:9051/v1/`。复制 `network-config.properties.template` → `network-config.properties` 自定义（该文件已 gitignore）
 - **Web 模块特殊规则**：
   - Kotlin/JS 通过 `@file:JsModule` + `@file:JsNonModule` 声明外部 JS 模块
   - React 组件包装为 `FC<Props>` 的 `external` 声明或 `val X = FC<XProps> { ... }` 的 Kotlin DSL
-  - 使用 `kotlinx.browser.window` / `kotlinx.browser.document` 访问浏览器 API
   - JSON 序列化：Kotlin `JsonElement` ↔ JS `dynamic` 需通过 `JSON.stringify` + `ProjectJson` 手动转换
 
 ## 对话效率
@@ -95,8 +96,6 @@ tiptap-bridge (React/TS) ──UMD──▶ web (Kotlin/JS) ──ArticleApi (Kt
 - **写 Compose / Kotlin / Ktor / React 代码遇到不确定的 API 时**，用 `WebFetch` 实时查官方文档（URL 见下方），禁止凭记忆猜测
 
 ## 实时文档查询
-
-写代码遇到不确定的 API 时，按需 `WebFetch` 以下来源：
 
 | 场景 | 查询 URL |
 |---|---|

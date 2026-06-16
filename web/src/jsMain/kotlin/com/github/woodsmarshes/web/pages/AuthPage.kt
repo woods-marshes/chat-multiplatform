@@ -66,6 +66,7 @@ val AuthPage = FC<Props> {
                     }
                 Router.navigate(returnUrl)
             } catch (e: Exception) {
+                     println("${e.printStackTrace()}")
                     errorMsg = e.message ?: "Authentication failed"
                     submitting = false
                 }

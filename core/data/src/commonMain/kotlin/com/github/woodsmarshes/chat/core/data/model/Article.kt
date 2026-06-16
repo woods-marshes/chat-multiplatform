@@ -5,6 +5,7 @@ import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.model.Article as baseArticle
 import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
 import io.github.woodsmarshes.chat.db.Article
+import io.github.woodsmarshes.chat.db.GetArticleByIdWithAuthor
 import io.github.woodsmarshes.chat.db.KeyedArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListAllArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListArticlesByAuthorAndStatusWithAuthor
@@ -127,6 +128,34 @@ fun KeyedArticlesWithAuthor.toArticleListUiModel(): ArticleListUiModel = Article
     coverImage = this.cover_image,
     slug = this.slug,
 )
+
+fun GetArticleByIdWithAuthor.toCoreArticle(): baseArticle? {
+    val content = this.content ?: return null
+    return baseArticle(
+        id = this.id,
+        title = this.title,
+        content = content,
+        author = com.github.woodsmarshes.chat.core.model.SimpleUser(
+            id = this.author_user_id,
+            username = this.username,
+            displayName = this.display_name,
+            avatarUrl = this.avatar,
+            createdAt = this.author_created_at,
+            updatedAt = this.author_updated_at,
+            deletedAt = this.author_deleted_at,
+            role = this.role,
+        ),
+        status = this.status,
+        excerpt = this.excerpt,
+        createdAt = this.created_at,
+        updatedAt = this.updated_at,
+        publishedAt = this.published_at,
+        coverImage = this.cover_image,
+        deletedAt = this.deleted_at,
+        slug = this.slug,
+        stats = this.stats ?: com.github.woodsmarshes.chat.core.model.ArticleStats(),
+    )
+}
 
 fun List<ListAllArticlesWithAuthor>.toArticleListUiModels(): List<ArticleListUiModel> =
     map { it.toArticleListUiModel() }

@@ -52,7 +52,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArticleListScreen(
-    onArticleClick: (Uuid) -> Unit,
+    onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
+    onCreateClick: () -> Unit,
     viewModel: ArticleListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -81,8 +82,7 @@ fun ArticleListScreen(
             )
         },
         floatingActionButton = {
-            // TODO: navigate to article editor
-            FloatingActionButton(onClick = { /* TODO: onCreateClick */ }) {
+            FloatingActionButton(onClick = onCreateClick) {
                 Icon(Icons.Default.Add, contentDescription = LocalStrings.current.articleCreateCd)
             }
         },
@@ -93,25 +93,20 @@ fun ArticleListScreen(
                 .padding(innerPadding),
         ) {
             // Tabs: 全部 | 我的
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PrimaryTabRow(
-                    selectedTabIndex = uiState.selectedTabIndex,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Tab(
-                        selected = uiState.selectedTabIndex == 0,
-                        onClick = { viewModel.selectTab(0) },
-                        text = { Text(LocalStrings.current.articleAllTab) },
-                    )
-                    Tab(
-                        selected = uiState.selectedTabIndex == 1,
-                        onClick = { viewModel.selectTab(1) },
-                        text = { Text(LocalStrings.current.articleMyTab) },
-                    )
-                }
-                IconButton(onClick = viewModel::showSortSheet) {
-                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = LocalStrings.current.articleSortCd)
-                }
+            PrimaryTabRow(
+                selectedTabIndex = uiState.selectedTabIndex,
+                modifier = Modifier.weight(1f),
+            ) {
+                Tab(
+                    selected = uiState.selectedTabIndex == 0,
+                    onClick = { viewModel.selectTab(0) },
+                    text = { Text(LocalStrings.current.articleAllTab) },
+                )
+                Tab(
+                    selected = uiState.selectedTabIndex == 1,
+                    onClick = { viewModel.selectTab(1) },
+                    text = { Text(LocalStrings.current.articleMyTab) },
+                )
             }
 
             HorizontalPager(
@@ -165,7 +160,7 @@ fun ArticleListScreen(
 @Composable
 private fun ArticleListContent(
     articlesFlow: Flow<PagingData<ArticleListUiModel>>,
-    onArticleClick: (Uuid) -> Unit,
+    onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
 ) {
     val articles = articlesFlow.collectAsLazyPagingItems()
 

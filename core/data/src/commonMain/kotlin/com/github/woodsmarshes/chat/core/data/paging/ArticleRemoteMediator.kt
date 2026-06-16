@@ -51,7 +51,7 @@ class ArticleRemoteMediator(
             log.debug(tag = "ArticleRemoteMediator", message = "cursor: $cursor")
 
             val pageSize = state.config.pageSize
-            val response = if (getMyArticle) {
+            val response = if (!getMyArticle) {
                 articleApi.listArticles(
                     beforeId = cursor,
                     limit = pageSize,

@@ -6,6 +6,9 @@ import com.github.woodsmarshes.web.components.ArticleCard
 import com.github.woodsmarshes.web.components.Sidebar
 import com.github.woodsmarshes.web.state.useCurrentContext
 import com.github.woodsmarshes.web.storage.ArticleRepository
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlin.uuid.Uuid
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.button
@@ -25,22 +28,39 @@ val MyArticlesPage = FC<Props> {
     val user = useCurrentContext().user
     var articles: List<ArticleListResponse> by useState(emptyList())
     var loading: Boolean by useState(true)
+    var lastId: Uuid? by useState(null)
+    var hasMore: Boolean by useState(false)
+
+    val loadPage: (Uuid?) -> Unit = { cursor ->
+        val scope = MainScope()
+        scope.launch {
+            loading = cursor == null
+            val result = ArticleRepository.listMy(beforeId = cursor, limit = 20)
+            if (cursor == null) {
+                articles = result.sortedByDescending { it.updatedAt }
+            } else {
+                articles = articles + result.sortedByDescending { it.updatedAt }
+            }
+            lastId = articles.lastOrNull()?.id
+            hasMore = result.size >= 20
+            loading = false
+        }
+    }
 
     useEffectOnce {
         if (user != null) {
-            articles = try {
-                ArticleRepository.listMy().sortedByDescending { it.updatedAt }
-            } catch (e: Exception) {
-                emptyList()
-            }
+            loadPage(null)
+        } else {
+            loading = false
         }
-        loading = false
     }
 
     div {
         className = ClassName("layout-with-sidebar")
 
-        Sidebar.invoke()
+        Sidebar.invoke {
+            authorId = null
+        }
 
         div {
             className = ClassName("layout-main")
@@ -57,7 +77,6 @@ val MyArticlesPage = FC<Props> {
             }
 
             if (user == null) {
-                // 未登录提示
                 div {
                     className = ClassName("empty-state")
                     h2 { +"请先登录" }
@@ -88,6 +107,13 @@ val MyArticlesPage = FC<Props> {
                 articles.forEach { article ->
                     ArticleCard.invoke {
                         this.article = article
+                    }
+                }
+                if (hasMore) {
+                    button {
+                        className = ClassName("btn load-more")
+                        onClick = { loadPage(lastId) }
+                        +"加载更多"
                     }
                 }
             }

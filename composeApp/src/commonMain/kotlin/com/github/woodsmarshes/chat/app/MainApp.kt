@@ -57,6 +57,12 @@ import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarState
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.feature.auth.ui.AuthScreen
+import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
+import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
+import com.github.woodsmarshes.chat.feature.article.navigation.articleDetailEntry
+import com.github.woodsmarshes.chat.feature.article.navigation.articleListEntry
+import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
+import com.github.woodsmarshes.chat.feature.article_editor.navigation.editorEntry
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.chatEntry
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
@@ -71,7 +77,7 @@ import com.github.woodsmarshes.chat.feature.search.navigation.searchEntry
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, kotlin.uuid.ExperimentalUuidApi::class)
 @Composable
 fun MainApp(
     appState: ChatAppState,
@@ -128,7 +134,7 @@ fun MainApp(
     }
 }
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, kotlin.uuid.ExperimentalUuidApi::class)
 @Composable
 private fun MainContent(
     appState: ChatAppState,
@@ -136,7 +142,7 @@ private fun MainContent(
     modifier: Modifier,
     windowAdaptiveInfo: WindowAdaptiveInfo
 ) {
-    val topLevelKeys = setOf(ConversationsNavKey, ContactsNavKey, SettingsNavKey)
+    val topLevelKeys = setOf(ArticleListNavKey, ConversationsNavKey, ContactsNavKey, SettingsNavKey)
     val navigationState = rememberNavigationState(
         startKey = ConversationsNavKey,
         topLevelKeys = topLevelKeys,
@@ -182,6 +188,19 @@ private fun MainContent(
         profileEntry(
             onBack = { navigator.goBack() },
             metadata = detailPaneMeta + extraPaneMeta,
+        )
+        articleListEntry(
+            onArticleClick = { id, authorId -> navigator.navigate(ArticleDetailNavKey(id, authorId)) },
+            onCreateClick = { navigator.navigate(ArticleEditorNavKey()) },
+            metadata = listPaneMeta,
+        )
+        articleDetailEntry(
+            onBack = { navigator.goBack() },
+            onEditClick = { id -> navigator.navigate(ArticleEditorNavKey(id)) },
+            metadata = detailPaneMeta,
+        )
+        editorEntry(
+            onBack = { navigator.goBack() },
         )
         searchEntry(
             onBack = { navigator.goBack() },

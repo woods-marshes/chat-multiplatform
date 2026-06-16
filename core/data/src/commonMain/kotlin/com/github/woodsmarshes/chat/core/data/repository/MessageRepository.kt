@@ -10,7 +10,7 @@ import kotlin.uuid.Uuid
 
 interface MessageRepository {
 
-    val invalidationEvents: Flow<Unit>
+//    val invalidationEvents: Flow<Unit>
 
     fun getMessages(
         ownUserId: Uuid,

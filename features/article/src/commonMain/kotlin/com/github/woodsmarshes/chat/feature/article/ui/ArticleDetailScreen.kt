@@ -1,6 +1,8 @@
 package com.github.woodsmarshes.chat.feature.article.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -26,7 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import kotlinx.serialization.json.JsonElement
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,17 +42,17 @@ fun ArticleDetailScreen(
     onEditClick: (Uuid) -> Unit,
     viewModel: ArticleDetailViewModel,
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     val isOwnArticle by viewModel.isOwnArticle.collectAsState()
 
-    // TODO: FAB visibility should be driven by scroll direction reported
-    // from the WebView JS bridge (kmpJsBridge.callNative('scrollUp'/'scrollDown')).
-    // For now, always visible when the article is the user's own.
-    var fabVisible by remember { mutableStateOf(isOwnArticle) }
+    var fabVisible by remember { mutableStateOf(true) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(LocalStrings.current.articleTitle) },
+                title = {
+                    Text(uiState.article?.title ?: LocalStrings.current.articleTitle)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -61,31 +66,48 @@ fun ArticleDetailScreen(
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = fabVisible && isOwnArticle,
-                enter = slideInVertically(initialOffsetY = { it }),
-                exit = slideOutVertically(targetOffsetY = { it }),
+                visible = fabVisible && isOwnArticle && uiState.article != null,
+                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { onEditClick(articleId) },
                     icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                    text = { Text("编辑") },
+                    text = { Text(LocalStrings.current.articleEditFab) },
                 )
             }
         },
     ) { innerPadding ->
-        // WebView placeholder — the article body will be rendered here
-        // via ComposeNativeWebView loading a viewer.html shell (Phase 3).
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center,
+                .padding(innerPadding)
         ) {
-            Text(
-                text = "文章内容即将上线",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            val article = uiState.article
+
+            when {
+                uiState.isLoading -> {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+                uiState.error != null -> {
+                    Text(
+                        text = uiState.error ?: LocalStrings.current.articleLoadFailed,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+                article != null -> {
+                    val jsonStr = remember(article) {
+                        ProjectJson.encodeToString(JsonElement.serializer(), article.content)
+                    }
+                    TiptapViewerWebView(
+                        jsonContentStr = jsonStr,
+                        onScrollUp = { fabVisible = true },
+                        onScrollDown = { fabVisible = false },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         }
     }
 }

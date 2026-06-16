@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import kotlin.uuid.Uuid
 
 /**
  * Renders article cards into a [LazyListScope] with per-item keys.
@@ -40,7 +40,7 @@ import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 fun LazyListScope.articleItems(
     itemCount: Int,
     itemProvider: (Int) -> ArticleListUiModel?,
-    onArticleClick: (kotlin.uuid.Uuid) -> Unit,
+    onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
 ) {
     items(
         count = itemCount,
@@ -49,7 +49,7 @@ fun LazyListScope.articleItems(
         val article = itemProvider(index) ?: return@items
         ArticleCardItem(
             article = article,
-            onClick = { onArticleClick(article.id) },
+            onClick = { onArticleClick(article.id, article.authorId) },
         )
     }
 }

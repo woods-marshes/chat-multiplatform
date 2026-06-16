@@ -9,11 +9,12 @@ import org.koin.dsl.module
 
 val articleModule = module {
     viewModelOf(::ArticleListViewModel)
-    viewModel { (articleId: Uuid) ->
+    viewModel { (articleId: Uuid, authorId: Uuid) ->
         ArticleDetailViewModel(
             articleRepository = get(),
             userRepository = get(),
             articleId = articleId,
+            authorId = authorId,
         )
     }
 }

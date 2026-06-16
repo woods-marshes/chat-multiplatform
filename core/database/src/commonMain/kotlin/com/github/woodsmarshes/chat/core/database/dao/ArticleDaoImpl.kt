@@ -8,6 +8,7 @@ import app.cash.sqldelight.paging3.QueryPagingSource
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import io.github.woodsmarshes.chat.db.Article
 import io.github.woodsmarshes.chat.db.ChatDatabase
+import io.github.woodsmarshes.chat.db.GetArticleByIdWithAuthor
 import io.github.woodsmarshes.chat.db.KeyedArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListAllArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListArticlesByAuthorAndStatusWithAuthor
@@ -37,6 +38,12 @@ class ArticleDaoImpl(
 
     override fun getById(id: Uuid): Flow<Article?> {
         return queries.getArticleById(id)
+            .asFlow()
+            .mapToOneOrNull(ioContext)
+    }
+
+    override fun getByIdWithAuthor(id: Uuid): Flow<GetArticleByIdWithAuthor?> {
+        return queries.getArticleByIdWithAuthor(id)
             .asFlow()
             .mapToOneOrNull(ioContext)
     }

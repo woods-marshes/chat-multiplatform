@@ -133,6 +133,25 @@
     <string name="confirm_password_label">确认密码</string>
     <string name="create_account">创建账户</string>
 
+    <!-- Article -->
+    <string name="article_title">文章</string>
+    <string name="article_all_tab">全部</string>
+    <string name="article_my_tab">我的</string>
+    <string name="article_sort_cd">排序筛选</string>
+    <string name="article_create_cd">创建文章</string>
+    <string name="article_no_articles">暂无文章</string>
+    <string name="article_load_more_failed">加载更多失败</string>
+    <string name="article_sort_title">排序方式</string>
+    <string name="article_sort_coming_soon">排序功能即将上线</string>
+    <string name="article_status_draft">草稿</string>
+    <string name="article_status_published">已发布</string>
+    <string name="article_edit_fab">编辑</string>
+    <string name="article_load_failed">加载失败</string>
+    <string name="article_new_title">写文章</string>
+    <string name="article_edit_title">编辑文章</string>
+    <string name="article_save_draft">存草稿</string>
+    <string name="article_publish">发布</string>
+
     <!-- Settings Theme Brand -->
     <string name="theme_miuix">Miuix (小米 HyperOS 风格)</string>
     <string name="theme_material3">Material 3 (Google 原生风格)</string>

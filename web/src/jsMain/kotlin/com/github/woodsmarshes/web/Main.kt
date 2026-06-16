@@ -5,6 +5,7 @@ import com.github.woodsmarshes.chat.core.common.di.WebContext
 import com.github.woodsmarshes.chat.core.common.di.commonModule
 import com.github.woodsmarshes.chat.core.datastore.di.dataStoreModule
 import com.github.woodsmarshes.chat.core.network.di.networkModule
+import com.github.woodsmarshes.chat.core.network.di.serializersModule
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
 import com.github.woodsmarshes.web.wrapper.createRoot
 import kotlinx.browser.document
@@ -25,6 +26,7 @@ fun main() {
                 single<NetworkConfig> { loadJsNetworkConfig() }
             },
             commonModule,
+            serializersModule,
             dataStoreModule,
             networkModule,
         )

@@ -5,6 +5,9 @@ import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.components.ArticleCard
 import com.github.woodsmarshes.web.components.Sidebar
 import com.github.woodsmarshes.web.storage.ArticleRepository
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlin.uuid.Uuid
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.button
@@ -18,19 +21,36 @@ import web.cssom.ClassName
 val HomePage = FC<Props> {
     var articles: List<ArticleListResponse> by useState(emptyList())
     var loading: Boolean by useState(true)
+    var lastId: Uuid? by useState(null)
+    var hasMore: Boolean by useState(false)
 
-    useEffectOnce{
-        val result = ArticleRepository.listAll()
-        articles = result
-            .sortedByDescending { it.updatedAt }
-        loading = false
+    val loadPage: (Uuid?) -> Unit = { cursor ->
+        val scope = MainScope()
+        scope.launch {
+            loading = cursor == null
+            val result = ArticleRepository.listAll(beforeId = cursor, limit = 20)
+            if (cursor == null) {
+                articles = result.sortedByDescending { it.updatedAt }
+            } else {
+                articles = articles + result.sortedByDescending { it.updatedAt }
+            }
+            lastId = articles.lastOrNull()?.id
+            hasMore = result.size >= 20
+            loading = false
+        }
+    }
+
+    useEffectOnce {
+        loadPage(null)
     }
 
     // 双栏布局：左侧边栏 + 右主区
     div {
         className = ClassName("layout-with-sidebar")
 
-        Sidebar.invoke()
+        Sidebar.invoke {
+            authorId = null
+        }
 
         div {
             className = ClassName("layout-main")
@@ -66,6 +86,13 @@ val HomePage = FC<Props> {
                 articles.forEach { article ->
                     ArticleCard.invoke {
                         this.article = article
+                    }
+                }
+                if (hasMore) {
+                    button {
+                        className = ClassName("btn load-more")
+                        onClick = { loadPage(lastId) }
+                        +"加载更多"
                     }
                 }
             }

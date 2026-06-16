@@ -9,6 +9,8 @@ import com.github.woodsmarshes.chat.core.domain.di.domainModule
 import com.github.woodsmarshes.chat.core.network.di.networkConfig
 import com.github.woodsmarshes.chat.core.network.di.networkModule
 import com.github.woodsmarshes.chat.core.network.di.serializersModule
+import com.github.woodsmarshes.chat.feature.article.di.articleModule
+import com.github.woodsmarshes.chat.feature.article_editor.di.articleEditorModule
 import com.github.woodsmarshes.chat.feature.auth.di.authModule
 import com.github.woodsmarshes.chat.feature.chat.di.chatModule
 import com.github.woodsmarshes.chat.feature.contacts.di.contactsModule
@@ -38,6 +40,8 @@ fun initKoin(
             networkModule,
             dataModule,
             domainModule,
+            articleModule,
+            articleEditorModule,
             authModule,
             conversationsModule,
             contactsModule,

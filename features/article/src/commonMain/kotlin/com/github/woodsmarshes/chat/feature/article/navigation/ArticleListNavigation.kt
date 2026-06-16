@@ -13,15 +13,17 @@ import org.koin.core.parameter.parametersOf
 data object ArticleListNavKey : NavKey
 
 @Serializable
-data class ArticleDetailNavKey(val id: Uuid) : NavKey
+data class ArticleDetailNavKey(val id: Uuid, val authorId: Uuid) : NavKey
 
 fun EntryProviderScope<NavKey>.articleListEntry(
-    onArticleClick: (Uuid) -> Unit,
+    onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
+    onCreateClick: () -> Unit,
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<ArticleListNavKey>(metadata = metadata) {
         ArticleListScreen(
             onArticleClick = onArticleClick,
+            onCreateClick = onCreateClick,
         )
     }
 }
@@ -36,7 +38,7 @@ fun EntryProviderScope<NavKey>.articleDetailEntry(
             articleId = key.id,
             viewModel = koinViewModel(
                 key = "article_detail_${key.id}",
-                parameters = { parametersOf(key.id) },
+                parameters = { parametersOf(key.id, key.authorId) },
             ),
             onBack = onBack,
             onEditClick = onEditClick,

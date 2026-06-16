@@ -968,3 +968,23 @@ body:has(.layout-with-sidebar) .app-main {
     color: var(--color-text-secondary);
     font-size: 15px;
 }
+
+/* === 移动端编辑器外壳与操作按钮优化 === */
+@media (max-width: 768px) {
+    /* 🟢 防止编辑页面在手机上被强行 Flex 撑死，允许页面长内容平滑滚动 */
+    body:has(.editor-page) .app-main {
+        min-height: auto;
+        display: block;
+        padding: 0 16px; /* 侧边内边距微调 */
+    }
+
+    /* 🟢 关键：取消底部操作栏的 sticky，改为 static。
+       这样打字时，按钮组不会浮动在输入法键盘上方阻挡视线，而是老老实实待在文章末尾。 */
+    .editor-actions {
+        position: static !important;
+        margin: 24px auto 32px auto !important;
+        padding: 16px 0;
+        justify-content: space-between; /* 按钮左右均分排版 */
+        border-top: 1px solid var(--color-border);
+    }
+}

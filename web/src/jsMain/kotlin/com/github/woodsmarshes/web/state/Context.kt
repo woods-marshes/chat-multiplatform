@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.web.koinInject
+import kotlinx.coroutines.flow.combine
 import react.Context
 import react.FC
 import react.PropsWithChildren
@@ -34,16 +35,16 @@ val ContextProvider = FC<PropsWithChildren> { props ->
     ))
 
     useEffectOnce {
-        koinInject<AuthTokenDataSource>().jwtToken.collect { token ->
-            status = status.copy(
+        combine(
+            koinInject<AuthTokenDataSource>().jwtToken,
+            koinInject<UserSettingDataSource>().user
+        ) { token, u ->
+            Status(
+                user = u,
                 isLoggedIn = token != null
             )
-        }
-
-        koinInject<UserSettingDataSource>().user.collect { u ->
-            status = status.copy(
-                user = u
-            )
+        }.collect { newStatus ->
+            status = newStatus // 3. 统一更新状态
         }
     }
 

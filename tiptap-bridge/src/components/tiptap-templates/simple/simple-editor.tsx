@@ -270,11 +270,13 @@ export function SimpleEditor({ title, onTitleChange, initialContent, onUpdate }:
           ref={toolbarRef}
           className="tiptap-sticky-toolbar"
           style={{
+              /*
             ...(isMobile
               ? {
                   bottom: `calc(100% - ${height - rect.y}px)`,
                 }
               : {}),
+              */
           }}
         >
           {mobileView === "main" ? (

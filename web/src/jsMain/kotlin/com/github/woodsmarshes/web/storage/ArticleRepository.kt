@@ -13,15 +13,38 @@ import kotlin.uuid.Uuid
  */
 object ArticleRepository {
 
-    suspend fun listAll(): List<ArticleListResponse> = koinInject<ArticleApi>().listArticles()
+    suspend fun listAll(
+        beforeId: Uuid? = null,
+        limit: Int = 20,
+    ): List<ArticleListResponse> = koinInject<ArticleApi>().listArticles(
+        beforeId = beforeId,
+        limit = limit,
+    )
 
-    /** 获取当前登录用户的全部文章（依赖已携带的 JWT）。失败时返回空列表。 */
-    suspend fun listMy(): List<ArticleListResponse> = try {
-        koinInject<ArticleApi>().listMyArticles()
+    /** 获取当前登录用户的文章（依赖已携带的 JWT）。失败时返回空列表。 */
+    suspend fun listMy(
+        beforeId: Uuid? = null,
+        limit: Int = 20,
+    ): List<ArticleListResponse> = try {
+        koinInject<ArticleApi>().listMyArticles(
+            beforeId = beforeId,
+            limit = limit,
+        )
     } catch (e: Exception) {
         console.log("Failed to fetch my articles: ${e.message}")
         emptyList()
     }
+
+    /** 获取指定作者的文章列表。 */
+    suspend fun listByAuthor(
+        authorId: Uuid,
+        beforeId: Uuid? = null,
+        limit: Int = 20,
+    ): List<ArticleListResponse> = koinInject<ArticleApi>().listArticles(
+        authorId = authorId,
+        beforeId = beforeId,
+        limit = limit,
+    )
 
     suspend fun getById(id: Uuid): Article? = try {
         koinInject<ArticleApi>().getArticle(id)

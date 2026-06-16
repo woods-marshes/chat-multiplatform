@@ -112,3 +112,19 @@ body,
   margin: 0;
   padding: 0;
 }
+
+/* =====================
+   移动端排版优化
+   ===================== */
+@media screen and (max-width: 480px) {
+  /* 🟢 统一标题输入框与内容编辑区的两端内边距，确保完美对齐 */
+  .simple-editor-title-input {
+    padding: 16px 1.5rem 12px 1.5rem !important;
+    font-size: 24px !important; /* 手机上微调字体大小，避免过大折行 */
+  }
+
+  /* 🟢 增大编辑器底部的 padding 留白，防止最后几行文字打字时被手机软键盘遮挡 */
+  .simple-editor-content .tiptap.ProseMirror.simple-editor {
+    padding: 1rem 1.5rem 30vh !important; /* 30vh 提供了充足的向上滚动视口 */
+  }
+}

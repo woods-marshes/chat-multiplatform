@@ -43,6 +43,23 @@ ON CONFLICT(id) DO UPDATE SET
 getArticleById:
 SELECT * FROM Article WHERE id = ? AND deleted_at IS NULL;
 
+getArticleByIdWithAuthor:
+SELECT
+    A.*,
+    U.id            AS author_user_id,
+    U.username,
+    U.email,
+    U.display_name,
+    U.avatar,
+    U.bio,
+    U.created_at    AS author_created_at,
+    U.updated_at    AS author_updated_at,
+    U.deleted_at    AS author_deleted_at,
+    U.role
+FROM Article AS A
+JOIN UserEntity AS U ON A.author_id = U.id
+WHERE A.id = ? AND A.deleted_at IS NULL;
+
 listAllArticlesWithAuthor:
 SELECT
     A.*,

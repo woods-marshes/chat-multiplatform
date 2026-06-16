@@ -86,6 +86,8 @@ kotlin {
             implementation(projects.features.chat)
             implementation(projects.features.profile)
             implementation(projects.features.settings)
+            implementation(projects.features.article)
+            implementation(projects.features.articleEditor)
             implementation(projects.features.search)
 
             // Not needed: composeApp uses core/* + features/*

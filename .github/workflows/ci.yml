@@ -18,6 +18,18 @@ jobs:
           distribution: temurin
           java-version: '25'
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'tiptap-bridge/package-lock.json'
+
+      - name: Install tiptap-bridge dependencies
+        run: |
+          cd tiptap-bridge
+          npm install
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.1'

@@ -48,7 +48,7 @@
     &::-webkit-scrollbar {
       display: none;
     }
-
+/*
     @media (max-width: 480px) {
       position: absolute;
       top: auto;
@@ -56,6 +56,23 @@
       border-top: 1px solid var(--tt-toolbar-border-color);
       border-bottom: none;
       padding: 0 0.5rem var(--tt-safe-area-bottom);
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+
+      .tiptap-toolbar-group {
+        flex: 0 0 auto;
+      }
+    }
+*/
+/* 🟢 移动端工具栏体验修正 */
+    @media (max-width: 480px) {
+      position: sticky !important; /* 修正为 sticky 吸顶，避免 iOS 键盘顶起导致错位 */
+      top: 0 !important;
+      bottom: auto !important;
+      height: var(--tt-toolbar-height);
+      border-top: none !important; /* 移除顶部边框 */
+      border-bottom: 1px solid var(--tt-toolbar-border-color) !important; /* 保留底部分界线 */
+      padding: 0 0.5rem;
       flex-wrap: nowrap;
       justify-content: flex-start;
 
