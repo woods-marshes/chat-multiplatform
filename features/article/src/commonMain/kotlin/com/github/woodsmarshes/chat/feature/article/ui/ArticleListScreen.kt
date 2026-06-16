@@ -95,7 +95,7 @@ fun ArticleListScreen(
             // Tabs: 全部 | 我的
             PrimaryTabRow(
                 selectedTabIndex = uiState.selectedTabIndex,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Tab(
                     selected = uiState.selectedTabIndex == 0,
@@ -111,7 +111,9 @@ fun ArticleListScreen(
 
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             ) { page ->
                 val flow = when (page) {
                     0 -> viewModel.allArticles
