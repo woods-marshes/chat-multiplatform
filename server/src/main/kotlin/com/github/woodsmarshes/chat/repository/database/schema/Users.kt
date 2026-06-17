@@ -1,11 +1,11 @@
 package com.github.woodsmarshes.chat.repository.database.schema
 
 import com.github.woodsmarshes.chat.core.model.UserRole
-import com.github.woodsmarshes.chat.repository.database.UuidV7Table
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import kotlin.time.Clock
 
-object Users : UuidV7Table("users") {
+object Users : UuidTable(name = "users", uuidVersion = UuidVersion.V7) {
     val username = varchar("username", length = 64).uniqueIndex()
     val email = varchar("email", length = 255).uniqueIndex()
     val displayName = varchar("display_name", length = 64).nullable()

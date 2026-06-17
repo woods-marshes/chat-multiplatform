@@ -3,13 +3,13 @@ package com.github.woodsmarshes.chat.repository.database.schema
 import com.github.woodsmarshes.chat.core.model.ArticleStats
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
-import com.github.woodsmarshes.chat.repository.database.UuidV7Table
 import kotlinx.serialization.json.JsonElement
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.json.jsonb
 import kotlin.time.Clock
 
-object Articles : UuidV7Table("articles") {
+object Articles : UuidTable(name = "articles", uuidVersion = UuidVersion.V7) {
     val title = varchar("title", length = 512)
     val content = jsonb<JsonElement>("content", ProjectJson)
     val authorId = reference("author_id", Users)

@@ -15,6 +15,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            isDebuggable = true
+            // 其他 debug 专属配置
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true

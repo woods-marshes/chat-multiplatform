@@ -94,7 +94,7 @@ class ArticleDaoImpl(
             pageBoundariesProvider = { anchorId, limit ->
                 queries.articleBoundaries(
                     limit = limit,
-                    referenceId = anchorId ?: Uuid.NIL,
+                    referenceId = anchorId,
                     authorId = authorId,
                 )
             },

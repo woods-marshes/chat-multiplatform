@@ -2,7 +2,6 @@ package com.github.woodsmarshes.chat.feature.article.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,8 +63,9 @@ fun ArticleListScreen(
         pagerState.animateScrollToPage(uiState.selectedTabIndex)
     }
     // Sync pager → tab (only after scroll settles)
-    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-        if (!pagerState.isScrollInProgress) {
+    LaunchedEffect(pagerState.currentPage) {
+        // 仅当当前页与选中的 tab 不同时才更新，避免不必要的重复调用
+        if (pagerState.currentPage != uiState.selectedTabIndex) {
             viewModel.selectTab(pagerState.currentPage)
         }
     }
@@ -165,6 +165,14 @@ private fun ArticleListContent(
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
 ) {
     val articles = articlesFlow.collectAsLazyPagingItems()
+
+    val refreshState = articles.loadState.refresh
+    if (refreshState is LoadState.Error) {
+        LaunchedEffect(refreshState) {
+            // 打印错误堆栈
+            refreshState.error.printStackTrace()
+        }
+    }
 
     when {
         articles.loadState.refresh is LoadState.Loading && articles.itemCount == 0 -> {

@@ -36,15 +36,16 @@ class ArticleRemoteMediator(
         return try {
             val cursor: Uuid? = when (loadType) {
                 LoadType.REFRESH -> {
-                    log.debug(tag = "ArticleRemoteMediator", message = "loadType is REFRESH")
+                    log.info { "DEBUG-MEDIATOR: REFRESH triggering, cursor = null" }
                     null
                 }
                 LoadType.PREPEND -> {
-                    log.debug(tag = "ArticleRemoteMediator", message = "loadType is PREPEND")
+                    log.info { "DEBUG-MEDIATOR: PREPEND triggering, skipping" }
                     return MediatorResult.Success(endOfPaginationReached = true)
                 }
                 LoadType.APPEND -> {
-                    log.debug(tag = "ArticleRemoteMediator", message = "loadType is APPEND")
+                    val lastId = state.lastItemOrNull()?.id
+                    log.info { "DEBUG-MEDIATOR: APPEND triggering, lastItem = $lastId" }
                     state.lastItemOrNull()?.id
                 }
             }
