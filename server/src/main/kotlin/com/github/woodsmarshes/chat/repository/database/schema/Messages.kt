@@ -4,11 +4,11 @@ import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
-import com.github.woodsmarshes.chat.repository.database.UuidV7Table
+import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.json.jsonb
 
-object Messages : UuidV7Table("messages") {
+object Messages : UuidTable(name = "messages", uuidVersion = UuidVersion.V7) {
     val conversationId = reference("conversation_id", Conversations)
     val senderId = reference("user_id", Users)
     val category = enumerationByName("category", 32, MessageCategory::class)

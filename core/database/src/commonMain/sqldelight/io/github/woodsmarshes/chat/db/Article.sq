@@ -123,6 +123,25 @@ UPDATE Article SET deleted_at = ? WHERE id = ?;
 hardDeleteArticle:
 DELETE FROM Article WHERE id = ?;
 
+countArticles:
+SELECT COUNT(*) FROM Article WHERE deleted_at IS NULL AND (:authorId IS NULL OR author_id = :authorId);
+
+offsetArticlesWithAuthor:
+SELECT
+  A.*,
+  U.id AS author_user_id,
+  U.username,
+  U.display_name,
+  U.avatar
+FROM Article AS A
+JOIN UserEntity AS U ON A.author_id = U.id
+WHERE A.deleted_at IS NULL
+AND (:authorId IS NULL OR A.author_id = :authorId)
+ORDER BY A.id DESC
+LIMIT :limit OFFSET :offset;
+
+
+
 -- Paging: boundaries (optional author filter)
 articleBoundaries:
 SELECT t.id
@@ -130,7 +149,10 @@ FROM (
   SELECT
     id,
     CASE
+      WHEN (:referenceId IS NULL AND row_number() OVER (ORDER BY id DESC) = 1) THEN 1
+
       WHEN ((row_number() OVER (ORDER BY id DESC) - 1) % CAST(:limit AS INTEGER)) = 0 THEN 1
+
       WHEN id = :referenceId THEN 1
       ELSE 0
     END AS page_boundary
@@ -139,7 +161,17 @@ FROM (
     AND (:authorId IS NULL OR author_id = :authorId)
   ORDER BY id DESC
 ) AS t
-WHERE page_boundary = 1;
+WHERE page_boundary = 1
+
+UNION ALL
+
+SELECT zeroblob(16) AS id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM Article
+  WHERE deleted_at IS NULL
+    AND (:authorId IS NULL OR author_id = :authorId)
+);
 
 -- Paging: keyed range with author info (optional author filter)
 keyedArticlesWithAuthor:

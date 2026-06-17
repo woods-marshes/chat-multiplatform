@@ -12,7 +12,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 @OptIn(ExperimentalSerializationApi::class)
 fun Application.configureSerialization() {
     install(ContentNegotiation) {
-        json(ProjectJson)
         protobuf(ProjectProtobuf)
+        json(ProjectJson)
     }
 }

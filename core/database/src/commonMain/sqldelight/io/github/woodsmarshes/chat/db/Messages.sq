@@ -72,7 +72,17 @@ FROM (
   WHERE conversation_id = :conversationId
   ORDER BY id DESC
 ) AS t
-WHERE page_boundary = 1;
+WHERE page_boundary = 1
+
+UNION ALL
+
+SELECT zeroblob(16) AS id
+FROM (SELECT 1)
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM MessageEntity
+  WHERE conversation_id = :conversationId
+);
 
 -- 区间查询(uuid v7):
 keyedMessages:
