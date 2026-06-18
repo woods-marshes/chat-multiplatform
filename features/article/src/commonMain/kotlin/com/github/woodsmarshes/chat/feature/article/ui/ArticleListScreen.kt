@@ -24,11 +24,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -132,7 +134,11 @@ fun ArticleListScreen(
     if (uiState.showSortSheet) {
         ModalBottomSheet(
             onDismissRequest = viewModel::dismissSortSheet,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+            sheetState = rememberBottomSheetState(
+                initialValue = SheetValue.Hidden,
+                enabledValues = if (false) setOf(SheetValue.Hidden, SheetValue.Expanded)
+                        else setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded),
+            ),
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
         ) {
             Column(

@@ -52,6 +52,7 @@ fun MediaActionPanel(
             .background(bubbleColors.panelBackground)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         actions.forEach { action ->
             Column(

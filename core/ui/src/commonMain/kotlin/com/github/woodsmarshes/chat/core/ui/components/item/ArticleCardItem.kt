@@ -63,6 +63,7 @@ fun ArticleCardItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {

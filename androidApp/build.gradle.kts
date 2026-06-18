@@ -9,7 +9,7 @@ android {
     defaultConfig {
         applicationId = "com.github.woodsmarshes.chat"
         versionCode = 1
-        versionName = "1.1"
+        versionName = "1.1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

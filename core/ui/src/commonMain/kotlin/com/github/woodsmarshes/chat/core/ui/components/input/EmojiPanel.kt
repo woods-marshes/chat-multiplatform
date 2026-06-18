@@ -42,7 +42,6 @@ fun EmojiPanel(
         columns = GridCells.Fixed(8),
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp)
             .background(bubbleColors.panelBackground)
             .padding(4.dp),
         contentPadding = PaddingValues(4.dp),

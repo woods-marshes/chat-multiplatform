@@ -29,6 +29,8 @@ kotlin {
                 api(libs.compose.material3.adaptive)
                 api(libs.compose.material3.adaptive.layout)
 
+                api(libs.androidx.navigationevent)
+
                 api(libs.koin.compose)
                 api(libs.koin.compose.viewmodel)
 
