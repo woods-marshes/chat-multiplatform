@@ -9,6 +9,9 @@ val articleEditorModule = module {
     viewModel { (articleId: Uuid?) ->
         ArticleEditorViewModel(
             articleRepository = get(),
+            userRepository = get(),
+            networkConfig = get(),
+            authRepository = get(),
             articleId = articleId,
         )
     }
