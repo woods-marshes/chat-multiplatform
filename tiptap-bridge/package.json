@@ -35,6 +35,7 @@
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/static-renderer": "^3.27.1",
+    "@tiptap/y-tiptap": "^3.0.5",
     "clsx": "^2.1.1",
     "lodash.throttle": "^4.1.1",
     "react": "^19.2.6",
