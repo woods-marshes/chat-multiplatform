@@ -5,6 +5,10 @@ on:
     branches: [main, '**']
     tags: ['v*']
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}/chat-server
   COLLAB_IMAGE_NAME: ghcr.io/${{ github.repository }}/chat-collab-server
