@@ -1,5 +1,5 @@
 import React from 'react';
-import './index.css'; // 🟢 引入我们在第一步配置好的样式
+import './index.css';
 import { SimpleEditor } from '@/components/tiptap-templates/simple/simple-editor';
 
 // --- Tiptap extensions (与 simple-editor.tsx 完全对齐，schema 必须一致才能正确渲染) ---
@@ -25,7 +25,11 @@ export function TiptapEditorBridge({
     title,
     onTitleChange,
     content,
-    onChange
+    onChange,
+    collabUrl,
+    roomId,
+    token,
+    userInfo
 }) {
   const initialValue = content || { type: 'doc', content: [] };
   return (
@@ -38,6 +42,10 @@ export function TiptapEditorBridge({
           onChange(editor.getJSON()); // 状态实时回传给 Kotlin/JS
         }
       }}
+      collabUrl={collabUrl}
+      roomId={roomId}
+      token={token}
+      userInfo={userInfo}
     />
   );
 }
