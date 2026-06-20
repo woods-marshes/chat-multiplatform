@@ -71,6 +71,25 @@ services:
     networks:
       - chat-net
 
+
+  collab-server:
+    image: quuui/chat-collab-server:latest
+    container_name: chat-collab-server
+    ports:
+      - "1234:1234"
+    depends_on:
+      db:
+        condition: service_healthy
+      server:
+        condition: service_started
+    environment:
+      - PORT=1234
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/chat_db
+      - KTOR_AUTH_URL=http://server:9051/api/auth/verify # 内部通信调用 Ktor
+    restart: unless-stopped
+    networks:
+      - chat-net
+
 # ─────────────────────────────────────
 # 持久化存储
 # ─────────────────────────────────────

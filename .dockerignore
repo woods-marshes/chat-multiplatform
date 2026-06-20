@@ -30,3 +30,13 @@ composeApp/src/
 .env
 tmp/
 local.properties
+
+# ═══════════════════════════════════════════
+# Node.js / 前端及协作模块 — 排除无用依赖与运行中产生的临时文件
+# ═══════════════════════════════════════════
+**/node_modules/
+**/dist/
+**/dist-webview/
+
+# 协作后端由独立的容器（collab-server）运行，完全不参与 Ktor 服务端的构建
+collab-server/

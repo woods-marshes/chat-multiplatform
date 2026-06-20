@@ -108,7 +108,7 @@ class OfflineFirstArticleRepositoryImpl(
         content: JsonElement?,
         status: ArticleStatus,
         excerpt: String?,
-    ): Result<Unit, ArticleError>  = coroutineBinding {
+    ): Result<Unit, ArticleError> = coroutineBinding {
         val article = bindApi(ArticleError::Unknown) {
             articleApi.saveArticle(
                 id = id,
@@ -121,6 +121,15 @@ class OfflineFirstArticleRepositoryImpl(
             )
         }
         articleDao.upsert(article.toDBArticle())
+    }
+
+    override suspend fun createBlankArticle(): Result<Article, ArticleError> = coroutineBinding {
+        bindApi(ArticleError::Unknown) {
+            articleApi.createBlank()
+        }
+            .also {
+                articleDao.upsert(it.toDBArticle())
+            }
     }
 
     override suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError> = coroutineBinding {

@@ -19,6 +19,9 @@ class V1 {
 
         @Resource("/refresh")
         class Refresh(val parent: Auth = Auth())
+
+        @Resource("/verify")
+        class Verify(val parent: Auth = Auth())
     }
 
     @Resource("/users")
@@ -199,6 +202,9 @@ class V1 {
     ) {
         @Resource("/{id}")
         class Id(val parent: Articles = Articles(), val id: Uuid)
+
+        @Resource("/create-blank")
+        class CreateBlank(val parent: Articles = Articles())
 
         @Resource("/my")
         class My(val parent: Articles = Articles()) {

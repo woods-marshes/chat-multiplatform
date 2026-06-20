@@ -59,11 +59,11 @@ fun ArticleEditorScreen(
                 actions = {
                     TextButton(
                         onClick = { viewModel.saveArticle(ArticleStatus.DRAFT) },
-                        enabled = !uiState.isSaving,
+                        enabled = !uiState.isSaving && !uiState.isCollaborativeEditing,
                     ) { Text(LocalStrings.current.articleSaveDraft) }
                     TextButton(
                         onClick = { viewModel.saveArticle(ArticleStatus.PUBLISHED) },
-                        enabled = !uiState.isSaving,
+                        enabled = !uiState.isSaving && !uiState.isCollaborativeEditing,
                     ) { Text(LocalStrings.current.articlePublish) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
@@ -80,6 +80,11 @@ fun ArticleEditorScreen(
                 initialJsonStr = uiState.contentJsonStr,
                 onTitleChanged = viewModel::updateTitle,
                 onContentChanged = viewModel::updateContent,
+                collabUrl = uiState.collabUrl,
+                roomId = uiState.roomId,
+                token = uiState.token,
+                userInfoName = uiState.userInfoName,
+                userInfoColor = uiState.userInfoColor,
                 modifier = Modifier.fillMaxSize().padding(innerPadding),
             )
         }

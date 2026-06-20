@@ -33,5 +33,7 @@ interface ArticleRepository {
         excerpt: String?,
     ): Result<Unit, ArticleError>
 
+    suspend fun createBlankArticle(): Result<Article, ArticleError>
+
     suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError>
 }

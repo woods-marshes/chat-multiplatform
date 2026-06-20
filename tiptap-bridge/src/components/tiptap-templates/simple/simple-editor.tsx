@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo } from "react"
 import { EditorContent, EditorContext, useEditor } from "@tiptap/react"
 
 // --- Tiptap Core Extensions ---
@@ -73,7 +73,14 @@ import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
 
-import content from "@/components/tiptap-templates/simple/data/content.json"
+// import content from "@/components/tiptap-templates/simple/data/content.json"
+
+// --- collaboration ---
+import { Collaboration } from '@tiptap/extension-collaboration'
+import { CollaborationCaret } from '@tiptap/extension-collaboration-caret'
+import { HocuspocusProvider } from '@hocuspocus/provider'
+import * as Y from 'yjs'
+
 
 const MainToolbarContent = ({
   onHighlighterClick,
@@ -188,15 +195,51 @@ interface SimpleEditorProps {
   onTitleChange?: (newTitle: string) => void
   initialContent?: any
   onUpdate?: (args: { editor: any }) => void
+  collabUrl?: string
+  roomId?: string
+  token?: string
+  userInfo?: { name: string; color: string }
 }
 
-export function SimpleEditor({ title, onTitleChange, initialContent, onUpdate }: SimpleEditorProps) {
+export function SimpleEditor({ 
+  title, 
+  onTitleChange, 
+  initialContent, 
+  onUpdate, 
+  collabUrl, 
+  roomId, 
+  token, 
+  userInfo
+ }: SimpleEditorProps) {
   const isMobile = useIsBreakpoint()
   const { height } = useWindowSize()
   const [mobileView, setMobileView] = useState<"main" | "highlighter" | "link">(
     "main"
   )
   const toolbarRef = useRef<HTMLDivElement>(null)
+
+  const isCollabActive = !!(collabUrl && roomId)
+
+  const [ydoc] = useState(() => new Y.Doc())
+
+  // 在首次渲染时同步构建 Provider，确保 extensions 装载时拿到非空的对象
+  const provider = useMemo(() => {
+    if (!isCollabActive) return null
+    return new HocuspocusProvider({
+      url: collabUrl,
+      name: roomId,
+      document: ydoc,
+      token: token || '',
+    })
+  }, [isCollabActive, collabUrl, roomId, token, ydoc])
+
+  // 销毁组件时释放提供者资源
+  useEffect(() => {
+    return () => {
+      provider?.destroy()
+    }
+  }, [provider])
+
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -216,6 +259,7 @@ export function SimpleEditor({ title, onTitleChange, initialContent, onUpdate }:
           openOnClick: false,
           enableClickSelection: true,
         },
+        undoRedo: !isCollabActive ? {} : false, 
       }),
       HorizontalRule,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
@@ -234,8 +278,20 @@ export function SimpleEditor({ title, onTitleChange, initialContent, onUpdate }:
         upload: handleImageUpload,
         onError: (error) => console.error("Upload failed:", error),
       }),
+      ...(provider ? [
+        Collaboration.configure({
+          document: ydoc,
+        }),
+        CollaborationCaret.configure({
+          provider: provider,
+          user: {
+            name: userInfo?.name || 'Anonymous',
+            color: userInfo?.color || '#ffcc00', // 协同光标气泡框颜色 
+          }
+        })
+      ] : [])
     ],
-    content: initialContent !== undefined ? initialContent : { type: "doc", content: [] },
+    content: !isCollabActive ? (initialContent !== undefined ? initialContent : { type: "doc", content: [] }) : undefined,
     onUpdate: (args) => {
       if (onUpdate) {
         onUpdate(args)
@@ -244,13 +300,13 @@ export function SimpleEditor({ title, onTitleChange, initialContent, onUpdate }:
   })
 
   useEffect(() => {
-    if (editor && initialContent && !editor.isDestroyed) {
+    if (!isCollabActive && editor && initialContent && !editor.isDestroyed) {
       const currentJson = editor.getJSON()
       if (JSON.stringify(currentJson) !== JSON.stringify(initialContent)) {
-        editor.commands.setContent(initialContent, false)
+        editor.commands.setContent(initialContent, { emitUpdate: false })
       }
     }
-  }, [editor, initialContent])
+  }, [editor, initialContent, isCollabActive])
 
   const rect = useCursorVisibility({
     editor,

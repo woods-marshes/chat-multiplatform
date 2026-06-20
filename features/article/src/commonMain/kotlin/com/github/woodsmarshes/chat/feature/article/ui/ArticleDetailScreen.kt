@@ -66,14 +66,21 @@ fun ArticleDetailScreen(
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = fabVisible && isOwnArticle && uiState.article != null,
+                visible = fabVisible
+                        && (uiState.article != null)
+                        && (isOwnArticle || uiState.article?.stats?.allowCollaboration == true),
                 enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
             ) {
                 ExtendedFloatingActionButton(
                     onClick = { onEditClick(articleId) },
                     icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                    text = { Text(LocalStrings.current.articleEditFab) },
+                    text = { Text(
+                        if (isOwnArticle)
+                            LocalStrings.current.articleEditFab
+                        else
+                            LocalStrings.current.articleCollaborativeEditFab
+                    ) },
                 )
             }
         },

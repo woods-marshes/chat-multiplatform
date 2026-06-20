@@ -13,6 +13,11 @@ actual fun TiptapEditorWebView(
     initialJsonStr: String,
     onTitleChanged: (String) -> Unit,
     onContentChanged: (String) -> Unit,
+    collabUrl: String?,
+    roomId: String?,
+    token: String?,
+    userInfoName: String?,
+    userInfoColor: String?,
     modifier: Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

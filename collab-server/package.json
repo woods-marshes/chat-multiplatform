@@ -1,0 +1,32 @@
+{
+  "name": "collab-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@hocuspocus/extension-database": "^4.3.0",
+    "@hocuspocus/server": "^4.3.0",
+    "@hocuspocus/transformer": "^4.3.0",
+    "dotenv": "^17.4.2",
+    "pg": "^8.22.0",
+    "yjs": "^13.6.31",
+    "@tiptap/core": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "@tiptap/extension-image": "^3.27.1",
+    "@tiptap/extension-list": "^3.27.1",
+    "@tiptap/extension-text-align": "^3.27.1",
+    "@tiptap/extension-typography": "^3.27.1",
+    "@tiptap/extension-highlight": "^3.27.1",
+    "@tiptap/extension-subscript": "^3.27.1",
+    "@tiptap/extension-superscript": "^3.27.1",
+    "@tiptap/extension-horizontal-rule": "^3.27.1",
+    "@tiptap/extension-link": "^3.27.1"
+  }
+}

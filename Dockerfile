@@ -5,7 +5,9 @@ FROM gradle:9.5.1-jdk25 AS build
 
 USER root
 RUN apt update && \
-    apt install -y --no-install-recommends nodejs npm && \
+    apt install -y --no-install-recommends curl ca-certificates && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 USER gradle
 
@@ -18,7 +20,7 @@ COPY --chown=gradle:gradle build-logic/ /home/gradle/src/build-logic/
 
 COPY --chown=gradle:gradle tiptap-bridge/package*.json /home/gradle/src/tiptap-bridge/
 RUN --mount=type=cache,target=/home/gradle/.npm,uid=1000,gid=1000 \
-    cd /home/gradle/src/tiptap-bridge && npm install
+    cd /home/gradle/src/tiptap-bridge && npm ci --legacy-peer-deps
 
 COPY --chown=gradle:gradle . .
 

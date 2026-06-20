@@ -23,9 +23,11 @@ class AuthRepositoryImpl(
     private val userSettingDataSource: UserSettingDataSource,
     private val userDao: UserDao,
     private val authApi: AuthApi,
-    private val databaseHolder: DatabaseHolder
+    private val databaseHolder: DatabaseHolder,
 ) : AuthRepository {
     private val log = KotlinLogging.logger {}
+
+    override val jwtToken: Flow<String?> = authTokenDataSource.jwtToken
 
     override fun observeIsLoggedIn(): Flow<Boolean> {
         return authTokenDataSource.jwtToken.map { jwt ->

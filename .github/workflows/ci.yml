@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, '**']
   pull_request:
-    branches: [main]
+    branches: [main, '**']
 
 jobs:
   client:
@@ -28,7 +28,7 @@ jobs:
       - name: Install tiptap-bridge dependencies
         run: |
           cd tiptap-bridge
-          npm install
+          npm install --legacy-peer-deps
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -36,6 +36,24 @@ jobs:
 
       - name: Compile client
         run: gradle :composeApp:jvmMainClasses --no-daemon
+
+  collab-server-check:
+    name: Collab Server Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'collab-server/package-lock.json'
+
+      - name: Install collab-server dependencies
+        run: |
+          cd collab-server
+          npm ci --legacy-peer-deps
 
   server:
     name: Server Test
@@ -58,7 +76,7 @@ jobs:
       - name: Install tiptap-bridge dependencies
         run: |
           cd tiptap-bridge
-          npm install
+          npm install --legacy-peer-deps
 
       - uses: gradle/actions/setup-gradle@v4
         with:

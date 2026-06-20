@@ -147,6 +147,7 @@
     <string name="article_status_draft">草稿</string>
     <string name="article_status_published">已发布</string>
     <string name="article_edit_fab">编辑</string>
+    <string name="article_collaborative_edit_fab">协作编辑</string>
     <string name="article_load_failed">加载失败</string>
     <string name="article_new_title">写文章</string>
     <string name="article_edit_title">编辑文章</string>

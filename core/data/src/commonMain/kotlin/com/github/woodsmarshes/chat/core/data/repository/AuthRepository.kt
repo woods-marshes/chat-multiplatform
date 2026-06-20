@@ -6,6 +6,8 @@ import com.github.woodsmarshes.chat.core.model.error.AuthError
 import kotlinx.coroutines.flow.Flow
 
 interface AuthRepository {
+    val jwtToken: Flow<String?>
+
     fun observeIsLoggedIn(): Flow<Boolean>
 
     suspend fun login(email: String, password: String): Result<User, AuthError>

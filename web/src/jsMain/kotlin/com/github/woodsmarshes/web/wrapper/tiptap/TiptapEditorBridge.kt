@@ -12,6 +12,10 @@ external interface TiptapEditorBridgeProps : Props {
     var onTitleChange: (String) -> Unit
     var content: dynamic
     var onChange: (dynamic) -> Unit
+    var collabUrl: String?
+    var roomId: String?
+    var token: String?
+    var userInfo: dynamic // JS 动态对象，包含 name 和 color
 }
 
 

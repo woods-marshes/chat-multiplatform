@@ -10,4 +10,5 @@ data class ArticleStats(
     @ProtoNumber(3) val comments: Int = 0,
     @ProtoNumber(4) val wordCount: Int = 0,
     @ProtoNumber(5) val readTimeMinutes: Int = 0,
+    @ProtoNumber(6) val allowCollaboration: Boolean = true,
 )

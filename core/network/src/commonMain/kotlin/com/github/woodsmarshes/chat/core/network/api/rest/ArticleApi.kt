@@ -56,6 +56,10 @@ class ArticleApi(
         }.body()
     }
 
+    suspend fun createBlank(): Article {
+        return client.post(V1.Articles.CreateBlank).body()
+    }
+
     suspend fun deleteArticle(id: Uuid) {
         client.delete(V1.Articles.Id(id = id))
     }

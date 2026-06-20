@@ -9,5 +9,10 @@ expect fun TiptapEditorWebView(
     initialJsonStr: String,
     onTitleChanged: (String) -> Unit,
     onContentChanged: (String) -> Unit,
+    collabUrl: String? = null,
+    roomId: String? = null,
+    token: String? = null,
+    userInfoName: String? = null,
+    userInfoColor: String? = null,
     modifier: Modifier = Modifier,
 )

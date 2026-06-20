@@ -16,6 +16,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
+import com.github.woodsmarshes.chat.repository.database.schema.YjsDocuments
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import com.github.woodsmarshes.chat.utils.connectToPostgresDatabase
@@ -61,12 +62,12 @@ private fun Application.configureDatabase(config: ServerConfig): Database {
     }
 }
 
-private fun Application.configureSchema(database: Database) {
+private fun configureSchema(database: Database) {
     transaction(database) {
         SchemaUtils.create(
             Users, Conversations, UserSettings, GroupProfiles,
             Messages, GroupJoinRequests, ConversationParticipants,
-            Contacts, ContactRequests, Articles
+            Contacts, ContactRequests, Articles, YjsDocuments
         )
     }
 }

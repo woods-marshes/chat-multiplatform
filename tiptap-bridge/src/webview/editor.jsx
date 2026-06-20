@@ -9,6 +9,8 @@ function EditorApp() {
   // Only used for one-time initial load — NOT updated while typing
   const [initialContent, setInitialContent] = useState(null);
 
+  const [collabConfig, setCollabConfig] = useState(null);
+
   const contentRef = useRef({ type: 'doc', content: [] });
   const titleRef = useRef(title);
 
@@ -16,8 +18,18 @@ function EditorApp() {
 
   useEffect(() => {
     window.__editorShell = {
-      initialize: (initialTitle, initialJsonStr) => {
+      initialize: (initialTitle, initialJsonStr, collabOptionsStr) => {
         setTitle(initialTitle || '');
+
+        if (collabOptionsStr) {
+          try {
+            const parsedConfig = JSON.parse(collabOptionsStr);
+            setCollabConfig(parsedConfig);
+          } catch (e) {
+            console.error("Failed to parse collab options", e);
+          }
+        }
+
         if (initialJsonStr) {
           try {
             const parsed = JSON.parse(initialJsonStr);
@@ -70,6 +82,10 @@ function EditorApp() {
       onTitleChange={handleTitleChange}
       initialContent={initialContent}
       onUpdate={handleUpdate}
+      collabUrl={collabConfig?.collabUrl}
+      roomId={collabConfig?.roomId}
+      token={collabConfig?.token}
+      userInfo={collabConfig?.userInfo}
     />
   );
 }

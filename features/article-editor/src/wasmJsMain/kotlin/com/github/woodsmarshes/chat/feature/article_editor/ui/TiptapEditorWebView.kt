@@ -35,6 +35,11 @@ actual fun TiptapEditorWebView(
     initialJsonStr: String,
     onTitleChanged: (String) -> Unit,
     onContentChanged: (String) -> Unit,
+    collabUrl: String?,
+    roomId: String?,
+    token: String?,
+    userInfoName: String?,
+    userInfoColor: String?,
     modifier: Modifier,
 ) {
     var htmlContent by remember { mutableStateOf<String?>(null) }
@@ -128,11 +133,35 @@ actual fun TiptapEditorWebView(
             @OptIn(ExperimentalEncodingApi::class)
             val titleB64 = Base64.encode(initialTitle.encodeToByteArray())
             val jsonB64 = Base64.encode(initialJsonStr.encodeToByteArray())
-            navigator.evaluateJavaScript(
+
+            val collabJsonStr = if (collabUrl != null && roomId != null) {
+                """
+                {
+                  "collabUrl": "$collabUrl",
+                  "roomId": "$roomId",
+                  "token": ${if (token != null) "\"$token\"" else "null"},
+                  "userInfo": {
+                    "name": "${userInfoName ?: "Anonymous"}",
+                    "color": "${userInfoColor ?: "#ffcc00"}"
+                  }
+                }
+                """.trimIndent()
+            } else null
+
+            val collabB64 = collabJsonStr?.let { Base64.encode(it.encodeToByteArray()) }
+
+            val jsCall = if (collabB64 != null) {
                 "window.__editorShell.initialize(" +
-                    "decodeURIComponent(escape(window.atob(\"$titleB64\"))), " +
-                    "decodeURIComponent(escape(window.atob(\"$jsonB64\"))));"
-            )
+                        "decodeURIComponent(escape(window.atob(\"$titleB64\"))), " +
+                        "decodeURIComponent(escape(window.atob(\"$jsonB64\"))), " +
+                        "decodeURIComponent(escape(window.atob(\"$collabB64\"))));"
+            } else {
+                "window.__editorShell.initialize(" +
+                        "decodeURIComponent(escape(window.atob(\"$titleB64\"))), " +
+                        "decodeURIComponent(escape(window.atob(\"$jsonB64\")));"
+            }
+
+            navigator.evaluateJavaScript(jsCall)
         }
     }
 

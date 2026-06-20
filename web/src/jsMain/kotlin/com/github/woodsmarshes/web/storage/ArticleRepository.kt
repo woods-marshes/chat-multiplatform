@@ -64,6 +64,8 @@ object ArticleRepository {
     suspend fun save(id: Uuid, request: UpdateArticleRequest): Article =
         koinInject<ArticleApi>().saveArticle(id, request)
 
+    suspend fun createBlank(): Article = koinInject<ArticleApi>().createBlank()
+
     suspend fun delete(id: Uuid) {
         koinInject<ArticleApi>().deleteArticle(id)
     }

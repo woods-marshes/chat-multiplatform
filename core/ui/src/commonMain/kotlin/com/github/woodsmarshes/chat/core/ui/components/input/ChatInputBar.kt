@@ -228,6 +228,7 @@ fun ChatInputBar(
                             max = panelMaxHeight
                         )
                         .background(bubbleColors.panelBackground)
+                        .navigationBarsPadding()
                 ) {
                     EmojiPanel(
                         onEmojiSelected = { emoji ->
@@ -255,6 +256,7 @@ fun ChatInputBar(
                             max = panelMaxHeight
                         )
                         .background(bubbleColors.panelBackground)
+                        .navigationBarsPadding()
                 ) {
                     MediaActionPanel(
                         onActionClick = { selector ->

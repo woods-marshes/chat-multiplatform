@@ -105,7 +105,7 @@ val ArticleViewPage = FC<Props> {
                     }
                     span { +(a.author.displayName ?: a.author.username) }
                     span { +formatTimestamp(a.updatedAt) }
-                    if (isOwn) {
+                    if (isOwn || a.stats.allowCollaboration) {
                         a {
                             href = "#/articles/${a.id}/edit"
                             className = ClassName("article-edit-link")
@@ -113,7 +113,7 @@ val ArticleViewPage = FC<Props> {
                                 event.preventDefault()
                                 Router.navigate("/articles/${a.id}/edit")
                             }
-                            +"Edit"
+                            +if (a.stats.allowCollaboration) "Edit" else "Collaborative-edit"
                         }
                     }
                 }
