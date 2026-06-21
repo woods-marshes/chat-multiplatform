@@ -48,7 +48,7 @@ fun Route.authRoutes() {
     authenticate {
         get<V1.Auth.Verify> {
             val userId = call.extractUserId()
-            call.respond(HttpStatusCode.OK, mapOf("userId" to userId))
+            call.respond(HttpStatusCode.OK, mapOf("userId" to userId.toString()))
         }
     }
 }
