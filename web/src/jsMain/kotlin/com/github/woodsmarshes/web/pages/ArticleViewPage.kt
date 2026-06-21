@@ -41,7 +41,7 @@ val ArticleViewPage = FC<Props> {
             val id = try { Uuid.parse(articleId) } catch (e: Exception) { null }
             if (id != null) {
                 // Try own-article API first (most useful for drafts + edit access)
-                val own = currentUser?.id?.let { ArticleRepository.getMy(it) }
+                val own = ArticleRepository.getMy(id)
                 if (own != null) {
                     article = own
                     isOwn = true

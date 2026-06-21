@@ -13,6 +13,8 @@ import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
 
+import * as Y from 'yjs';
+
 const backendSchemaExtensions = [
   StarterKit.configure({
     horizontalRule: false,
@@ -103,7 +105,8 @@ const server = new Server({
   },
 
   // 存储文档 Hook
-  async onStoreDocument({ documentName, state }) {
+  async onStoreDocument({ documentName, document }) {
+    const state = Y.encodeStateAsUpdate(document);
     await dbPool.query(
       `INSERT INTO yjs_documents (article_id, state, updated_at) 
        VALUES ($1::uuid, $2, NOW())
