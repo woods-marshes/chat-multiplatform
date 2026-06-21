@@ -53,7 +53,8 @@ const server = new Server({
       const response = await fetch(ktorAuthUrl, {
         headers: { 
           'Authorization': `Bearer ${token}` ,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
       if (!response.ok) {
