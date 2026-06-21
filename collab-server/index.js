@@ -51,7 +51,10 @@ const server = new Server({
       const ktorAuthUrl = process.env.KTOR_AUTH_URL || 'http://localhost:9051/v1/auth/verify';
       // 远程调用 Ktor 服务端校验 JWT 合法性
       const response = await fetch(ktorAuthUrl, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}` ,
+          'Content-Type': 'application/json'
+        }
       });
       if (!response.ok) {
         throw new Error('Unauthorized');
