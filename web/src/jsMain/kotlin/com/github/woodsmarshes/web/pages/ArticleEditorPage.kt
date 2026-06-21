@@ -40,6 +40,7 @@ val ArticleEditorPage = FC<Props> {
     val contextStatus = useCurrentContext()
     val loggedIn = contextStatus.isLoggedIn
     val currentUser = contextStatus.user
+    val jwtToken = contextStatus.jwtToken
 
     val (title, setTitle) = useState("")
     val (loading, setLoading) = useState(true)
@@ -50,7 +51,6 @@ val ArticleEditorPage = FC<Props> {
     val (editorJson, setEditorJson) = useState<dynamic>(null)
 
     val networkConfig = koinInject<NetworkConfig>()
-    val (jwtToken, setJwtToken) = useState<String?>(null)
 
     val (canSave, setCanSave) = useState(false)
     val (isSaving, setIsSaving) = useState(false)
@@ -61,16 +61,7 @@ val ArticleEditorPage = FC<Props> {
             return@useEffect // 如果未登录，直接拦截展示“Login Required”，不做任何数据操作
         }
 
-        val scope = MainScope()
-
-        // 订阅并载入协作所需的 JWT Token
-        scope.launch {
-            koinInject<AuthTokenDataSource>().jwtToken.collect { token ->
-                setJwtToken(token)
-            }
-        }
-
-        scope.launch {
+        launch {
             try {
                 if (isEditing) {
                     // 编辑已有文章，正常拉取内容
@@ -167,7 +158,7 @@ val ArticleEditorPage = FC<Props> {
             className = ClassName("editor-page")
 
             // 新建文章（editorJson为null）或者编辑文章（且editorJson已在useEffect中异步加载完）时挂载
-            if (!isEditing || editorJson != null) {
+            if (!isEditing || (editorJson != null && jwtToken != null)) {
                 TiptapEditorBridge {
                     this.title = title
                     this.onTitleChange = { newTitle -> setTitle(newTitle) }

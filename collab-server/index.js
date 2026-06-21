@@ -28,6 +28,8 @@ const backendSchemaExtensions = [
   Subscript,
 ];
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 dotenv.config();
 
 const dbPool = new pg.Pool({
@@ -63,24 +65,34 @@ const server = new Server({
   },
 
   async onLoadDocument({ documentName }) {
-    const res = await dbPool.query(
-      'SELECT state FROM yjs_documents WHERE article_id = $1',
-      [documentName]
-    );
-    if (res.rows[0]?.state) {
-        return res.rows[0].state; 
+
+    if (!UUID_REGEX.test(documentName)) {
+      console.warn(`[onLoadDocument] Invalid UUID room name: "${documentName}". Skipping DB fetch.`);
+      return null;
     }
 
-    const articleRes = await dbPool.query(
-        'SELECT content FROM articles WHERE id = $1',
+    try {
+      const res = await dbPool.query(
+        'SELECT state FROM yjs_documents WHERE article_id = $1::uuid',
         [documentName]
-    );
-
-    const contentJson = articleRes.rows[0]?.content;
-
-    if (contentJson && Object.keys(contentJson).length > 0) {
-        const ydoc = TiptapTransformer.toYdoc(contentJson, 'default', backendSchemaExtensions);
-        return ydoc; 
+      );
+      if (res.rows[0]?.state) {
+          return res.rows[0].state; 
+      }
+  
+      const articleRes = await dbPool.query(
+          'SELECT content FROM articles WHERE id = $1::uuid',
+          [documentName]
+      );
+  
+      const contentJson = articleRes.rows[0]?.content;
+  
+      if (contentJson && Object.keys(contentJson).length > 0) {
+          const ydoc = TiptapTransformer.toYdoc(contentJson, 'default', backendSchemaExtensions);
+          return ydoc; 
+      }
+    } catch (e) {
+      console.error('[onLoadDocument] Database query failed:', e.message);
     }
 
     return null;
@@ -90,7 +102,7 @@ const server = new Server({
   async onStoreDocument({ documentName, state }) {
     await dbPool.query(
       `INSERT INTO yjs_documents (article_id, state, updated_at) 
-       VALUES ($1, $2, NOW()) 
+       VALUES ($1::uuid, $2, NOW())
        ON CONFLICT (article_id) DO UPDATE SET state = $2, updated_at = NOW()`,
       [documentName, state]
     );

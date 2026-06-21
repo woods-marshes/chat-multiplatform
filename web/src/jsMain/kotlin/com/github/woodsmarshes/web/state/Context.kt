@@ -15,11 +15,13 @@ import react.useState
 
 data class Status(
     val user: User?,
-    val isLoggedIn: Boolean
+    val isLoggedIn: Boolean,
+    val jwtToken: String? = null
 )
 val Context: Context<Status> = createContext(Status(
     user = null,
-    isLoggedIn = false
+    isLoggedIn = false,
+    jwtToken = null
 ))
 
 fun useCurrentContext(): Status = use(Context)
@@ -31,7 +33,8 @@ fun useCurrentContext(): Status = use(Context)
 val ContextProvider = FC<PropsWithChildren> { props ->
     var status by useState(Status(
         user = null,
-        isLoggedIn = false
+        isLoggedIn = false,
+        jwtToken = null
     ))
 
     useEffectOnce {
@@ -41,7 +44,8 @@ val ContextProvider = FC<PropsWithChildren> { props ->
         ) { token, u ->
             Status(
                 user = u,
-                isLoggedIn = token != null
+                isLoggedIn = token != null,
+                jwtToken = token
             )
         }.collect { newStatus ->
             status = newStatus // 3. 统一更新状态
