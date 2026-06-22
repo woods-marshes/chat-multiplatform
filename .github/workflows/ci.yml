@@ -36,6 +36,8 @@ jobs:
 
       - name: Compile client
         run: gradle :composeApp:jvmMainClasses --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   collab-server-check:
     name: Collab Server Dependency Check
@@ -84,3 +86,5 @@ jobs:
 
       - name: Run server tests
         run: gradle :server:test --no-daemon
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

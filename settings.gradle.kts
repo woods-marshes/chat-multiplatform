@@ -1,5 +1,22 @@
+import java.util.Properties
+
 rootProject.name = "chat-multiplatform"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootDir.resolve("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+val gprUser: String? = localProperties.getProperty("gpr.user")
+    ?: providers.gradleProperty("gpr.user").orNull
+    ?: System.getenv("GITHUB_ACTOR")
+
+val gprKey: String? = localProperties.getProperty("gpr.key")
+    ?: providers.gradleProperty("gpr.key").orNull
+    ?: System.getenv("GITHUB_TOKEN")
 
 pluginManagement {
     includeBuild("build-logic")
@@ -35,6 +52,13 @@ dependencyResolutionManagement {
         }
 
         mavenCentral()
+        maven {
+            url = uri("https://maven.pkg.github.com/woods-marshes/ComposeNativeWebview")
+            credentials {
+                username = gprUser
+                password = gprKey
+            }
+        }
         maven("https://packages.confluent.io/maven/")
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/kotlin-js-wrappers")
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")

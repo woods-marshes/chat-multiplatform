@@ -3,6 +3,9 @@
 # =============================================================
 FROM gradle:9.5.1-jdk25 AS build
 
+ARG GITHUB_ACTOR
+ARG GITHUB_TOKEN
+
 USER root
 RUN apt update && \
     apt install -y --no-install-recommends curl ca-certificates && \

@@ -122,6 +122,8 @@ compose.desktop {
     application {
         mainClass = "com.github.woodsmarshes.chat.MainKt"
 
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
+
         nativeDistributions {
             jvmArgs.add("--add-exports=java.base/sun.misc=ALL-UNNAMED")
             jvmArgs.add("--add-exports=java.base/sun.nio.ch=ALL-UNNAMED")

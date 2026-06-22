@@ -57,7 +57,7 @@ class ArticleApi(
     }
 
     suspend fun createBlank(): Article {
-        return client.post(V1.Articles.CreateBlank).body()
+        return client.post(V1.Articles.CreateBlank()).body()
     }
 
     suspend fun deleteArticle(id: Uuid) {

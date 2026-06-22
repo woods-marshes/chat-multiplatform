@@ -24,6 +24,9 @@ services:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
+    #   args:
+    #     - GITHUB_ACTOR=${GITHUB_ACTOR}
+    #     - GITHUB_TOKEN=${GITHUB_TOKEN}
     container_name: chat-server
     ports:
       - "9051:9051"
