@@ -29,6 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.serialization.json.JsonElement
@@ -65,23 +68,32 @@ fun ArticleDetailScreen(
             )
         },
         floatingActionButton = {
-            AnimatedVisibility(
-                visible = fabVisible
-                        && (uiState.article != null)
-                        && (isOwnArticle || uiState.article?.stats?.allowCollaboration == true),
-                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
+            val isFabActive = fabVisible
+                    && (uiState.article != null)
+                    && (isOwnArticle || uiState.article?.stats?.allowCollaboration == true)
+
+            DesktopHeavyweightPopup(
+                alignment = Alignment.BottomEnd,
+                offset = IntOffset(-32, -32),
             ) {
-                ExtendedFloatingActionButton(
-                    onClick = { onEditClick(articleId) },
-                    icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                    text = { Text(
-                        if (isOwnArticle)
-                            LocalStrings.current.articleEditFab
-                        else
-                            LocalStrings.current.articleCollaborativeEditFab
-                    ) },
-                )
+                AnimatedVisibility(
+                    visible = isFabActive,
+                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
+                ) {
+                    ExtendedFloatingActionButton(
+                        onClick = { onEditClick(articleId) },
+                        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        text = {
+                            Text(
+                                if (isOwnArticle)
+                                    LocalStrings.current.articleEditFab
+                                else
+                                    LocalStrings.current.articleCollaborativeEditFab
+                            )
+                        },
+                    )
+                }
             }
         },
     ) { innerPadding ->

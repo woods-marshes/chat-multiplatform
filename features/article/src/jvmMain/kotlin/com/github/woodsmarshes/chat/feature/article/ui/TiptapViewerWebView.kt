@@ -1,7 +1,9 @@
 package com.github.woodsmarshes.chat.feature.article.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -13,6 +15,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.features.article.resources.Res
 import io.github.kdroidfilter.webview.jsbridge.IJsMessageHandler
 import io.github.kdroidfilter.webview.jsbridge.JsMessage
@@ -131,10 +135,21 @@ private fun TiptapViewerWebViewContent(
         }
     }
 
-    WebView(
-        state = state,
-        navigator = navigator,
-        webViewJsBridge = jsBridge,
-        modifier = modifier,
-    )
+    Box(modifier = modifier) {
+        WebView(
+            state = state,
+            navigator = navigator,
+            webViewJsBridge = jsBridge,
+            modifier = if (isJsReady) Modifier.fillMaxSize() else Modifier.size(1.dp),
+        )
+        if (!isJsReady) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+    }
 }
