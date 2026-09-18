@@ -154,6 +154,8 @@ fun ChatScreen(
                     value = uiState.input,
                     onValueChange = viewModel::onInputChanged,
                     onSend = viewModel::sendMessage,
+                    replyTo = uiState.replyToMessage,
+                    onClearReply = viewModel::clearReplyTo,
                     onImageClick = { /* TODO: 打开系统图片选择器 */ },
                     onFileClick = { /* TODO: 打开系统文件选择器 */ },
                     onVoiceClick = { /* TODO: 开始录音 */ },

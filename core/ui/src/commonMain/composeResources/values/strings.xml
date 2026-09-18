@@ -97,6 +97,11 @@
     <string name="input_placeholder">输入消息…</string>
     <string name="send_cd">发送</string>
     <string name="voice_cd">语音</string>
+    <string name="emoji_cd">表情</string>
+    <string name="reply_preview_image">[图片]</string>
+    <string name="reply_preview_video">[视频]</string>
+    <string name="reply_preview_audio">[语音]</string>
+    <string name="reply_preview_file">[文件]</string>
 
     <!-- Time -->
     <string name="yesterday_format">昨天 %s</string>

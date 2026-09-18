@@ -1,6 +1,5 @@
 package com.github.woodsmarshes.chat.feature.profile.ui
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.michaelbull.result.onErr
@@ -14,7 +13,7 @@ import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
 class ProfileViewModel(
-    savedStateHandle: SavedStateHandle,
+    userId: String,
     private val userRepository: UserRepository,
 ) : ViewModel() {
 
@@ -22,12 +21,9 @@ class ProfileViewModel(
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
-        val userIdStr = savedStateHandle.get<String>("userId")
-        if (userIdStr != null) {
-            val userId = try { Uuid.parse(userIdStr) } catch (_: Exception) { null }
-            if (userId != null) {
-                loadProfile(userId)
-            }
+        val userId = runCatching { Uuid.parse(userId) }.getOrNull()
+        if (userId != null) {
+            loadProfile(userId)
         }
     }
 

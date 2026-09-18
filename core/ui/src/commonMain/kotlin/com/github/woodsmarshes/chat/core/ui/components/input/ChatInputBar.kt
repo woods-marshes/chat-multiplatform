@@ -1,73 +1,84 @@
 package com.github.woodsmarshes.chat.core.ui.components.input
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.onConsumedWindowInsetsChanged
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SentimentSatisfiedAlt
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.navigationevent.NavigationEventInfo
+import com.github.woodsmarshes.chat.core.model.AudioContent
+import com.github.woodsmarshes.chat.core.model.FileContent
+import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.VideoContent
+import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
-import top.yukonga.miuix.kmp.icon.MiuixIcons
+import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.icon.extended.AddCircle
 import top.yukonga.miuix.kmp.icon.extended.Mic
 import top.yukonga.miuix.kmp.icon.extended.Send
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun ChatInputBar(
     value: TextFieldValue,
+    modifier: Modifier = Modifier,
     onValueChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    replyTo: MessageUiModel? = null,
+    onClearReply: (() -> Unit)? = null,
     onImageClick: (() -> Unit)? = null,
     onFileClick: (() -> Unit)? = null,
     onVoiceClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
     val bubbleColors = LocalBubbleColors.current
@@ -76,43 +87,73 @@ fun ChatInputBar(
     val textFieldFocusRequester = remember { FocusRequester() }
     val localDensity = LocalDensity.current
     val ime = WindowInsets.ime
+    val navigationBars = WindowInsets.navigationBars
+    val animation = rememberImeAnimationInsets()
+    var windowSize by remember { mutableStateOf(IntSize.Zero) }
+    val panelState = remember(localDensity, windowSize) { InputPanelState() }
+    val currentSelector = panelState.selector
 
-    var keyboardHeightDp by remember {
-        mutableStateOf(0.dp)
-    }
-    var currentSelector by remember { mutableStateOf<InputSelector>(InputSelector.NONE) }
-
-    LaunchedEffect(key1 = localDensity) {
+    LaunchedEffect(panelState, ime, animation, localDensity) {
         snapshotFlow {
-            ime.getBottom(density = localDensity)
-        }.collect { bottomInset ->
-            val realtimeKeyboardHeightDp = (bottomInset / localDensity.density).dp
-            // 记录最大键盘高度
-            keyboardHeightDp = maxOf(realtimeKeyboardHeightDp, keyboardHeightDp)
-
-            if (realtimeKeyboardHeightDp == keyboardHeightDp) {
-                currentSelector = InputSelector.NONE
-                keyboardController?.show()
-            }
+            Triple(
+                ime.getBottom(localDensity),
+                animation.source.getBottom(localDensity),
+                animation.target.getBottom(localDensity),
+            )
+        }.collect { (current, source, target) ->
+            panelState.observeIme(current, source, target)
         }
     }
 
-
-    val panelMaxHeight = if (keyboardHeightDp <= 0.dp) {
-        270.dp
-    } else {
-        keyboardHeightDp
+    LaunchedEffect(panelState, panelState.awaitingKeyboard) {
+        if (panelState.awaitingKeyboard) {
+            textFieldFocusRequester.requestFocus()
+            keyboardController?.show()
+            // Failure guard only: successful handoff is driven by actual IME geometry.
+            delay(1500.milliseconds)
+            panelState.abandonKeyboardRequest()
+        }
     }
 
+    fun openPanel(selector: InputSelector) {
+        panelState.openPanel(
+            selector = selector,
+            currentImePx = maxOf(
+                ime.getBottom(localDensity),
+                animation.target.getBottom(localDensity),
+            ),
+            fallbackPx = with(localDensity) { 270.dp.roundToPx() },
+        )
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
+
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = currentSelector != InputSelector.NONE || panelState.awaitingKeyboard,
+        onBackCompleted = {
+            panelState.close()
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+        },
+    )
     Column(
         modifier = modifier
-            .background(bubbleColors.inputBarBackground),
+            .background(bubbleColors.inputBarBackground)
+            .onGloballyPositioned { coordinates ->
+                windowSize = coordinates.findRootCoordinates().size
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(
-            space = 12.dp,
-            alignment = Alignment.Top
-        )
     ) {
+        replyTo?.let { reply ->
+            ReplyPreview(
+                message = reply,
+                onClear = { onClearReply?.invoke() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,14 +163,9 @@ fun ChatInputBar(
             IconButton(
                 onClick = {
                     if (currentSelector == InputSelector.IMAGE) {
-                        // 如果已经是附件面板，点击则关闭面板并重新聚焦输入框
-                        // 重新聚焦输入框，让键盘自动升起
-                        currentSelector = InputSelector.NONE
+                        panelState.requestKeyboard()
                     } else {
-                        // 否则展示附件面板，关闭键盘并清除焦点
-                        focusManager.clearFocus(force = true)
-                        keyboardController?.hide()
-                        currentSelector = InputSelector.IMAGE
+                        openPanel(InputSelector.IMAGE)
                     }
                 },
                 enabled = enabled,
@@ -146,12 +182,9 @@ fun ChatInputBar(
             IconButton(
                 onClick = {
                     if (currentSelector == InputSelector.EMOJI) {
-                        currentSelector = InputSelector.NONE
+                        panelState.requestKeyboard()
                     } else {
-                        // 否则展示表情面板，清除焦点并隐藏键盘
-                        focusManager.clearFocus(force = true)
-                        keyboardController?.hide()
-                        currentSelector = InputSelector.EMOJI
+                        openPanel(InputSelector.EMOJI)
                     }
                 },
                 enabled = enabled,
@@ -172,6 +205,7 @@ fun ChatInputBar(
                 modifier = Modifier
                     .weight(1f)
                     .focusRequester(textFieldFocusRequester)
+                    .onFocusChanged { if (it.isFocused) panelState.requestKeyboard() }
                     .clip(RoundedCornerShape(20.dp))
                     .background(bubbleColors.inputFieldBackground)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -214,76 +248,135 @@ fun ChatInputBar(
             }
         }
 
-        when (currentSelector) {
-            InputSelector.NONE -> {
-                // 面板不显示时，使用 Spacer 占据键盘+导航栏的空间
-                KeyboardSpace(modifier = Modifier)
-            }
-            InputSelector.EMOJI -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(
-                            min = keyboardHeightDp,
-                            max = panelMaxHeight
-                        )
-                        .background(bubbleColors.panelBackground)
-                        .navigationBarsPadding()
-                ) {
-                    EmojiPanel(
-                        onEmojiSelected = { emoji ->
-                            val newText = value.text.substring(0, value.selection.start) +
-                                    emoji +
-                                    value.text.substring(value.selection.end)
-                            val newCursor = value.selection.start + emoji.length
-                            onValueChange(
-                                value.copy(
-                                    text = newText,
-                                    selection = TextRange(newCursor)
-                                )
+        InputAreaHost(
+            state = panelState,
+            ime = ime,
+            animation = animation,
+            navigationBars = navigationBars,
+            modifier = Modifier.fillMaxWidth().background(bubbleColors.panelBackground),
+        ) {
+            when (currentSelector) {
+                InputSelector.NONE -> Unit
+                InputSelector.EMOJI -> EmojiPanel(
+                    onEmojiSelected = { emoji ->
+                        val start = value.selection.min
+                        val end = value.selection.max
+                        onValueChange(
+                            value.copy(
+                                text = value.text.replaceRange(start, end, emoji),
+                                selection = TextRange(start + emoji.length),
+                                composition = null,
                             )
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-            InputSelector.IMAGE, InputSelector.FILE, InputSelector.AUDIO -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(
-                            min = keyboardHeightDp,
-                            max = panelMaxHeight
                         )
-                        .background(bubbleColors.panelBackground)
-                        .navigationBarsPadding()
-                ) {
-                    MediaActionPanel(
-                        onActionClick = { selector ->
-                            when (selector) {
-                                InputSelector.IMAGE -> onImageClick?.invoke()
-                                InputSelector.FILE -> onFileClick?.invoke()
-                                InputSelector.AUDIO -> onVoiceClick?.invoke()
-                                else -> {}
-                            }
-                            // 点击功能后关闭面板
-                            currentSelector = InputSelector.NONE
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                else -> MediaActionPanel(
+                    onActionClick = { selector ->
+                        panelState.close()
+                        when (selector) {
+                            InputSelector.IMAGE -> onImageClick?.invoke()
+                            InputSelector.FILE -> onFileClick?.invoke()
+                            InputSelector.AUDIO -> onVoiceClick?.invoke()
+                            else -> Unit
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
 }
 
+/** Reads animated geometry during measurement rather than recomposing the message screen. */
 @Composable
-private fun KeyboardSpace(modifier: Modifier) {
-    Spacer(
+private fun InputAreaHost(
+    state: InputPanelState,
+    ime: WindowInsets,
+    animation: ImeAnimationInsets,
+    navigationBars: WindowInsets,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    var consumedBottom by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    Layout(
+        content = content,
+        modifier = modifier.onConsumedWindowInsetsChanged {
+            consumedBottom = it.getBottom(density)
+        },
+    ) { measurables, constraints ->
+        val total = state.occupiedHeight(
+            current = ime.getBottom(this),
+            source = animation.source.getBottom(this),
+            target = animation.target.getBottom(this),
+            navigation = navigationBars.getBottom(this),
+        )
+        val height = constraints.constrainHeight((total - consumedBottom).coerceAtLeast(0))
+        val navigation = (navigationBars.getBottom(this) - consumedBottom).coerceAtLeast(0)
+        val contentHeight = (height - navigation).coerceAtLeast(0)
+        val width = constraints.maxWidth
+        val children = measurables.map {
+            it.measure(Constraints.fixed(width, contentHeight))
+        }
+        layout(width, height) {
+            children.forEach { it.placeRelative(0, 0) }
+        }
+    }
+}
+
+/** Compact preview of the message being replied to, shown above the input field. */
+@Composable
+private fun ReplyPreview(
+    message: MessageUiModel,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bubbleColors = LocalBubbleColors.current
+    val strings = LocalStrings.current
+    val senderName = message.sender?.displayName ?: message.sender?.username ?: ""
+    val excerpt = when (val content = message.content) {
+        is TextContent -> content.text
+        is ImageContent -> strings.replyPreviewImage
+        is VideoContent -> strings.replyPreviewVideo
+        is AudioContent -> strings.replyPreviewAudio
+        is FileContent -> strings.replyPreviewFile
+        else -> ""
+    }
+    Row(
         modifier = modifier
-            .windowInsetsPadding(
-                insets = WindowInsets.navigationBars
-                    .union(insets = WindowInsets.ime)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bubbleColors.inputFieldBackground)
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "${strings.reply} $senderName",
+                style = TextStyle(
+                    color = bubbleColors.inputFieldContent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-    )
+            Text(
+                text = excerpt,
+                style = TextStyle(
+                    color = bubbleColors.inputFieldPlaceholder,
+                    fontSize = 12.sp,
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onClear) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = strings.dismiss,
+                tint = bubbleColors.inputIconTint,
+            )
+        }
+    }
 }

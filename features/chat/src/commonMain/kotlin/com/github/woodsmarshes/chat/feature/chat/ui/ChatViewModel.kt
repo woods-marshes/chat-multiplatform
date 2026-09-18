@@ -92,12 +92,9 @@ class ChatViewModel(
         val text = _uiState.value.input.text
         if (text.isBlank()) return
 
-        log.info { "[ChatVM] sendMessage triggered, text='$text'" }
+        log.info { "[ChatVM] sendMessage triggered" }
 
-        _uiState.value = _uiState.value.copy(
-            input = TextFieldValue(),
-            isSending = true,
-        )
+        _uiState.value = _uiState.value.copy(isSending = true)
 
         viewModelScope.launch {
             val replyToId = _uiState.value.replyToMessage?.id
@@ -108,10 +105,18 @@ class ChatViewModel(
             )
             result.onOk {
                 log.info { "[ChatVM] sendMessage result OK" }
-                _uiState.value = _uiState.value.copy(isSending = false, replyToMessage = null)
+                // Clear the input only after a confirmed send: on failure the
+                // user keeps their draft instead of losing it.
+                _uiState.value = _uiState.value.copy(
+                    input = TextFieldValue(),
+                    isSending = false,
+                    error = null,
+                )
+                clearReplyTo()
             }.onErr {
                 log.warn { "[ChatVM] sendMessage result ERR: ${it.message}" }
                 _uiState.value = _uiState.value.copy(isSending = false, error = "Send failed")
+                clearReplyTo()
             }
         }
     }

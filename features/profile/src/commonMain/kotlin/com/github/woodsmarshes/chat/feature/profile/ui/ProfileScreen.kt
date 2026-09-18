@@ -28,12 +28,13 @@ import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 @Composable
 fun ProfileScreen(
     userId: String,
     onBack: () -> Unit,
-    viewModel: ProfileViewModel = koinViewModel(),
+    viewModel: ProfileViewModel = koinViewModel(parameters = { parametersOf(userId) }),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val bubbleColors = LocalBubbleColors.current
