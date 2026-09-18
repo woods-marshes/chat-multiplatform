@@ -45,6 +45,7 @@ fun LazyListScope.articleItems(
     items(
         count = itemCount,
         key = { index -> itemProvider(index)?.id?.toString() ?: index },
+        contentType = { "article" },
     ) { index ->
         val article = itemProvider(index) ?: return@items
         ArticleCardItem(

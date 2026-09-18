@@ -37,11 +37,16 @@ fun Modifier.shimmer(
     val shimmerColors = colors ?: defaultShimmerColors
     val density = LocalDensity.current
     val cornerPx = with(density) { cornerRadius.toPx() }
+    // Density-aware sweep geometry; the old literals only matched 1x displays.
+    val sweepStartPx = with(density) { (-300).dp.toPx() }
+    val sweepEndPx = with(density) { 900.dp.toPx() }
+    val gradientLengthPx = with(density) { 300.dp.toPx() }
+    val minSweepWidthPx = with(density) { 400.dp.toPx() }
 
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim by transition.animateFloat(
-        initialValue = -300f,
-        targetValue = 900f,
+        initialValue = sweepStartPx,
+        targetValue = sweepEndPx,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart,
@@ -49,11 +54,11 @@ fun Modifier.shimmer(
         label = "shimmerTranslate",
     )
 
-    val brush = remember(shimmerColors) {
+    val brush = remember(shimmerColors, density) {
         Brush.linearGradient(
             colors = shimmerColors,
             start = Offset.Zero,
-            end = Offset(300f, 0f),
+            end = Offset(gradientLengthPx, 0f),
         )
     }
 
@@ -63,7 +68,7 @@ fun Modifier.shimmer(
             drawRoundRect(
                 brush = brush,
                 topLeft = Offset(translateAnim, 0f),
-                size = Size(size.width.coerceAtLeast(400f), size.height),
+                size = Size(size.width.coerceAtLeast(minSweepWidthPx), size.height),
                 cornerRadius = CornerRadius(cornerPx, cornerPx),
                 alpha = 0.6f,
             )
