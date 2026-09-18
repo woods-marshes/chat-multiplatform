@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.core.data.repository
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.User
@@ -44,4 +45,6 @@ interface ConversationRepository {
         conversationId: Uuid,
         settings: ParticipantSettings
     ): Result<Unit, ConversationError>
+
+    suspend fun searchGroups(keyword: String): Result<List<GroupProfile>, ConversationError>
 }

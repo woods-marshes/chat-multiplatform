@@ -30,4 +30,6 @@ interface UserRepository {
     ): Result<Boolean, UserError>
 
     suspend fun fetchUserDetail(userId: Uuid): Result<User, UserError>
+
+    suspend fun searchUsers(keyword: String): Result<List<User>, UserError>
 }

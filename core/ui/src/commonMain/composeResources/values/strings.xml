@@ -58,6 +58,9 @@
     <string name="search_cd">搜索</string>
     <string name="search_placeholder">搜索用户或消息…</string>
     <string name="search_prompt">输入关键词开始搜索</string>
+    <string name="search_no_results">未找到匹配结果</string>
+    <string name="search_not_supported">该类型暂不支持搜索</string>
+    <string name="search_failed">搜索失败</string>
 
     <!-- Profile -->
     <string name="profile_title">用户资料</string>

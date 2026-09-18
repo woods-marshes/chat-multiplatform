@@ -106,4 +106,15 @@ class UserRepositoryImpl(
         }
     }
 
+    override suspend fun searchUsers(keyword: String): Result<List<User>, UserError> = coroutineBinding {
+        bindApi(UserError::Unknown) {
+            userApi.searchUsers(keyword.trim())
+        }.also { users ->
+            // Cache hits so profile lookups resolve from local storage later.
+            users.forEach { user ->
+                userDao.insertUser(user.toUserEntity())
+            }
+        }
+    }
+
 }

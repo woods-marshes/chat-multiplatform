@@ -19,6 +19,7 @@ import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.User
@@ -301,12 +302,19 @@ class ConversationRepositoryImpl(
         val success = bindApi(ConversationError::Unknown) {
             conversationApi.updatePersonalSettings(conversationId, settings)
         }
-        
+
         if (success) {
             // The settings update might affect how we display the conversation
             syncConversations()
         }
-        
+
         Unit
     }
+
+    override suspend fun searchGroups(keyword: String): Result<List<GroupProfile>, ConversationError> =
+        coroutineBinding {
+            bindApi(ConversationError::Unknown) {
+                conversationApi.searchGroups(keyword.trim())
+            }
+        }
 }
