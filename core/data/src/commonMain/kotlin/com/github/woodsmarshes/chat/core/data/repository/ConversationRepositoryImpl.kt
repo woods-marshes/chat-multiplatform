@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.core.data.model.toGroupOwnerUserEntity
 import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
 import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
 import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
+import com.github.woodsmarshes.chat.core.data.model.toPeerParticipantEntity
 import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
 import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
@@ -23,6 +24,7 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.ui.SenderUser
 import com.github.woodsmarshes.chat.core.model.ui.LastMessageInfo
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
@@ -31,6 +33,7 @@ import com.github.woodsmarshes.chat.core.network.dto.conversation.CreatePrivateR
 import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -62,6 +65,9 @@ class ConversationRepositoryImpl(
                 flowOf(emptyList())
             } else {
                 conversationDao.getConversationListView(currentUser.id).flatMapLatest { entities ->
+                    if (entities.isEmpty()) {
+                        return@flatMapLatest flowOf(emptyList())
+                    }
                     val groupIds = mutableListOf<Uuid>()
                     val c2CIds = mutableListOf<Uuid>()
                     entities.forEach { entity ->
@@ -74,13 +80,39 @@ class ConversationRepositoryImpl(
                             }
                         }
                     }
+                    // One COUNT flow per conversation, keyed by the participant's
+                    // last_read_message_id; message/participant writes re-emit these.
+                    val unreadFlows: List<Flow<Long>> = entities.map { entity ->
+                        messageDao.countUnreadAfter(
+                            conversationId = entity.conversation_id,
+                            myUserId = currentUser.id,
+                            lastReadMessageId = entity.participant_last_read_message_id,
+                        )
+                    }
+                    val unreadCountsFlow: Flow<List<Long>> =
+                        combine(unreadFlows) { counts -> counts.toList() }
                     combine(
                         groupProfileDao.getGroupProfiles(groupIds),
-                        participantDao.getParticipantsExcludingUser(c2CIds, currentUser.id)
-                    ) { groups, c2Cs->
-                        val groups = groups.associateBy { it.conversation_id }
-                        val c2Cs = c2Cs.associateBy { it.conversation_id }
-                        entities.map { entity ->
+                        participantDao.getParticipantsExcludingUser(c2CIds, currentUser.id),
+                        participantDao.getConversationMemberAvatars(currentUser.id),
+                        unreadCountsFlow,
+                    ) { groupRows, c2cRows, memberAvatarRows, unreadCounts ->
+                        val groups = groupRows.associateBy { it.conversation_id }
+                        val c2cs = c2cRows.associateBy { it.conversation_id }
+                        val memberAvatars = memberAvatarRows
+                            .groupBy { it.conversation_id }
+                            .mapValues { (_, rows) ->
+                                rows.map { row ->
+                                    SenderUser(
+                                        id = row.u_id,
+                                        username = row.u_username,
+                                        displayName = row.u_display_name,
+                                        avatarUrl = row.u_avatar,
+                                        role = row.p_role
+                                    )
+                                }
+                            }
+                        entities.mapIndexed { index, entity ->
                             val lastMessage =
                                 if (entity.last_message_id != null) {
                                     LastMessageInfo(
@@ -93,7 +125,7 @@ class ConversationRepositoryImpl(
                                         isOwnMessage = currentUser.id == entity.last_message_sender_id
                                     )
                                 } else null
-                            log.info { "[ConversationRepositoryImpl] lastMessage is ${lastMessage.toString()}" }
+                            log.debug { "[getConversationListFlow] lastMessage=$lastMessage" }
                             when (entity.conversation_type) {
                                 ConversationType.GROUP -> {
                                     ConversationUiModel(
@@ -104,20 +136,21 @@ class ConversationRepositoryImpl(
                                         description = groups[entity.conversation_id]?.description,
                                         handle = groups[entity.conversation_id]?.handle,
                                         lastMessage = lastMessage,
-                                        unreadCount = 0,
-                                        isPinned = entity.participant_settings?.pinnedAt != null
+                                        unreadCount = unreadCounts[index].toInt(),
+                                        isPinned = entity.participant_settings?.pinnedAt != null,
+                                        memberAvatars = memberAvatars[entity.conversation_id] ?: emptyList()
                                     )
                                 }
                                 ConversationType.PRIVATE -> {
                                     ConversationUiModel(
                                         id = entity.conversation_id,
                                         type = entity.conversation_type,
-                                        name = c2Cs[entity.conversation_id]?.username,
-                                        avatarUrl = c2Cs[entity.conversation_id]?.avatar,
-                                        description = c2Cs[entity.conversation_id]?.bio,
+                                        name = c2cs[entity.conversation_id]?.username,
+                                        avatarUrl = c2cs[entity.conversation_id]?.avatar,
+                                        description = c2cs[entity.conversation_id]?.bio,
                                         handle = null,
                                         lastMessage = lastMessage,
-                                        unreadCount = 0,
+                                        unreadCount = unreadCounts[index].toInt(),
                                         isPinned = entity.participant_settings?.pinnedAt != null
                                     )
                                 }
@@ -141,7 +174,17 @@ class ConversationRepositoryImpl(
             )
             groupProfileDao.insertGroupProfiles(groupResponses.mapNotNull { it.toGroupProfileEntity() })
             participantDao.insertParticipants(responses.map { it.toParticipantEntity() })
-            messageDao.insertMessages(responses.mapNotNull { it.toMessageEntity() })
+            // The sync API carries no peer participant row for private chats;
+            // seed it once so peer lookups (name, avatar) resolve.
+            participantDao.insertParticipantsIfAbsent(responses.mapNotNull { it.toPeerParticipantEntity() })
+            // A single malformed lastMessage must not abort the whole sync.
+            messageDao.insertMessages(
+                responses.mapNotNull { response ->
+                    runCatching { response.toMessageEntity() }
+                        .onFailure { log.warn(it) { "Skipping unpersistable last message" } }
+                        .getOrNull()
+                }
+            )
         }
     }
 
@@ -242,8 +285,10 @@ class ConversationRepositoryImpl(
             try {
                 val participants = conversationApi.getParticipants(id)
                 emit(participants)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                // Emit empty list or handle error appropriately
+                log.error(e) { "getParticipants failed; emitting empty list" }
                 emit(emptyList())
             }
         }

@@ -15,6 +15,7 @@ import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
+import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
@@ -38,6 +39,7 @@ import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
@@ -53,6 +55,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class OfflineFirstMessageRepositoryImpl(
@@ -66,9 +70,21 @@ class OfflineFirstMessageRepositoryImpl(
     private val scope: CoroutineScope
 ) : MessageRepository, KoinComponent {
     private val log = KotlinLogging.logger {}
+
+    private companion object {
+        /** Wait this long after sending before a retry is considered. */
+        val RETRY_DELAY = 10.seconds
+
+        /** Periodic sweep interval for the outbox. */
+        val RETRY_POLL_INTERVAL = 15.seconds
+
+        /** Give up on unacked messages older than this. */
+        val MESSAGE_TTL = 24.hours
+    }
     val ownUser = userSettingDataSource.user
 
     private var messageConsumptionJob: Job? = null
+    private var outboxRetryJob: Job? = null
 
 //    private val _invalidationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 //    override val invalidationEvents: Flow<Unit>
@@ -76,6 +92,7 @@ class OfflineFirstMessageRepositoryImpl(
 
     init {
         startMessageConsumption()
+        startOutboxRetryLoop()
     }
 
     @OptIn(ExperimentalPagingApi::class)
@@ -122,13 +139,38 @@ class OfflineFirstMessageRepositoryImpl(
                 }
 
             val requestId = Uuid.generateV7()
-            log.info { "[sendMessage] sending, requestId=$requestId conversationId=$conversationId content=$content" }
+            log.info { "[sendMessage] sending, requestId=$requestId conversationId=$conversationId" }
+
+            // The socket send is a silent no-op when disconnected; without this
+            // guard the message would sit in SENDING forever.
+            if (messageApi.connectionState.value !is ConnectionState.Connected) {
+                log.warn { "[sendMessage] socket not connected, persisting as FAILED" }
+                messageDao.insertMessage(
+                    message = MessageEntity(
+                        id = requestId,
+                        conversation_id = conversationId,
+                        user_id = currentUser.id,
+                        category = when (content) {
+                            is System -> MessageCategory.SYSTEM
+                            is Normal -> MessageCategory.NORMAL
+                        },
+                        render_type = determineRenderType(content),
+                        content = content,
+                        reply_to_message_id = replyToMessageId,
+                        created_at = Clock.System.now(),
+                        revoked_at = null,
+                        local_send_status = MessageStatus.FAILED
+                    )
+                )
+                return Err(MessageError.OperationFailed)
+            }
 
             val request = MessageRequest.Send(
                 senderId = currentUser.id,
                 conversationId = conversationId,
                 content = content,
-                requestId = requestId.toString()
+                requestId = requestId.toString(),
+                replyToMessageId = replyToMessageId,
             )
 
             messageApi.send(request)
@@ -161,6 +203,8 @@ class OfflineFirstMessageRepositoryImpl(
 //            _invalidationEvents.tryEmit(Unit)
             log.info { "[sendMessage] local insert done, requestId=$requestId" }
             Ok(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.error(e) { "[sendMessage] exception: ${e.message}" }
             Err(MessageError.Unknown(e.message))
@@ -177,8 +221,10 @@ class OfflineFirstMessageRepositoryImpl(
             )
 
             messageApi.send(request)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            // Log error if needed
+            log.error(e) { "Failed to send realtime request" }
         }
     }
 
@@ -193,8 +239,10 @@ class OfflineFirstMessageRepositoryImpl(
             )
 
             messageApi.send(request)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            // Log error if needed
+            log.error(e) { "Failed to send realtime request" }
         }
     }
 
@@ -224,6 +272,8 @@ class OfflineFirstMessageRepositoryImpl(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 log.error(e) { "[ws-consume] error in event consumption: ${e.message}" }
             }
@@ -246,13 +296,20 @@ class OfflineFirstMessageRepositoryImpl(
             // Insert into database using transaction
             messageDao.transaction {
                 if (isOwnMessage) {
-                    log.info { "[handleReceived] updating own msg: oldId=${event.requestId} -> newId=${message.id}" }
-                    messageDao.updateMessageStatus(
-                        oldId = Uuid.parse(event.requestId),
-                        newId = message.id,
-                        createdAt = message.createdAt,
-                        status = MessageStatus.SENT
-                    )
+                    val localRow = messageDao.getMessageById(Uuid.parse(event.requestId)).firstOrNull()
+                    if (localRow != null) {
+                        log.info { "[handleReceived] updating own msg: oldId=${event.requestId} -> newId=${message.id}" }
+                        messageDao.updateMessageStatus(
+                            oldId = Uuid.parse(event.requestId),
+                            newId = message.id,
+                            createdAt = message.createdAt,
+                            status = MessageStatus.SENT
+                        )
+                    } else {
+                        // Ack for a message sent from another own device: there
+                        // is no local SENDING row to promote, insert as SENT.
+                        messageDao.insertMessage(messageEntity)
+                    }
                 } else {
                     messageDao.insertMessage(messageEntity)
                 }
@@ -267,6 +324,8 @@ class OfflineFirstMessageRepositoryImpl(
             }
             log.info { "[handleReceived] db transaction done" }
 //            _invalidationEvents.tryEmit(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.error(e) { "[handleReceived] error: ${e.message}" }
         }
@@ -278,6 +337,8 @@ class OfflineFirstMessageRepositoryImpl(
 //                .also {
 //                    _invalidationEvents.tryEmit(Unit)
 //                }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.error(e) { "Error handling withdrawn message" }
         }
@@ -285,10 +346,14 @@ class OfflineFirstMessageRepositoryImpl(
 
     private suspend fun handleReadMessage(event: MessageEventResponse.Read) {
         try {
-            // Update read status in database if needed
             log.debug { "Message read: ${event.messageId} by ${event.readerId}" }
-            // TODO: Implement read status update in database
-            // This might involve updating participant's last_read_message_id
+            participantDao.updateLastReadMessage(
+                conversationId = event.conversationId,
+                userId = event.readerId,
+                lastMessageId = event.messageId
+            )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.error(e) { "Error handling read message" }
         }
@@ -297,10 +362,70 @@ class OfflineFirstMessageRepositoryImpl(
     private fun stopMessageConsumption() {
         messageConsumptionJob?.cancel()
         messageConsumptionJob = null
+        outboxRetryJob?.cancel()
+        outboxRetryJob = null
     }
 
     fun cleanup() {
         stopMessageConsumption()
+    }
+
+    /**
+     * Outbox driver: `SENDING` rows double as the outbox. Retries trigger on
+     * WS (re)connect and every [RETRY_POLL_INTERVAL]; messages still unacked
+     * after [MESSAGE_TTL] are marked FAILED so bubbles stop spinning. Resends
+     * reuse the original requestId, which the server uses as the message
+     * primary key, making replays idempotent.
+     */
+    private fun startOutboxRetryLoop() {
+        outboxRetryJob?.cancel()
+        outboxRetryJob = scope.launch {
+            // Resend as soon as the socket comes back up.
+            messageApi.connectionState.collectLatest { state ->
+                if (state is ConnectionState.Connected) {
+                    retryPendingMessages()
+                }
+            }
+        }
+        scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(RETRY_POLL_INTERVAL)
+                expireStaleMessages()
+                retryPendingMessages()
+            }
+        }
+    }
+
+    override suspend fun retryPendingMessages() {
+        if (messageApi.connectionState.value !is ConnectionState.Connected) return
+        val retryCutoff = Clock.System.now() - RETRY_DELAY
+        val pending = messageDao.getRetryableMessages(retryCutoff)
+        if (pending.isEmpty()) return
+
+        log.info { "[outbox] resending ${pending.size} pending message(s)" }
+        for (entity in pending) {
+            val request = MessageRequest.Send(
+                senderId = entity.user_id,
+                conversationId = entity.conversation_id,
+                content = entity.content,
+                requestId = entity.id.toString()
+            )
+            try {
+                messageApi.send(request)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Socket died mid-retry: leave rows in SENDING for the next
+                // trigger instead of failing the whole batch.
+                log.warn(e) { "[outbox] resend interrupted" }
+                break
+            }
+        }
+    }
+
+    private suspend fun expireStaleMessages() {
+        val giveUpBefore = Clock.System.now() - MESSAGE_TTL
+        messageDao.failStaleMessages(giveUpBefore)
     }
 
     private fun determineRenderType(content: MessageContent): MessageRenderType = when (content) {

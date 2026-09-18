@@ -16,6 +16,7 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
@@ -135,6 +136,18 @@ class MessageDaoImpl(
         queries.revokeMessage(revokedAt, id)
     }
 
+    override suspend fun getRetryableMessages(retryAfter: Instant): List<MessageEntity> {
+        return queries.getRetryableMessages(retryAfter)
+            .asFlow()
+            .mapToList(ioContext)
+            .first()
+    }
+
+    override suspend fun failStaleMessages(giveUpBefore: Instant) {
+        // Generated as a suspend statement (UPDATE), executes directly.
+        queries.failStaleMessages(giveUpBefore)
+    }
+
     override suspend fun deleteMessage(id: Uuid) {
         queries.deleteMessage(id)
     }
@@ -146,9 +159,9 @@ class MessageDaoImpl(
     override fun countUnreadAfter(
         conversationId: Uuid,
         myUserId: Uuid,
-        lastReadTimestamp: Instant
+        lastReadMessageId: Uuid?
     ): Flow<Long> {
-        return queries.countUnreadAfter(conversationId, myUserId, lastReadTimestamp)
+        return queries.countUnreadAfter(conversationId, myUserId, lastReadMessageId)
             .asFlow()
             .mapToOneOrNull(ioContext)
             .map { it ?: 0L }

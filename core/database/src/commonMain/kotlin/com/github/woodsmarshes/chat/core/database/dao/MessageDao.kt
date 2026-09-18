@@ -55,6 +55,10 @@ interface MessageDao {
 
     suspend fun revokeMessage(id: Uuid, revokedAt: Instant)
 
+    suspend fun getRetryableMessages(retryAfter: Instant): List<MessageEntity>
+
+    suspend fun failStaleMessages(giveUpBefore: Instant)
+
     // 删除
     suspend fun deleteMessage(id: Uuid)
 
@@ -64,6 +68,6 @@ interface MessageDao {
     fun countUnreadAfter(
         conversationId: Uuid,
         myUserId: Uuid,
-        lastReadTimestamp: Instant
+        lastReadMessageId: Uuid?
     ): Flow<Long>
 }

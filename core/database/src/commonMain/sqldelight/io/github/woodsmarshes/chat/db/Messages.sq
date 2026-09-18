@@ -46,9 +46,14 @@ INSERT INTO MessageEntity(
 )
 VALUES ?
 ON CONFLICT(id) DO UPDATE SET
-    content            = excluded.content,
-    revoked_at         = COALESCE(excluded.revoked_at, revoked_at),
-    local_send_status  = COALESCE(excluded.local_send_status, local_send_status);
+    category            = excluded.category,
+    render_type         = excluded.render_type,
+    content             = excluded.content,
+    reply_to_message_id = excluded.reply_to_message_id,
+    -- The server timestamp is authoritative once the message is acked.
+    created_at          = excluded.created_at,
+    revoked_at          = COALESCE(excluded.revoked_at, revoked_at),
+    local_send_status   = COALESCE(excluded.local_send_status, local_send_status);
 
 -- 分页查询：获取某个会话中早于某个时间点的消息（用于下拉加载更多）
 getMessagesPaged:
@@ -85,12 +90,6 @@ WHERE NOT EXISTS (
 );
 
 -- 区间查询(uuid v7):
-keyedMessages:
-SELECT * FROM MessageEntity
-WHERE conversation_id = :conversationId
-  AND id <= :beginInclusive
-  AND (id > :endExclusive OR :endExclusive IS NULL)
-ORDER BY id DESC;
 
 
 keyedMessagesWithRelations:
@@ -243,6 +242,18 @@ SET local_send_status = :status,
     id = :newId -- 如果服务器返回了正式 ID，可以替换本地生成的临时 ID
 WHERE id = :oldId;
 
+-- Outbox: messages still pending after `retryAfter` are eligible for resend.
+getRetryableMessages:
+SELECT * FROM MessageEntity
+WHERE local_send_status = 'SENDING' AND created_at < :retryAfter
+ORDER BY created_at ASC;
+
+-- Outbox: give up on messages older than the TTL so bubbles stop spinning.
+failStaleMessages:
+UPDATE MessageEntity
+SET local_send_status = 'FAILED'
+WHERE local_send_status = 'SENDING' AND created_at < :giveUpBefore;
+
 -- 撤回消息
 revokeMessage:
 UPDATE MessageEntity
@@ -257,10 +268,12 @@ DELETE FROM MessageEntity WHERE id = :id;
 clearConversationHistory:
 DELETE FROM MessageEntity WHERE conversation_id = :conversationId;
 
--- 计算会话中的未读数
--- 配合 ParticipantEntity 中的 last_read_message_id 使用，此处示例为计算某个时间点之后的消息数
+-- 计算会话中的未读数。
+-- 按消息 id 比较（UUIDv7 时间有序）；upsertMessage 会以服务器时间戳覆盖
+-- created_at，因此不能依赖时间戳比较。lastReadMessageId 为 NULL 表示从未
+-- 读过，会话内他人消息全部计入。
 countUnreadAfter:
 SELECT COUNT(*) FROM MessageEntity
 WHERE conversation_id = :conversationId
 AND user_id != :myUserId
-AND created_at > :lastReadTimestamp;
+AND (:lastReadMessageId IS NULL OR id > :lastReadMessageId);
