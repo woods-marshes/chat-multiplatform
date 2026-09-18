@@ -82,6 +82,7 @@ fun ChatInputBar(
     enabled: Boolean = true,
 ) {
     val bubbleColors = LocalBubbleColors.current
+    val strings = LocalStrings.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val textFieldFocusRequester = remember { FocusRequester() }
@@ -172,7 +173,7 @@ fun ChatInputBar(
             ) {
                 Icon(
                     imageVector = MiuixIcons.AddCircle,
-                    contentDescription = "附件",
+                    contentDescription = strings.attachmentCd,
                     tint = if (currentSelector == InputSelector.IMAGE) bubbleColors.inputSendIconTint
                     else bubbleColors.inputIconTint,
                 )
@@ -191,7 +192,7 @@ fun ChatInputBar(
             ) {
                 Icon(
                     imageVector = Icons.Default.SentimentSatisfiedAlt,
-                    contentDescription = "表情",
+                    contentDescription = strings.emojiCd,
                     tint = if (currentSelector == InputSelector.EMOJI) bubbleColors.inputSendIconTint
                     else bubbleColors.inputIconTint,
                 )
@@ -219,7 +220,7 @@ fun ChatInputBar(
                 decorationBox = { innerTextField ->
                     if (value.text.isEmpty()) {
                         androidx.compose.material3.Text(
-                            text = "输入消息...",
+                            text = strings.inputPlaceholder,
                             style = TextStyle(
                                 color = bubbleColors.inputFieldPlaceholder,
                                 fontSize = 15.sp,
@@ -241,7 +242,7 @@ fun ChatInputBar(
             ) {
                 Icon(
                     imageVector = if (hasText) MiuixIcons.Send else MiuixIcons.Mic,
-                    contentDescription = if (hasText) "发送" else "语音",
+                    contentDescription = if (hasText) strings.sendCd else strings.voiceCd,
                     tint = if (hasText) bubbleColors.inputSendIconTint
                     else bubbleColors.inputIconTint,
                 )
@@ -337,10 +338,10 @@ private fun ReplyPreview(
     val senderName = message.sender?.displayName ?: message.sender?.username ?: ""
     val excerpt = when (val content = message.content) {
         is TextContent -> content.text
-        is ImageContent -> strings.replyPreviewImage
-        is VideoContent -> strings.replyPreviewVideo
-        is AudioContent -> strings.replyPreviewAudio
-        is FileContent -> strings.replyPreviewFile
+        is ImageContent -> strings.messagePreviewImage
+        is VideoContent -> strings.messagePreviewVideo
+        is AudioContent -> strings.messagePreviewAudio
+        is FileContent -> strings.messagePreviewFile
         else -> ""
     }
     Row(

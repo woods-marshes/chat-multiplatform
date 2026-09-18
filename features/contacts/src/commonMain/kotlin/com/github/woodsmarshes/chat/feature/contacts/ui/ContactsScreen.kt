@@ -24,9 +24,8 @@ import com.github.woodsmarshes.chat.core.ui.components.AlphabetIndexBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ContactItem
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ContactSkeleton
-import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
-import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
+import com.github.woodsmarshes.chat.core.ui.components.state.ListScreenScaffold
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -37,6 +36,7 @@ private val indexLetters = ('A'..'Z').map { it.toString() } + "#"
 fun ContactsScreen(
     onContactClick: (String) -> Unit,
     onMenuClick: (() -> Unit)? = null,
+    onSearchClick: () -> Unit,
     viewModel: ContactsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -49,67 +49,57 @@ fun ContactsScreen(
                 title = LocalStrings.current.contactsTitle,
                 showMenuButton = onMenuClick != null,
                 onMenuClick = onMenuClick,
+                onSearchClick = onSearchClick,
+                showAccountAffordance = true,
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { /* TODO: 添加联系人 */ }) {
-                Icon(Icons.Default.Add, contentDescription = "添加联系人")
+                Icon(Icons.Default.Add, contentDescription = LocalStrings.current.addContactCd)
             }
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading && uiState.contacts.isEmpty() -> {
-                ListSkeleton(
-                    modifier = Modifier.padding(innerPadding),
-                    count = 8,
-                    skeleton = { ContactSkeleton() }
-                )
-            }
-            uiState.error != null && uiState.contacts.isEmpty() -> {
-                ErrorContent(
-                    message = uiState.error ?: LocalStrings.current.loadFailed,
-                    modifier = Modifier.padding(innerPadding),
-                )
-            }
-            uiState.contacts.isEmpty() && !uiState.isLoading -> {
-                EmptyContent(
-                    message = LocalStrings.current.noContacts,
-                    modifier = Modifier.padding(innerPadding),
-                )
-            }
-            else -> {
-                Box(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .fillMaxSize()
+        ListScreenScaffold(
+            isLoading = uiState.isLoading,
+            error = uiState.error,
+            isEmpty = uiState.contacts.isEmpty(),
+            emptyMessage = LocalStrings.current.noContacts,
+            loadingContent = {
+                ListSkeleton(count = 8, skeleton = { ContactSkeleton() })
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
                 ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        state = listState,
-                    ) {
-                        items(
-                            items = uiState.contacts,
-                            key = { it.id },
-                        ) { contact ->
-                            ContactItem(
-                                contact = contact,
-                                onClick = { onContactClick(contact.id.toString()) },
-                            )
-                        }
+                    items(
+                        items = uiState.contacts,
+                        key = { it.id },
+                    ) { contact ->
+                        ContactItem(
+                            contact = contact,
+                            onClick = { onContactClick(contact.id.toString()) },
+                        )
                     }
-                    AlphabetIndexBar(
-                        letters = indexLetters,
-                        onLetterSelected = { letter ->
-                            val idx = uiState.contacts.indexOfFirst {
-                                (it.displayName?.firstOrNull() ?: it.username.firstOrNull())?.uppercaseChar() == letter.firstOrNull()
-                            }
-                            if (idx >= 0) {
-                                scope.launch { listState.animateScrollToItem(idx) }
-                            }
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-                    )
                 }
+                AlphabetIndexBar(
+                    letters = indexLetters,
+                    onLetterSelected = { letter ->
+                        val idx = uiState.contacts.indexOfFirst {
+                            (it.displayName?.firstOrNull() ?: it.username.firstOrNull())?.uppercaseChar() == letter.firstOrNull()
+                        }
+                        if (idx >= 0) {
+                            scope.launch { listState.animateScrollToItem(idx) }
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+                )
             }
         }
     }

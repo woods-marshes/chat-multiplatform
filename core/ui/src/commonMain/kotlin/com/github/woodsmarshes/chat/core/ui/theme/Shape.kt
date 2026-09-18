@@ -21,7 +21,7 @@ data class ShapeTokens(
 )
 
 val LocalShapeTokens = staticCompositionLocalOf<ShapeTokens> {
-    error("LocalShapeTokens not provided — 请确保 ChatTheme 包裹了此内容")
+    error("LocalShapeTokens not provided — make sure ChatTheme wraps this content")
 }
 
 object ShapeDefaults {

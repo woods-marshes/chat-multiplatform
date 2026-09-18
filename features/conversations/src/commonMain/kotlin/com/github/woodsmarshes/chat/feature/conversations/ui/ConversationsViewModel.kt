@@ -6,8 +6,10 @@ import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.conversations.model.ConversationsUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +22,9 @@ class ConversationsViewModel(
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
     private val log = KotlinLogging.logger {}
+
+    // User-facing strings for ViewModel-produced messages (no CompositionLocal here).
+    private val strings = getLocaleStrings()
 
     private val _uiState = MutableStateFlow(ConversationsUiState())
     val uiState: StateFlow<ConversationsUiState> = _uiState.asStateFlow()
@@ -37,7 +42,7 @@ class ConversationsViewModel(
                 .onStart { _uiState.value = _uiState.value.copy(isLoading = true) }
                 .catch { e ->
                     _uiState.value = _uiState.value.copy(
-                        error = e.message ?: "加载失败",
+                        error = e.message ?: strings.loadFailed,
                         isLoading = false,
                     )
                 }
@@ -55,8 +60,10 @@ class ConversationsViewModel(
             _uiState.value = _uiState.value.copy(isRefreshing = true)
             try {
                 conversationRepository.syncConversations()
-            } catch (_: Exception) {
-                // silently ignore sync failures
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.error(e) { "[ConversationsViewModel] sync failed" }
             } finally {
                 _uiState.value = _uiState.value.copy(isRefreshing = false)
             }
@@ -100,7 +107,7 @@ class ConversationsViewModel(
     fun createGroup() {
         val name = _uiState.value.groupName.trim()
         if (name.isBlank()) {
-            _uiState.value = _uiState.value.copy(createError = "群聊名称不能为空")
+            _uiState.value = _uiState.value.copy(createError = strings.groupNameRequired)
             return
         }
 
@@ -110,7 +117,7 @@ class ConversationsViewModel(
                 name = name,
                 description = _uiState.value.groupDescription.trim().ifEmpty { null },
             ).onErr {
-                _uiState.value = _uiState.value.copy(isCreating = false, createError = "创建失败")
+                _uiState.value = _uiState.value.copy(isCreating = false, createError = strings.createGroupFailed)
             }.onOk {
                 _uiState.value = _uiState.value.copy(showCreateGroup = false, isCreating = false)
                 refresh()
@@ -143,7 +150,7 @@ class ConversationsViewModel(
             Uuid.parse(idStr)
         } catch (_: Exception) {
             log.info { "[ConversationsViewModel]: joinGroup(), not parse" }
-            _uiState.value = _uiState.value.copy(joinError = "无效的群组 ID")
+            _uiState.value = _uiState.value.copy(joinError = strings.invalidGroupId)
             return
         }
 
@@ -151,7 +158,7 @@ class ConversationsViewModel(
         viewModelScope.launch {
             conversationRepository.joinGroup(id).onErr {
                 log.info { "[ConversationsViewModel]: joinGroup() => $it" }
-                _uiState.value = _uiState.value.copy(isJoining = false, joinError = "加入失败，请检查 ID 是否正确")
+                _uiState.value = _uiState.value.copy(isJoining = false, joinError = strings.joinGroupFailed)
             }.onOk {
                 log.info { "[ConversationsViewModel]: joinGroup() => success" }
                 _uiState.value = _uiState.value.copy(showJoinGroup = false, isJoining = false)

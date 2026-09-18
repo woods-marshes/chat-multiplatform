@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 
 private data class MediaAction(
@@ -39,11 +40,12 @@ fun MediaActionPanel(
     modifier: Modifier = Modifier,
 ) {
     val bubbleColors = LocalBubbleColors.current
+    val strings = LocalStrings.current
 
     val actions = listOf(
-        MediaAction("图片", Icons.Default.Image, InputSelector.IMAGE),
-        MediaAction("文件", Icons.AutoMirrored.Filled.InsertDriveFile, InputSelector.FILE),
-        MediaAction("语音", Icons.Default.Mic, InputSelector.AUDIO),
+        MediaAction(strings.mediaImage, Icons.Default.Image, InputSelector.IMAGE),
+        MediaAction(strings.mediaFile, Icons.AutoMirrored.Filled.InsertDriveFile, InputSelector.FILE),
+        MediaAction(strings.mediaVoice, Icons.Default.Mic, InputSelector.AUDIO),
     )
 
     Row(

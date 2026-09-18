@@ -56,7 +56,7 @@ fun ConversationItem(
         Box(modifier = Modifier.size(52.dp)) {
             if (conversation.type == ConversationType.GROUP) {
                 ConversationAvatar(
-                    participants = emptyList(),
+                    participants = conversation.memberAvatars,
                     size = 52.dp,
                 )
             } else {
@@ -148,11 +148,12 @@ private fun LastMessagePreview(
     }
 
     val senderPrefix = if (lastMessage.senderName != null) "${lastMessage.senderName}: " else ""
+    val strings = LocalStrings.current
     val contentPreview = when (lastMessage.renderType) {
-        MessageRenderType.IMAGE -> "[图片]"
-        MessageRenderType.VIDEO -> "[视频]"
-        MessageRenderType.AUDIO -> "[语音]"
-        MessageRenderType.FILE -> "[文件]"
+        MessageRenderType.IMAGE -> strings.messagePreviewImage
+        MessageRenderType.VIDEO -> strings.messagePreviewVideo
+        MessageRenderType.AUDIO -> strings.messagePreviewAudio
+        MessageRenderType.FILE -> strings.messagePreviewFile
         else -> lastMessage.contentTruncated(50)
     }
     val fullPreview = "$senderPrefix$contentPreview"

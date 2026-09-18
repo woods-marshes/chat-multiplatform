@@ -11,6 +11,7 @@ import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.article_editor.model.EditorUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,9 @@ class ArticleEditorViewModel(
     private val articleId: Uuid? = null,
 ) : ViewModel() {
     private val log = KotlinLogging.logger {}
+
+    // User-facing strings for ViewModel-produced messages (no CompositionLocal here).
+    private val strings = getLocaleStrings()
 
     private val _uiState = MutableStateFlow(EditorUiState(isNew = articleId == null))
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -77,7 +81,7 @@ class ArticleEditorViewModel(
                                 )
                             }
                         } else {
-                            _uiState.update { it.copy(isLoading = false, error = "文章未找到") }
+                            _uiState.update { it.copy(isLoading = false, error = strings.articleNotFound) }
                         }
                     }.onErr { error ->
                         _uiState.update { it.copy(isLoading = false, error = error.toString()) }
@@ -133,12 +137,16 @@ class ArticleEditorViewModel(
     fun saveArticle(status: ArticleStatus) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
-            val id = activeArticleId ?: Uuid.generateV7()
+            // A parse failure must never silently replace the document with
+            // `{}` — that would wipe the article body on save.
             val content = try {
                 ProjectJson.parseToJsonElement(_uiState.value.contentJsonStr)
             } catch (e: Exception) {
-                ProjectJson.parseToJsonElement("{}")
+                log.error(e) { "Editor content is not valid JSON; refusing to save" }
+                _uiState.update { it.copy(isSaving = false, error = "Content is not valid JSON") }
+                return@launch
             }
+            val id = activeArticleId ?: Uuid.generateV7()
             articleRepository.saveArticle(
                 id = id,
                 title = _uiState.value.title.ifBlank { "Untitled" },
@@ -146,7 +154,10 @@ class ArticleEditorViewModel(
                 status = status,
                 excerpt = null,
             ).onOk {
-                _uiState.update { it.copy(isSaving = false, isSaved = true) }
+                // Pin the id only after a confirmed save, otherwise a failed
+                // first save makes every retry mint a new (orphan) article.
+                activeArticleId = id
+                _uiState.update { it.copy(isSaving = false, isSaved = true, isNew = false, roomId = id.toString()) }
             }.onErr { error ->
                 _uiState.update { it.copy(isSaving = false, error = error.toString()) }
             }

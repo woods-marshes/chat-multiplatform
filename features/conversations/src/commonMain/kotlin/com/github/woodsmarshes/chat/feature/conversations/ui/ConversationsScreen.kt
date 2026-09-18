@@ -44,9 +44,8 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ConversationSkeleton
-import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
-import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
+import com.github.woodsmarshes.chat.core.ui.components.state.ListScreenScaffold
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -67,11 +66,8 @@ fun ConversationsScreen(
                 title = LocalStrings.current.conversationsTitle,
                 showMenuButton = onMenuClick != null,
                 onMenuClick = onMenuClick,
-                actions = {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(Icons.Default.Search, contentDescription = LocalStrings.current.searchCd)
-                    }
-                },
+                onSearchClick = onSearchClick,
+                showAccountAffordance = true,
             )
         },
         floatingActionButton = {
@@ -80,63 +76,52 @@ fun ConversationsScreen(
             }
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading && uiState.conversations.isEmpty() -> {
-                ListSkeleton(
-                    modifier = Modifier.padding(innerPadding),
-                    count = 8, skeleton = { ConversationSkeleton() }
-                )
-            }
-            uiState.error != null && uiState.conversations.isEmpty() -> {
-                ErrorContent(
-                    message = uiState.error ?: LocalStrings.current.loadFailed,
-                    onRetry = { viewModel.refresh() },
-                    modifier = Modifier.padding(innerPadding),
-                )
-            }
-            uiState.conversations.isEmpty() && !uiState.isLoading -> {
-                EmptyContent(
-                    message = LocalStrings.current.noConversations,
-                    modifier = Modifier.padding(innerPadding),
-                )
-            }
-            else -> {
-                val state = rememberPullToRefreshState()
+        ListScreenScaffold(
+            isLoading = uiState.isLoading,
+            error = uiState.error,
+            isEmpty = uiState.conversations.isEmpty(),
+            emptyMessage = LocalStrings.current.noConversations,
+            onRetry = viewModel::refresh,
+            loadingContent = {
+                ListSkeleton(count = 8, skeleton = { ConversationSkeleton() })
+            },
+            modifier = modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            val state = rememberPullToRefreshState()
 
-                PullToRefreshBox(
-                    isRefreshing = uiState.isRefreshing,
-                    onRefresh = viewModel::refresh,
-                    modifier = modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    state = state,
-                    indicator = {
-                        Indicator(
-                            modifier = Modifier.align(Alignment.TopCenter),
-                            isRefreshing = uiState.isRefreshing,
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            state = state
-                        )
-                    },
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier.fillMaxSize(),
+                state = state,
+                indicator = {
+                    Indicator(
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        isRefreshing = uiState.isRefreshing,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        state = state
+                    )
+                },
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(
-                            items = uiState.conversations,
-                            key = { it.id },
-                        ) { conv ->
-                            ConversationItem(
-                                conversation = conv,
-                                onClick = {
-                                    onConversationClick(
-                                        conv.id.toString(),
-                                        conv.type == ConversationType.GROUP
-                                    )
-                                },
-                            )
-                        }
+                    items(
+                        items = uiState.conversations,
+                        key = { it.id },
+                    ) { conv ->
+                        ConversationItem(
+                            conversation = conv,
+                            onClick = {
+                                onConversationClick(
+                                    conv.id.toString(),
+                                    conv.type == ConversationType.GROUP
+                                )
+                            },
+                        )
                     }
                 }
             }

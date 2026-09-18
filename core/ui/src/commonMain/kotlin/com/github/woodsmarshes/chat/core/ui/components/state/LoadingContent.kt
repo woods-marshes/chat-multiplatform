@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
@@ -20,7 +21,7 @@ import top.yukonga.miuix.kmp.basic.Text
 @Composable
 fun LoadingContent(
     modifier: Modifier = Modifier,
-    message: String = "加载中...",
+    message: String = LocalStrings.current.loading,
     useShimmer: Boolean = false,
     shimmerCount: Int = 8,
 ) {

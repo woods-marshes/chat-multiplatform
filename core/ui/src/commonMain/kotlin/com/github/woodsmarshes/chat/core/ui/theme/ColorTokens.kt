@@ -120,7 +120,7 @@ data class BubbleColorTokens(
  * - 参考 Jetcaster 和 NiA 的最佳实践
  */
 val LocalColorTokens = staticCompositionLocalOf<ColorTokens> {
-    error("LocalColorTokens not provided — 请确保 ChatTheme 包裹了此内容")
+    error("LocalColorTokens not provided — make sure ChatTheme wraps this content")
 }
 
 @Immutable

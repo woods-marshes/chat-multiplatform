@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -26,7 +27,7 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 fun ErrorContent(
     message: String,
     onRetry: (() -> Unit)? = null,
-    retryLabel: String = "重试",
+    retryLabel: String = LocalStrings.current.retry,
     modifier: Modifier = Modifier,
 ) {
     val bubbleColors = LocalBubbleColors.current
