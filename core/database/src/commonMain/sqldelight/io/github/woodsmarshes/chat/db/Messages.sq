@@ -63,6 +63,8 @@ ORDER BY created_at DESC
 LIMIT :limit;
 
 -- 边界计算查询:
+-- No zeroblob(16) seed row for empty databases: since SQLDelight 2.4.0
+-- (#6284) KeyedQueryPagingSource handles an empty boundary result itself.
 messageBoundaries:
 SELECT t.id
 FROM (
@@ -77,17 +79,7 @@ FROM (
   WHERE conversation_id = :conversationId
   ORDER BY id DESC
 ) AS t
-WHERE page_boundary = 1
-
-UNION ALL
-
-SELECT zeroblob(16) AS id
-FROM (SELECT 1)
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM MessageEntity
-  WHERE conversation_id = :conversationId
-);
+WHERE page_boundary = 1;
 
 -- 区间查询(uuid v7):
 
