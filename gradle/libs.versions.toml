@@ -61,7 +61,7 @@ core = "1.7.0"
 # lyricist = "1.8.0"
 lyricist = "1.8.0-compose-1.10"
 uuid-creator = "6.1.1"
-buildkonfig = "0.22.0"
+buildkonfig = "0.23.0"
 
 unstyled = "2.10.0"
 lucide = "1.1.0"
