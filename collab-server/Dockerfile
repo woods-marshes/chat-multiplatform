@@ -1,5 +1,5 @@
 # ─── 阶段 1：构建依赖 ───
-FROM node:22-alpine AS builder
+FROM node:25-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -9,7 +9,7 @@ RUN npm ci --legacy-peer-deps
 COPY . .
 
 # ─── 阶段 2：运行环境 ───
-FROM node:22-alpine AS runtime
+FROM node:25-alpine AS runtime
 WORKDIR /app
 
 # 安全考虑：使用非 root 用户运行
