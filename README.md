@@ -2,6 +2,44 @@
 
 基于 **Kotlin Multiplatform + Compose Multiplatform + Ktor** 的全栈即时通讯与文章写作平台。一套 Kotlin 代码同时编译到 Android、Desktop（JVM）、Web（JS/Wasm）客户端；后端使用 Ktor + PostgreSQL，通过 WebSocket 实现实时消息推送；文章协作编辑基于 **Yjs + Hocuspocus**（`collab-server`），富文本编辑器 **Tiptap** 以 React 组件库（UMD）供 Web 前端直接使用、以自包含 HTML 供 Desktop/Android 原生 WebView 加载。
 
+## 仓库数据
+
+[![commits](https://img.shields.io/github/commits/m/woods-marshes/chat-multiplatform?style=flat-square&label=commits&color=blue)](https://github.com/woods-marshes/chat-multiplatform/commits)
+[![last commit](https://img.shields.io/github/last-commit/woods-marshes/chat-multiplatform?style=flat-square&label=last%20commit&color=blue)](https://github.com/woods-marshes/chat-multiplatform/commits)
+[![commit activity](https://img.shields.io/github/commit-activity/m/woods-marshes/chat-multiplatform?style=flat-square&label=activity&color=blue)](https://github.com/woods-marshes/chat-multiplatform/graphs/commit-activity)
+[![top language](https://img.shields.io/github/languages/top/woods-marshes/chat-multiplatform?style=flat-square&color=blue)](https://github.com/woods-marshes/chat-multiplatform)
+[![contributors](https://img.shields.io/github/contributors/woods-marshes/chat-multiplatform?style=flat-square&label=contributors&color=blue)](https://github.com/woods-marshes/chat-multiplatform/graphs/contributors)
+[![repo size](https://img.shields.io/github/repo-size/woods-marshes/chat-multiplatform?style=flat-square&label=size&color=blue)](https://github.com/woods-marshes/chat-multiplatform)
+[![CI](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/ci.yml/badge.svg)](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/ci.yml)
+[![Docker Test](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/docker-test.yml/badge.svg)](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/docker-test.yml)
+
+| 指标 | 数值 | 采集方式 |
+|---|---|---|
+| 提交总数 | 89 | `git rev-list --count HEAD` |
+| 贡献者 | 2 | `git shortlog -sne --all` |
+| 首次提交 | 2026-06-12 | `git log --reverse` |
+| 最近提交 | 2026-09-24 | `git log -1` |
+| 已跟踪文件 | 815 | `git ls-files` |
+| 代码行数 | 54,018 | 快照，见下方口径 |
+
+### 代码构成
+
+统计口径：2026-09-24 用 `rg` 统计已跟踪文件的物理行数，剔除 `tiptap-bridge/repomix-output.xml` 等生成物；分布条为近似值（每 █ 约 5%）。
+
+| 语言 | 行数 | 占比 | 分布 |
+|---|---:|---:|---|
+| Kotlin | 34,382 | 63.6% | █████████████ |
+| TSX | 5,241 | 9.7% | ██ |
+| TypeScript | 4,901 | 9.1% | ██ |
+| SCSS | 3,391 | 6.3% | █ |
+| YAML | 2,003 | 3.7% | █ |
+| CSS | 1,322 | 2.4% | █ |
+| SQL | 1,009 | 1.9% | █ |
+| JavaScript | 504 | 0.9% | █ |
+| HTML | 434 | 0.8% | █ |
+| JSX | 431 | 0.8% | █ |
+| XML | 400 | 0.7% | █ |
+
 ## 架构概览
 
 ```
@@ -37,20 +75,67 @@
 
 ## 技术栈
 
+**语言与构建**
+
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Gradle](https://img.shields.io/badge/Gradle-9.7.1-02303A?logo=gradle&logoColor=white)](https://gradle.org)
+[![AGP](https://img.shields.io/badge/AGP-9.2.1-3DDC84?logo=android&logoColor=white)](https://developer.android.com/build)
+[![JDK](https://img.shields.io/badge/JDK-25-ED8B00)](https://adoptium.net)
+[![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+
+**客户端**
+
+[![Compose Multiplatform](https://img.shields.io/badge/Compose_Multiplatform-1.12.0-4285F4)](https://www.jetbrains.com/compose-multiplatform/)
+[![Material 3](https://img.shields.io/badge/Material_3-1.12.0-alpha03-6750A4)](https://m3.material.io)
+[![Material 3 Adaptive](https://img.shields.io/badge/Material_3_Adaptive-1.3.0-rc01-6750A4)](https://developer.android.com/develop/ui/compose/layouts/adaptive)
+[![Navigation 3](https://img.shields.io/badge/Navigation_3-1.2.0-beta01-4285F4)](https://developer.android.com/jetpack/androidx/releases/navigation)
+[![Koin](https://img.shields.io/badge/Koin-4.2.2-20A4F3)](https://insert-koin.io/docs/reference/koin-compose/)
+[![SQLDelight](https://img.shields.io/badge/SQLDelight-2.4.0-2E7D32)](https://sqldelight.github.io/sqldelight/)
+[![Room](https://img.shields.io/badge/Room-3.0.3-4285F4)](https://developer.android.com/kotlin/multiplatform/room)
+[![DataStore](https://img.shields.io/badge/DataStore-1.3.0-alpha11-4285F4)](https://developer.android.com/jetpack/datastore)
+[![Paging](https://img.shields.io/badge/Paging-3.5.1-4285F4)](https://developer.android.com/topic/libraries/architecture/paging/v3-overview)
+[![ComposeNativeWebView](https://img.shields.io/badge/ComposeNativeWebView-1.0.3-7C3AED)](https://github.com/NucleusFramework/ComposeNativeWebview)
+[![Nucleus](https://img.shields.io/badge/Nucleus-2.5.16-7C3AED)](https://nucleusframework.dev)
+[![Coil](https://img.shields.io/badge/Coil-3.6.3-7C3AED)](https://coil-kt.github.io/coil/compose/)
+[![Miuix](https://img.shields.io/badge/Miuix-0.9.3-7C3AED)](https://github.com/YuKongA/miuix)
+[![Lyricist](https://img.shields.io/badge/Lyricist-1.8.0-7C3AED)](https://github.com/skaldebane/lyricist)
+
+**服务端**
+
+[![Ktor](https://img.shields.io/badge/Ktor-3.6.0-087CFA?logo=ktor&logoColor=white)](https://ktor.io)
+[![Exposed](https://img.shields.io/badge/Exposed-1.5.0-087CFA)](https://github.com/JetBrains/Exposed)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![H2](https://img.shields.io/badge/H2-2.5.250-09476B?logo=h2database&logoColor=white)](https://www.h2database.com)
+[![kotlinx.serialization](https://img.shields.io/badge/kotlinx.serialization-1.11.0-087CFA)](https://github.com/Kotlin/kotlinx.serialization)
+[![jave2](https://img.shields.io/badge/jave2-4.2.0-087CFA)](https://github.com/psibre/jave2)
+[![Docker Compose](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+
+**Web / 协作编辑 / 工程**
+
+[![React](https://img.shields.io/badge/React-19.2.6-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-8.0.16-9135FF?logo=vite&logoColor=white)](https://vite.dev)
+[![Tiptap](https://img.shields.io/badge/Tiptap-3.27.1-9135FF)](https://tiptap.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3.1-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Yjs](https://img.shields.io/badge/Yjs-13.6.31-9135FF)](https://docs.yjs.dev)
+[![Hocuspocus](https://img.shields.io/badge/Hocuspocus-4.3.0-9135FF)](https://tiptap.dev/hocuspocus)
+[![ESLint](https://img.shields.io/badge/ESLint-10.5.0-4B32C3)](https://eslint.org)
+[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](https://github.com/features/actions)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-2088FF?logo=dependabot&logoColor=white)](https://docs.github.com/code-security/dependabot)
+
 | 层 | 技术 |
 |---|---|
-| **语言/构建** | Kotlin 2.4.10 + Gradle 9.5.1（Version Catalog + 约定插件 `build-logic`） |
-| **UI 框架** | Compose Multiplatform 1.12 + Material 3 Adaptive |
-| **导航** | Jetpack Navigation 3（Scene + NavEntry，自适应 ListDetail 布局） |
-| **DI** | Koin 4.2（ViewModel → `viewModelOf`，Repository → `single`） |
-| **网络** | Ktor 3.5（Client + Server），REST API（Ktor Resources）+ WebSocket |
-| **序列化** | kotlinx-serialization 1.11（JSON + Protobuf 双格式，共享 DTO） |
-| **客户端数据库** | SQLDelight 2.3（7 表，含离线优先文章缓存 + UUIDv7 游标分页） |
-| **服务端数据库** | Exposed 1.5 + PostgreSQL 17（生产）/ H2（开发默认） |
-| **实时协作** | Yjs + @hocuspocus/server（collab-server） |
-| **富文本** | Tiptap 3.x（React UMD + 自包含 HTML 双产物） |
-| **图片/媒体** | Coil 3.6、jave2（音视频处理/波形）、BlurHash |
-| **国际化** | Lyricist（KSP 从 `strings.xml` 生成） |
+| **语言/构建** | Kotlin 2.4.20 + Gradle 9.7.1（Version Catalog + 约定插件 `build-logic`） |
+| **UI 框架** | Compose Multiplatform 1.12.0 + Material 3 Adaptive 1.3.0 |
+| **导航** | Jetpack Navigation 3 1.2.0-beta01（Scene + NavEntry，自适应 ListDetail 布局） |
+| **DI** | Koin 4.2.2（ViewModel → `viewModelOf`，Repository → `single`） |
+| **网络** | Ktor 3.6.0（Client + Server），REST API（Ktor Resources）+ WebSocket |
+| **序列化** | kotlinx-serialization 1.11.0（JSON + Protobuf 双格式，共享 DTO） |
+| **客户端数据库** | SQLDelight 2.4.0（7 表，含离线优先文章缓存 + UUIDv7 游标分页） |
+| **服务端数据库** | Exposed 1.5.0 + PostgreSQL 17（生产）/ H2 2.5.250（开发默认） |
+| **实时协作** | Yjs 13.6 + @hocuspocus/server 4.3（collab-server） |
+| **富文本** | Tiptap 3.27.1（React UMD + 自包含 HTML 双产物） |
+| **图片/媒体** | Coil 3.6.3、jave2 4.2.0（音视频处理/波形）、BlurHash |
+| **国际化** | Lyricist 1.8.0（KSP 从 `strings.xml` 生成） |
 | **认证** | JWT（HMAC256，Bearer）+ BCrypt 密码散列 |
 | **WebView** | ComposeNativeWebView 1.0.3（`dev.nucleusframework:composewebview`，桌面端由 Nucleus Tao 托管） |
 
