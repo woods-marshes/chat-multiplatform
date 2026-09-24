@@ -1,5 +1,7 @@
 # `:composeApp`
 
+共享客户端模块（KMP 库）：提供 Compose UI 装配（`ChatApp`/`MainApp`）、Koin 组装（`initKoin`）与共享资源。按 [KMP 官方推荐结构](https://kotlinlang.org/docs/multiplatform-project-recommended-structure.html)，各平台入口点已拆分为独立模块：`:androidApp` / `:desktopApp` / `:webApp` 均依赖本模块。保留 jvm/js/wasmJs 目标仅供入口模块消费，不产出可执行程序。
+
 ## Module dependency graph
 
 <!--region graph-->

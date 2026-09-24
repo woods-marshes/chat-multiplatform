@@ -17,6 +17,7 @@ data class ChatNavKey(
 fun EntryProviderScope<NavKey>.chatEntry(
     onBack: () -> Unit,
     onNavigateToProfile: (userId: String) -> Unit,
+    onNavigateToGroupInfo: (conversationId: String) -> Unit,
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<ChatNavKey>(metadata = metadata) { key ->
@@ -26,6 +27,7 @@ fun EntryProviderScope<NavKey>.chatEntry(
                 parameters = { parametersOf(key.conversationId, key.isGroup) },
             ),
             onProfileClick = onNavigateToProfile,
+            onGroupInfoClick = onNavigateToGroupInfo,
             onBack = onBack,
         )
     }

@@ -9,11 +9,12 @@
 - **Koin DI**：ViewModel → `viewModelOf(::X)` 或 `viewModel { (params) -> X(get(), params) }`。Repository → `single<Interface> { Impl(get()) }`。Repository 接口和实现均在 `core:data`。禁止 nullable 构造函数依赖。ViewModel 直接注入 Repository，不在 domain 中建无意义的转发 UseCase。详见 `@notes/koin-di.md`
 - **版本目录**：`gradle/libs.versions.toml` 是依赖版本的唯一来源。添加依赖时先加到 catalog，再通过 `libs.<alias>` 引用。完整版本清单见 `@notes/versions.md`
 - **平台分离**：composewebview 库不支持 Kotlin/JS，需用 `expect`/`actual` 分离。非 JS 平台依赖加在 `jvmMain`/`androidMain`/`wasmJsMain` 的 `dependencies` 块中。KMP 不支持 JVM+Android 共享源集，需各自独立 `actual`。
+- **桌面 WebView2 UDF**：项目统一使用可写的共享 `dataDirectory`（jvm actual 设为 `~/.chat-multiplatform/webview`），这是应用策略，并非 WebView2 的同进程限制。默认目录位于可执行文件旁，可能因权限不足失败。不同 UDF 受支持；共享浏览器进程的环境选项必须兼容。创建失败应检查具体阶段与 HRESULT，不能仅凭目录差异归因。
 
 ## 架构速览
 
 ```
-依赖方向：composeApp → core/* + features/*     server → core:model + core:network     web → core:common + core:model + core:network + core:datastore
+依赖方向：androidApp / desktopApp / webApp（平台入口）→ composeApp（共享 UI 装配）→ core/* + features/*     server → core:model + core:network     web → core:common + core:model + core:network + core:datastore
 ```
 
 | 层 | 模块 | 关键内容 |
@@ -32,7 +33,7 @@
 | Web 前端 | `web/` | Kotlin/JS (ES2015) + React + Tiptap，通过 Koin 注入 core 模块 |
 | Tiptap 桥接 | `tiptap-bridge/` | React 组件库：UMD 打包供 web 调用 + Vite 自包含 HTML 供 ComposeNativeWebView 加载 |
 
-**DI 注册顺序**：`commonModule → dataStoreModule → serializersModule → daosModule → networkModule → dataModule → domainModule → feature ViewModel modules`
+**DI 注册顺序**：`commonModule → dataStoreModule → databaseModule → daosModule → serializersModule → networkModule → dataModule → domainModule → sessionModule → feature ViewModel modules`
 
 ## 文章系统概览
 
@@ -53,16 +54,16 @@ tiptap-bridge (React/Vite)
 - **web 模块**：使用 `@file:JsModule` 声明调用 UMD，列表 + 详情 + 编辑均已实现分页
 - **Compose 客户端**：features/article（列表 + 详情 WebView）+ features/article-editor（Tiptap 编辑器 WebView）
 - **server**：UUIDv7 游标分页（`beforeId`），完整 REST CRUD
-- **ComposeNativeWebView**：`io.github.kdroidfilter:composewebview:1.0.0-beta-02`，支持 jvm/android/wasmJs，不支持 js
+- **ComposeNativeWebView**：`dev.nucleusframework:composewebview:1.0.3`，支持 android/jvm/wasmJs，不支持 js；桌面端由 Nucleus Tao 后端托管（`desktopApp` 入口为 `nucleusApplication(backend = NucleusBackend.Tao)`），WebView 与 Compose 同窗口栈合成，可正常叠加 Compose 浮层
 - **JS Bridge 通信**：Base64 编码传 JSON，`rememberUpdatedState` 防闭包过期，"一次性初始化"防白屏重载
 
 ## 常用命令
 
 | 目的 | 命令 |
 |---|---|
-| 编译检查（客户端） | `./gradlew :composeApp:jvmMainClasses` |
+| 编译检查（客户端） | `./gradlew :desktopApp:compileKotlin` |
 | 运行全部测试 | `./gradlew check` |
-| 运行桌面客户端 | `./gradlew :composeApp:run` |
+| 运行桌面客户端 | `./gradlew :desktopApp:run` |
 | 运行服务端 (端口 9051) | `./gradlew :server:run` |
 | 服务端测试 | `./gradlew :server:test` |
 | Web 开发构建 | `./gradlew :web:jsBrowserDevelopmentRun` |
@@ -77,7 +78,7 @@ tiptap-bridge (React/Vite)
 - **Git Commit**：`<scope>: <summary>`，scope 可选 `client`/`server`/`web`/`core`/`features`/`build`/`deps`/`tiptap`，主题 ≤72 字符，英文
 - **代码风格**：Kotlin official style，4 空格缩进，显式 import（不用通配符），英文标识符和注释
 - **Compose**：参数顺序 → required callbacks, `Modifier`, flags, visual params, content lambda 最后。颜色用 `MiuixTheme.colorScheme.*`。不确定 API 用法时用 `WebFetch` 查官方文档，禁止猜测
-- **JVM 目标**：composeApp/Android → JVM 17，composeApp/Desktop → JVM 25，server → JVM 25
+- **JVM 目标**：composeApp/Android → JVM 17，desktopApp → JVM 25，server → JVM 25
 - **JS 目标**：web 模块 → ES2015，browser 平台
 - **API 基址**：`http://127.0.0.1:9051/v1/`。复制 `network-config.properties.template` → `network-config.properties` 自定义（该文件已 gitignore）
 - **Web 模块特殊规则**：

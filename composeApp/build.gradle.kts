@@ -1,32 +1,39 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.android.kotlin.multiplatform.library) apply false
     alias(libs.plugins.kotlin.plugin.serialization)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
 }
 
+if (project.extra["enableAndroid"] as Boolean) {
+    apply(plugin = libs.plugins.android.kotlin.multiplatform.library.get().pluginId)
+}
+
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.ui"
-        compileSdk = libs.versions.android.compileSdk.get().toInt()
-        minSdk = libs.versions.android.minSdk.get().toInt()
+    if (project.extra["enableAndroid"] as Boolean) {
+        targets.withType<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget>().configureEach {
+            namespace = "com.github.woodsmarshes.chat.ui"
+            compileSdk = libs.versions.android.compileSdk.get().toInt()
+            minSdk = libs.versions.android.minSdk.get().toInt()
 
-        androidResources {
-            enable = true
-        }
+            androidResources {
+                enable = true
+            }
 
-        withJava()
+            withJava()
 
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_17)
+            }
         }
     }
 
+    // jvm / js / wasmJs targets are kept so the desktopApp and webApp entry
+    // point modules can consume this shared module on those platforms.
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_25)
@@ -35,18 +42,18 @@ kotlin {
 
     js {
         browser()
-        binaries.executable()
     }
 
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         browser()
-        binaries.executable()
     }
 
     sourceSets {
-        androidMain.dependencies {
-            implementation(libs.compose.ui.tooling)
+        matching { it.name == "androidMain" }.configureEach {
+            dependencies {
+                implementation(libs.compose.ui.tooling)
+            }
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -95,51 +102,17 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
-        jvmMain.dependencies {
-            implementation(compose.desktop.currentOs)
-            implementation(libs.compose.ui.tooling)
-            implementation(libs.kotlinx.coroutines.swing)
-            implementation(libs.logback.classic)
-        }
-        webMain.dependencies {
-            implementation(npm("@cashapp/sqldelight-sqljs-worker", libs.versions.sqlDelight.get()))
-            implementation(npm("sql.js", libs.versions.sqlJs.get()))
-        }
     }
 }
 
 compose.resources {
-    publicResClass = false
+    // Public so the desktopApp / webApp entry point modules can reference the
+    // generated Res class (e.g. the desktop window icon).
+    publicResClass = true
     packageOfResClass = "com.github.woodsmarshes.chat.resources.composeApp"
     generateResClass = always
 }
 
 dependencies {
-    "androidRuntimeClasspath"(libs.compose.ui.tooling)
-}
-
-compose.desktop {
-    application {
-        mainClass = "com.github.woodsmarshes.chat.MainKt"
-
-        jvmArgs += "--enable-native-access=ALL-UNNAMED"
-
-        nativeDistributions {
-            jvmArgs.add("--add-exports=java.base/sun.misc=ALL-UNNAMED")
-            jvmArgs.add("--add-exports=java.base/sun.nio.ch=ALL-UNNAMED")
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.github.woodsmarshes.chat"
-            packageVersion = "1.0.0"
-
-            macOS {
-                iconFile.set(project.file("icons/icon.icns"))
-            }
-            windows {
-                iconFile.set(project.file("icons/icon.ico"))
-            }
-            linux {
-                iconFile.set(project.file("icons/icon.png"))
-            }
-        }
-    }
+    if (project.extra["enableAndroid"] as Boolean) add("androidRuntimeClasspath", libs.compose.ui.tooling)
 }

@@ -89,7 +89,17 @@ fun Route.realtimeRoutes() {
                                 userId = userId,
                                 conversationId = result.conversationId,
                                 messageId = result.messageId
-                            )
+                            ).mapBoth({ }) { error ->
+                                // Mirror Send/Withdraw: report the failure back
+                                // so the client knows the receipt never landed.
+                                sendSerialized(
+                                    SocketErrorResponse(
+                                        requestId = null,
+                                        code = error.mapToStatus().value,
+                                        message = "Read report failed"
+                                    )
+                                )
+                            }
                         }
 
                         is MessageRequest.Typing -> {

@@ -84,7 +84,10 @@ fun AppTheme(
     )
 
     // val miuixTextStyles = remember(appFontFamily) { getMiuixTextStyles(appFontFamily) }
-    val m3Typography = remember(appFontFamily) { getM3Typography(appFontFamily) }
+    // The family is constant (static resource fonts), so a keyless remember is
+    // both correct and actually effective — remember(appFontFamily) never hit
+    // because the family was rebuilt each recomposition.
+    val m3Typography = remember { getM3Typography(appFontFamily) }
 
     val contentWithFontFallback = @Composable {
         CompositionLocalProvider(

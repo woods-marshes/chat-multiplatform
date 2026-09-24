@@ -6,8 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -23,16 +26,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButtonDefaults.Icon
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,25 +57,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.ui.components.ChatConversationTopBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.bubble.messageItems
 import com.github.woodsmarshes.chat.core.ui.components.bubble.rememberFormatter
 import com.github.woodsmarshes.chat.core.ui.components.input.ChatInputBar
+import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import kotlin.uuid.Uuid
 
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
     onProfileClick: (String) -> Unit,
+    onGroupInfoClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -67,6 +96,11 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val formatter = rememberFormatter()
     val coroutineScope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val forwardTargets by viewModel.forwardTargets.collectAsState(initial = emptyList<ConversationUiModel>())
+    val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
+    val strings = LocalStrings.current
 
     // 记录最新一条消息的 ID
     val latestMessage = if (lazyMessages.itemCount > 0) lazyMessages[0] else null
@@ -134,32 +168,178 @@ fun ChatScreen(
 //        }
 //    }
 
+    var headerMenuExpanded by remember { mutableStateOf(false) }
+
+    // Stable message-list callbacks: recreated only when their captures
+    // actually change, so LazyColumn items can skip recomposition.
+    val selectedIds = remember(uiState.selectedMessages) {
+        uiState.selectedMessages.map { it.id }.toSet()
+    }
+    val onRetryCallback: (MessageUiModel) -> Unit = remember(viewModel) {
+        { message: MessageUiModel -> viewModel.sendMessage() }
+    }
+    val onReplyCallback: (MessageUiModel) -> Unit = remember(viewModel) {
+        { message: MessageUiModel -> viewModel.toggleReplyTo(message) }
+    }
+    val onAvatarClickCallback: (MessageUiModel) -> Unit = remember(onProfileClick) {
+        { message: MessageUiModel ->
+            message.sender?.id?.let { senderId ->
+                onProfileClick(senderId.toString())
+            }
+        }
+    }
+    val menuContentCallback: @Composable (MessageUiModel, () -> Unit) -> Unit =
+        remember(viewModel, clipboard, snackbarHostState, coroutineScope, strings) {
+            { message: MessageUiModel, dismiss: () -> Unit ->
+                MessageContextMenu(
+                    isText = message.content is TextContent,
+                    dismiss = dismiss,
+                    onReply = { viewModel.setReplyTo(message) },
+                    onCopy = {
+                        (message.content as? TextContent)?.let { content ->
+                            clipboard.setText(AnnotatedString(content.text))
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(strings.copied)
+                            }
+                        }
+                    },
+                    onForward = { viewModel.startForward(listOf(message)) },
+                    onMultiSelect = { viewModel.enterSelection(message) },
+                )
+            }
+        }
+
+    // Back gesture/button exits multi-select before leaving the chat.
+    NavigationBackHandler(
+        state = navigationEventState,
+        isBackEnabled = uiState.selectionMode,
+        onBackCompleted = viewModel::clearSelection,
+    )
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            ChatTopAppBar(
-                title = LocalStrings.current.chatTitle,
-                showBackButton = true,
-                onBackClick = onBack,
+            if (uiState.selectionMode) {
+                ChatTopAppBar(
+                    title = LocalStrings.current.selectedCountFmt(
+                        uiState.selectedMessages.size.toString(),
+                    ),
+                    showBackButton = true,
+                    onBackClick = viewModel::clearSelection,
+                )
+            } else {
+                val strings = LocalStrings.current
+                val header = uiState.header
+            val typing = uiState.typingUsers
+            // Subtitle: typing indicator wins over the member count.
+            val subtitle = when {
+                typing.isNotEmpty() && header?.isGroup == true ->
+                    typing.map { it.displayName?.ifEmpty { null } ?: it.username }
+                        .joinToString("、") + " " + strings.typingLabel
+                typing.isNotEmpty() -> strings.typingLabel
+                header?.isGroup == true && uiState.memberCount != null ->
+                    strings.memberCountFmt(uiState.memberCount.toString())
+                else -> null
+            }
+            // While someone types in a group chat, the header avatar swaps
+            // to that member (Telegram behaviour).
+            val typingUser = if (header?.isGroup == true) typing.firstOrNull() else null
+            val openDetails: (() -> Unit)? = when {
+                header == null -> null
+                header.isGroup -> {
+                    val conversationId = header.conversationId.toString()
+                    val action: () -> Unit = { onGroupInfoClick(conversationId) }
+                    action
+                }
+                header.peerUserId != null -> {
+                    val peerId = header.peerUserId.toString()
+                    val action: () -> Unit = { onProfileClick(peerId) }
+                    action
+                }
+                else -> null
+            }
+            ChatConversationTopBar(
+                title = header?.title ?: strings.chatTitle,
+                subtitle = subtitle,
+                avatarName = typingUser?.let { it.displayName?.ifEmpty { null } ?: it.username }
+                    ?: (header?.title ?: strings.chatTitle),
+                avatarUrl = typingUser?.avatarUrl ?: header?.avatarUrl,
+                onBack = onBack,
+                onHeaderClick = openDetails,
+                actions = {
+                    if (openDetails != null && header != null) {
+                        IconButton(onClick = { headerMenuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = strings.menuCd,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = headerMenuExpanded,
+                            onDismissRequest = { headerMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (header.isGroup) strings.groupInfoTitle
+                                        else strings.profileTitle
+                                    )
+                                },
+                                onClick = {
+                                    headerMenuExpanded = false
+                                    openDetails?.invoke()
+                                },
+                            )
+                        }
+                    }
+                },
             )
+            }
         },
         bottomBar = {
-            // 使用 Box 包裹 ChatInputBar，设置背景色避免透明问题
-            Box(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surface)
-//                   .navigationBarsPadding()
-//                    .imePadding()
-            ) {
-                ChatInputBar(
-                    value = uiState.input,
-                    onValueChange = viewModel::onInputChanged,
-                    onSend = viewModel::sendMessage,
-                    replyTo = uiState.replyToMessage,
-                    onClearReply = viewModel::clearReplyTo,
-                    onImageClick = { /* TODO: 打开系统图片选择器 */ },
-                    onFileClick = { /* TODO: 打开系统文件选择器 */ },
-                    onVoiceClick = { /* TODO: 开始录音 */ },
+            if (uiState.selectionMode) {
+                SelectionActionBar(
+                    selectedCount = uiState.selectedMessages.size,
+                    canReply = uiState.selectedMessages.size == 1,
+                    canCopy = uiState.selectedMessages.any { it.content is TextContent },
+                    onReply = {
+                        uiState.selectedMessages.firstOrNull()?.let(
+                            viewModel::setReplyToAndClearSelection,
+                        )
+                    },
+                    onCopy = {
+                        val text = uiState.selectedMessages
+                            .mapNotNull { (it.content as? TextContent)?.text }
+                            .joinToString("\n")
+                        clipboard.setText(AnnotatedString(text))
+                        viewModel.clearSelection()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(strings.copied)
+                        }
+                    },
+                    onForward = { viewModel.startForward(uiState.selectedMessages) },
                 )
+            } else {
+                // 使用 Box 包裹 ChatInputBar，设置背景色避免透明问题。
+                // The draft input is collected HERE, in the bottom-bar scope:
+                // keystrokes only recompose the input bar, never the message
+                // list (ChatViewModel.input is a separate stream on purpose).
+                val draftInput by viewModel.input.collectAsState()
+                Box(
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    ChatInputBar(
+                        value = draftInput,
+                        onValueChange = viewModel::onInputChanged,
+                        onSend = viewModel::sendMessage,
+                        replyTo = uiState.replyToMessage,
+                        onClearReply = viewModel::clearReplyTo,
+                        onImageClick = { /* TODO: 打开系统图片选择器 */ },
+                        onFileClick = { /* TODO: 打开系统文件选择器 */ },
+                        onVoiceClick = { /* TODO: 开始录音 */ },
+                    )
+                }
             }
         },
     ) { padding ->
@@ -188,8 +368,13 @@ fun ChatScreen(
                     itemProvider = { lazyMessages[it] },
                     formatter = formatter,
                     ownUserId = uiState.ownUserId,
-                    onRetry = { viewModel.sendMessage() },
-                    onReply = { viewModel.setReplyTo(it) },
+                    onRetry = onRetryCallback,
+                    onReply = onReplyCallback,
+                    onAvatarClick = onAvatarClickCallback,
+                    selectionActive = uiState.selectionMode,
+                    selectedIds = selectedIds,
+                    onToggleSelection = viewModel::toggleSelection,
+                    menuContent = menuContentCallback,
                 )
             }
 
@@ -226,7 +411,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Scroll to bottom",
+                            contentDescription = strings.scrollToBottomCd,
                             modifier = Modifier.size(20.dp)
                         )
                         if (unreadCount.value > 0) {
@@ -242,4 +427,176 @@ fun ChatScreen(
             }
         }
     }
+
+    if (uiState.forwardingMessages.isNotEmpty()) {
+        ForwardDialog(
+            targets = forwardTargets,
+            isSending = uiState.isForwarding,
+            onDismiss = viewModel::dismissForward,
+            onTargetSelected = viewModel::forwardMessages,
+        )
+    }
+}
+
+/** Bottom action bar shown in multi-select mode. */
+@Composable
+private fun SelectionActionBar(
+    selectedCount: Int,
+    canReply: Boolean,
+    canCopy: Boolean,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onForward: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(64.dp)
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SelectionAction(
+                icon = Icons.AutoMirrored.Filled.Reply,
+                label = strings.reply,
+                enabled = canReply,
+                onClick = onReply,
+                modifier = Modifier.weight(1f),
+            )
+            SelectionAction(
+                icon = Icons.Default.ContentCopy,
+                label = strings.copy,
+                enabled = canCopy,
+                onClick = onCopy,
+                modifier = Modifier.weight(1f),
+            )
+            SelectionAction(
+                icon = Icons.AutoMirrored.Filled.Forward,
+                label = strings.forward,
+                enabled = true,
+                onClick = onForward,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectionAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+        )
+    }
+}
+
+/** Long-press/tap message menu (reply / copy / forward / multi-select). */
+@Composable
+private fun MessageContextMenu(
+    isText: Boolean,
+    dismiss: () -> Unit,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onForward: () -> Unit,
+    onMultiSelect: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    DropdownMenu(expanded = true, onDismissRequest = dismiss) {
+        DropdownMenuItem(
+            text = { Text(strings.reply) },
+            leadingIcon = {
+                Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null)
+            },
+            onClick = {
+                dismiss()
+                onReply()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(strings.copy) },
+            leadingIcon = {
+                Icon(Icons.Default.ContentCopy, contentDescription = null)
+            },
+            enabled = isText,
+            onClick = {
+                dismiss()
+                onCopy()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(strings.forward) },
+            leadingIcon = {
+                Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null)
+            },
+            onClick = {
+                dismiss()
+                onForward()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(strings.multiSelect) },
+            leadingIcon = {
+                Icon(Icons.Default.CheckCircle, contentDescription = null)
+            },
+            onClick = {
+                dismiss()
+                onMultiSelect()
+            },
+        )
+    }
+}
+
+/** Conversation picker shown when forwarding messages. */
+@Composable
+private fun ForwardDialog(
+    targets: List<ConversationUiModel>,
+    isSending: Boolean,
+    onDismiss: () -> Unit,
+    onTargetSelected: (Uuid) -> Unit,
+) {
+    val strings = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.forwardTitle) },
+        text = {
+            LazyColumn(modifier = Modifier.height(320.dp)) {
+                items(targets, key = { it.id }) { conversation ->
+                    ConversationItem(
+                        conversation = conversation,
+                        onClick = { onTargetSelected(conversation.id) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isSending) { Text(strings.cancel) }
+        },
+    )
 }

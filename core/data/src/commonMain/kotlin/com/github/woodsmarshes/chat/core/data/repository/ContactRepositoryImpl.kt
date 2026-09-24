@@ -2,7 +2,11 @@ package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.data.model.toEntity
+import com.github.woodsmarshes.chat.core.data.model.toFriend
+import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.database.dao.ContactDao
+import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.model.Contact
 import com.github.woodsmarshes.chat.core.model.ContactRequest
 import com.github.woodsmarshes.chat.core.model.User
@@ -12,38 +16,40 @@ import com.github.woodsmarshes.chat.core.network.dto.contact.ContactRequestActio
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlin.uuid.Uuid
 
 class ContactRepositoryImpl(
     private val contactApi: ContactApi,
     private val contactDao: ContactDao,
+    private val userDao: UserDao,
 ) : ContactRepository {
 
-    override fun getFriendsFlow(): Flow<List<Pair<Contact, User>>> {
-        contactDao.getAllContactsWithUserInfo()
-        return emptyFlow()
-    }
+    override fun getFriendsFlow(): Flow<List<Pair<Contact, User>>> =
+        contactDao.getAllContactsWithUserInfo().map { rows ->
+            rows.map { it.toFriend() }
+        }
 
     override suspend fun syncFriends(): Result<Unit, ContactError> = coroutineBinding {
         val contacts = bindApi(ContactError::Unknown) {
             contactApi.getContacts()
         }
-        contacts.forEach { (contact, _) ->
-            contactDao.insertContact(
-                io.github.woodsmarshes.chat.db.ContactEntity(
-                    contact.contactId,
-                    contact.status,
-                    contact.nickname,
-                    contact.alias,
-                    contact.createdAt,
-                    contact.updatedAt,
-                )
-            )
+        contacts.forEach { (contact, friend) ->
+            contactDao.insertContact(contact.toEntity())
+            // The friends list query joins UserEntity; without caching the
+            // friend's user row the join silently drops the contact.
+            friend.toUserEntity()?.let { userDao.insertUser(it) }
         }
     }
 
     override suspend fun searchContacts(query: String): Result<List<Pair<Contact, User>>, ContactError> {
-        TODO("Not yet implemented")
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            return com.github.michaelbull.result.Ok(emptyList())
+        }
+        val rows = contactDao.searchContacts(trimmed).first()
+        return com.github.michaelbull.result.Ok(rows.map { it.toFriend() })
     }
 
     override suspend fun sendFriendRequest(targetId: Uuid, message: String?): Result<Boolean, ContactError> =

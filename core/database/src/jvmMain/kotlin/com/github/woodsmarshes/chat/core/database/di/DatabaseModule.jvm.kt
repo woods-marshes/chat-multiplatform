@@ -37,7 +37,23 @@ actual suspend fun provideDbDriver(
     if (isDatabaseEmpty) {
         schema.create(driver).await()
     } else {
-        schema.migrate(driver, schema.version - 1, schema.version).await()
+        // Migrate only from the version SQLite actually records in
+        // user_version; the previous code always "migrated" from
+        // version - 1 even when the DB was already current.
+        val userVersion = driver.executeQuery(
+            identifier = null,
+            sql = "PRAGMA user_version",
+            mapper = { cursor ->
+                QueryResult.Value(if (cursor.next().value) cursor.getLong(0) ?: 0L else 0L)
+            },
+            parameters = 0
+        ).value ?: 0L
+
+        when {
+            userVersion < schema.version.toLong() ->
+                schema.migrate(driver, userVersion, schema.version.toLong()).await()
+            else -> Unit // already current
+        }
     }
     return driver
 }

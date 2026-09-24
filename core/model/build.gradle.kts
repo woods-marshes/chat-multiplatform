@@ -4,14 +4,15 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.core.model"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.core.model"
+        }
     }
 
     sourceSets {
         commonMain {
             dependencies {
-                implementation(projects.core.common)
 
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.kotlinx.serialization.protobuf)

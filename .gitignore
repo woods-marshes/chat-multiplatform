@@ -75,6 +75,9 @@ replay_pid*
 # Local configuration file (sdk path, etc)
 local.properties
 
+# Project-local build options
+/local-build.properties
+
 # Android Studio generated files and folders
 captures/
 .externalNativeBuild/

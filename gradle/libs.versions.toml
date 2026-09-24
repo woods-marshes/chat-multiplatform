@@ -5,66 +5,65 @@ android-minSdk = "24"
 android-targetSdk = "37"
 androidDesugarJdkLibs = "2.1.5"
 androidx-activity = "1.13.0"
-androidx-appcompat = "1.7.1"
+androidx-appcompat = "1.8.0"
 androidx-core = "1.19.0"
 androidx-espresso = "3.7.0"
 androidx-testExt = "1.3.0"
-composeHotReload = "1.1.1"
-composeMultiplatform = "1.12.0-beta02"
+composeMultiplatform = "1.12.0"
 composeMaterial3 = "1.12.0-alpha03"
-material3Adaptive = "1.3.0-beta02"
+material3Adaptive = "1.3.0-rc01"
 composeMaterialIcons = "1.7.3"
 lifecycle = "2.11.0"
-navigation3 = "1.2.0-alpha02"
+navigation3 = "1.2.0-beta01"
 navigationEvent = "1.1.0"
 savedstate = '1.4.0'
 windowCore = "1.5.1"
 
-androidx-datastore = "1.3.0-alpha09"
+androidx-datastore = "1.3.0-alpha11"
 
-exposed-version = "1.3.1"
-h2-version = "2.4.240"
+exposed-version = "1.5.0"
+h2-version = "2.5.250"
 koin-version = "4.2.2"
-kotlin-version = "2.4.0"
-kotlin-css-version = "2026.7.1"
+kotlin-version = "2.4.20"
+kotlin-css-version = "2026.9.1"
 kotlinx-browser-version = "0.5.0"
 kotlinx-serialization-version = "1.11.0"
 kotlinx-html-version = "0.12.0"
-ktor-version = "3.5.1"
-logback-version = "1.5.38"
-slf4j-version = "2.0.18"
+ktor-version = "3.6.0"
+logback-version = "1.6.3"
+slf4j-version = "2.0.19"
 postgres-version = "42.7.13"
-commons-version = "1.22.0"
+commons-version = "1.22.1"
 hikariCP-version = "7.1.0"
-jave2-version = "3.5.0"
+jave2-version = "4.2.0"
 doodle-version = "0.11.5"
 kotlinx-coroutines-version = "1.11.0"
 kotlinx-datetime = "0.8.0"
 kotlinx-io = "0.9.1"
 
-kobweb = "0.25.0"
+kobweb = "0.25.1"
 kotlin-logging = "8.0.4"
-filekit = "0.14.2"
+filekit = "0.16.0"
 multiplatform-settings = "1.3.0"
-sqlDelight = "2.3.2"
+sqlDelight = "2.4.0"
 sqlJs = "1.8.0"
-paging = "3.5.0"
+paging = "3.5.1"
 junit = "4.13.2"
 lifecycleRuntimeKtx = "2.10.0"
 composeBom = "2026.01.00"
 
 ksp = "2.3.4"
-room = "2.8.4"
-room3 = "3.0.0"
+room = "2.8.5"
+room3 = "3.0.3"
 runner = "1.7.0"
 core = "1.7.0"
 
 # lyricist = "1.8.0"
 lyricist = "1.8.0-compose-1.10"
 uuid-creator = "6.1.1"
-buildkonfig = "0.21.2"
+buildkonfig = "0.22.0"
 
-unstyled = "2.7.0"
+unstyled = "2.10.0"
 lucide = "1.1.0"
 ripple = "1.1.0"
 
@@ -73,11 +72,11 @@ store = "5.1.0"
 bcrypt = "0.10.2"
 
 kotlin-result = "2.3.1"
-miuix = "0.9.2"
-coil = "3.5.0"
+miuix = "0.9.3"
+coil = "3.6.3"
 
-composewebview = "1.0.0-beta-02"
-woods-marshes-composewebview = "0.0.1"
+composewebview = "1.0.3"
+nucleus = "2.5.16"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin-version" }
@@ -171,6 +170,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "kotlinx-serialization-version" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines-version" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines-version" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines-version" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 kotlinx-io-bytestring = { module = "org.jetbrains.kotlinx:kotlinx-io-bytestring", version.ref = "kotlinx-io" }
@@ -186,6 +186,7 @@ silk-foundation = { module = "com.varabyte.kobweb:silk-foundation", version.ref 
 silk-icons-fa = { module = "com.varabyte.kobwebx:silk-icons-fa", version.ref = "kobweb" }
 silk-icons-mdi = { module = "com.varabyte.kobwebx:silk-icons-mdi", version.ref = "kobweb" }
 # ktor-client
+ktor-resources = { module = "io.ktor:ktor-resources", version.ref = "ktor-version" }
 ktor-client-core = {module = "io.ktor:ktor-client-core", version.ref = "ktor-version"}
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor-version" }
 ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor-version" }
@@ -232,7 +233,7 @@ sqldelight-web-driver = { module = "app.cash.sqldelight:web-worker-driver", vers
 room3-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
 room3-paging = { module = "androidx.room3:room3-paging", version.ref = "room3" }
 room3-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
-room3-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version = "2.6.2" }
+room3-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version = "2.7.1" }
 # Android
 android-desugarJdkLibs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androidDesugarJdkLibs" }
 # AndroidX
@@ -293,9 +294,13 @@ lyricist = { module = "dev.skaldebane:lyricist", version.ref = "lyricist" }
 lyricist-processor = { module = "dev.skaldebane:lyricist-processor", version.ref = "lyricist" }
 lyricist-processor-xml = { module = "dev.skaldebane:lyricist-processor-xml", version.ref = "lyricist" }
 
-#composewebview
-# composewebview = { module = "io.github.kdroidfilter:composewebview", version.ref = "composewebview"}
-composewebview = { module = "io.github.woods-marshes:composewebview", version.ref = "woods-marshes-composewebview"}
+# composewebview (upstream: NucleusFramework/ComposeNativeWebview, Maven Central)
+composewebview = { module = "dev.nucleusframework:composewebview", version.ref = "composewebview"}
+
+# Nucleus desktop application framework (Tao backend host for the desktop WebView)
+nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "nucleus" }
+nucleus-decorated-window-tao = { module = "dev.nucleusframework:nucleus.decorated-window-tao", version.ref = "nucleus" }
+nucleus-core-runtime = { module = "dev.nucleusframework:nucleus.core-runtime", version.ref = "nucleus" }
 
 # Build logic dependencies
 android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
@@ -310,7 +315,6 @@ kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref 
 ktor = { id = "io.ktor.plugin", version.ref = "ktor-version" }
 kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin-version" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin-version" }
-compose-hotReload = { id = "org.jetbrains.compose.hot-reload", version.ref = "composeHotReload" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 kobweb-application = { id = "com.varabyte.kobweb.application", version.ref = "kobweb" }
 kobweb-library = { id = "com.varabyte.kobweb.library", version.ref = "kobweb" }
@@ -321,6 +325,7 @@ kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin-ver
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+nucleus = { id = "dev.nucleusframework", version.ref = "nucleus" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room = { id = "androidx.room", version.ref = "room" }
 room3 = { id = "androidx.room3", version.ref = "room3" }

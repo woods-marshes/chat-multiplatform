@@ -10,10 +10,14 @@ import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ConversationSettingsService
 import com.github.woodsmarshes.chat.service.FileService
 import com.github.woodsmarshes.chat.service.UserService
+import com.github.woodsmarshes.chat.utils.FileUploadConfig
 import com.github.woodsmarshes.chat.utils.extractUserId
+import com.github.michaelbull.result.mapBoth
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.resources.post
 import io.ktor.server.response.respond
@@ -21,58 +25,66 @@ import io.ktor.server.routing.Route
 import io.ktor.util.logging.Logger
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
-import com.github.michaelbull.result.Err
-import com.github.michaelbull.result.mapBoth
 import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("FileRoutes")
-private const val MAX_FILE_SIZE = 100 * 1024 * 1024L // 100MB
+
+/** Per-type cap from [FileUploadConfig]; falls back to 100MB for unknown types. */
+private fun maxBytesFor(type: FileType): Long =
+    FileUploadConfig.maxFileSize[type.name.lowercase()] ?: 100L * 1024 * 1024
+
 
 fun Route.fileRoutes() {
     val fileService by inject<FileService>()
     val settingsService by inject<ConversationSettingsService>()
     val userService by inject<UserService>()
+
+    rateLimit(RateLimitName("uploads")) {
     post<V1.Files.Upload> { params ->
+        val type = params.type
+        val maxBytes = maxBytesFor(type)
         val multipartData = call.receiveMultipart()
         var result: MediaContent? = null
-        var errorMessage: String? = null
+        var error: FileError? = null
 
         multipartData.forEachPart { part ->
-            if (errorMessage != null) return@forEachPart
-            when (part) {
-                is PartData.FileItem -> {
-                    val rawFileName = part.originalFileName ?: "unknown"
-                    val sanitized = fileService.sanitizeFileName(rawFileName)
-                    if (sanitized == null) {
-                        errorMessage = "Invalid file name"
-                        part.dispose()
-                        return@forEachPart
-                    }
-                    val mimeType = part.contentType?.toString() ?: "application/octet-stream"
+                try {
+                    if (error != null) return@forEachPart
+                    when (part) {
+                        is PartData.FileItem -> {
+                            val rawFileName = part.originalFileName ?: "unknown"
+                            val sanitized = fileService.sanitizeFileName(rawFileName)
+                            if (sanitized == null) {
+                                error = FileError.NoFileProvided
+                                return@forEachPart
+                            }
+                            val mimeType = part.contentType?.toString() ?: "application/octet-stream"
 
-                    val fileBytes = part.provider().readRemaining().readByteArray()
-                    if (fileBytes.size > MAX_FILE_SIZE) {
-                        errorMessage = "File too large (max 100MB)"
-                        part.dispose()
-                        return@forEachPart
-                    }
+                            val fileBytes = part.provider().readRemaining().readByteArray()
+                            if (fileBytes.size > maxBytes) {
+                                logger.warn("Upload rejected for {}: {} bytes exceeds cap", type, fileBytes.size)
+                                error = FileError.FileTooLarge
+                                return@forEachPart
+                            }
 
-                    result = fileService.uploadFile(
-                        fileType = params.type,
-                        fileName = sanitized,
-                        fileData = fileBytes,
-                        mimeType = mimeType
-                    ).getOrThrow()
+                            result = fileService.uploadFile(
+                                fileType = type,
+                                fileName = sanitized,
+                                fileData = fileBytes,
+                                mimeType = mimeType
+                            ).getOrThrow()
+                        }
+                        is PartData.FormItem -> { /* reserved */ }
+                        else -> {}
+                    }
+                } finally {
+                    part.dispose()
                 }
-                is PartData.FormItem -> { /* reserved */ }
-                else -> {}
             }
-            part.dispose()
-        }
 
         when {
-            errorMessage != null -> call.respond(HttpStatusCode.BadRequest, errorMessage!!)
+            error != null -> call.respond(HttpStatusCode.BadRequest, error!!)
             result != null -> call.respond(result!!)
             else -> call.respond(HttpStatusCode.BadRequest, FileError.NoFileProvided)
         }
@@ -80,31 +92,37 @@ fun Route.fileRoutes() {
 
     post<V1.Files.Avatar> { params ->
         val userId = call.extractUserId()
+        val maxBytes = maxBytesFor(FileType.AVATAR)
         val multipartData = call.receiveMultipart()
         var uploadedUrl: String? = null
-        var errorMessage: String? = null
+        var error: FileError? = null
 
         multipartData.forEachPart { part ->
-            if (errorMessage != null) return@forEachPart
-            if (part is PartData.FileItem) {
-                val fileBytes = part.provider().readRemaining().readByteArray()
-                if (fileBytes.size > MAX_FILE_SIZE) {
-                    errorMessage = "File too large"
+                try {
+                    if (error != null) return@forEachPart
+                    if (part is PartData.FileItem) {
+                        val fileBytes = part.provider().readRemaining().readByteArray()
+                        if (fileBytes.size > maxBytes) {
+                            error = FileError.FileTooLarge
+                            return@forEachPart
+                        }
+
+                        val media = fileService.uploadFile(
+                            fileType = FileType.AVATAR,
+                            fileName = "avatar.jpg",
+                            fileData = fileBytes,
+                            mimeType = part.contentType?.toString() ?: "image/jpeg"
+                        ).getOrThrow()
+                        uploadedUrl = media.url
+                    }
+                } finally {
                     part.dispose()
-                    return@forEachPart
                 }
-
-                val media = fileService.uploadFile(
-                    fileType = FileType.AVATAR,
-                    fileName = "avatar.jpg",
-                    fileData = fileBytes,
-                    mimeType = part.contentType?.toString() ?: "image/jpeg"
-                ).getOrThrow()
-                uploadedUrl = media.url
             }
-            part.dispose()
-        }
 
+        if (error != null) {
+            return@post call.respond(HttpStatusCode.BadRequest, error!!)
+        }
         val url = uploadedUrl
         if (url == null) {
             return@post call.respond(HttpStatusCode.BadRequest, FileError.NoFileProvided)
@@ -130,10 +148,11 @@ fun Route.fileRoutes() {
 
         updateResult.mapBoth(
             success = { call.respond(mapOf("url" to url)) },
-            failure = { error ->
-                logger.error("Failed to update avatar reference: {}", error)
+            failure = { err ->
+                logger.error("Failed to update avatar reference: {}", err)
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Avatar upload succeeded but profile update failed"))
             }
         )
+    }
     }
 }

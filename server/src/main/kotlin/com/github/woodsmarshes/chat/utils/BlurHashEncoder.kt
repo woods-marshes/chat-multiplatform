@@ -80,8 +80,8 @@ object BlurHashEncoder {
 
     private fun encodeAC(value: DoubleArray, maxVal: Double): Long {
         val r = floor(max(0.0, min(18.0, floor(signSqrt(value[0] / maxVal) * 9 + 9.5))))
-        val g = floor(max(0.0, min(18.0, floor(signSqrt(value[0] / maxVal) * 9 + 9.5))))
-        val b = floor(max(0.0, min(18.0, floor(signSqrt(value[0] / maxVal) * 9 + 9.5))))
+        val g = floor(max(0.0, min(18.0, floor(signSqrt(value[1] / maxVal) * 9 + 9.5))))
+        val b = floor(max(0.0, min(18.0, floor(signSqrt(value[2] / maxVal) * 9 + 9.5))))
         return (r * 19 * 19 + g * 19 + b).toLong()
     }
 

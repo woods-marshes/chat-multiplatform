@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.libs
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
+import org.gradle.kotlin.dsl.extra
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
@@ -12,7 +13,9 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
         with(target) {
             with(pluginManager) {
                 apply(libs.findPlugin("kotlin-multiplatform").get().get().pluginId)
-                apply(libs.findPlugin("android-kotlin-multiplatform-library").get().get().pluginId)
+                if (project.extra["enableAndroid"] as Boolean) {
+                    apply(libs.findPlugin("android-kotlin-multiplatform-library").get().get().pluginId)
+                }
             }
             extensions.configure<KotlinMultiplatformExtension> {
                 compilerOptions {
@@ -24,14 +27,16 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
                     languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
                 }
 
-                extensions.configure<KotlinMultiplatformAndroidLibraryExtension> {
-                    val sdkVersions = getAndroidSdkVersions()
-                    compileSdk = sdkVersions.compileSdk
-                    minSdk = sdkVersions.minSdk
+                if (project.extra["enableAndroid"] as Boolean) {
+                    extensions.configure<KotlinMultiplatformAndroidLibraryExtension> {
+                        val sdkVersions = getAndroidSdkVersions()
+                        compileSdk = sdkVersions.compileSdk
+                        minSdk = sdkVersions.minSdk
 
-                    androidResources.enable = true
+                        androidResources.enable = true
 
-                    withHostTest {}
+                        withHostTest {}
+                    }
                 }
 
                 jvm()

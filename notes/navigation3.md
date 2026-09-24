@@ -174,6 +174,27 @@ AnimatedContent(targetState = appState.isLoggedIn) { loggedIn ->
 
 这确保退出登录后整个导航栈被销毁，不会出现"回退到已登录页面"的问题。
 
+## List-Detail 原地替换规则
+
+`Navigator.goToKey` 对官方多返回栈样例做了一处偏离：当栈顶已经是某类 detail 条目、
+新导航目标是**同类型** detail 时，**原地替换**栈顶而不是压栈（Material list-detail
+的 in-place 语义）。
+
+- 动机：宽屏下列表窗格常驻，连续点击列表项 `[List, DetailA, DetailB, ...]` 会让
+  详情页返回按钮逐个弹出，返回体验极差。替换后 `[List, DetailB]`，返回一步即回列表。
+- 不同类型仍然压栈（article → editor、chat → profile、search → chat），
+  保持这些场景的返回语义。
+- 单测：`core:navigation/src/commonTest/.../NavigatorTest.kt`（替换/压栈/去重/
+  多栈保持/返回安全）。
+
+## 账户入口与搜索胶囊
+
+- **头像**：不再作为导航 suite 的 item。medium+ 布局固定在 rail 底部（MainApp 中
+  overlay，rail 宽 80dp）；compact 布局由 shell 通过 `LocalAccountAffordance`
+  提供到 `ChatTopAppBar` 末尾（仅顶层页面传 `showAccountAffordance = true`）。
+- **搜索**：`ChatTopAppBar(onSearchClick = ...)` 渲染胶囊入口，分别打开
+  `SearchNavKey(CONVERSATION / CONTACT / SETTING)`；articles 暂无搜索后端未接入。
+
 ## 依赖
 
 `core:navigation` 模块依赖：

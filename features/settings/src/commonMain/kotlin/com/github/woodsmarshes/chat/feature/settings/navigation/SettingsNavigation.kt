@@ -10,8 +10,10 @@ data object SettingsNavKey : NavKey
 
 fun EntryProviderScope<NavKey>.settingsEntry(
     onBack: () -> Unit,
+    onLogout: () -> Unit,
+    onSearchClick: () -> Unit,
 ) {
     entry<SettingsNavKey> {
-        SettingsScreen(onBack = onBack)
+        SettingsScreen(onBack = onBack, onLogout = onLogout, onSearchClick = onSearchClick)
     }
 }

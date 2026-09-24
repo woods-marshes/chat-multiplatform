@@ -5,8 +5,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.feature.article_editor"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.feature.article_editor"
+        }
     }
 
     sourceSets {
@@ -26,7 +28,7 @@ kotlin {
             }
         }
         jvmMain.dependencies { implementation(libs.composewebview) }
-        androidMain.dependencies { implementation(libs.composewebview) }
+        matching { it.name == "androidMain" }.configureEach { dependencies { implementation(libs.composewebview) } }
         wasmJsMain.dependencies { implementation(libs.composewebview) }
     }
 }

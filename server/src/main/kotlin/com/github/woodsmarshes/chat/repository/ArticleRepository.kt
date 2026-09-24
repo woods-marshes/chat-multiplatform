@@ -139,6 +139,7 @@ class ArticleDataSourceImpl : ArticleRepository {
             if (content != null) it[this.content] = content
             if (status != null) it[this.status] = status
             if (excerpt != null) it[this.excerpt] = excerpt
+            if (coverImage != null) it[this.coverImage] = coverImage
             it[this.updatedAt] = now
             if (status == ArticleStatus.PUBLISHED) {
                 it[Articles.publishedAt] = coalesce(
@@ -168,7 +169,7 @@ class ArticleDataSourceImpl : ArticleRepository {
                 if (content != null) it[this.content] = content
                 if (title != null) it[this.title] = title
                 if (excerpt != null) it[this.excerpt] = excerpt
-                if (excerpt != null) it[this.coverImage] = coverImage
+                if (coverImage != null) it[this.coverImage] = coverImage
                 if (status == ArticleStatus.PUBLISHED) {
                     it[Articles.publishedAt] = existing.publishedAt ?: now
                 }

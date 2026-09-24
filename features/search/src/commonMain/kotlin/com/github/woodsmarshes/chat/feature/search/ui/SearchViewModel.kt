@@ -14,19 +14,12 @@ import com.github.woodsmarshes.chat.feature.search.model.SearchResultUiModel
 import com.github.woodsmarshes.chat.feature.search.model.SearchUiState
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchType
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
-@OptIn(FlowPreview::class)
 class SearchViewModel(
     private val searchType: SearchType,
     private val userRepository: UserRepository,
@@ -41,19 +34,12 @@ class SearchViewModel(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    private val _queryFlow = MutableStateFlow("")
     private var searchJob: Job? = null
 
     init {
         if (searchType == SearchType.SETTING) {
             _uiState.value = _uiState.value.copy(notSupported = true)
         }
-        _queryFlow
-            .debounce(300)
-            .distinctUntilChanged()
-            .filter { it.length >= 2 }
-            .onEach { query -> performSearch(query) }
-            .launchIn(viewModelScope)
     }
 
     fun onQueryChanged(query: String) {
@@ -68,7 +54,25 @@ class SearchViewModel(
                 error = null,
             )
         }
-        _queryFlow.value = query
+    }
+
+    /**
+     * Runs (or clears) the search. Called by
+     * [com.github.woodsmarshes.chat.core.ui.components.search.AdaptiveSearchBar]
+     * after its debounce; an empty query means the text is below the minimum
+     * length or was cleared.
+     */
+    fun onSearchQuery(query: String) {
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                results = emptyList(),
+                isLoading = false,
+                error = null,
+            )
+            return
+        }
+        performSearch(query)
     }
 
     /** Re-runs the search for the current query (error retry affordance). */

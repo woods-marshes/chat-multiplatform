@@ -22,19 +22,21 @@ fun Route.userRoutes() {
     val userService by inject<UserService>()
     val lifecycleService by inject<ConversationLifecycleService>()
     val membersService by inject<GroupMembershipService>()
-    // 检查是否存在，不需要权限
-    get<V1.Users.Check> { params ->
-        val exists = userService.checkExists(params.email, params.username).getOrThrow()
-        call.respond(mapOf("exists" to exists))
-    }
-
-    // 搜索用户
-    get<V1.Users.Search> { params ->
-        val results = userService.searchUsers(params.keyword).getOrThrow()
-        call.respond(results)
-    }
 
     authenticate {
+        // Existence check and user search both reveal personal data, so they
+        // require an authenticated caller (prevents anonymous enumeration).
+        get<V1.Users.Check> { params ->
+            val exists = userService.checkExists(params.email, params.username).getOrThrow()
+            call.respond(mapOf("exists" to exists))
+        }
+
+        // 搜索用户
+        get<V1.Users.Search> { params ->
+            val results = userService.searchUsers(params.keyword).getOrThrow()
+            call.respond(results)
+        }
+
         // 获取自己的资料
         get<V1.Users.Me> {
             val userId = call.extractUserId()

@@ -36,13 +36,17 @@ buildkonfig {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.core.network"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.core.network"
+        }
     }
 
     sourceSets {
         commonMain {
             dependencies {
+                api(projects.core.networkApi)
+
                 implementation(projects.core.common)
                 implementation(projects.core.model)
                 implementation(projects.core.datastore)
@@ -74,7 +78,7 @@ kotlin {
             }
         }
 
-        androidMain {
+        matching { it.name == "androidMain" }.configureEach {
             dependencies {
                 implementation(libs.ktor.client.okhttp)
             }

@@ -17,6 +17,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
@@ -122,8 +123,12 @@ fun createHttpClient(
     expectSuccess = true
     HttpResponseValidator {
         handleResponseExceptionWithRequest { exception, request ->
-            val clientException = exception as? ClientRequestException ?: return@handleResponseExceptionWithRequest
-            val exceptionResponse = clientException.response
+            // 5xx (ServerRequestException) must reach the error bus too, not
+            // only 4xx — consumers otherwise never learn about server faults.
+            val serverException = exception as? ServerResponseException
+            val clientException = exception as? ClientRequestException
+            val exceptionResponse = serverException?.response ?: clientException?.response
+            if (exceptionResponse == null) return@handleResponseExceptionWithRequest
             val requestUrl = exceptionResponse.call.request.url
             val event: HttpErrorEvent = when (val statusCode = exceptionResponse.status) {
                 HttpStatusCode.Unauthorized ->  {

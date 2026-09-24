@@ -66,7 +66,7 @@ tasks.withType<ProcessResources> {
 
 dependencies {
     implementation(projects.core.model)
-    implementation(projects.core.network)
+    implementation(projects.core.networkApi)
 
     implementation(libs.kotlinx.html)
     implementation(libs.kotlinx.coroutines.core)

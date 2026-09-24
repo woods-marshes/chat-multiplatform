@@ -32,6 +32,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberModalBottomSheetState
+import io.github.oshai.kotlinlogging.KotlinLogging
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +50,8 @@ import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 import org.koin.compose.viewmodel.koinViewModel
+
+private val log = KotlinLogging.logger {}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +79,7 @@ fun ArticleListScreen(
         topBar = {
             ChatTopAppBar(
                 title = LocalStrings.current.articleTitle,
+                showAccountAffordance = true,
                 actions = {
                     IconButton(onClick = viewModel::showSortSheet) {
                         Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = LocalStrings.current.articleSortCd)
@@ -175,8 +179,7 @@ private fun ArticleListContent(
     val refreshState = articles.loadState.refresh
     if (refreshState is LoadState.Error) {
         LaunchedEffect(refreshState) {
-            // 打印错误堆栈
-            refreshState.error.printStackTrace()
+            log.error(refreshState.error) { "Article list refresh failed" }
         }
     }
 

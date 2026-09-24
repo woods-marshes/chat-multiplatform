@@ -8,7 +8,7 @@ class ComposeMultiplatformConventionPlugin : Plugin<Project> {
             with(pluginManager) {
                 apply(libs.findPlugin("compose-multiplatform").get().get().pluginId)
                 apply(libs.findPlugin("compose-compiler").get().get().pluginId)
-                apply(libs.findPlugin("compose-hotReload").get().get().pluginId)
+                // apply(libs.findPlugin("compose-hotReload").get().get().pluginId)
             }
         }
     }

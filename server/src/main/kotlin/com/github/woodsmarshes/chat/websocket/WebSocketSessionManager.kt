@@ -19,7 +19,14 @@ class SessionIndex {
 
     fun remove(session: WebSocketServerSession): Uuid? {
         val userId = bySession.remove(session) ?: return null
-        byUser[userId]?.remove(session)
+        byUser[userId]?.let { userSessions ->
+            userSessions.remove(session)
+            // Drop the per-user entry once its last session is gone so
+            // getActiveUsers()/size() never report disconnected users.
+            if (userSessions.isEmpty()) {
+                byUser.remove(userId, userSessions)
+            }
+        }
         return userId
     }
 

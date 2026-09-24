@@ -1,16 +1,13 @@
 package com.github.woodsmarshes.chat.core.database.room.di
 
-import com.github.woodsmarshes.chat.core.database.room.RoomChatDatabase
-import com.github.woodsmarshes.chat.core.database.room.dao.MessageDao
-import com.github.woodsmarshes.chat.core.database.room.dao.UserDao
 import org.koin.dsl.module
 
+/**
+ * The Room stack is staged to replace SQLDelight (see CLAUDE.md) but is NOT
+ * wired into the app graph yet. Loading this module without providing real
+ * platform bindings must fail fast with a clear message instead of silently
+ * resolving to null and exploding with a cryptic NPE at first use.
+ */
 val roomDatabaseModule = module {
-    // Placeholder — actual database creation requires platform-specific driver
-    // See Room.databaseBuilder<RoomChatDatabase>("chat.db")
-    //     .setDriver(platformDriver)
-    //     .build()
-    single<RoomChatDatabase?> { null }
-    single<UserDao?> { null }
-    single<MessageDao?> { null }
+    single<Any> { error("core:database-room is not wired up yet: provide a platform Room driver first") }
 }

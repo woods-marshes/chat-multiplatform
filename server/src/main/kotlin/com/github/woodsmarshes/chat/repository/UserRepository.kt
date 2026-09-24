@@ -10,6 +10,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.innerJoin
@@ -194,8 +195,16 @@ class UserDataSourceImpl : UserRepository {
         }
         return dbQuery {
             val query = Users.select(Users.id)
-            email?.let { query.andWhere  { Users.email eq it } }
-            username?.let { query.andWhere { Users.username eq it } }
+            // OR semantics: either value already taken means the pair is taken.
+            // AND here would let "existing username + new email" slip through
+            // the check and die on the unique index with a 500.
+            query.andWhere {
+                val conditions = buildList {
+                    email?.let { add(Users.email eq it) }
+                    username?.let { add(Users.username eq it) }
+                }
+                conditions.reduce { acc, op -> acc or op }
+            }
             query
                 .limit(1)
                 .count() > 0
@@ -204,25 +213,21 @@ class UserDataSourceImpl : UserRepository {
 
     override suspend fun searchUsers(keyword: String): List<User> {
         val queryTerm = keyword.trim().lowercase()
-
-        val textConditions = listOf(
-            Users.username.lowerCase() like "%$queryTerm%",
-            Users.email.lowerCase() like "%$queryTerm%",
-            Users.displayName.lowerCase() like "%$queryTerm%"
-        )
+        if (queryTerm.isEmpty()) return emptyList()
+        // Escape LIKE wildcards so user input can't scan the whole table.
+        val pattern = "%${escapeLike(queryTerm)}%"
 
         return dbQuery {
             (Users innerJoin UserSettings)
                 .selectAll()
                 .where {
-                    val conditions = mutableListOf<Op<Boolean>>()
-
-                    conditions.addAll(textConditions)
-
-                    conditions.add(UserSettings.allowSearch eq true)
-
-                    conditions.reduce { acc, op -> acc or op }
+                    // Keyword match AND opt-in searchability, never either alone.
+                    val textMatches = (Users.username.lowerCase() like pattern) or
+                            (Users.email.lowerCase() like pattern) or
+                            (Users.displayName.lowerCase() like pattern)
+                    textMatches and (UserSettings.allowSearch eq true)
                 }
+                .orderBy(Users.username, SortOrder.ASC)
                 .limit(20)
                 .map {
                     when (it[UserSettings.profileVisibility]) {
@@ -237,6 +242,11 @@ class UserDataSourceImpl : UserRepository {
         }
     }
 }
+
+/** Escapes `%`, `_` and the escape char for a LIKE pattern. */
+private fun escapeLike(value: String): String =
+    value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 data class UserAuthInfo(
     val userId: Uuid,
     val passwordHash: String,

@@ -6,6 +6,7 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import io.github.woodsmarshes.chat.db.ChatDatabase
+import io.github.woodsmarshes.chat.db.GetConversationMemberAvatars
 import io.github.woodsmarshes.chat.db.GetParticipantsExcludingUser
 import io.github.woodsmarshes.chat.db.GetParticipantsWithUserInfo
 import io.github.woodsmarshes.chat.db.ParticipantEntity
@@ -26,10 +27,21 @@ class ParticipantDaoImpl(
         queries.upsertParticipant(participant)
     }
 
+    override suspend fun insertParticipantIfAbsent(participant: ParticipantEntity) {
+        queries.insertParticipantIfAbsent(participant)
+    }
+
     override suspend fun insertParticipants(participants: List<ParticipantEntity>) {
         if (participants.isEmpty()) return
         queries.transaction {
             participants.forEach { insertParticipant(it) }
+        }
+    }
+
+    override suspend fun insertParticipantsIfAbsent(participants: List<ParticipantEntity>) {
+        if (participants.isEmpty()) return
+        queries.transaction {
+            participants.forEach { insertParticipantIfAbsent(it) }
         }
     }
 
@@ -59,6 +71,12 @@ class ParticipantDaoImpl(
         excludeUserId: Uuid
     ): Flow<List<GetParticipantsExcludingUser>> {
         return queries.getParticipantsExcludingUser(conversationIds, excludeUserId)
+            .asFlow()
+            .mapToList(ioContext)
+    }
+
+    override fun getConversationMemberAvatars(ownUserId: Uuid): Flow<List<GetConversationMemberAvatars>> {
+        return queries.getConversationMemberAvatars(ownUserId)
             .asFlow()
             .mapToList(ioContext)
     }

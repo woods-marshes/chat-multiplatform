@@ -5,8 +5,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.feature.search"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.feature.search"
+        }
     }
 
     sourceSets {

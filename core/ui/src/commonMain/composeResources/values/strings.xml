@@ -61,6 +61,28 @@
     <string name="search_no_results">未找到匹配结果</string>
     <string name="search_not_supported">该类型暂不支持搜索</string>
     <string name="search_failed">搜索失败</string>
+    <string name="search_contacts_placeholder">搜索联系人…</string>
+    <string name="search_conversations_placeholder">搜索群聊…</string>
+    <string name="search_clear_cd">清除搜索内容</string>
+    <string name="send_message">发消息</string>
+    <string name="open_chat">进入聊天</string>
+    <string name="copy_id_cd">复制用户 ID</string>
+    <string name="copied">已复制到剪贴板</string>
+    <string name="profile_load_failed">资料加载失败</string>
+    <string name="open_chat_failed">打开会话失败</string>
+    <string name="group_info_title">群聊信息</string>
+    <string name="group_not_found">群聊不存在</string>
+    <string name="group_load_failed">群聊信息加载失败</string>
+    <string name="members_label">成员</string>
+    <string name="member_count_fmt">%s 位成员</string>
+    <string name="typing_label">正在输入…</string>
+    <string name="copy">复制</string>
+    <string name="forward">转发</string>
+    <string name="multi_select">多选</string>
+    <string name="forward_title">转发到…</string>
+    <string name="forward_failed">转发失败</string>
+    <string name="selected_count_fmt">已选 %s 条</string>
+    <string name="scroll_to_bottom_cd">滚动到底部</string>
 
     <!-- Profile -->
     <string name="profile_title">用户资料</string>

@@ -9,6 +9,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 interface MessageRepository {
+    /**
+     * Resends outbox messages whose original send was never acknowledged.
+     * Idempotent: the server keys retried messages by their requestId.
+     */
+    suspend fun retryPendingMessages()
 
 //    val invalidationEvents: Flow<Unit>
 
@@ -28,4 +33,15 @@ interface MessageRepository {
     suspend fun revokeMessage(messageId: Uuid)
 
     suspend fun markAsRead(conversationId: Uuid, messageId: Uuid)
+
+    /**
+     * Who is currently typing in a conversation: userId -> last typing-event
+     * timestamp (epoch millis). Entries do NOT expire on their own — pair
+     * this flow with a ticker and treat entries older than a few seconds as
+     * stopped, in case the matching "stopped typing" event was lost.
+     */
+    fun getTypingUsersFlow(conversationId: Uuid): Flow<Map<Uuid, Long>>
+
+    /** Broadcasts the local user's typing state to conversation members. */
+    suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean)
 }

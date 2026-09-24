@@ -25,7 +25,6 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import react.useEffect
-import react.useEffectOnce
 import react.useState
 import web.cssom.ClassName
 
@@ -55,7 +54,10 @@ val ArticleEditorPage = FC<Props> {
     val (canSave, setCanSave) = useState(false)
     val (isSaving, setIsSaving) = useState(false)
 
-    useEffect(loggedIn) {
+    // Keyed on the target article id too: after createBlank() navigates from
+    // /articles/new to /articles/{id}/edit, this effect must re-run to load
+    // the fresh document (previously the page stayed on the spinner forever).
+    useEffect(loggedIn, rawId) {
         if (!loggedIn) {
             setLoading(false)
             return@useEffect // 如果未登录，直接拦截展示“Login Required”，不做任何数据操作
@@ -79,7 +81,6 @@ val ArticleEditorPage = FC<Props> {
                     }
                     setLoading(false)
                 } else {
-                    println("=== DEBUG: to post  ===")
                     // 新建文章 (进入 /articles/new)，且登录校验已通过。
                     val blankArticle = ArticleRepository.createBlank()
                     Router.navigate("/articles/${blankArticle.id}/edit")

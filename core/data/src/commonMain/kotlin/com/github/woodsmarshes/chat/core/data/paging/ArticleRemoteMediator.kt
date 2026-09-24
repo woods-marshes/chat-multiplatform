@@ -15,6 +15,7 @@ import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.KeyedArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListAllArticlesWithAuthor
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
@@ -36,16 +37,14 @@ class ArticleRemoteMediator(
         return try {
             val cursor: Uuid? = when (loadType) {
                 LoadType.REFRESH -> {
-                    log.info { "DEBUG-MEDIATOR: REFRESH triggering, cursor = null" }
+                    log.debug(tag = "ArticleRemoteMediator", message = "REFRESH triggering, cursor = null")
                     null
                 }
                 LoadType.PREPEND -> {
-                    log.info { "DEBUG-MEDIATOR: PREPEND triggering, skipping" }
+                    log.debug(tag = "ArticleRemoteMediator", message = "PREPEND triggering, skipping")
                     return MediatorResult.Success(endOfPaginationReached = true)
                 }
                 LoadType.APPEND -> {
-                    val lastId = state.lastItemOrNull()?.id
-                    log.info { "DEBUG-MEDIATOR: APPEND triggering, lastItem = $lastId" }
                     state.lastItemOrNull()?.id
                 }
             }
@@ -82,6 +81,9 @@ class ArticleRemoteMediator(
             MediatorResult.Success(
                 endOfPaginationReached = response.size < pageSize
             )
+        } catch (e: CancellationException) {
+            // Never swallow structured-concurrency cancellation.
+            throw e
         } catch (e: Exception) {
             log.error(tag = "ArticleRemoteMediator", message = "Load failed", throwable = e)
             MediatorResult.Error(e)

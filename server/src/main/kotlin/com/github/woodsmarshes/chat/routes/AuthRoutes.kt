@@ -9,6 +9,8 @@ import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.resources.get
@@ -20,29 +22,34 @@ import kotlin.collections.mapOf
 
 fun Route.authRoutes() {
     val authService by inject<AuthService>()
-    post<V1.Auth.Register> {
-        val req = call.receive<RegisterRequest>()
-        val res = authService.register(req).getOrThrow()
-        call.respond(res)
-    }
 
-    post<V1.Auth.Login> {
-        val req = call.receive<LoginRequest>()
-        val res = authService.login(req).getOrThrow()
-        call.respond(res)
-    }
-
-    post<V1.Auth.Refresh> {
-        val authHeader = call.request.header(HttpHeaders.Authorization)
-            ?.removePrefix("Bearer ") ?: run {
-            call.respond(
-                io.ktor.http.HttpStatusCode.Unauthorized,
-                mapOf("error" to "Missing token")
-            )
-            return@post
+    // Credential endpoints are the only ones an attacker can hammer without
+    // an account, so they get a tighter budget than the generic "api" limiter.
+    rateLimit(RateLimitName("auth")) {
+        post<V1.Auth.Register> {
+            val req = call.receive<RegisterRequest>()
+            val res = authService.register(req).getOrThrow()
+            call.respond(res)
         }
-        val res = authService.refreshToken(authHeader).getOrThrow()
-        call.respond(res)
+
+        post<V1.Auth.Login> {
+            val req = call.receive<LoginRequest>()
+            val res = authService.login(req).getOrThrow()
+            call.respond(res)
+        }
+
+        post<V1.Auth.Refresh> {
+            val authHeader = call.request.header(HttpHeaders.Authorization)
+                ?.removePrefix("Bearer ") ?: run {
+                call.respond(
+                    io.ktor.http.HttpStatusCode.Unauthorized,
+                    mapOf("error" to "Missing token")
+                )
+                return@post
+            }
+            val res = authService.refreshToken(authHeader).getOrThrow()
+            call.respond(res)
+        }
     }
 
     authenticate {

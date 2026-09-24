@@ -50,7 +50,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.update
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -74,6 +76,9 @@ class OfflineFirstMessageRepositoryImpl(
     private companion object {
         /** Wait this long after sending before a retry is considered. */
         val RETRY_DELAY = 10.seconds
+
+        /** Typing entries older than this are dropped defensively. */
+        const val TYPING_ENTRY_TTL_MS = 60_000L
 
         /** Periodic sweep interval for the outbox. */
         val RETRY_POLL_INTERVAL = 15.seconds
@@ -246,6 +251,50 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
+    // conversationId -> (userId -> last typing-event epoch millis)
+    private val _typingUsers = MutableStateFlow<Map<Uuid, Map<Uuid, Long>>>(emptyMap())
+
+    override fun getTypingUsersFlow(conversationId: Uuid): Flow<Map<Uuid, Long>> =
+        _typingUsers.map { it[conversationId].orEmpty() }
+
+    override suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean) {
+        try {
+            val currentUser = ownUser.firstOrNull() ?: return
+
+            val request = MessageRequest.Typing(
+                senderId = currentUser.id,
+                conversationId = conversationId,
+                isTyping = isTyping,
+            )
+
+            messageApi.send(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.error(e) { "Failed to send typing state" }
+        }
+    }
+
+    private fun handleUserTyping(event: MessageEventResponse.UserTyping) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        _typingUsers.update { all ->
+            // Drop stale entries in case a "stopped typing" event was lost.
+            val perConversation = all[event.conversationId].orEmpty()
+                .filterValues { now - it < TYPING_ENTRY_TTL_MS }
+                .toMutableMap()
+            if (event.isTyping) {
+                perConversation[event.userId] = now
+            } else {
+                perConversation.remove(event.userId)
+            }
+            if (perConversation.isEmpty()) {
+                all - event.conversationId
+            } else {
+                all + (event.conversationId to perConversation)
+            }
+        }
+    }
+
     private fun startMessageConsumption() {
         messageConsumptionJob?.cancel()
         messageConsumptionJob = scope.launch {
@@ -265,7 +314,7 @@ class OfflineFirstMessageRepositoryImpl(
                             handleReadMessage(event)
                         }
                         is MessageEventResponse.UserTyping -> {
-                            // Handle typing indicator if needed
+                            handleUserTyping(event)
                         }
                         else -> {
                             log.debug { "[ws-consume] unknown event: ${event::class.simpleName}" }

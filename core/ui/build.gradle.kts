@@ -5,8 +5,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.core.ui"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.core.ui"
+        }
     }
 
     sourceSets {
@@ -61,7 +63,7 @@ kotlin {
             }
         }
 
-        androidMain {
+        matching { it.name == "androidMain" }.configureEach {
             dependencies {
                 implementation(libs.androidx.activity.compose)
             }

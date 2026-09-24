@@ -21,6 +21,8 @@ import io.github.woodsmarshes.chat.db.GroupProfileEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.ParticipantEntity
 import io.github.woodsmarshes.chat.db.UserEntity
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 import kotlin.uuid.Uuid
@@ -103,29 +105,52 @@ expect suspend fun provideDbDriver(
     dbName: String,
 ): SqlDriver
 
+/**
+ * Lazily opens one SQLDelight database per logged-in user. DAOs are process
+ * singletons that call [getActiveDatabase] on every use, so swapping users
+ * swaps the underlying driver without rebuilding the DI graph.
+ *
+ * Open/close are serialized with a mutex; concurrent get-or-create and close
+ * (e.g. logout racing a token refresh) can no longer close a driver that was
+ * just handed out.
+ */
 class DatabaseHolder(
     private val platformContext: PlatformContext,
 ) {
+    private val mutex = Mutex()
     private var currentDb: ChatDatabase? = null
     private var currentDriver: SqlDriver? = null
     private var currentUserId: Uuid? = null
 
-    suspend fun getOrCreateDatabase(userId: Uuid): ChatDatabase {
+    suspend fun getOrCreateDatabase(userId: Uuid): ChatDatabase = mutex.withLock {
         if (currentUserId == userId && currentDb != null) {
-            return currentDb!!
+            return@withLock currentDb!!
         }
 
-        closeDatabase()
+        closeLocked()
 
         val dbName = "chat_${userId}.db"
         currentDb = createDatabase { schema ->
             provideDbDriver(schema, platformContext, dbName).also { currentDriver = it }
         }
         currentUserId = userId
-        return currentDb!!
+        currentDb!!
     }
 
-    fun closeDatabase() {
+    /**
+     * Closes the active database only when it still belongs to [userId].
+     * Guards the logout grace window: if another user logged in while the
+     * authenticated UI was tearing down, their freshly opened database must
+     * not be closed by a stale logout sequence.
+     */
+    suspend fun closeDatabaseIfCurrent(userId: Uuid) = mutex.withLock {
+        if (currentUserId == userId) {
+            closeLocked()
+        }
+    }
+
+    /** Must be called while holding [mutex]. */
+    private fun closeLocked() {
         currentDriver?.close()
         currentDriver = null
         currentDb = null

@@ -66,9 +66,10 @@ fun connectToPostgresDatabase(config: DatabaseConfig): Database {
         username = config.username
         password = config.password
         maximumPoolSize = 10
-        // as of version 0.46.0, if these options are set here, they do not need to be duplicated in DatabaseConfig
+        // READ_COMMITTED: SERIALIZABLE aborts concurrent OLTP writes with
+        // serialization failures that nothing retries.
         isReadOnly = false
-        transactionIsolation = "TRANSACTION_SERIALIZABLE"
+        transactionIsolation = "TRANSACTION_READ_COMMITTED"
     }
     val dataSource = HikariDataSource(hikariConfig)
     return Database.connect(

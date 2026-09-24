@@ -114,6 +114,11 @@ fun ResultRow.toArticle(user: SimpleUser? = null): Article = Article(
     createdAt = this[Articles.createdAt],
     updatedAt = this[Articles.updatedAt],
     publishedAt = this[Articles.publishedAt],
+    // deletedAt must round-trip, otherwise soft-deleted articles stay readable
+    deletedAt = this[Articles.deletedAt],
+    slug = this[Articles.slug],
+    coverImage = this[Articles.coverImage],
+    stats = this[Articles.stats],
 )
 
 fun ResultRow.toSimpleUser() = SimpleUser(

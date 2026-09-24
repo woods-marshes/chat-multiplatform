@@ -25,6 +25,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
+import com.github.woodsmarshes.chat.utils.dbQuery
 import com.github.woodsmarshes.chat.repository.UserRepository
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -40,8 +41,11 @@ class ConversationLifecycleService(
     suspend fun createConversation(userId: Uuid, req: CreateConversationRequest): Result<Conversation, ConversationError> = coroutineBinding {
         val conversation = when (req) {
             is CreateGroupRequest -> {
-                val metadata = GroupMetadata()
-                conversationRepository.insertConversation(ConversationType.GROUP, metadata).also { conv ->
+                var invitedParticipants: List<ConversationParticipant> = emptyList()
+                // Conversation + group profile + owner membership + invites
+                // commit atomically; events fire after the transaction ends.
+                val created = dbQuery {
+                    val conv = conversationRepository.insertConversation(ConversationType.GROUP, GroupMetadata())
                     groupProfileRepository.initGroupProfile(
                         conversationId = conv.id,
                         name = req.name,
@@ -50,7 +54,7 @@ class ConversationLifecycleService(
                         settings = req.settings,
                         description = req.description,
                         avatarUrl = req.avatar
-                    ) ?: Err(ConversationError.OperationFailed).bind()
+                    ) ?: return@dbQuery null
                     conversationParticipantRepository.insertConversationParticipant(
                         ConversationParticipant(
                             conversationId = conv.id,
@@ -60,24 +64,26 @@ class ConversationLifecycleService(
                             joinedAt = Clock.System.now(),
                             settings = ParticipantSettings(),
                         )
-                    ) ?: Err(ConversationError.OperationFailed).bind()
+                    ) ?: return@dbQuery null
                     if (req.memberIds.isNotEmpty()) {
                         val friendIds = req.memberIds.intersect(contactRepository.getFriendIds(userId).toSet())
-                        val invited = conversationParticipantRepository.inviteUsersToConversation(
+                        invitedParticipants = conversationParticipantRepository.inviteUsersToConversation(
                             conv.id, userId, friendIds
                         )
-                        if (invited.isNotEmpty()) {
-                            eventBus.publishConversationEvent(
-                                ConversationEvent.UserJoinedConversation(
-                                    conversationId = conv.id,
-                                    userId = invited.map { it.userId },
-                                    inviterId = userId,
-                                    timestamp = Clock.System.now()
-                                )
-                            )
-                        }
                     }
+                    conv
+                } ?: Err(ConversationError.OperationFailed).bind()
+                if (invitedParticipants.isNotEmpty()) {
+                    eventBus.publishConversationEvent(
+                        ConversationEvent.UserJoinedConversation(
+                            conversationId = created.id,
+                            userId = invitedParticipants.map { it.userId },
+                            inviterId = userId,
+                            timestamp = Clock.System.now()
+                        )
+                    )
                 }
+                created
             }
 
             is CreatePrivateRequest -> {
@@ -86,32 +92,40 @@ class ConversationLifecycleService(
                 if (existingConversation != null) {
                     existingConversation
                 } else {
-                    val metadata = PrivateMetadata()
-                    conversationRepository.insertConversation(ConversationType.PRIVATE, metadata).also { conv ->
-                        val participants = listOf(
-                            ConversationParticipant(
-                                conversationId = conv.id, userId = userId,
-                                role = ConversationRole.PARTICIPANT, lastReadMessageId = null,
-                                joinedAt = Clock.System.now(), settings = ParticipantSettings(),
-                            ),
-                            ConversationParticipant(
-                                conversationId = conv.id, userId = req.targetUserId,
-                                role = ConversationRole.PARTICIPANT, lastReadMessageId = null,
-                                joinedAt = Clock.System.now(), settings = ParticipantSettings(),
-                            )
-                        )
-                        participants.forEach { participant ->
-                            conversationParticipantRepository.insertConversationParticipant(participant)
-                        }
+                    var createdNew = false
+                    val conversation = dbQuery {
+                        conversationRepository.getExistingPrivateConversation(userId, req.targetUserId)
+                            ?: conversationRepository.insertConversation(ConversationType.PRIVATE, PrivateMetadata())
+                                .also { conv ->
+                                    createdNew = true
+                                    val participants = listOf(
+                                        ConversationParticipant(
+                                            conversationId = conv.id, userId = userId,
+                                            role = ConversationRole.PARTICIPANT, lastReadMessageId = null,
+                                            joinedAt = Clock.System.now(), settings = ParticipantSettings(),
+                                        ),
+                                        ConversationParticipant(
+                                            conversationId = conv.id, userId = req.targetUserId,
+                                            role = ConversationRole.PARTICIPANT, lastReadMessageId = null,
+                                            joinedAt = Clock.System.now(), settings = ParticipantSettings(),
+                                        )
+                                    )
+                                    participants.forEach { participant ->
+                                        conversationParticipantRepository.insertConversationParticipant(participant)
+                                    }
+                                }
+                    }
+                    if (createdNew) {
                         eventBus.publishConversationEvent(
                             ConversationEvent.UserJoinedConversation(
-                                conversationId = conv.id,
+                                conversationId = conversation.id,
                                 userId = listOf(req.targetUserId),
                                 inviterId = userId,
                                 timestamp = Clock.System.now()
                             )
                         )
                     }
+                    conversation
                 }
             }
         }

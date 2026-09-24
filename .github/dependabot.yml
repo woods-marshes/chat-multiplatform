@@ -1,0 +1,59 @@
+# Dependabot 依赖自动更新配置
+# 文档: https://docs.github.com/zh/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+
+updates:
+  # ── GitHub Actions（checkout / setup-node / setup-java 等）─────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── Gradle（含 gradle/libs.versions.toml Version Catalog）──────────────
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # ── tiptap-bridge (npm) ────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/tiptap-bridge"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-tiptap-minor:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── collab-server (npm) ────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/collab-server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm-collab-minor:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── 根 Dockerfile 基础镜像（gradle / temurin / alpine）─────────────────
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # ── collab-server Dockerfile 基础镜像 ──────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/collab-server"
+    schedule:
+      interval: "weekly"

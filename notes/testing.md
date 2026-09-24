@@ -16,7 +16,7 @@
 |---|---|
 | 运行全部测试 | `./gradlew check` |
 | 服务端测试 | `./gradlew :server:test` |
-| 编译检查（客户端） | `./gradlew :composeApp:jvmMainClasses` |
+| 编译检查（客户端） | `./gradlew :desktopApp:compileKotlin` |
 
 ## 各模块测试配置
 

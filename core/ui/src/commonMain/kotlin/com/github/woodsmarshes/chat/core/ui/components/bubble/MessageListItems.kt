@@ -41,6 +41,11 @@ fun LazyListScope.messageItems(
     onFileClick: ((FileContent) -> Unit)? = null,
     onRetry: ((MessageUiModel) -> Unit)? = null,
     onReply: ((MessageUiModel) -> Unit)? = null,
+    onAvatarClick: ((MessageUiModel) -> Unit)? = null,
+    selectionActive: Boolean = false,
+    selectedIds: Set<Uuid> = emptySet(),
+    onToggleSelection: ((MessageUiModel) -> Unit)? = null,
+    menuContent: (@Composable (message: MessageUiModel, dismiss: () -> Unit) -> Unit)? = null,
 ) {
     items(
         count = itemCount,
@@ -53,6 +58,7 @@ fun LazyListScope.messageItems(
     ) { index ->
         val message = itemProvider(index) ?: return@items
         val isOwn = ownUserId != null && message.sender?.id == ownUserId
+        val selected = selectionActive && message.id in selectedIds
 
         val content: @Composable () -> Unit = {
             MessageBubbleContent(
@@ -76,7 +82,13 @@ fun LazyListScope.messageItems(
         if (isOwn) {
             OwnMessageContainer(
                 message = message,
-                onReply = if (onReply != null) {{ onReply(message) }} else null,
+                onReply = onReply?.let { { onReply(message) } },
+                selectionActive = selectionActive,
+                selected = selected,
+                onToggleSelection = onToggleSelection?.let { { it(message) } },
+                menuContent = menuContent?.let { content ->
+                    { dismiss -> content(message, dismiss) }
+                },
                 content = content,
             )
         } else {
@@ -84,7 +96,14 @@ fun LazyListScope.messageItems(
                 message = message,
                 showAvatar = true,
                 showSenderName = true,
-                onReply = if (onReply != null) {{ onReply(message) }} else null,
+                onReply = onReply?.let { { onReply(message) } },
+                onAvatarClick = onAvatarClick?.let { click -> { click(message) } },
+                selectionActive = selectionActive,
+                selected = selected,
+                onToggleSelection = onToggleSelection?.let { { it(message) } },
+                menuContent = menuContent?.let { content ->
+                    { dismiss -> content(message, dismiss) }
+                },
                 content = content,
             )
         }

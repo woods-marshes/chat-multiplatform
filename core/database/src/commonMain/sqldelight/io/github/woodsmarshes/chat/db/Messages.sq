@@ -82,8 +82,6 @@ FROM (
 WHERE page_boundary = 1;
 
 -- 区间查询(uuid v7):
-
-
 keyedMessagesWithRelations:
 SELECT m.*,
     u.username AS senderUsername,

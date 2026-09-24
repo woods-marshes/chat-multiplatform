@@ -181,20 +181,20 @@ class NotesApi(private val client: HttpClient) {
 2. **定位**：用 `Grep` 搜索相关代码路径，阅读关键文件
 3. **诊断**：添加临时日志（`KotlinLogging`）确认根因
 4. **修复**：最小化改动，遵循现有代码风格
-5. **验证**：`./gradlew :composeApp:jvmMainClasses` 编译通过
-6. **测试**：运行 `./gradlew :server:run` + `./gradlew :composeApp:run` 端到端验证
+5. **验证**：`./gradlew :desktopApp:compileKotlin` 编译通过
+6. **测试**：运行 `./gradlew :server:run` + `./gradlew :desktopApp:run` 端到端验证
 
 ## 常用诊断命令
 
 ```bash
 # 编译检查
-./gradlew :composeApp:jvmMainClasses
+./gradlew :desktopApp:compileKotlin
 
 # 服务端编译 + 运行
 ./gradlew :server:run
 
 # 无配置缓存（遇到异常时）
-./gradlew :composeApp:jvmMainClasses --no-configuration-cache
+./gradlew :desktopApp:compileKotlin --no-configuration-cache
 
 # 检查 Koin 依赖图
 # 如果启动时报 NoDefinitionFoundException，检查 DI 注册顺序是否正确

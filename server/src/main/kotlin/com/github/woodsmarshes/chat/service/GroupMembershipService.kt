@@ -5,6 +5,7 @@ import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.RequestStatus
@@ -19,6 +20,7 @@ import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
 import com.github.woodsmarshes.chat.repository.GroupJoinRequestRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
+import com.github.woodsmarshes.chat.utils.dbQuery
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -106,6 +108,18 @@ class GroupMembershipService(
     }
 
     suspend fun leaveGroup(conversationId: Uuid, userId: Uuid): Result<Unit, ConversationError> = coroutineBinding {
+        val (conversation, _) = conversationRepository.getConversationWithGroupProfile(conversationId)
+            ?: Err(ConversationError.NotFound).bind()
+        if (conversation.type != ConversationType.GROUP) {
+            Err(ConversationError.InvalidRequest).bind()
+        }
+        val participant = conversationParticipantRepository.getConversationParticipant(
+            conversationId = conversationId, userId = userId
+        ) ?: Err(ConversationError.NotParticipant).bind()
+        if (participant.role == ConversationRole.OWNER) {
+            // The owner cannot leave: doing so would orphan the group.
+            Err(ConversationError.PermissionDenied).bind()
+        }
         val success = conversationParticipantRepository.deleteConversationParticipant(conversationId, userId)
         if (success) {
             eventBus.publishConversationEvent(
@@ -168,8 +182,12 @@ class GroupMembershipService(
         val conversationIds = joinRequests.map { it.conversationId }.distinct()
         val participants = conversationParticipantRepository.getConversationParticipants(adminId, conversationIds)
             .associateBy { it.conversationId }
-        participants.forEach { (_, participant) ->
-            if (participant.role !in setOf(ConversationRole.ADMIN, ConversationRole.OWNER)) {
+        // Every requested conversation must be covered by the admin's own
+        // participant rows; a missing row means the caller has no role there.
+        conversationIds.forEach { conversationId ->
+            val role = participants[conversationId]?.role
+                ?: Err(ConversationError.NotParticipant).bind()
+            if (role !in setOf(ConversationRole.ADMIN, ConversationRole.OWNER)) {
                 Err(ConversationError.PermissionDenied).bind()
             }
         }
@@ -181,35 +199,42 @@ class GroupMembershipService(
                 }
             )
         }
-        val success = groupJoinRequestRepository.updateGroupJoinRequests(adminId, updates)
-        if (!success) {
-            Err(ConversationError.OperationFailed).bind()
-        }
-        val approvedRequests = requests.filter { it.action == GroupJoinRequestAction.APPROVE }
-        approvedRequests.forEach { request ->
-            val joinRequest = joinRequests.find { it.id == request.groupJoinRequestId }
-                ?: Err(ConversationError.RequestNotFound).bind()
+        // Status updates and approval invites commit atomically; events fire
+        // after the transaction ends so subscribers never observe half-applied
+        // batches.
+        val approvedJoinRequests = dbQuery {
+            val success = groupJoinRequestRepository.updateGroupJoinRequests(adminId, updates)
+            if (!success) {
+                null
+            } else {
+                requests.mapNotNull { request ->
+                    if (request.action != GroupJoinRequestAction.APPROVE) return@mapNotNull null
+                    val joinRequest = joinRequests.find { it.id == request.groupJoinRequestId }
+                        ?: return@dbQuery null
+                    conversationParticipantRepository.inviteUserToConversation(
+                        conversationId = joinRequest.conversationId, inviterId = adminId,
+                        userId = joinRequest.applicantId
+                    )
+                    joinRequest
+                }
+            }
+        } ?: Err(ConversationError.OperationFailed).bind()
+        approvedJoinRequests.forEach { joinRequest ->
             eventBus.publishConversationEvent(
                 ConversationEvent.GroupJoinRequestHandled(
                     requestId = joinRequest.id, conversationId = joinRequest.conversationId,
                     applicantId = joinRequest.applicantId, handlerId = adminId,
-                    approved = joinRequest.status == RequestStatus.ACCEPTED,
+                    approved = true,
                     reason = joinRequest.message, timestamp = Clock.System.now()
                 )
             )
-            val invited = conversationParticipantRepository.inviteUserToConversation(
-                conversationId = joinRequest.conversationId, inviterId = adminId,
-                userId = joinRequest.applicantId
-            )
-            if (invited != null) {
-                eventBus.publishConversationEvent(
-                    ConversationEvent.UserJoinedConversation(
-                        conversationId = invited.conversationId,
-                        userId = listOf(invited.userId), inviterId = null,
-                        timestamp = Clock.System.now()
-                    )
+            eventBus.publishConversationEvent(
+                ConversationEvent.UserJoinedConversation(
+                    conversationId = joinRequest.conversationId,
+                    userId = listOf(joinRequest.applicantId), inviterId = null,
+                    timestamp = Clock.System.now()
                 )
-            }
+            )
         }
     }
 }

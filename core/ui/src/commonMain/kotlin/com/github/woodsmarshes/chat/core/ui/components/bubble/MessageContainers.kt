@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -19,21 +20,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -54,12 +62,17 @@ val REPLY_THRESHOLD_DP = 80.dp
  * Container for the user's own messages.
  *
  * Right-aligned. Swipe-left triggers reply. Handles send-status display.
+ * Supports tap/long-press/right-click message actions and multi-select.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OwnMessageContainer(
     message: MessageUiModel,
     onReply: (() -> Unit)? = null,
+    selectionActive: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
+    menuContent: (@Composable (dismiss: () -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -68,13 +81,37 @@ fun OwnMessageContainer(
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     var showReplyHint by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    // Gesture handlers read these through rememberUpdatedState so the
+    // pointerInput below can stay keyed on Unit: restarting the event loop
+    // on every recomposition would drop in-flight presses.
+    val currentMenuContent by rememberUpdatedState(menuContent)
+    val currentToggleSelection by rememberUpdatedState(onToggleSelection)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                else Color.Transparent,
+            )
             .padding(horizontal = 12.dp, vertical = 4.dp),
         contentAlignment = Alignment.CenterEnd,
     ) {
+        if (selectionActive) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 8.dp)
+                    .size(22.dp),
+            )
+        }
+
         // Reply icon visible when swiped past threshold
         if (showReplyHint && onReply != null) {
             Icon(
@@ -124,6 +161,43 @@ fun OwnMessageContainer(
                             )
                         }
                     } else Modifier
+                )
+                .then(
+                    if (menuContent != null || selectionActive) {
+                        Modifier
+                            .combinedClickable(
+                                onClick = {
+                                    when {
+                                        selectionActive -> onToggleSelection?.invoke()
+                                        menuContent != null -> menuExpanded = true
+                                    }
+                                },
+                                onLongClick = { onToggleSelection?.invoke() },
+                            )
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        if (event.type == PointerEventType.Press) {
+                                            when {
+                                                // Desktop right-click: message menu.
+                                                event.buttons.isSecondaryPressed && currentMenuContent != null -> {
+                                                    menuExpanded = true
+                                                    event.changes.forEach { it.consume() }
+                                                }
+                                                // Desktop Ctrl+click: toggle selection.
+                                                event.changes.firstOrNull()?.pressed == true &&
+                                                    event.keyboardModifiers.isCtrlPressed &&
+                                                    currentToggleSelection != null -> {
+                                                    currentToggleSelection?.invoke()
+                                                    event.changes.forEach { it.consume() }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                    } else Modifier
                 ),
         ) {
             content()
@@ -133,6 +207,15 @@ fun OwnMessageContainer(
                 isOwnMessage = true,
             )
         }
+
+        if (menuContent != null) {
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                menuContent { menuExpanded = false }
+            }
+        }
     }
 }
 
@@ -141,6 +224,7 @@ fun OwnMessageContainer(
  *
  * Left-aligned with avatar and sender name. Swipe-right triggers reply.
  * On desktop (no touch), right-click triggers reply.
+ * Supports tap/long-press/right-click message actions and multi-select.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -149,6 +233,11 @@ fun OtherMessageContainer(
     showAvatar: Boolean = true,
     showSenderName: Boolean = true,
     onReply: (() -> Unit)? = null,
+    onAvatarClick: (() -> Unit)? = null,
+    selectionActive: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
+    menuContent: (@Composable (dismiss: () -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -157,6 +246,12 @@ fun OtherMessageContainer(
     val coroutineScope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     var showReplyHint by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    // Same rationale as in OwnMessageContainer: Unit-keyed pointerInput with
+    // remembered-current callbacks instead of restart-on-recomposition.
+    val currentMenuContent by rememberUpdatedState(menuContent)
+    val currentToggleSelection by rememberUpdatedState(onToggleSelection)
 
     val sender = message.sender
     val bubbleColors = LocalBubbleColors.current
@@ -164,16 +259,39 @@ fun OtherMessageContainer(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                else Color.Transparent,
+            )
             .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.Top,
     ) {
-        if (showAvatar) {
-            UserAvatar(
-                name = sender?.displayName ?: sender?.username ?: "?",
-                avatarUrl = sender?.avatarUrl,
-                size = 36.dp,
+        if (selectionActive) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier
+                    .align(Alignment.CenterVertically)
+                    .padding(end = 8.dp)
+                    .size(22.dp),
             )
+        }
+
+        if (showAvatar) {
+            Box(
+                modifier = Modifier.clickable(enabled = onAvatarClick != null) {
+                    onAvatarClick?.invoke()
+                },
+            ) {
+                UserAvatar(
+                    name = sender?.displayName ?: sender?.username ?: "?",
+                    avatarUrl = sender?.avatarUrl,
+                    size = 36.dp,
+                )
+            }
             Spacer(modifier = Modifier.width(8.dp))
         }
 
@@ -228,22 +346,56 @@ fun OtherMessageContainer(
                             }
                         } else Modifier
                     )
-                    // Right-click for reply on desktop
                     .then(
-                        if (onReply != null) {
-                            Modifier.combinedClickable(
-                                onClick = {},
-                                onLongClick = { onReply() },
-                            )
+                        if (menuContent != null || selectionActive) {
+                            Modifier
+                                .combinedClickable(
+                                    onClick = {
+                                        when {
+                                            selectionActive -> onToggleSelection?.invoke()
+                                            menuContent != null -> menuExpanded = true
+                                        }
+                                    },
+                                    onLongClick = { onToggleSelection?.invoke() },
+                                )
+                                .pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            if (event.type == PointerEventType.Press) {
+                                                when {
+                                                    // Desktop right-click: message menu.
+                                                    event.buttons.isSecondaryPressed && currentMenuContent != null -> {
+                                                        menuExpanded = true
+                                                        event.changes.forEach { it.consume() }
+                                                    }
+                                                    // Desktop Ctrl+click: toggle selection.
+                                                    event.changes.firstOrNull()?.pressed == true &&
+                                                        event.keyboardModifiers.isCtrlPressed &&
+                                                        currentToggleSelection != null -> {
+                                                        currentToggleSelection?.invoke()
+                                                        event.changes.forEach { it.consume() }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                         } else Modifier
                     ),
             ) {
                 if (showSenderName && sender != null) {
                     val s = sender
-                    MessageSenderName(
-                        name = s.displayName ?: s.username,
-                        role = s.role?.name,
-                    )
+                    Box(
+                        modifier = Modifier.clickable(enabled = onAvatarClick != null) {
+                            onAvatarClick?.invoke()
+                        },
+                    ) {
+                        MessageSenderName(
+                            name = s.displayName ?: s.username,
+                            role = s.role?.name,
+                        )
+                    }
                 }
                 content()
                 MessageTimestamp(
@@ -251,6 +403,15 @@ fun OtherMessageContainer(
                     sendStatus = message.sendStatus,
                     isOwnMessage = false,
                 )
+            }
+        }
+
+        if (menuContent != null) {
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                menuContent { menuExpanded = false }
             }
         }
     }

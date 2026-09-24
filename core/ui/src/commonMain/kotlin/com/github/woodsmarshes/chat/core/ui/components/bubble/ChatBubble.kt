@@ -49,15 +49,20 @@ fun MessageBubbleContent(
             isPlaying = videoIsPlaying,
             onPlayClick = onVideoPlayClick,
         )
-        MessageRenderType.AUDIO -> AudioBubble(
-            content = content as? AudioContent,
-            isOwnMessage = isOwnMessage,
-            state = audioState,
-            onPlayPauseToggle = if (onAudioPlayPauseClick != null)
-                {{ onAudioPlayPauseClick(content as? AudioContent ?: return@AudioBubble) }}
-            else null,
-            onSeek = null, // wiring left to caller
-        )
+        MessageRenderType.AUDIO -> {
+            val audioContent = content as? AudioContent
+            AudioBubble(
+                content = audioContent,
+                isOwnMessage = isOwnMessage,
+                state = audioState,
+                onPlayPauseToggle = if (audioContent == null) {
+                    null
+                } else {
+                    onAudioPlayPauseClick?.let { click -> { click(audioContent) } }
+                },
+                onSeek = null, // wiring left to caller
+            )
+        }
         MessageRenderType.FILE -> FileBubble(
             content = content as? FileContent,
             isOwnMessage = isOwnMessage,

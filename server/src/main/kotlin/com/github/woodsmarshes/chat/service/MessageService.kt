@@ -85,7 +85,11 @@ class MessageService(
             content
         }
         try {
-            val message = messageRepository.insertMessage(
+            // (message, isNew): an outbox resend with an already-persisted
+            // requestId returns the existing row; conversation state is not
+            // touched twice and the broadcast is skipped — the resender still
+            // gets its ack because the event below is emitted either way.
+            val inserted = messageRepository.insertMessage(
                 conversationId = conversationId,
                 senderId = userId,
                 content = trustedContent,
@@ -94,8 +98,11 @@ class MessageService(
                     is Normal -> MessageCategory.NORMAL
                 },
                 renderType = determineRenderType(trustedContent),
-                replyToMessageId = replyToMessageId
-            )?.copy(
+                replyToMessageId = replyToMessageId,
+                requestId = Uuid.parseOrNull(requestId)
+            ) ?: Err(MessageError.OperationFailed).bind()
+
+            val message = inserted.first.copy(
                 sender = SimpleUser(
                     id = user.id,
                     username = user.username,
@@ -113,7 +120,7 @@ class MessageService(
                     lastReadMessageId = participant.lastReadMessageId,
                     mutedUntil = participant.mutedUntil
                 )
-            ) ?: Err(MessageError.OperationFailed).bind()
+            )
 
             eventBus.publishMessageEvent(
                 MessageEvent.SendMessage(
@@ -198,6 +205,8 @@ class MessageService(
     suspend fun getReadMessageUsers(userId: Uuid, messageId: Uuid): Result<List<User>, MessageError> = coroutineBinding {
         // 1. 获取消息和已读用户
         val (message, readUsers) = messageRepository.getReadMessageUsers(messageId)
+            // Missing message -> typed 404 instead of an escaping 500.
+            ?: Err(MessageError.MessageNotFound).bind()
 
         // 2. 检查用户是否在会话中
         checkIfUserInConversation(conversationId = message.conversationId, userId = userId).bind()
@@ -211,6 +220,7 @@ class MessageService(
      */
     suspend fun isMessageReadByUser(userId: Uuid, messageId: Uuid): Result<Boolean, MessageError> = coroutineBinding {
         val (message, readUsers) = messageRepository.getReadMessageUsers(messageId)
+            ?: Err(MessageError.MessageNotFound).bind()
 
         checkIfUserInConversation(conversationId = message.conversationId, userId = userId).bind()
 
@@ -281,7 +291,12 @@ class MessageService(
         }
     }
 
-    fun onUserTyping(senderId: Uuid, conversationId: Uuid, isTyping: Boolean) {
+    suspend fun onUserTyping(senderId: Uuid, conversationId: Uuid, isTyping: Boolean) {
+        // Membership guard: otherwise any authenticated user could spoof
+        // typing indicators into a conversation they do not belong to.
+        if (conversationParticipantRepository.getConversationParticipant(senderId, conversationId) == null) {
+            return
+        }
         eventBus.publishMessageEvent(
             MessageEvent.UserTyping(
                 conversationId = conversationId,

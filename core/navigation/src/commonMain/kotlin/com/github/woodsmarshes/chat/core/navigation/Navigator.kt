@@ -43,7 +43,10 @@ class Navigator(val state: NavigationState) {
      */
     fun goBack() {
         when (state.currentKey) {
-            state.startKey -> error("You cannot go back from the start route")
+            // Already at the app's start route: nothing to pop. A no-op lets
+            // the system default (exiting the app) happen naturally if
+            // NavDisplay ever invokes onBack here; erroring would crash.
+            state.startKey -> Unit
             state.currentTopLevelKey -> {
                 // We're at the base of the current sub stack, go back to the previous top level
                 // stack.
@@ -58,6 +61,16 @@ class Navigator(val state: NavigationState) {
      */
     private fun goToKey(key: NavKey) {
         state.currentSubStack.apply {
+            // In-place detail update (Material list-detail pattern): when the
+            // visible top entry is a detail of the same kind, selecting another
+            // item replaces it instead of stacking, so the detail pane swaps
+            // content and back returns to the list in a single step. Different
+            // kinds still push (article -> editor, chat -> profile, search ->
+            // chat) so their back stacks stay meaningful.
+            val top = lastOrNull()
+            if (top != null && top !in state.topLevelKeys && top::class == key::class) {
+                removeAt(lastIndex)
+            }
             // Remove it if it's already in the stack so it's added at the end.
             remove(key)
             add(key)

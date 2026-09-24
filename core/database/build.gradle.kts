@@ -5,8 +5,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.core.database"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.core.database"
+        }
     }
 
     sourceSets {
@@ -33,7 +35,7 @@ kotlin {
             }
         }
 
-        androidMain {
+        matching { it.name == "androidMain" }.configureEach {
             dependencies {
                 implementation(libs.sqldelight.android.driver)
             }

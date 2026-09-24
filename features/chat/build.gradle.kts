@@ -5,8 +5,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.feature.chat"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.feature.chat"
+        }
     }
 
     sourceSets {
@@ -21,6 +23,10 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.androidx.paging.common)
             implementation(libs.androidx.paging.compose)
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

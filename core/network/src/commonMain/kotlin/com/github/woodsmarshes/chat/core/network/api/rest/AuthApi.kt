@@ -42,7 +42,7 @@ class AuthApi (
         }.body()
     }
 
-    suspend fun refreshToken() {
-        client.post(V1.Auth.Refresh()) {}
+    suspend fun refreshToken(): AuthResponse {
+        return client.post(V1.Auth.Refresh()) {}.body()
     }
 }

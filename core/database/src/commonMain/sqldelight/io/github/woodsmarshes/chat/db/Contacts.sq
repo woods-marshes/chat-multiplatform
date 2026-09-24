@@ -43,9 +43,16 @@ ON CONFLICT(contact_id) DO UPDATE SET
 getAllContactsWithUserInfo:
 SELECT
     C.*,
-    U.username,
-    U.display_name,
-    U.avatar
+    U.id AS u_id,
+    U.username AS u_username,
+    U.email AS u_email,
+    U.display_name AS u_display_name,
+    U.avatar AS u_avatar,
+    U.bio AS u_bio,
+    U.created_at AS u_created_at,
+    U.updated_at AS u_updated_at,
+    U.deleted_at AS u_deleted_at,
+    U.role AS u_role
 FROM ContactEntity AS C
 JOIN UserEntity AS U ON C.contact_id = U.id
 WHERE C.status = 'FRIEND'
@@ -64,8 +71,16 @@ SELECT * FROM ContactEntity WHERE status = 'BLOCKED';
 searchContacts:
 SELECT
     C.*,
-    U.display_name,
-    U.username
+    U.id AS u_id,
+    U.username AS u_username,
+    U.email AS u_email,
+    U.display_name AS u_display_name,
+    U.avatar AS u_avatar,
+    U.bio AS u_bio,
+    U.created_at AS u_created_at,
+    U.updated_at AS u_updated_at,
+    U.deleted_at AS u_deleted_at,
+    U.role AS u_role
 FROM ContactEntity AS C
 JOIN UserEntity AS U ON C.contact_id = U.id
 WHERE

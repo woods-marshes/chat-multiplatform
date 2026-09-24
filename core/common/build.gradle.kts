@@ -3,8 +3,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.core.common"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.core.common"
+        }
     }
 
     sourceSets {
@@ -17,8 +19,14 @@ kotlin {
             api(libs.kotlin.result)
             api(libs.kotlin.result.coroutines)
         }
-        androidMain.dependencies {
-            api(libs.koin.android)
+        matching { it.name == "androidMain" }.configureEach {
+            dependencies {
+                api(libs.koin.android)
+            }
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

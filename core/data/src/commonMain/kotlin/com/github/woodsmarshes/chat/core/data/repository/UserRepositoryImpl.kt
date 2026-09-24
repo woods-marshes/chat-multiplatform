@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.data.model.toUser
 import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
@@ -17,6 +18,7 @@ import com.github.woodsmarshes.chat.core.network.ktor.HttpEventBus
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -105,6 +107,9 @@ class UserRepositoryImpl(
             userDao.insertUser(user.toUserEntity())
         }
     }
+
+    override fun getUserFlow(userId: Uuid): Flow<User?> =
+        userDao.getUserById(userId).map { it?.toUser() }
 
     override suspend fun searchUsers(keyword: String): Result<List<User>, UserError> = coroutineBinding {
         bindApi(UserError::Unknown) {

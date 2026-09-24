@@ -3,13 +3,10 @@
 # =============================================================
 FROM gradle:9.5.1-jdk25 AS build
 
-ARG GITHUB_ACTOR
-ARG GITHUB_TOKEN
-
 USER root
 RUN apt update && \
     apt install -y --no-install-recommends curl ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 USER gradle
@@ -29,9 +26,7 @@ COPY --chown=gradle:gradle . .
 
 # uid=1000/gid=1000 确保 gradle 用户对挂载的缓存目录有读写权限
 RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
-    ./gradlew :server:buildFatJar --no-daemon
-
-RUN jar tf /home/gradle/src/server/build/libs/fat.jar | grep -E '\.(html|css|js)$' | head -20
+    ./gradlew :server:buildFatJar -PenableAndroid=false --no-daemon
 
 FROM eclipse-temurin:25-jre-alpine AS runtime
 

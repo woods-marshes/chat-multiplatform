@@ -41,14 +41,23 @@ import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 interface MessageRepository {
+    /**
+     * Persists a message and returns `(message, isNew)`.
+     *
+     * When [requestId] is supplied (client outbox resend), it becomes the
+     * message primary key so retries are idempotent: an already-persisted
+     * request returns the existing row with `isNew = false` and leaves
+     * conversation state untouched.
+     */
     suspend fun insertMessage(
         conversationId: Uuid,
         senderId: Uuid,
         content: MessageContent,
         category: MessageCategory,
         renderType: MessageRenderType,
-        replyToMessageId: Uuid? = null
-    ): Message?
+        replyToMessageId: Uuid? = null,
+        requestId: Uuid? = null,
+    ): Pair<Message, Boolean>?
 
     suspend fun getHistory(
         conversationId: Uuid,
@@ -70,7 +79,7 @@ interface MessageRepository {
     suspend fun getMessageRevokeContext(userId: Uuid, messageId: Uuid): Triple<Pair<Uuid, Message>, ConversationParticipant, Conversation>?
 
     suspend fun revokeMessage(messageId: Uuid): Boolean
-    suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>
+    suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>?
 }
 
 class MessageDataSourceImpl : MessageRepository {
@@ -81,7 +90,8 @@ class MessageDataSourceImpl : MessageRepository {
         category: MessageCategory,
         renderType: MessageRenderType,
         replyToMessageId: Uuid?,
-    ): Message? = dbQuery {
+        requestId: Uuid?,
+    ): Pair<Message, Boolean>? = dbQuery {
         val replyTo = replyToMessageId?.let {
             Messages
                 .innerJoin(Users)
@@ -123,7 +133,19 @@ class MessageDataSourceImpl : MessageRepository {
             }
         }
 
+        // Outbox resends reuse the client-generated id; the first insert wins
+        // and any later one is a no-op that returns the persisted message.
+        // (Check-then-insert: a concurrent duplicate would surface as a unique
+        // violation and simply fail that one request.)
+        if (requestId != null) {
+            val existing = Messages.selectAll().where { Messages.id eq requestId }.singleOrNull()
+            if (existing != null) {
+                return@dbQuery Pair(existing.toMessage(), false)
+            }
+        }
+
         Messages.insert {
+            if (requestId != null) it[Messages.id] = requestId
             it[Messages.conversationId] = conversationId
             it[Messages.senderId] = senderId
             it[Messages.content] = content
@@ -148,7 +170,7 @@ class MessageDataSourceImpl : MessageRepository {
                     it[Conversations.updatedAt] = Clock.System.now()
                 }
             }
-            ?.toMessage(replyTo = replyTo)
+            ?.let { row -> Pair(row.toMessage(replyTo = replyTo), true) }
     }
 
     override suspend fun getHistory(
@@ -327,7 +349,7 @@ class MessageDataSourceImpl : MessageRepository {
         } > 0
     }
 
-    override suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>> = dbQuery {
+    override suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>? = dbQuery<Pair<Message, List<User>>?> {
         val message = Messages
             .innerJoin(Users)
             .leftJoin(ConversationParticipants)
@@ -335,7 +357,7 @@ class MessageDataSourceImpl : MessageRepository {
             .where { Messages.id eq messageId }
             .singleOrNull()
             ?.toFilteredUser()
-            ?: throw IllegalArgumentException("Message not found")
+            ?: return@dbQuery null
 
         val readUsers = ConversationParticipants
             .innerJoin(Users)

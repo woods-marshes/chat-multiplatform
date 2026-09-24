@@ -21,7 +21,7 @@ import react.dom.html.ReactHTML.div
 import react.dom.html.ReactHTML.h1
 import react.dom.html.ReactHTML.p
 import react.dom.html.ReactHTML.span
-import react.useEffectOnce
+import react.useEffect
 import react.useState
 import web.cssom.ClassName
 
@@ -36,7 +36,10 @@ val ArticleViewPage = FC<Props> {
     var loading: Boolean by useState(true)
     var isOwn: Boolean by useState(false)
 
-    useEffectOnce {
+    // Keyed on the article id: without this, navigating between two articles
+    // kept the first one mounted and never refetched.
+    useEffect(articleId) {
+        loading = true
         if (articleId != null) {
             val id = try { Uuid.parse(articleId) } catch (e: Exception) { null }
             if (id != null) {

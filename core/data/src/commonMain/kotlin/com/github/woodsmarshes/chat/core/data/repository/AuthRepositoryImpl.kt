@@ -9,14 +9,16 @@ import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
+import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
+import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
-import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 
 class AuthRepositoryImpl(
     private val authTokenDataSource: AuthTokenDataSource,
@@ -25,41 +27,31 @@ class AuthRepositoryImpl(
     private val authApi: AuthApi,
     private val databaseHolder: DatabaseHolder,
 ) : AuthRepository {
-    private val log = KotlinLogging.logger {}
 
     override val jwtToken: Flow<String?> = authTokenDataSource.jwtToken
 
+    /**
+     * Pure mapping of persisted auth state: logged in means both a token and
+     * a usable cached user exist. Database opening is deliberately NOT done
+     * here — that is the SessionManager's job, driven by an eagerly collected
+     * session flow rather than whatever happens to be subscribed.
+     */
     override fun observeIsLoggedIn(): Flow<Boolean> {
-        return authTokenDataSource.jwtToken.map { jwt ->
-            val hasToken = !jwt.isNullOrEmpty()
-            if (hasToken) {
-                val cachedUser = userSettingDataSource.user.first()
-                if (cachedUser != null) {
-                    databaseHolder.getOrCreateDatabase(cachedUser.id)
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        }
+        return combine(
+            authTokenDataSource.jwtToken,
+            userSettingDataSource.user,
+        ) { jwt, user -> !jwt.isNullOrEmpty() && user != null }
     }
 
     override suspend fun login(
         email: String,
         password: String
     ): Result<User, AuthError> = coroutineBinding {
-        bindApi(AuthError::Unknown) {
+        val resp = bindApi(AuthError::Unknown) {
             authApi.login(email, password)
         }
-            .also { resp ->
-                userSettingDataSource.setUser(resp.user)
-                databaseHolder.getOrCreateDatabase(resp.user.id)
-                userDao.insertUser(resp.user.toUserEntity())
-                authTokenDataSource.setJwtToken(resp.accessToken)
-            }
-            .user
+        persistAuthResponse(resp)
+        resp.user
     }
 
     override suspend fun register(
@@ -67,21 +59,35 @@ class AuthRepositoryImpl(
         email: String,
         password: String
     ): Result<User, AuthError> = coroutineBinding {
-        bindApi(AuthError::Unknown) {
+        val resp = bindApi(AuthError::Unknown) {
             authApi.register(username, email, password)
         }
-            .also { resp ->
-                log.info { "[AuthRepositoryImpl]: register -> ${resp.toString()}" }
-                userSettingDataSource.setUser(resp.user)
-                databaseHolder.getOrCreateDatabase(resp.user.id)
-                userDao.insertUser(resp.user.toUserEntity())
-                authTokenDataSource.setJwtToken(resp.accessToken)
-            }
-            .user
+        persistAuthResponse(resp)
+        resp.user
     }
 
+    /**
+     * Persists user + token atomically: the token write is a single DataStore
+     * transaction and the user cache is written before the token, so a crash
+     * mid-way can only leave "user without token" (safe, treated as logged
+     * out) rather than "token without usable user".
+     */
+    private suspend fun persistAuthResponse(resp: AuthResponse) {
+        userSettingDataSource.setUser(resp.user)
+        databaseHolder.getOrCreateDatabase(resp.user.id)
+        userDao.insertUser(resp.user.toUserEntity())
+        authTokenDataSource.setToken(
+            AuthToken(jwtToken = resp.accessToken, refreshToken = null, expiryTimestamp = null)
+        )
+    }
+
+    /**
+     * Clears the persisted session only. Closing the per-user database is not
+     * done here: it belongs to the session owner (SessionManager), which can
+     * wait for the authenticated UI and its in-flight queries to tear down
+     * before the driver goes away.
+     */
     override suspend fun logout() {
-        databaseHolder.closeDatabase()
         userSettingDataSource.clearUserSetting()
         authTokenDataSource.clearAuthToken()
     }
@@ -96,15 +102,15 @@ class AuthRepositoryImpl(
             databaseHolder.getOrCreateDatabase(cachedUser.id)
             return Ok(cachedUser)
         }
+        // No cached user: refresh the token and persist the response so the
+        // next launch has a usable session instead of relying on a cache
+        // that never existed.
         return try {
-            authApi.refreshToken()
-            val user = userSettingDataSource.user.first()
-            if (user != null) {
-                databaseHolder.getOrCreateDatabase(user.id)
-                Ok(user)
-            } else {
-                Err(AuthError.InvalidCredentials)
-            }
+            val resp = authApi.refreshToken()
+            persistAuthResponse(resp)
+            Ok(resp.user)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Err(AuthError.Unknown(e.message))
         }

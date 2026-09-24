@@ -31,5 +31,8 @@ interface UserRepository {
 
     suspend fun fetchUserDetail(userId: Uuid): Result<User, UserError>
 
+    /** Offline-first stream of a cached user; null while nothing is stored. */
+    fun getUserFlow(userId: Uuid): Flow<User?>
+
     suspend fun searchUsers(keyword: String): Result<List<User>, UserError>
 }

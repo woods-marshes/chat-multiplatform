@@ -23,6 +23,7 @@ import com.github.woodsmarshes.chat.core.network.dto.article.UpdateArticleReques
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -66,7 +67,9 @@ class OfflineFirstArticleRepositoryImpl(
                     }
                     // Upsert to DB — will trigger re-emit via the collect
                     articleDao.upsert(networkArticle.toDBArticle())
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
                     log.error(e) { "Failed to fetch article $articleId: ${e.message}" }
                     emit(Err(ArticleError.NotFound))
                 }

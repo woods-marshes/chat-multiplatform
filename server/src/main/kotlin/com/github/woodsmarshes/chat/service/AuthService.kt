@@ -30,6 +30,9 @@ class AuthService(
     private val tokenConfig get() = appConfig.tokenConfig
 
     suspend fun register(request: RegisterRequest): Result<AuthResponse, AuthError> = coroutineBinding {
+        if (request.password.length < MIN_PASSWORD_LENGTH) {
+            Err(AuthError.WeakPassword).bind()
+        }
         if (userRepository.checkExists(request.email, request.username)) {
             Err(AuthError.UserAlreadyExists).bind()
         }
@@ -77,11 +80,13 @@ class AuthService(
     }
 
     suspend fun refreshToken(rawToken: String): Result<AuthResponse, AuthError> = coroutineBinding {
+        // An expired token must never mint a new one: without a dedicated
+        // refresh token there is otherwise a ~30-day sliding window on any
+        // stolen access token.
         val jwt = try {
             JWT.require(Algorithm.HMAC256(tokenConfig.secret))
                 .withAudience(tokenConfig.audience)
                 .withIssuer(tokenConfig.issuer)
-                .acceptExpiresAt(tokenConfig.expiresIn * 2) // Allow long-expired tokens
                 .build()
                 .verify(rawToken)
         } catch (e: Exception) {
@@ -96,5 +101,9 @@ class AuthService(
             TokenClaim(name = Keys.USER_ID, value = userId.toString()),
         )
         AuthResponse(user, newToken)
+    }
+
+    private companion object {
+        const val MIN_PASSWORD_LENGTH = 8
     }
 }

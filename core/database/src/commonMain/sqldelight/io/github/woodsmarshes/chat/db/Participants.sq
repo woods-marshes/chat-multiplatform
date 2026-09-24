@@ -16,6 +16,29 @@ CREATE TABLE ParticipantEntity (
     FOREIGN KEY (user_id) REFERENCES UserEntity(id) ON DELETE CASCADE
 );
 
+-- 插入成员（仅当不存在时）：用于同步期间补建私聊对方的参与者行，
+-- 绝不覆盖已有的真实设置。
+insertParticipantIfAbsent:
+INSERT OR IGNORE INTO ParticipantEntity(
+    conversation_id, user_id, role, last_read_message_id, joined_at, muted_until, settings
+) VALUES ?;
+
+-- 每个会话最多取 4 名（非本人）成员头像，供群聊 2x2 头像网格使用。
+getConversationMemberAvatars:
+SELECT conversation_id, u_id, u_username, u_display_name, u_avatar, p_role FROM (
+    SELECT
+        p.conversation_id AS conversation_id,
+        u.id AS u_id,
+        u.username AS u_username,
+        u.display_name AS u_display_name,
+        u.avatar AS u_avatar,
+        p.role AS p_role,
+        ROW_NUMBER() OVER (PARTITION BY p.conversation_id ORDER BY p.joined_at ASC) AS rn
+    FROM ParticipantEntity AS p
+    JOIN UserEntity AS u ON p.user_id = u.id
+    WHERE p.user_id != :ownUserId AND u.avatar IS NOT NULL
+) WHERE rn <= 4;
+
 -- 添加成员（或更新现有成员信息）
 insertParticipant:
 INSERT OR REPLACE INTO ParticipantEntity(

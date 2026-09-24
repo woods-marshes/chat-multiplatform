@@ -5,8 +5,10 @@ plugins {
 }
 
 kotlin {
-    android {
-        namespace = "com.github.woodsmarshes.chat.core.database.room"
+    if (project.extra["enableAndroid"] as Boolean) {
+        extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
+            namespace = "com.github.woodsmarshes.chat.core.database.room"
+        }
     }
 
     sourceSets {
@@ -25,8 +27,10 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
-        androidMain.dependencies {
-            implementation(libs.room3.sqlite.bundled)
+        matching { it.name == "androidMain" }.configureEach {
+            dependencies {
+                implementation(libs.room3.sqlite.bundled)
+            }
         }
         jvmMain.dependencies {
             implementation(libs.room3.sqlite.bundled)
@@ -36,7 +40,7 @@ kotlin {
 
 dependencies {
     add("kspJvm", libs.room3.compiler)
-    add("kspAndroid", libs.room3.compiler)
+    if (project.extra["enableAndroid"] as Boolean) add("kspAndroid", libs.room3.compiler)
     add("kspJs", libs.room3.compiler)
     add("kspWasmJs", libs.room3.compiler)
 }

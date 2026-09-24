@@ -36,6 +36,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onLogout: () -> Unit,
+    onSearchClick: () -> Unit,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -46,6 +48,8 @@ fun SettingsScreen(
                 title = LocalStrings.current.settingsTitle,
                 showBackButton = true,
                 onBackClick = onBack,
+                onSearchClick = onSearchClick,
+                showAccountAffordance = true,
             )
         }
     ) { padding ->
@@ -124,7 +128,9 @@ fun SettingsScreen(
                 icon = Icons.AutoMirrored.Filled.ExitToApp,
                 title = LocalStrings.current.logout,
                 danger = true,
-                onClick = { viewModel.logout() },
+                // Hoisted: the session owner (SessionManager) sequences socket
+                // disconnect, auth teardown and the per-user database close.
+                onClick = onLogout,
             )
         }
     }

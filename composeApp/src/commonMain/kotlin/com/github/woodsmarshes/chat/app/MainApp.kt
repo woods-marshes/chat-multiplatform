@@ -79,7 +79,9 @@ import com.github.woodsmarshes.chat.feature.chat.navigation.chatEntry
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.contactsEntry
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ConversationsNavKey
+import com.github.woodsmarshes.chat.feature.conversations.navigation.GroupInfoNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.conversationsEntry
+import com.github.woodsmarshes.chat.feature.conversations.navigation.groupInfoEntry
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.profileEntry
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
@@ -171,14 +173,13 @@ private fun MainContent(
             onNavigateToChat = { conversationId, isGroup ->
                 navigator.navigate(ChatNavKey(conversationId , isGroup))
             },
-            onSearchClick = {
-                navigator.navigate(SearchNavKey(SearchType.CONVERSATION))
+            onGroupInfoClick = { conversationId ->
+                navigator.navigate(GroupInfoNavKey(conversationId))
             },
             metadata = listPaneMeta,
         )
         contactsEntry(
             onNavigateToProfile = { navigator.navigate(ProfileNavKey(it)) },
-            onSearchClick = { navigator.navigate(SearchNavKey(SearchType.CONTACT)) },
             metadata = listPaneMeta,
         )
         settingsEntry(
@@ -189,10 +190,23 @@ private fun MainContent(
         chatEntry(
             onBack = { navigator.goBack() },
             onNavigateToProfile = { navigator.navigate(ProfileNavKey(it)) },
+            onNavigateToGroupInfo = { conversationId ->
+                navigator.navigate(GroupInfoNavKey(conversationId))
+            },
+            metadata = detailPaneMeta,
+        )
+        groupInfoEntry(
+            onBack = { navigator.goBack() },
+            onOpenChat = { conversationId ->
+                navigator.navigate(ChatNavKey(conversationId, true))
+            },
             metadata = detailPaneMeta,
         )
         profileEntry(
             onBack = { navigator.goBack() },
+            onOpenChat = { conversationId ->
+                navigator.navigate(ChatNavKey(conversationId, false))
+            },
             metadata = detailPaneMeta,
         )
         articleListEntry(

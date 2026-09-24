@@ -39,14 +39,15 @@ import org.koin.compose.viewmodel.koinViewModel
 fun AuthScreen(
     viewModel: AuthViewModel = koinViewModel(),
     windowSizeClass: WindowSizeClass = currentWindowAdaptiveInfoV2().windowSizeClass,
-    onAuthSuccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.screenState) {
         when (val state = uiState.screenState) {
-            is AuthScreenState.Success -> onAuthSuccess()
+            // Success intentionally has no side effect here: the persisted
+            // token flips the app-level session flow, which swaps this screen
+            // out for the authenticated content.
             is AuthScreenState.Error -> {
                 snackbarHostState.showSnackbar(state.message)
                 viewModel.resetScreenState()

@@ -30,6 +30,7 @@ composeApp/src/
 .env
 tmp/
 local.properties
+local-build.properties
 
 # ═══════════════════════════════════════════
 # Node.js / 前端及协作模块 — 排除无用依赖与运行中产生的临时文件

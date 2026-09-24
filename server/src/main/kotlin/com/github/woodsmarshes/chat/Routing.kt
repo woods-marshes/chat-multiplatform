@@ -45,6 +45,16 @@ fun Application.configureRouting() {
     }
     install(Resources)
 
+    // User-uploaded files are served straight from disk: without nosniff a
+    // polyglot payload could be reinterpreted as script/HTML by the browser.
+    install(createApplicationPlugin("UploadSecurityHeaders") {
+        onCall { call ->
+            if (call.request.local.uri.startsWith("/uploads/")) {
+                call.response.headers.append("X-Content-Type-Options", "nosniff", safeOnly = false)
+            }
+        }
+    })
+
     routing {
         authRoutes()
         articleRoutes()

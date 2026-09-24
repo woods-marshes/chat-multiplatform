@@ -1,20 +1,13 @@
 package com.github.woodsmarshes.chat.feature.article.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,9 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.serialization.json.JsonElement
@@ -50,11 +40,20 @@ fun ArticleDetailScreen(
 
     var fabVisible by remember { mutableStateOf(true) }
 
+    val article = uiState.article
+    val canEdit = article != null &&
+        (isOwnArticle || article.stats.allowCollaboration)
+    val editLabel = if (isOwnArticle) {
+        LocalStrings.current.articleEditFab
+    } else {
+        LocalStrings.current.articleCollaborativeEditFab
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(uiState.article?.title ?: LocalStrings.current.articleTitle)
+                    Text(article?.title ?: LocalStrings.current.articleTitle)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -68,33 +67,11 @@ fun ArticleDetailScreen(
             )
         },
         floatingActionButton = {
-            val isFabActive = fabVisible
-                    && (uiState.article != null)
-                    && (isOwnArticle || uiState.article?.stats?.allowCollaboration == true)
-
-            DesktopHeavyweightPopup(
-                alignment = Alignment.BottomEnd,
-                offset = IntOffset(-32, -32),
-            ) {
-                AnimatedVisibility(
-                    visible = isFabActive,
-                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
-                ) {
-                    ExtendedFloatingActionButton(
-                        onClick = { onEditClick(articleId) },
-                        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        text = {
-                            Text(
-                                if (isOwnArticle)
-                                    LocalStrings.current.articleEditFab
-                                else
-                                    LocalStrings.current.articleCollaborativeEditFab
-                            )
-                        },
-                    )
-                }
-            }
+            ArticleEditFloatingActionButton(
+                visible = canEdit && fabVisible,
+                label = editLabel,
+                onClick = { onEditClick(articleId) },
+            )
         },
     ) { innerPadding ->
         Box(
@@ -102,12 +79,11 @@ fun ArticleDetailScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val article = uiState.article
-
             when {
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
+
                 uiState.error != null -> {
                     Text(
                         text = uiState.error ?: LocalStrings.current.articleLoadFailed,
@@ -115,6 +91,7 @@ fun ArticleDetailScreen(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
+
                 article != null -> {
                     val jsonStr = remember(article) {
                         ProjectJson.encodeToString(JsonElement.serializer(), article.content)

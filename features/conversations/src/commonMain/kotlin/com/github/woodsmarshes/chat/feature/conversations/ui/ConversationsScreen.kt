@@ -16,7 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.GroupAdd
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,41 +33,88 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.ConversationType
-import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
+import com.github.woodsmarshes.chat.core.ui.components.search.AdaptiveSearchBar
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ConversationSkeleton
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
+import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
+import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ListScreenScaffold
+import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
     onConversationClick: (conversationId: String, isGroup: Boolean) -> Unit,
+    onGroupInfoClick: (conversationId: String) -> Unit,
     onMenuClick: (() -> Unit)? = null,
-    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ConversationsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val searchBarState = rememberSearchBarState()
+    val scope = rememberCoroutineScope()
+    val strings = LocalStrings.current
+    var searchQuery by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
-            ChatTopAppBar(
-                title = LocalStrings.current.conversationsTitle,
-                showMenuButton = onMenuClick != null,
-                onMenuClick = onMenuClick,
-                onSearchClick = onSearchClick,
-                showAccountAffordance = true,
+            AdaptiveSearchBar(
+                onQueryChange = { searchQuery = it },
+                onSearchQuery = viewModel::onSearchQuery,
+                state = searchBarState,
+                placeholder = strings.searchConversationsPlaceholder,
+                navigationIcon = if (onMenuClick != null) Icons.Default.Menu else null,
+                onNavigationIconClick = onMenuClick,
+                trailingAffordance = LocalAccountAffordance.current,
+                searchViewContent = {
+                    when {
+                        uiState.isSearching && uiState.searchResults.isEmpty() -> LoadingContent(
+                            message = strings.loading,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        uiState.searchError != null && uiState.searchResults.isEmpty() -> ErrorContent(
+                            message = uiState.searchError ?: strings.searchFailed,
+                            onRetry = viewModel::retrySearch,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        uiState.searchResults.isEmpty() -> EmptyContent(
+                            message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(
+                                items = uiState.searchResults,
+                                key = { it.id },
+                            ) { conv ->
+                                ConversationItem(
+                                    conversation = conv,
+                                    onClick = {
+                                        scope.launch { searchBarState.animateToCollapsed() }
+                                        onGroupInfoClick(conv.id.toString())
+                                    },
+                                )
+                            }
+                        }
+                    }
+                },
             )
         },
         floatingActionButton = {

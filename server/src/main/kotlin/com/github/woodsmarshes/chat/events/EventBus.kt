@@ -1,14 +1,9 @@
 package com.github.woodsmarshes.chat.events
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.launch
 
 interface EventBus {
     val contactEvents: SharedFlow<ContactEvent>
@@ -21,45 +16,40 @@ interface EventBus {
 }
 
 class EventBusImpl : EventBus, AutoCloseable {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    override fun close() {
-        scope.cancel()
-    }
-
+    // DROP_OLDEST guarantees tryEmit never suspends, so events can be published
+    // inline from the caller — emitting from separate launched coroutines would
+    // reorder events under load.
     private val _contactEvents = MutableSharedFlow<ContactEvent>(
-        extraBufferCapacity = 64,
+        extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     override val contactEvents: SharedFlow<ContactEvent> = _contactEvents.asSharedFlow()
 
     private val _conversationEvents = MutableSharedFlow<ConversationEvent>(
-        extraBufferCapacity = 64,
+        extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     override val conversationEvents: SharedFlow<ConversationEvent> = _conversationEvents.asSharedFlow()
 
     private val _messageEvents = MutableSharedFlow<MessageEvent>(
-        extraBufferCapacity = 64,
+        extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     override val messageEvents: SharedFlow<MessageEvent> = _messageEvents.asSharedFlow()
 
     override fun publishContactEvent(event: ContactEvent) {
-        scope.launch {
-            _contactEvents.emit(event)
-        }
+        _contactEvents.tryEmit(event)
     }
 
     override fun publishConversationEvent(event: ConversationEvent) {
-        scope.launch {
-            _conversationEvents.emit(event)
-        }
+        _conversationEvents.tryEmit(event)
     }
 
     override fun publishMessageEvent(event: MessageEvent) {
-        scope.launch {
-            _messageEvents.emit(event)
-        }
+        _messageEvents.tryEmit(event)
+    }
+
+    override fun close() {
+        // SharedFlows hold no resources; kept for AutoCloseable symmetry.
     }
 }

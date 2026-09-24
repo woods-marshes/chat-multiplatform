@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.database.dao
 
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
+import io.github.woodsmarshes.chat.db.GetConversationMemberAvatars
 import io.github.woodsmarshes.chat.db.GetParticipantsExcludingUser
 import io.github.woodsmarshes.chat.db.GetParticipantsWithUserInfo
 import io.github.woodsmarshes.chat.db.ParticipantEntity
@@ -13,7 +14,9 @@ import kotlin.uuid.Uuid
 interface ParticipantDao {
     // 写入
     suspend fun insertParticipant(participant: ParticipantEntity)
+    suspend fun insertParticipantIfAbsent(participant: ParticipantEntity)
     suspend fun insertParticipants(participants: List<ParticipantEntity>)
+    suspend fun insertParticipantsIfAbsent(participants: List<ParticipantEntity>)
 
     // 查询
     fun getParticipantsByConversationId(conversationId: Uuid): Flow<List<ParticipantEntity>>
@@ -24,6 +27,8 @@ interface ParticipantDao {
         conversationIds: List<Uuid>,
         excludeUserId: Uuid
     ): Flow<List<GetParticipantsExcludingUser>>
+
+    fun getConversationMemberAvatars(ownUserId: Uuid): Flow<List<GetConversationMemberAvatars>>
 
     // 更新
     suspend fun updateRole(conversationId: Uuid, userId: Uuid, role: ConversationRole)

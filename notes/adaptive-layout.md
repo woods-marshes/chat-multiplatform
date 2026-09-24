@@ -6,10 +6,13 @@
 
 | 组件 | 用途 |
 |---|---|
-| `NavigationSuiteScaffold` | 底部导航栏（compact）/ 导航轨（medium）/ 永久导航 drawers（expanded） |
+| `NavigationSuiteScaffold` | 底部导航栏（compact）/ 导航轨（medium）/ 永久导航 drawers（expanded），末位附加当前用户头像 item |
 | `ListDetailSceneStrategy` | 列表-详情双/三窗格布局 |
-| `ModalNavigationDrawer` | 侧滑抽屉（用户菜单） |
 | `WindowSizeClass` | 窗口尺寸断点判断 |
+
+> **注**：ModalNavigationDrawer（侧滑抽屉）已按 M3 Expressive 的建议移除
+> （官方不再推荐 Navigation Drawer，改用 expanded navigation rail）。
+> 原抽屉承载的登出迁入 Settings 页，个人资料入口由导航栏末位的头像 item 承担。
 
 ## WindowSizeClass 断点
 
@@ -99,38 +102,33 @@ val showNavigationSuite = isTopLevelRoute || isMediumOrLarger
 - **Compact + 顶层** → 显示导航栏
 - **Medium+** → 始终显示（用作导航轨或永久抽屉）
 
-## ModalNavigationDrawer
+## 导航栏账户入口（替代已移除的抽屉）
 
-包裹整个 `NavigationSuiteScaffold`，提供侧滑用户菜单：
+`NavigationSuiteScaffold` 的 `navigationSuiteItems` 末位附加一个非选中态的头像 item，
+点击进入当前登录用户的 Profile（`sessionManager.currentUser` 提供头像与昵称）：
 
 ```kotlin
-ModalNavigationDrawer(
-    drawerState = drawerState,
-    drawerContent = {
-        MeDrawerSheet(
-            displayName = ...,
-            onProfileClick = { ... },
-            onSettingsClick = { ... },
-            onLogoutClick = { ... },
+NavigationSuiteScaffold(
+    navigationSuiteItems = {
+        topLevelNavigationItems.forEach { ... }
+        item(
+            selected = false,
+            onClick = { currentUser?.let { navigator.navigate(ProfileNavKey(it.id)) } },
+            icon = { UserAvatar(name = ..., avatarUrl = ..., size = 26.dp) },
+            label = { Text(strings.profileTitle) },
         )
     },
-    gesturesEnabled = showNavigationSuite,  // 仅在顶层路由或大屏时启用滑动手势
-) {
-    NavigationSuiteScaffold(...) { ... }
-}
+) { ... }
 ```
 
-### 手势策略
-
-- 在 Conversations / Contacts 顶层 → 可滑动打开
-- 在 Chat / Profile 等详情页（compact） → 禁用手势，防止误触
-- 在 Medium+ → 始终可滑动
+登出入口在 Settings 页（`settingsEntry(onBack, onLogout)`），经 `SessionManager.logout()`
+统一编排断连、清凭据与关库时序。
 
 ## AuthScreen 自适应
 
 ```kotlin
 @Composable
-fun AuthScreen(onAuthSuccess: () -> Unit) {
+fun AuthScreen() {
     val windowSizeClass = currentWindowAdaptiveInfoV2().windowSizeClass
     val isDesktopOrTablet = windowSizeClass.isWidthAtLeastBreakpoint(
         WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND
@@ -169,9 +167,8 @@ implementation(libs.compose.material3.adaptive.navigation.suite)
 
 | 文件 | 内容 |
 |---|---|
-| `composeApp/.../app/MainApp.kt` | 顶层布局组合：AnimatedContent + ModalNavigationDrawer + NavDisplay |
-| `composeApp/.../app/MainApp.kt` | `NavigationSuiteScaffold` 配置 + 自适应逻辑 |
+| `composeApp/.../app/MainApp.kt` | 顶层布局组合：AnimatedContent（登录门）+ NavigationSuiteScaffold + NavDisplay |
 | `composeApp/.../app/navigation/TopLevelNavigation.kt` | 顶层标签页项定义 |
 | `composeApp/.../app/navigation/NavConfiguration.kt` | NavKey 序列化器注册 |
-| `composeApp/.../app/ui/MeDrawerSheet.kt` | 侧滑抽屉菜单内容 |
+| `composeApp/.../app/session/SessionManager.kt` | 会话编排（登录态 / 数据库 / WebSocket / 登出序列） |
 | `features/auth/.../ui/AuthScreen.kt` | AuthScreen 自适应布局 |

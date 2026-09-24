@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.feature.article.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -14,20 +15,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.github.woodsmarshes.chat.features.article.resources.Res
-import io.github.kdroidfilter.webview.jsbridge.IJsMessageHandler
-import io.github.kdroidfilter.webview.jsbridge.JsMessage
-import io.github.kdroidfilter.webview.jsbridge.rememberWebViewJsBridge
-import io.github.kdroidfilter.webview.web.WebView
-import io.github.kdroidfilter.webview.web.WebViewNavigator
-import io.github.kdroidfilter.webview.web.rememberWebViewNavigator
-import io.github.kdroidfilter.webview.web.rememberWebViewStateWithHTMLData
+import dev.nucleusframework.webview.jsbridge.IJsMessageHandler
+import dev.nucleusframework.webview.jsbridge.JsMessage
+import dev.nucleusframework.webview.jsbridge.rememberWebViewJsBridge
+import dev.nucleusframework.webview.web.WebView
+import dev.nucleusframework.webview.web.WebViewNavigator
+import dev.nucleusframework.webview.web.rememberWebViewNavigator
+import dev.nucleusframework.webview.web.rememberWebViewStateWithHTMLData
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.delay
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 private val json = Json { ignoreUnknownKeys = true }
+private val log = KotlinLogging.logger {}
+private const val VIEWER_READY_TIMEOUT_MS = 10_000L
 
 @Composable
 actual fun TiptapViewerWebView(
@@ -42,7 +47,7 @@ actual fun TiptapViewerWebView(
         try {
             htmlContent = Res.readBytes("files/viewer.html").decodeToString()
         } catch (e: Exception) {
-            e.printStackTrace()
+            log.error(e) { "Failed to load viewer.html asset" }
         }
     }
 
@@ -79,6 +84,14 @@ private fun TiptapViewerWebViewContent(
     val jsBridge = rememberWebViewJsBridge(navigator)
 
     var isJsReady by remember { mutableStateOf(false) }
+    var readyTimedOut by remember { mutableStateOf(false) }
+
+    // The JS handshake retries forever on the JS side; give up visibly after
+    // a timeout instead of showing a spinner forever.
+    LaunchedEffect(Unit) {
+        delay(VIEWER_READY_TIMEOUT_MS)
+        if (!isJsReady) readyTimedOut = true
+    }
 
     DisposableEffect(jsBridge, state) {
         val scrollHandler = object : IJsMessageHandler {
@@ -129,6 +142,13 @@ private fun TiptapViewerWebViewContent(
                 "window.__viewerShell.renderContent(decodeURIComponent(escape(window.atob(\"$base64Str\"))));"
             )
         }
+    }
+
+    if (readyTimedOut && !isJsReady) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Viewer failed to load")
+        }
+        return
     }
 
     WebView(

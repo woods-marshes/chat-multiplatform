@@ -10,9 +10,14 @@ data class ProfileNavKey(val userId: String) : NavKey
 
 fun EntryProviderScope<NavKey>.profileEntry(
     onBack: () -> Unit,
+    onOpenChat: (conversationId: String) -> Unit,
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<ProfileNavKey>(metadata = metadata) { key ->
-        ProfileScreen(userId = key.userId, onBack = onBack)
+        ProfileScreen(
+            userId = key.userId,
+            onBack = onBack,
+            onOpenChat = onOpenChat,
+        )
     }
 }

@@ -5,7 +5,6 @@ import androidx.savedstate.serialization.SavedStateConfiguration
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
 import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
-import com.github.woodsmarshes.chat.feature.auth.navigation.AuthNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ConversationsNavKey
@@ -24,7 +23,6 @@ val navConfiguration = SavedStateConfiguration {
             subclass(SettingsNavKey::class)
             subclass(ChatNavKey::class)
             subclass(ProfileNavKey::class)
-            subclass(AuthNavKey::class)
             subclass(SearchNavKey::class)
             subclass(ArticleListNavKey::class)
             subclass(ArticleDetailNavKey::class)

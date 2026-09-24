@@ -16,6 +16,8 @@ data class ConversationUiModel(
     val lastMessage: LastMessageInfo? = null,
     val unreadCount: Int = 0,
     val isPinned: Boolean = false,
+    /** Up to 4 non-own members with avatars, for the group avatar grid. */
+    val memberAvatars: List<SenderUser> = emptyList(),
 )
 
 data class LastMessageInfo(

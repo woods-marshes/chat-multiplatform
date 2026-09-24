@@ -37,7 +37,6 @@ import io.ktor.server.routing.openapi.OpenApiDocSource
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.css.*
 import kotlinx.html.*
-import kotlinx.serialization.Serializable
 import org.koin.dsl.module
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
@@ -96,6 +95,14 @@ fun Application.configureHTTP() {
         register(RateLimitName("uploads")) {
             rateLimiter(
                 limit = 60,                 // 每分钟允许60次上传
+                refillPeriod = 60.seconds,
+            )
+        }
+
+        register(RateLimitName("auth")) {
+            // Credential endpoints: tight budget to blunt credential stuffing.
+            rateLimiter(
+                limit = 10,
                 refillPeriod = 60.seconds,
             )
         }

@@ -32,62 +32,74 @@ val uuidAdapter = object : ColumnAdapter<Uuid, ByteArray> {
     }
 }
 
+/**
+ * DB-side mirror of the wire format (core:network ProjectJson) with the same
+ * class discriminator. `ignoreUnknownKeys` is essential: a model field added in
+ * a newer app version must not make previously persisted rows undecodable.
+ * Kept local so core:database does not depend on core:network.
+ */
+private val DbJson = Json {
+    classDiscriminator = "type"
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
 val participantSettingsAdapter = object : ColumnAdapter<ParticipantSettings, String> {
     override fun decode(databaseValue: String): ParticipantSettings {
-        return Json.decodeFromString(databaseValue)
+        return DbJson.decodeFromString(databaseValue)
     }
 
     override fun encode(value: ParticipantSettings): String {
-        return Json.encodeToString(value)
+        return DbJson.encodeToString(value)
     }
 }
 
 val groupSettingsAdapter = object : ColumnAdapter<GroupSettings, String> {
     override fun decode(databaseValue: String): GroupSettings {
-        return Json.decodeFromString(databaseValue)
+        return DbJson.decodeFromString(databaseValue)
     }
 
     override fun encode(value: GroupSettings): String {
-        return Json.encodeToString(value)
+        return DbJson.encodeToString(value)
     }
 }
 
 val conversationMetadataAdapter = object : ColumnAdapter<ConversationMetadata, String> {
     override fun decode(databaseValue: String): ConversationMetadata {
-        return Json.decodeFromString(databaseValue)
+        return DbJson.decodeFromString(databaseValue)
     }
 
     override fun encode(value: ConversationMetadata): String {
-        return Json.encodeToString(value)
+        return DbJson.encodeToString(value)
     }
 }
 
 val messageContentAdapter = object : ColumnAdapter<MessageContent, String> {
     override fun decode(databaseValue: String): MessageContent {
-        return Json.decodeFromString(databaseValue)
+        return DbJson.decodeFromString(databaseValue)
     }
 
     override fun encode(value: MessageContent): String {
-        return Json.encodeToString(value)
+        return DbJson.encodeToString(value)
     }
 }
 
 val jsonElementAdapter = object : ColumnAdapter<JsonElement, String> {
     override fun decode(databaseValue: String): JsonElement {
-        return Json.decodeFromString(databaseValue)
+        return DbJson.decodeFromString(databaseValue)
     }
 
     override fun encode(value: JsonElement): String {
-        return Json.encodeToString(value)
+        return DbJson.encodeToString(value)
     }
 }
 
 val articleStatsAdapter = object : ColumnAdapter<ArticleStats, String> {
     override fun decode(databaseValue: String): ArticleStats {
-        return Json.decodeFromString(databaseValue)
+        return DbJson.decodeFromString(databaseValue)
     }
 
     override fun encode(value: ArticleStats): String {
-        return Json.encodeToString(value)
+        return DbJson.encodeToString(value)
     }
 }

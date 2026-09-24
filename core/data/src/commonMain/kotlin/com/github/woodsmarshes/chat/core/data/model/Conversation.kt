@@ -2,6 +2,8 @@ package com.github.woodsmarshes.chat.core.data.model
 
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.Conversation
+import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.Message
@@ -115,6 +117,29 @@ fun ConversationResponse.toGroupProfileEntity(): GroupProfileEntity? {
         settings = groupInfo.settings,
         created_at = groupInfo.createdAt,
         updated_at = groupInfo.updatedAt
+    )
+}
+
+/**
+ * Builds the private-chat peer's participant row from the conversation info.
+ * The sync API only carries the caller's own participant, so without this the
+ * peer row is never persisted and peer lookups (avatars, names) come up empty.
+ * Store with insertParticipantIfAbsent to keep any real row intact.
+ */
+fun ConversationResponse.toPeerParticipantEntity(): ParticipantEntity? {
+    val userInfo = this.conversationInfo as? UserInfo ?: return null
+    if (userInfo.id == this.participant.userId) return null
+    return ParticipantEntity(
+        conversation_id = this.conversationId,
+        user_id = userInfo.id,
+        role = ConversationRole.PARTICIPANT,
+        last_read_message_id = null,
+        joined_at = when (val info = conversationInfo) {
+            is GroupInfo -> info.createdAt
+            is UserInfo -> info.createdAt
+        },
+        muted_until = null,
+        settings = ParticipantSettings(),
     )
 }
 

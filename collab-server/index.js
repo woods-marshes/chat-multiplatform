@@ -45,7 +45,7 @@ const server = new Server({
   maxDebounce: 10000,  // 强制落库：打字不停时，最长 10 秒强制备份一次
 
   // 鉴权 Hook
-  async onAuthenticate({ token }) {
+  async onAuthenticate({ token, documentName, connectionConfig }) {
     if (!token) {
       throw new Error('Not authorized: Token missing');
     }
@@ -53,7 +53,7 @@ const server = new Server({
       const ktorAuthUrl = process.env.KTOR_AUTH_URL || 'http://localhost:9051/v1/auth/verify';
       // 远程调用 Ktor 服务端校验 JWT 合法性
       const response = await fetch(ktorAuthUrl, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}` ,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -63,7 +63,23 @@ const server = new Server({
         throw new Error('Unauthorized');
       }
       const user = await response.json();
-      return { userId: user.userId }; // 注入上下文
+      const userId = user.userId;
+
+      // 按房间授权：只有文章作者可写，其他已登录用户进入只读模式。
+      // 否则任何持有合法 token 的用户都能篡改他人的草稿。
+      let canWrite = false;
+      if (UUID_REGEX.test(documentName)) {
+        const ownership = await dbPool.query(
+          'SELECT author_id FROM articles WHERE id = $1::uuid',
+          [documentName]
+        );
+        canWrite = ownership.rows[0]?.author_id === userId;
+      }
+      if (!canWrite && connectionConfig) {
+        connectionConfig.readOnly = true;
+      }
+
+      return { userId }; // 注入上下文
     } catch (e) {
       console.error('Authentication failed:', e.message);
       throw new Error('Unauthorized');

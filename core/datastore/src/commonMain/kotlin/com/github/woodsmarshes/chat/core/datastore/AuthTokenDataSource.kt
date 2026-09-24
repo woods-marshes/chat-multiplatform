@@ -38,6 +38,19 @@ class AuthTokenDataSource(
         preferences[Keys.EXPIRY_TIMESTAMP]
     }
 
+    /**
+     * Persists all token fields in one DataStore transaction so observers never
+     * see an inconsistent mix (e.g. new token with old expiry).
+     */
+    suspend fun setToken(token: AuthToken) {
+        dataStore.edit { preferences ->
+            token.jwtToken?.let { preferences[Keys.JWT_TOKEN] = it } ?: preferences.remove(Keys.JWT_TOKEN)
+            token.refreshToken?.let { preferences[Keys.REFRESH_TOKEN] = it } ?: preferences.remove(Keys.REFRESH_TOKEN)
+            token.expiryTimestamp?.let { preferences[Keys.EXPIRY_TIMESTAMP] = it }
+                ?: preferences.remove(Keys.EXPIRY_TIMESTAMP)
+        }
+    }
+
     suspend fun setJwtToken(jwtToken: String) {
         dataStore.edit {
             it[Keys.JWT_TOKEN] = jwtToken

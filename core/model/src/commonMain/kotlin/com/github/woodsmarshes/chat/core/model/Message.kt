@@ -147,10 +147,3 @@ enum class FileType {
     AVATAR
 }
 
-enum class FormattingType {
-    MENTION, // @人
-    URL,     // 链接
-    BOLD,    // 加粗
-    ITALIC,  // 斜体
-    CODE     // 代码块
-}

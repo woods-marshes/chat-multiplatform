@@ -1,0 +1,3 @@
+# Copy to local-build.properties; use false only for affected IDEs.
+# Override: -PenableAndroid=true
+enableAndroid=true

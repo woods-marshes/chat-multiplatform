@@ -5,6 +5,7 @@ import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.data.model.toConversation
 import com.github.woodsmarshes.chat.core.data.model.toEntity
 import com.github.woodsmarshes.chat.core.data.model.toGroupOwnerUserEntity
+import com.github.woodsmarshes.chat.core.data.model.toGroupProfile
 import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
 import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
 import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
@@ -24,6 +25,7 @@ import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
+import com.github.woodsmarshes.chat.core.model.ui.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.SenderUser
 import com.github.woodsmarshes.chat.core.model.ui.LastMessageInfo
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlin.collections.emptyList
 import kotlin.collections.map
 import kotlin.uuid.Uuid
@@ -315,6 +318,70 @@ class ConversationRepositoryImpl(
         coroutineBinding {
             bindApi(ConversationError::Unknown) {
                 conversationApi.searchGroups(keyword.trim())
+            }.also { groups ->
+                // Cache hits so the group info page resolves from local storage later.
+                groupProfileDao.insertGroupProfiles(groups.map { it.toEntity() })
+            }
+        }
+
+    override fun getGroupProfileFlow(conversationId: Uuid): Flow<GroupProfile?> =
+        groupProfileDao.getGroupProfile(conversationId).map { it?.toGroupProfile() }
+
+    override fun getGroupMembersFlow(conversationId: Uuid): Flow<List<SenderUser>> =
+        participantDao.getParticipantsWithUserInfo(conversationId).map { rows ->
+            rows.map { row ->
+                SenderUser(
+                    id = row.user_id,
+                    username = row.username,
+                    displayName = row.display_name,
+                    avatarUrl = row.avatar,
+                    role = row.role,
+                )
+            }
+        }
+
+    override suspend fun refreshGroupDetail(conversationId: Uuid): Result<Unit, ConversationError> = coroutineBinding {
+        bindApi(ConversationError::Unknown) {
+            conversationApi.getDetail(conversationId)
+        }.also { response ->
+            conversationDao.insertConversation(response.toConversation().toEntity())
+            response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
+        }
+        Unit
+    }
+
+    override fun getConversationHeaderFlow(conversationId: Uuid): Flow<ConversationHeader?> =
+        combine(
+            conversationDao.getConversationById(conversationId),
+            groupProfileDao.getGroupProfile(conversationId),
+            participantDao.getParticipantsWithUserInfo(conversationId),
+            userSettingDataSource.user,
+        ) { conversation, groupProfile, participants, me ->
+            when {
+                conversation == null -> null
+                conversation.type == ConversationType.GROUP -> groupProfile?.let { profile ->
+                    ConversationHeader(
+                        conversationId = conversationId,
+                        isGroup = true,
+                        title = profile.name,
+                        avatarUrl = profile.avatar_url,
+                    )
+                }
+                else -> {
+                    // Private chat: title and avatar come from the other
+                    // participant; nickname (contact remark) wins over the
+                    // profile display name, matching the list screen.
+                    val peer = participants.firstOrNull { it.user_id != me?.id }
+                    peer?.let {
+                        ConversationHeader(
+                            conversationId = conversationId,
+                            isGroup = false,
+                            title = it.nickname ?: it.display_name ?: it.username,
+                            avatarUrl = it.avatar,
+                            peerUserId = it.user_id,
+                        )
+                    }
+                }
             }
         }
 }

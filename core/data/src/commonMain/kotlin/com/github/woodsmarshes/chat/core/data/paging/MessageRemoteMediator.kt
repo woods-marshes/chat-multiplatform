@@ -9,17 +9,14 @@ import com.github.woodsmarshes.chat.core.common.utils.debug
 import com.github.woodsmarshes.chat.core.common.utils.error
 import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
 import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
-import com.github.woodsmarshes.chat.core.data.model.toReplyMessageEntity
-import com.github.woodsmarshes.chat.core.data.model.toReplyParticipantEntity
-import com.github.woodsmarshes.chat.core.data.model.toReplyUserEntity
 import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import io.github.oshai.kotlinlogging.KotlinLogging
-import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
@@ -66,13 +63,19 @@ class MessageRemoteMediator(
                 return MediatorResult.Success(endOfPaginationReached = true)
             }
             if (isGroup) {
+                // Reply targets must be persisted with THEIR OWN content, so map
+                // the referenced message directly (toReplyMessageEntity would
+                // walk to reply.replyTo and store the grandparent instead).
                 val replyEntities = response
                     .mapNotNull { it.replyTo }
+                    // A reply target without a sender cannot be persisted; skip
+                    // it instead of aborting the whole page.
+                    .filter { it.sender != null }
                     .map { reply ->
                         Triple(
-                            reply.toReplyMessageEntity(),
-                            reply.toReplyUserEntity(),
-                            reply.toReplyParticipantEntity()
+                            reply.toMessageEntity(),
+                            reply.toUserEntity(),
+                            reply.toParticipantEntity()
                         )
                     }
 
@@ -103,22 +106,33 @@ class MessageRemoteMediator(
                     }
                 }
             } else {
+                // Private chats need sender users cached too, or the sender join
+                // in keyedMessagesWithRelations returns null names.
                 val replyEntities = response
                     .mapNotNull { it.replyTo }
-                    .map { reply ->
-                        reply.toReplyMessageEntity()
-                    }
+                    .filter { it.sender != null }
+                    .map { reply -> reply.toMessageEntity() }
+                val userEntities = (response.mapNotNull { it.replyTo } + response)
+                    .mapNotNull { it.toUserEntity() }
+                    .filter { it.id != ownUserId }
+                    .distinct()
                 val mainEntities = response.map { it.toMessageEntity() }
                 val messageEntities = (replyEntities + mainEntities)
                     .filterNotNull()
                     .distinct()
                 withContext(appDispatchers.io) {
-                    messageDao.insertMessages(messageEntities)
+                    messageDao.transaction {
+                        userDao.insertUsers(userEntities)
+                        messageDao.insertMessages(messageEntities)
+                    }
                 }
             }
             MediatorResult.Success(
                 endOfPaginationReached = response.size < pageSize
             )
+        } catch (e: CancellationException) {
+            // Never swallow structured-concurrency cancellation.
+            throw e
         } catch (e: Exception) {
             log.error(tag = "MessageRemoteMediator", message = "Load failed", throwable = e)
             MediatorResult.Error(e)

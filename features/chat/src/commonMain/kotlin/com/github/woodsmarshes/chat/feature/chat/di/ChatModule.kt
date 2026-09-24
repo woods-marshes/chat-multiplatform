@@ -11,6 +11,7 @@ val chatModule = module {
             isGroup = isGroup,
             messageRepository = get(),
             userRepository = get(),
+            conversationRepository = get(),
         )
     }
 }

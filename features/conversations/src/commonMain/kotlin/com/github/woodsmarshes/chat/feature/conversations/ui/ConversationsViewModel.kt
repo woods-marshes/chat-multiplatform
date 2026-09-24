@@ -5,11 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
+import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.conversations.model.ConversationsUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +30,9 @@ class ConversationsViewModel(
 
     private val _uiState = MutableStateFlow(ConversationsUiState())
     val uiState: StateFlow<ConversationsUiState> = _uiState.asStateFlow()
+
+    private var searchJob: Job? = null
+    private var lastSearchQuery: String = ""
 
     init {
         loadConversations()
@@ -67,6 +72,56 @@ class ConversationsViewModel(
             } finally {
                 _uiState.value = _uiState.value.copy(isRefreshing = false)
             }
+        }
+    }
+
+    // ---------------- In-place search ----------------
+
+    /**
+     * Runs (or clears) the group search. Called with the trimmed query by
+     * [com.github.woodsmarshes.chat.core.ui.components.search.AdaptiveSearchBar]
+     * after its debounce; an empty query means the text is below the minimum
+     * length or was cleared, so stale results are dropped immediately.
+     */
+    fun onSearchQuery(query: String) {
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            lastSearchQuery = ""
+            _uiState.value = _uiState.value.copy(
+                searchResults = emptyList(),
+                isSearching = false,
+                searchError = null,
+            )
+            return
+        }
+        lastSearchQuery = query
+        searchJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSearching = true, searchError = null)
+            conversationRepository.searchGroups(query).onOk { groups ->
+                _uiState.value = _uiState.value.copy(
+                    searchResults = groups.map { group ->
+                        ConversationUiModel(
+                            id = group.conversationId,
+                            type = ConversationType.GROUP,
+                            name = group.name,
+                            avatarUrl = group.avatarUrl,
+                            description = group.description,
+                            handle = group.handle,
+                        )
+                    },
+                    isSearching = false,
+                )
+            }.onErr { err ->
+                log.error { "[ConversationsViewModel] group search failed: $err" }
+                _uiState.value = _uiState.value.copy(isSearching = false, searchError = strings.searchFailed)
+            }
+        }
+    }
+
+    /** Re-runs the search for the last query (error retry affordance). */
+    fun retrySearch() {
+        if (lastSearchQuery.isNotBlank()) {
+            onSearchQuery(lastSearchQuery)
         }
     }
 
