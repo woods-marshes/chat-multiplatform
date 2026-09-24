@@ -52,7 +52,7 @@ junit = "4.13.2"
 lifecycleRuntimeKtx = "2.10.0"
 composeBom = "2026.01.00"
 
-ksp = "2.3.4"
+ksp = "2.3.12"
 room = "2.8.5"
 room3 = "3.0.3"
 runner = "1.7.0"
