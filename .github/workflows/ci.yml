@@ -44,7 +44,9 @@ jobs:
           test -x "$sdkmanager"
           compile_sdk=$(sed -nE 's/^android-compileSdk[[:space:]]*=[[:space:]]*"([0-9]+)".*/\1/p' gradle/libs.versions.toml)
           test -n "$compile_sdk"
-          "$sdkmanager" "platforms;android-$compile_sdk" "platform-tools"
+          if ! "$sdkmanager" "platforms;android-$compile_sdk" "platform-tools"; then
+            "$sdkmanager" "platforms;android-$compile_sdk.0" "platform-tools"
+          fi
 
       - uses: gradle/actions/setup-gradle@v6
 
@@ -112,7 +114,9 @@ jobs:
           test -x "$sdkmanager"
           compile_sdk=$(sed -nE 's/^android-compileSdk[[:space:]]*=[[:space:]]*"([0-9]+)".*/\1/p' gradle/libs.versions.toml)
           test -n "$compile_sdk"
-          "$sdkmanager" "platforms;android-$compile_sdk" "platform-tools"
+          if ! "$sdkmanager" "platforms;android-$compile_sdk" "platform-tools"; then
+            "$sdkmanager" "platforms;android-$compile_sdk.0" "platform-tools"
+          fi
 
       - uses: gradle/actions/setup-gradle@v6
 
