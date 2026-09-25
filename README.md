@@ -4,41 +4,16 @@
 
 ## 仓库数据
 
-[![commits](https://img.shields.io/github/commits/m/woods-marshes/chat-multiplatform?style=flat-square&label=commits&color=blue)](https://github.com/woods-marshes/chat-multiplatform/commits)
+[![streak](https://streak-stats.demolab.com?user=woods-marshes&theme=default&hide_border=true)](https://github.com/woods-marshes)
+[![stats](https://github-readme-stats-one-bice.vercel.app/api?username=woods-marshes&show_icons=true&include_all_commits=true&theme=default)](https://github.com/woods-marshes)
+[![top langs](https://github-readme-stats-one-bice.vercel.app/api/top-langs/?username=woods-marshes&layout=compact&theme=default)](https://github.com/woods-marshes)
 [![last commit](https://img.shields.io/github/last-commit/woods-marshes/chat-multiplatform?style=flat-square&label=last%20commit&color=blue)](https://github.com/woods-marshes/chat-multiplatform/commits)
 [![commit activity](https://img.shields.io/github/commit-activity/m/woods-marshes/chat-multiplatform?style=flat-square&label=activity&color=blue)](https://github.com/woods-marshes/chat-multiplatform/graphs/commit-activity)
-[![top language](https://img.shields.io/github/languages/top/woods-marshes/chat-multiplatform?style=flat-square&color=blue)](https://github.com/woods-marshes/chat-multiplatform)
-[![contributors](https://img.shields.io/github/contributors/woods-marshes/chat-multiplatform?style=flat-square&label=contributors&color=blue)](https://github.com/woods-marshes/chat-multiplatform/graphs/contributors)
 [![repo size](https://img.shields.io/github/repo-size/woods-marshes/chat-multiplatform?style=flat-square&label=size&color=blue)](https://github.com/woods-marshes/chat-multiplatform)
 [![CI](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/ci.yml/badge.svg)](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/ci.yml)
 [![Docker Test](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/docker-test.yml/badge.svg)](https://github.com/woods-marshes/chat-multiplatform/actions/workflows/docker-test.yml)
 
-| 指标 | 数值 | 采集方式 |
-|---|---|---|
-| 提交总数 | 89 | `git rev-list --count HEAD` |
-| 贡献者 | 2 | `git shortlog -sne --all` |
-| 首次提交 | 2026-06-12 | `git log --reverse` |
-| 最近提交 | 2026-09-24 | `git log -1` |
-| 已跟踪文件 | 815 | `git ls-files` |
-| 代码行数 | 54,018 | 快照，见下方口径 |
-
-### 代码构成
-
-统计口径：2026-09-24 用 `rg` 统计已跟踪文件的物理行数，剔除 `tiptap-bridge/repomix-output.xml` 等生成物；分布条为近似值（每 █ 约 5%）。
-
-| 语言 | 行数 | 占比 | 分布 |
-|---|---:|---:|---|
-| Kotlin | 34,382 | 63.6% | █████████████ |
-| TSX | 5,241 | 9.7% | ██ |
-| TypeScript | 4,901 | 9.1% | ██ |
-| SCSS | 3,391 | 6.3% | █ |
-| YAML | 2,003 | 3.7% | █ |
-| CSS | 1,322 | 2.4% | █ |
-| SQL | 1,009 | 1.9% | █ |
-| JavaScript | 504 | 0.9% | █ |
-| HTML | 434 | 0.8% | █ |
-| JSX | 431 | 0.8% | █ |
-| XML | 400 | 0.7% | █ |
+> 统计图由第三方服务实时生成：贡献 streak 与总览卡片来自 [streak-stats](https://streak-stats.demolab.com) 和 github-readme-stats（官方实例 `github-readme-stats.vercel.app` 当前返回 503，暂用社区镜像 `github-readme-stats-one-bice.vercel.app`，官方恢复后可换回）。最近提交、月活、仓库体积等来自 shields.io。
 
 ## 架构概览
 
