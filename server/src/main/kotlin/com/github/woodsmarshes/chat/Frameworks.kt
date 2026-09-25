@@ -44,11 +44,49 @@ private const val EXPIRED_FILE_CLEANUP_MINUTES = 30L
 @OptIn(KoinExperimentalAPI::class)
 fun Application.configureFrameworks() {
     val appConfig = extractServerConfig()
+    requireProductionConfiguration(appConfig)
     val database = configureDatabase(appConfig)
     configureSchema(database)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
     configureFileCleanup()
 }
+
+/**
+ * Refuses to boot with the repository's development defaults outside
+ * development mode.
+ *
+ * The shipped defaults (a published JWT secret, the checked-in PostgreSQL
+ * password and the in-memory H2 fallback) are convenient locally and are a
+ * credential leak in production, where forgetting an environment variable
+ * would otherwise start a publicly reachable server with known secrets.
+ */
+private fun Application.requireProductionConfiguration(config: ServerConfig) {
+    if (config.development) return
+    val databaseType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"
+    check(databaseType == "postgres") {
+        "database.type must be \"postgres\" outside development mode (was \"$databaseType\")"
+    }
+    check(config.tokenConfig.secret !in INSECURE_SECRETS) {
+        "jwt.secret still uses the shipped development default; set JWT_SECRET"
+    }
+    val database = config.databaseConfig
+    check(
+        database != null &&
+            !database.url.isBlank() &&
+            !database.username.isBlank() &&
+            !database.password.isBlank()
+    ) {
+        "postgres url/username/password must be configured outside development mode"
+    }
+    check(database.password !in INSECURE_SECRETS) {
+        "postgres password still uses the shipped development default; set POSTGRES_PASSWORD"
+    }
+}
+
+private val INSECURE_SECRETS = setOf(
+    "my-local-test-secret-key-change-in-prod",
+    "jghN7qJJq4vDmvHVg",
+)
 
 private fun Application.configureDatabase(config: ServerConfig): Database {
     val dbType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"

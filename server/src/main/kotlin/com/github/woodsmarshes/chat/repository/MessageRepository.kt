@@ -59,6 +59,20 @@ interface MessageRepository {
         requestId: Uuid? = null,
     ): Pair<Message, Boolean>?
 
+    /**
+     * Looks up a previously persisted message by its client-generated
+     * [requestId], scoped to the conversation and sender that created it.
+     *
+     * The scope is what makes the outbox retry safe: a request id observed in
+     * another conversation (or authored by somebody else) must never be
+     * replayed as if it were this sender's message.
+     */
+    suspend fun findMessageByRequestId(
+        requestId: Uuid,
+        conversationId: Uuid,
+        senderId: Uuid,
+    ): Message?
+
     suspend fun getHistory(
         conversationId: Uuid,
         limit: Int,
@@ -102,7 +116,7 @@ class MessageDataSourceImpl : MessageRepository {
                     additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
                 )
                 .selectAll()
-                .where { Messages.id eq it }
+                .where { (Messages.id eq it) and (Messages.conversationId eq conversationId) }
                 .singleOrNull()
                 ?.toFilteredUser()
         }
@@ -138,7 +152,14 @@ class MessageDataSourceImpl : MessageRepository {
         // (Check-then-insert: a concurrent duplicate would surface as a unique
         // violation and simply fail that one request.)
         if (requestId != null) {
-            val existing = Messages.selectAll().where { Messages.id eq requestId }.singleOrNull()
+            val existing = Messages
+                .selectAll()
+                .where {
+                    (Messages.id eq requestId) and
+                        (Messages.conversationId eq conversationId) and
+                        (Messages.senderId eq senderId)
+                }
+                .singleOrNull()
             if (existing != null) {
                 return@dbQuery Pair(existing.toMessage(), false)
             }
@@ -172,6 +193,27 @@ class MessageDataSourceImpl : MessageRepository {
             }
             ?.let { row -> Pair(row.toMessage(replyTo = replyTo), true) }
     }
+
+    override suspend fun findMessageByRequestId(
+        requestId: Uuid,
+        conversationId: Uuid,
+        senderId: Uuid,
+    ): Message? = dbQuery {
+        Messages
+            .selectAll()
+            .where {
+                (Messages.id eq requestId) and
+                    (Messages.conversationId eq conversationId) and
+                    (Messages.senderId eq senderId)
+            }
+            .singleOrNull()
+            ?.toMessage()
+    }
+
+    private fun String.escapeLike(): String =
+        replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
 
     override suspend fun getHistory(
         conversationId: Uuid,
@@ -221,7 +263,11 @@ class MessageDataSourceImpl : MessageRepository {
         keyword: String,
         limit: Int,
     ): List<Message> = dbQuery {
-        val searchPattern = "%$keyword%"
+        val searchTerm = keyword.trim().lowercase()
+        if (searchTerm.isEmpty()) {
+            return@dbQuery emptyList()
+        }
+        val searchPattern = "%${searchTerm.escapeLike()}%"
 
         val messageRows = Messages
             .innerJoin(Users)
@@ -233,7 +279,8 @@ class MessageDataSourceImpl : MessageRepository {
             )
             .selectAll()
             .where {
-                (Messages.conversationId eq conversationId) and (
+                (Messages.conversationId eq conversationId) and
+                        (Messages.revokedAt.isNull()) and (
                         (Messages.searchText like searchPattern) or
                                 (Users.username like searchPattern) or
                                 (Users.displayName like searchPattern)
@@ -344,15 +391,22 @@ class MessageDataSourceImpl : MessageRepository {
         }
 
     override suspend fun revokeMessage(messageId: Uuid): Boolean = dbQuery {
-        Messages.update(where = { Messages.id eq messageId }) {
+        // Blanking the payload is what makes a revoke irreversible from the
+        // read paths: history, "last message" and search all read these
+        // columns. A second revoke reports failure instead of rewriting the
+        // timestamp.
+        Messages.update(
+            where = { (Messages.id eq messageId) and Messages.revokedAt.isNull() }
+        ) {
             it[Messages.revokedAt] = Clock.System.now()
+            it[Messages.content] = TextContent("")
+            it[Messages.searchText] = ""
         } > 0
     }
 
     override suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>? = dbQuery<Pair<Message, List<User>>?> {
         val message = Messages
             .innerJoin(Users)
-            .leftJoin(ConversationParticipants)
             .selectAll()
             .where { Messages.id eq messageId }
             .singleOrNull()
@@ -389,7 +443,10 @@ class MessageDataSourceImpl : MessageRepository {
                     additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
                 )
                 .selectAll()
-                .where { Messages.id inList replyToIds }
+                .where {
+                    (Messages.id inList replyToIds) and
+                        (Messages.conversationId eq conversationId)
+                }
                 .associateBy { it[Messages.id].value }
         } else {
             emptyMap()

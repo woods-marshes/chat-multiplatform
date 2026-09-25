@@ -1,10 +1,11 @@
-package com.github.woodsmarshes.chat.routes
+﻿package com.github.woodsmarshes.chat.routes
 
 import com.github.michaelbull.result.mapBoth
 import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.error.MessageError
-import com.github.woodsmarshes.chat.core.network.dto.events.SocketErrorResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.network.dto.events.SocketErrorResponse
 import com.github.woodsmarshes.chat.service.MessageService
 import com.github.woodsmarshes.chat.service.RealtimeService
 import com.github.woodsmarshes.chat.utils.extractUserIdFromWebSocket
@@ -58,11 +59,12 @@ fun Route.realtimeRoutes() {
                                     // ACK ?
                                 },
                                 failure = { error ->
-                                    sendSerialized(
+                                    sendSerialized<RealtimeEvent>(
                                         SocketErrorResponse(
                                             requestId = result.requestId,
                                             code = error.mapToStatus().value,
-                                            message = "Failed to send message"
+                                            message = "Failed to send message",
+                                            error = error
                                         )
                                     )
                                 }
@@ -74,11 +76,12 @@ fun Route.realtimeRoutes() {
                                 userId = userId,
                                 messageId = result.messageId
                             ).mapBoth({  }) { error ->
-                                sendSerialized(
+                                sendSerialized<RealtimeEvent>(
                                     SocketErrorResponse(
                                         requestId = null,
                                         code = error.mapToStatus().value,
-                                        message = "Withdraw failed"
+                                        message = "Withdraw failed",
+                                        error = error
                                     )
                                 )
                             }
@@ -92,11 +95,12 @@ fun Route.realtimeRoutes() {
                             ).mapBoth({ }) { error ->
                                 // Mirror Send/Withdraw: report the failure back
                                 // so the client knows the receipt never landed.
-                                sendSerialized(
+                                sendSerialized<RealtimeEvent>(
                                     SocketErrorResponse(
                                         requestId = null,
                                         code = error.mapToStatus().value,
-                                        message = "Read report failed"
+                                        message = "Read report failed",
+                                        error = error
                                     )
                                 )
                             }

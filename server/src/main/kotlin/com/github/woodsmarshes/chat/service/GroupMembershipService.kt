@@ -120,7 +120,9 @@ class GroupMembershipService(
             // The owner cannot leave: doing so would orphan the group.
             Err(ConversationError.PermissionDenied).bind()
         }
-        val success = conversationParticipantRepository.deleteConversationParticipant(conversationId, userId)
+        val success = conversationParticipantRepository.deleteConversationParticipant(
+            userId = userId, conversationId = conversationId
+        )
         if (success) {
             eventBus.publishConversationEvent(
                 ConversationEvent.UserLeftConversation(

@@ -34,14 +34,26 @@ fun Application.configureSecurity() {
             challenge { _, _ ->
                 call.respond(HttpStatusCode.Unauthorized, "Token is not valid or has expired")
             }
-            // 支持从 query param 提取 token（浏览器 WebSocket 不允许自定义 Header）
+            // The query-parameter fallback exists only because browsers cannot
+            // set headers on a WebSocket handshake. It is restricted to the
+            // websocket route: on REST endpoints a token in the query string
+            // leaks into access logs, proxy logs and browser history.
             authHeader { call ->
-                call.request.parseAuthorizationHeader()?.takeIf {
-                    it.authScheme == AuthScheme.Bearer && it is HttpAuthHeader.Single
-                } ?: call.request.queryParameters["access_token"]?.let { token ->
-                    HttpAuthHeader.Single(AuthScheme.Bearer, token)
+                val header = call.request.parseAuthorizationHeader()
+                if (header != null) {
+                    header.takeIf {
+                        it.authScheme == AuthScheme.Bearer && it is HttpAuthHeader.Single
+                    }
+                } else if (call.request.local.uri.startsWith(WS_PATH)) {
+                    call.request.queryParameters["access_token"]?.let { token ->
+                        HttpAuthHeader.Single(AuthScheme.Bearer, token)
+                    }
+                } else {
+                    null
                 }
             }
         }
     }
 }
+
+private const val WS_PATH = "/ws"

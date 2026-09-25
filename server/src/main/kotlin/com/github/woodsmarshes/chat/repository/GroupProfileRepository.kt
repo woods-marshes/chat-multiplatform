@@ -7,7 +7,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
-import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
@@ -133,20 +133,28 @@ class GroupProfileDataSourceImpl : GroupProfileRepository {
 
     override suspend fun searchGroup(keyword: String): List<GroupProfile> = dbQuery {
         val queryTerm = keyword.trim().lowercase()
+        if (queryTerm.isEmpty()) {
+            return@dbQuery emptyList()
+        }
+        val pattern = "%${queryTerm.escapeLike()}%"
 
         (GroupProfiles innerJoin Conversations)
             .selectAll()
             .where {
-                val conditions = mutableListOf<Op<Boolean>>()
-                conditions.add(Conversations.deletedAt.isNull())
-                conditions.add(GroupProfiles.handle.lowerCase() like "%$queryTerm%")
-                conditions.add(GroupProfiles.name.lowerCase() like "%$queryTerm%")
-                conditions.add(GroupProfiles.description.lowerCase() like "%$queryTerm%")
-                conditions.reduce { acc, op -> acc or op }
+                (Conversations.deletedAt.isNull()) and (
+                    (GroupProfiles.handle.lowerCase() like pattern) or
+                        (GroupProfiles.name.lowerCase() like pattern) or
+                        (GroupProfiles.description.lowerCase() like pattern)
+                    )
             }
             .limit(20)
             .map { it.toGroupProfile() }
     }
+
+    private fun String.escapeLike(): String =
+        replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
 
     override suspend fun checkHandleExists(handle: String): Boolean = dbQuery {
         GroupProfiles

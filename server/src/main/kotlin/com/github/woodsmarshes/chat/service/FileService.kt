@@ -35,6 +35,7 @@ class FileService(
 ) {
     private val logger = LoggerFactory.getLogger(FileService::class.java)
     private val uploadDir: String = "uploads"
+    private val privateUploadDir: String = "private-uploads"
 
     // Extensions that must never be served back from /uploads
     // (stored-XSS and malware vectors); such uploads are rejected.
@@ -64,6 +65,16 @@ class FileService(
             val dir = File("$uploadDir/$it")
             if (!dir.exists()) dir.mkdirs()
         }
+        val privateDir = File("$privateUploadDir/file")
+        if (!privateDir.exists()) privateDir.mkdirs()
+    }
+
+    fun resolvePrivateFile(fileName: String): File? {
+        if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+            return null
+        }
+        val file = File("$privateUploadDir/file", fileName)
+        return if (file.isFile) file else null
     }
 
     suspend fun uploadFile(
@@ -83,7 +94,9 @@ class FileService(
                     Err(FileError.UnsupportedFormat).bind()
                 }
                 val uniqueName = if (extension.isNotEmpty()) "$fileUuid.$extension" else fileUuid
-                val newFile = File("$uploadDir/$subFolder", uniqueName).also { physicalFile = it }
+                val isPrivate = fileType == FILE
+                val targetDir = if (isPrivate) "$privateUploadDir/file" else "$uploadDir/$subFolder"
+                val newFile = File(targetDir, uniqueName).also { physicalFile = it }
 
                 try {
                     newFile.writeBytes(fileData)
@@ -91,7 +104,11 @@ class FileService(
                     Err(FileError.IoError).bind()
                 }
 
-                val url = "/$uploadDir/$subFolder/$uniqueName"
+                val url = if (isPrivate) {
+                    "/v1/files/content/$uniqueName"
+                } else {
+                    "/$uploadDir/$subFolder/$uniqueName"
+                }
                 val size = fileData.size.toLong()
 
 

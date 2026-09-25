@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.openapi.OpenApiInfo
@@ -84,12 +85,15 @@ fun Application.configureHTTP() {
         }
     }
     install(RateLimit) {
+        // Without a requestKey every caller shares one bucket, so a single
+        // client exhausting its budget locks out everyone behind the same
+        // instance. Buckets are keyed per client instead.
         register(RateLimitName("api")) {
-            // 配置限流规则
             rateLimiter(
                 limit = 1000,               // 允许的请求数
                 refillPeriod = 60.seconds,  // 重置周期
             )
+            requestKey { call -> call.clientKey() }
         }
 
         register(RateLimitName("uploads")) {
@@ -97,6 +101,7 @@ fun Application.configureHTTP() {
                 limit = 60,                 // 每分钟允许60次上传
                 refillPeriod = 60.seconds,
             )
+            requestKey { call -> call.clientKey() }
         }
 
         register(RateLimitName("auth")) {
@@ -105,6 +110,12 @@ fun Application.configureHTTP() {
                 limit = 10,
                 refillPeriod = 60.seconds,
             )
+            requestKey { call -> call.clientKey() }
         }
     }
+}
+
+private fun ApplicationCall.clientKey(): String {
+    val userId = runCatching { extractUserId() }.getOrNull()
+    return if (userId != null) "user:$userId" else "ip:${request.local.remoteHost}"
 }

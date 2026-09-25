@@ -11,13 +11,17 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
+import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -125,14 +129,37 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
         conversationId: Uuid,
         messageId: Uuid
     ): Boolean = dbQuery {
-        ConversationParticipants.update(
-            where = {
+        // The cursor column has no foreign key, so a read receipt could point
+        // at a message from another conversation (or at nothing at all).
+        Messages.selectAll()
+            .where { Messages.id eq messageId }
+            .singleOrNull()
+            ?.takeIf { it[Messages.conversationId].value == conversationId }
+            ?: return@dbQuery false
+        ConversationParticipants.selectAll()
+            .where {
                 (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId)
             }
+            .singleOrNull()
+            ?: return@dbQuery false
+
+        // Message ids are UUIDv7, so "greater" is chronological. A receipt for
+        // an already-covered message is a no-op rather than a failure: several
+        // devices report the same position.
+        ConversationParticipants.update(
+            where = {
+                (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId) and
+                        (
+                                ConversationParticipants.lastReadMessageId.isNull() or
+                                        (ConversationParticipants.lastReadMessageId less messageId)
+                                )
+            }
         ) {
             it[this.lastReadMessageId] = messageId
-        } > 0
+        }
+        true
     }
 
     override suspend fun updateConversationParticipantRole(

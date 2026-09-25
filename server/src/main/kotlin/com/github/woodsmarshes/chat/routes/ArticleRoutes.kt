@@ -1,7 +1,10 @@
 package com.github.woodsmarshes.chat.routes
 
+import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.network.api.V1
+import com.github.woodsmarshes.chat.core.network.dto.article.ArticleAuthorDto
+import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
 import com.github.woodsmarshes.chat.core.network.dto.article.CreateArticleRequest
 import com.github.woodsmarshes.chat.core.network.dto.article.UpdateArticleRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
@@ -27,7 +30,7 @@ fun Route.articleRoutes() {
             limit = params.limit,
             authorId = params.authorId,
         ).getOrThrow()
-        call.respond(articles)
+        call.respond(articles.map { it.toListResponse() })
     }
 
     get<V1.Articles.Id> { params ->
@@ -44,7 +47,7 @@ fun Route.articleRoutes() {
                 beforeId = params.parent.beforeId,
                 limit = params.parent.limit
             ).getOrThrow()
-            call.respond(articles)
+            call.respond(articles.map { it.toListResponse() })
         }
 
         get<V1.Articles.My.Id> { params ->
@@ -99,3 +102,33 @@ fun Route.articleRoutes() {
         }
     }
 }
+
+/**
+ * List endpoints speak [ArticleListResponse], not the domain model.
+ *
+ * The two are not wire-compatible: the domain model numbers `deletedAt` as 11
+ * while the DTO reads 11 as `slug`, so encoding an [Article] directly made the
+ * client decode the deletion timestamp as the slug. Mapping here also keeps
+ * the document body out of list responses, which is what the DTO documents.
+ */
+private fun Article.toListResponse(): ArticleListResponse = ArticleListResponse(
+    id = id,
+    title = title,
+    content = null,
+    author = ArticleAuthorDto(
+        id = author.id,
+        username = author.username,
+        displayName = author.displayName,
+        avatarUrl = author.avatarUrl,
+        createdAt = author.createdAt,
+        updatedAt = author.updatedAt,
+        deletedAt = author.deletedAt,
+    ),
+    status = status,
+    excerpt = excerpt,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    publishedAt = publishedAt,
+    coverImage = coverImage,
+    slug = slug,
+)

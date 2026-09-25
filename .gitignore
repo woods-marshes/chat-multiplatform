@@ -105,6 +105,7 @@ google-services.json
 
 # uploade
 server/uploads/
+server/private-uploads/
 uploads/
 
 pmeCR9e.jpg

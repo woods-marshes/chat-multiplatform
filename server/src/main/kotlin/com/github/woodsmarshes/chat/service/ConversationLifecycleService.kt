@@ -187,7 +187,7 @@ class ConversationLifecycleService(
                 userId = userId,
                 conversationIds = userIdList
             )
-            .associateBy { it.id }
+            .toMap()
 
         val groupMap = groupProfileRepository
             .getGroupProfilesWithUsers(groupIdList)

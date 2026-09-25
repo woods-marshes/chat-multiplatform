@@ -68,16 +68,44 @@ class MessageService(
                     } == true) {
                     Err(MessageError.UserBlocked).bind()
                 }
-                // 如果不是好友，检查是否允许陌生人聊天
+                // 如果不是好友，双方都需要允许陌生人聊天
                 if (contacts == null || contacts.let { (c1, c2) ->
                         c1.status == ContactStatus.DELETED || c2.status == ContactStatus.DELETED
                     }) {
                     userSettingRepository.getSettings(userId)?.privacy?.allowStrangerChat?.let {
                         if (!it) Err(MessageError.StrangerChatDenied).bind()
                     }
+                    val peerId = conversationParticipantRepository
+                        .getPrivateConversationOtherParticipantsWithUser(userId, conversationId)
+                        ?.second
+                        ?.id
+                        ?: Err(MessageError.ConversationNotFound).bind()
+                    userSettingRepository.getSettings(peerId)?.privacy?.allowStrangerChat?.let {
+                        if (!it) Err(MessageError.StrangerChatDenied).bind()
+                    }
                 }
             }
         }
+        val parsedRequestId = Uuid.parseOrNull(requestId)
+            ?: Err(MessageError.InvalidContent).bind()
+        if (content is System) {
+            // System events are server-authored; accepting them from a client
+            // would let anyone forge audit entries such as "X joined".
+            Err(MessageError.InvalidContent).bind()
+        }
+
+        // Idempotency has to run before the temporary upload is consumed: an
+        // outbox resend of a media message would otherwise be rejected with
+        // MediaExpired, because the first attempt already confirmed the upload.
+        val persisted = messageRepository.findMessageByRequestId(
+            requestId = parsedRequestId,
+            conversationId = conversationId,
+            senderId = userId,
+        )
+        if (persisted != null) {
+            return@coroutineBinding persisted.withSenderContext(user, participant)
+        }
+
         val trustedContent = if (content is MediaContent) {
             uploadStore.retrieveAndConfirm(content.url)
                 ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
@@ -85,42 +113,23 @@ class MessageService(
             content
         }
         try {
-            // (message, isNew): an outbox resend with an already-persisted
-            // requestId returns the existing row; conversation state is not
-            // touched twice and the broadcast is skipped — the resender still
-            // gets its ack because the event below is emitted either way.
             val inserted = messageRepository.insertMessage(
                 conversationId = conversationId,
                 senderId = userId,
                 content = trustedContent,
-                category = when (trustedContent) {
-                    is System -> MessageCategory.SYSTEM
-                    is Normal -> MessageCategory.NORMAL
-                },
+                category = MessageCategory.NORMAL,
                 renderType = determineRenderType(trustedContent),
                 replyToMessageId = replyToMessageId,
-                requestId = Uuid.parseOrNull(requestId)
+                requestId = parsedRequestId
             ) ?: Err(MessageError.OperationFailed).bind()
 
-            val message = inserted.first.copy(
-                sender = SimpleUser(
-                    id = user.id,
-                    username = user.username,
-                    displayName = participant.settings.nickname ?: user.displayName,
-                    avatarUrl = user.avatarUrl,
-                    createdAt = user.createdAt,
-                    updatedAt = user.updatedAt,
-                    deletedAt = user.deletedAt,
-                    role = user.role
-                ),
-                senderContext = MessageSenderContext(
-                    conversationRole = participant.role,
-                    participantSettings = participant.settings,
-                    joinedAt = participant.joinedAt,
-                    lastReadMessageId = participant.lastReadMessageId,
-                    mutedUntil = participant.mutedUntil
-                )
-            )
+            if (!inserted.second) {
+                // A concurrent duplicate won the race: return its row and leave
+                // the single broadcast to the winner.
+                return@coroutineBinding inserted.first.withSenderContext(user, participant)
+            }
+
+            val message = inserted.first.withSenderContext(user, participant)
 
             eventBus.publishMessageEvent(
                 MessageEvent.SendMessage(
@@ -276,7 +285,9 @@ class MessageService(
 
     // 更新已读的消息
     suspend fun markAsRead(conversationId: Uuid, userId: Uuid, messageId: Uuid): Result<Unit, MessageError> = coroutineBinding {
-        val success = conversationParticipantRepository.updateReadLastMessage(conversationId, userId, messageId)
+        val success = conversationParticipantRepository.updateReadLastMessage(
+            userId = userId, conversationId = conversationId, messageId = messageId
+        )
         if (success) {
             eventBus.publishMessageEvent(
                 MessageEvent.ReadMessage(
@@ -313,6 +324,29 @@ class MessageService(
             Err(MessageError.NotParticipant).bind()
         }
     }
+
+    private fun Message.withSenderContext(
+        user: User,
+        participant: ConversationParticipant,
+    ): Message = copy(
+        sender = SimpleUser(
+            id = user.id,
+            username = user.username,
+            displayName = participant.settings.nickname ?: user.displayName,
+            avatarUrl = user.avatarUrl,
+            createdAt = user.createdAt,
+            updatedAt = user.updatedAt,
+            deletedAt = user.deletedAt,
+            role = user.role
+        ),
+        senderContext = MessageSenderContext(
+            conversationRole = participant.role,
+            participantSettings = participant.settings,
+            joinedAt = participant.joinedAt,
+            lastReadMessageId = participant.lastReadMessageId,
+            mutedUntil = participant.mutedUntil
+        )
+    )
 
     private fun determineRenderType(content: MessageContent): MessageRenderType = when (content) {
         is TextContent -> MessageRenderType.TEXT

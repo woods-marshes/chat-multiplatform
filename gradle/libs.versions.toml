@@ -49,6 +49,7 @@ sqlDelight = "2.4.0"
 sqlJs = "1.8.0"
 paging = "3.5.1"
 junit = "4.13.2"
+mockk = "1.14.11"
 lifecycleRuntimeKtx = "2.10.0"
 composeBom = "2026.01.00"
 
@@ -118,6 +119,7 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j-version
 ktor-server-config-yaml = { module = "io.ktor:ktor-server-config-yaml-jvm", version.ref = "ktor-version" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host-jvm", version.ref = "ktor-version" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin-version" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 # compose
 compose-html-core = { module = "org.jetbrains.compose.html:html-core", version.ref = "composeMultiplatform" }
 compose-animation = { module = "org.jetbrains.compose.animation:animation", version.ref = "composeMultiplatform" }

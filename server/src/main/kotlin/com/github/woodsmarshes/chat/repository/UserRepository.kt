@@ -54,7 +54,7 @@ interface UserRepository{
 
     suspend fun getUsersById(userIds: List<Uuid>): List<User>
 
-    suspend fun getPrivateConversationOtherUser(userId: Uuid, conversationIds: List<Uuid>): List<User>
+    suspend fun getPrivateConversationOtherUser(userId: Uuid, conversationIds: List<Uuid>): List<Pair<Uuid, User>>
 
     suspend fun getUsers(): List<User>
 
@@ -160,7 +160,7 @@ class UserDataSourceImpl : UserRepository {
     override suspend fun getPrivateConversationOtherUser(
         userId: Uuid,
         conversationIds: List<Uuid>
-    ): List<User> = dbQuery {
+    ): List<Pair<Uuid, User>> = dbQuery {
         ConversationParticipants
             .innerJoin(
                 otherTable = Users,
@@ -172,7 +172,7 @@ class UserDataSourceImpl : UserRepository {
             .where {
                 ConversationParticipants.conversationId inList conversationIds
             }
-            .map { it.toUser() }
+            .map { it[ConversationParticipants.conversationId].value to it.toUser() }
     }
 
     override suspend fun getUsers(): List<User> = dbQuery {
