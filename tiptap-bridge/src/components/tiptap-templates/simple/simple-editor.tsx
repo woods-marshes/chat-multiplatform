@@ -222,6 +222,12 @@ export function SimpleEditor({
 
   const [ydoc] = useState(() => new Y.Doc())
 
+  // The collaborative document is rebuilt from the Y.Doc, which stays empty until the
+  // server answers. Without this flag the editor would be editable while empty and the
+  // first keystroke would push that empty document into the host app, wiping the article.
+  const [collabSynced, setCollabSynced] = useState(!isCollabActive)
+  const [collabError, setCollabError] = useState<string | null>(null)
+
   // 在首次渲染时同步构建 Provider，确保 extensions 装载时拿到非空的对象
   const provider = useMemo(() => {
     if (!isCollabActive) return null
@@ -230,6 +236,11 @@ export function SimpleEditor({
       name: roomId,
       document: ydoc,
       token: token || '',
+      onSynced: ({ state }) => setCollabSynced(state),
+      onAuthenticationFailed: ({ reason }) => {
+        setCollabError(reason)
+        setCollabSynced(false)
+      },
     })
   }, [isCollabActive, collabUrl, roomId, token, ydoc])
 
@@ -243,6 +254,7 @@ export function SimpleEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
+    editable: !isCollabActive || collabSynced,
     editorProps: {
       attributes: {
         autocomplete: "off",
@@ -293,11 +305,19 @@ export function SimpleEditor({
     ],
     content: !isCollabActive ? (initialContent !== undefined ? initialContent : { type: "doc", content: [] }) : undefined,
     onUpdate: (args) => {
+      // Never report an unsynced collaborative document: the host app would store the
+      // empty document as the new article body on the next save.
+      if (isCollabActive && !collabSynced) return
       if (onUpdate) {
         onUpdate(args)
       }
     }
   })
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    editor.setEditable(!isCollabActive || collabSynced)
+  }, [editor, isCollabActive, collabSynced])
 
   useEffect(() => {
     if (!isCollabActive && editor && initialContent && !editor.isDestroyed) {
@@ -351,6 +371,13 @@ export function SimpleEditor({
 
         {/* 文章标题 */}
         <div className="simple-editor-content">
+          {isCollabActive && !collabSynced ? (
+            <div className="simple-editor-collab-status" role="status">
+              {collabError
+                ? `Collaborative editing is unavailable: ${collabError}. The document is read-only until the connection is restored.`
+                : "Connecting to the collaborative document..."}
+            </div>
+          ) : null}
           <input
             type="text"
             className="simple-editor-title-input"

@@ -72,6 +72,17 @@ body,
   flex: 1;
 }
 
+.simple-editor-collab-status {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tt-toolbar-text-color);
+  background: var(--tt-toolbar-bg-color);
+  border: 1px solid var(--tt-toolbar-border-color);
+}
+
 .simple-editor-content .tiptap.ProseMirror.simple-editor {
   flex: 1;
   padding: 16px 0 20vh 0;

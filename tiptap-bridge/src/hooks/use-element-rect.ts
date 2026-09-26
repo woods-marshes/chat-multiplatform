@@ -130,8 +130,10 @@ export function useElementRect({
     window.addEventListener("resize", handleUpdate, true)
 
     cleanup.push(() => {
-      window.removeEventListener("scroll", handleUpdate)
-      window.removeEventListener("resize", handleUpdate)
+      // The capture flag has to match the one used in addEventListener, otherwise the
+      // listener survives the unmount and keeps firing against a dead component.
+      window.removeEventListener("scroll", handleUpdate, true)
+      window.removeEventListener("resize", handleUpdate, true)
     })
 
     return () => {

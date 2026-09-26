@@ -47,14 +47,23 @@ function EditorApp() {
       getTitle: () => titleRef.current
     };
 
+    let readyTimer;
+    let disposed = false;
     const notifyReady = () => {
+      if (disposed) return;
       if (window.kmpJsBridge) {
         window.kmpJsBridge.callNative("onEditorReady", {});
       } else {
-        setTimeout(notifyReady, 50);
+        readyTimer = setTimeout(notifyReady, 50);
       }
     };
     notifyReady();
+
+    return () => {
+      disposed = true;
+      clearTimeout(readyTimer);
+      delete window.__editorShell;
+    };
   }, []);
 
   const handleTitleChange = (newTitle) => {
