@@ -49,6 +49,13 @@ class ArticleEditorViewModel(
         }
     }
 
+    /** Re-run the initial load after a failure so the screen can offer a retry. */
+    fun reload() {
+        _uiState.update { it.copy(error = null, isLoading = true) }
+        val id = articleId ?: activeArticleId
+        if (id != null) loadArticle(id) else createBlankArticle()
+    }
+
     private fun loadArticle(id: Uuid) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -84,7 +91,8 @@ class ArticleEditorViewModel(
                             _uiState.update { it.copy(isLoading = false, error = strings.articleNotFound) }
                         }
                     }.onErr { error ->
-                        _uiState.update { it.copy(isLoading = false, error = error.toString()) }
+                        log.error { "[editor] load article $id failed: $error" }
+                        _uiState.update { it.copy(isLoading = false, error = strings.articleLoadFailed) }
                     }
                 }
         }
@@ -121,7 +129,8 @@ class ArticleEditorViewModel(
                     }
                 }
                 .onErr { error ->
-                    _uiState.update { it.copy(isLoading = false, error = error.toString()) }
+                    log.error { "[editor] create blank article failed: $error" }
+                    _uiState.update { it.copy(isLoading = false, error = strings.articleLoadFailed) }
                 }
         }
     }
@@ -143,13 +152,13 @@ class ArticleEditorViewModel(
                 ProjectJson.parseToJsonElement(_uiState.value.contentJsonStr)
             } catch (e: Exception) {
                 log.error(e) { "Editor content is not valid JSON; refusing to save" }
-                _uiState.update { it.copy(isSaving = false, error = "Content is not valid JSON") }
+                _uiState.update { it.copy(isSaving = false, error = strings.articleSaveFailed) }
                 return@launch
             }
             val id = activeArticleId ?: Uuid.generateV7()
             articleRepository.saveArticle(
                 id = id,
-                title = _uiState.value.title.ifBlank { "Untitled" },
+                title = _uiState.value.title.ifBlank { strings.articleUntitled },
                 content = content,
                 status = status,
                 excerpt = null,
@@ -159,7 +168,8 @@ class ArticleEditorViewModel(
                 activeArticleId = id
                 _uiState.update { it.copy(isSaving = false, isSaved = true, isNew = false, roomId = id.toString()) }
             }.onErr { error ->
-                _uiState.update { it.copy(isSaving = false, error = error.toString()) }
+                log.error { "[editor] save article $id failed: $error" }
+                _uiState.update { it.copy(isSaving = false, error = strings.articleSaveFailed) }
             }
         }
     }

@@ -176,7 +176,7 @@ fun ChatScreen(
         uiState.selectedMessages.map { it.id }.toSet()
     }
     val onRetryCallback: (MessageUiModel) -> Unit = remember(viewModel) {
-        { message: MessageUiModel -> viewModel.sendMessage() }
+        { message: MessageUiModel -> viewModel.retryMessage(message) }
     }
     val onReplyCallback: (MessageUiModel) -> Unit = remember(viewModel) {
         { message: MessageUiModel -> viewModel.toggleReplyTo(message) }
@@ -338,6 +338,7 @@ fun ChatScreen(
                         onImageClick = { /* TODO: 打开系统图片选择器 */ },
                         onFileClick = { /* TODO: 打开系统文件选择器 */ },
                         onVoiceClick = { /* TODO: 开始录音 */ },
+                        enabled = !uiState.isSending,
                     )
                 }
             }

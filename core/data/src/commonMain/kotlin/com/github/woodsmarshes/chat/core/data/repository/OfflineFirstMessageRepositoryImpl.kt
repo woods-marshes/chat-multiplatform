@@ -456,6 +456,9 @@ class OfflineFirstMessageRepositoryImpl(
             val request = MessageRequest.Send(
                 senderId = entity.user_id,
                 conversationId = entity.conversation_id,
+                // The row keeps the reply target, and the server stores it on insert:
+                // dropping it here would silently degrade a retried reply to a plain message.
+                replyToMessageId = entity.reply_to_message_id,
                 content = entity.content,
                 requestId = entity.id.toString()
             )

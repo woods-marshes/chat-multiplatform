@@ -22,7 +22,21 @@ class AuthViewModel(
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
-    fun setMode(mode: AuthMode) = _uiState.update { it.copy(mode = mode) }
+    // Register-only validation results must follow the active mode: the name and
+    // confirm-password fields are not rendered in Login mode, so an error produced in
+    // Register mode could never be cleared again and would keep canSubmit false for the
+    // rest of the session.
+    fun setMode(mode: AuthMode) = _uiState.update {
+        it.copy(
+            mode = mode,
+            nameError = if (mode == AuthMode.Register) AuthUiState.validateName(it.name) else null,
+            confirmPasswordError = if (mode == AuthMode.Register) {
+                AuthUiState.validateConfirmPassword(it.confirmPassword, it.password)
+            } else {
+                null
+            },
+        )
+    }
 
     fun updateName(name: String) = _uiState.update { 
         it.copy(name = name, nameError = AuthUiState.validateName(name)) 
@@ -46,6 +60,9 @@ class AuthViewModel(
     fun resetScreenState() = _uiState.update { it.copy(screenState = AuthScreenState.Idle) }
 
     fun submit() {
+        // The submit button reads the screen state captured at composition time, so two taps
+        // inside one frame would both pass the UI guard. Reject the duplicate here.
+        if (_uiState.value.screenState is AuthScreenState.Loading) return
         log.info { "[AuthViewModel]: submit()" }
         if (!validateAll()) return
 

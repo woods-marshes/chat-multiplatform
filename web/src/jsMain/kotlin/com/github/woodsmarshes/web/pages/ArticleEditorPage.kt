@@ -66,8 +66,10 @@ val ArticleEditorPage = FC<Props> {
         launch {
             try {
                 if (isEditing) {
-                    // 编辑已有文章，正常拉取内容
-                    val article = ArticleRepository.getById(Uuid.parse(rawId!!))
+                    // Own drafts are only visible through the /my endpoint, so it has to be
+                    // tried first: the public endpoint rejects everything that is not published.
+                    val id = Uuid.parse(rawId!!)
+                    val article = ArticleRepository.getMy(id) ?: ArticleRepository.getById(id)
                     if (article != null) {
                         setTitle(article.title)
                         setExistingArticle(article)

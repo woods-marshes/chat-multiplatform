@@ -3,7 +3,9 @@ package com.github.woodsmarshes.chat.feature.article_editor.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -70,23 +72,51 @@ fun ArticleEditorScreen(
             )
         },
     ) { innerPadding ->
+        val loadFailed = uiState.error != null && uiState.roomId == null
         if (uiState.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
+        } else if (loadFailed) {
+            // Without this branch a failed load rendered an empty editor: the user could type
+            // into a document the server never returned and save it over the real article.
+            Column(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = uiState.error.orEmpty(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                TextButton(onClick = viewModel::reload) {
+                    Text(LocalStrings.current.retry)
+                }
+            }
         } else {
-            TiptapEditorWebView(
-                initialTitle = uiState.title,
-                initialJsonStr = uiState.contentJsonStr,
-                onTitleChanged = viewModel::updateTitle,
-                onContentChanged = viewModel::updateContent,
-                collabUrl = uiState.collabUrl,
-                roomId = uiState.roomId,
-                token = uiState.token,
-                userInfoName = uiState.userInfoName,
-                userInfoColor = uiState.userInfoColor,
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-            )
+            Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                if (uiState.error != null) {
+                    Text(
+                        text = uiState.error.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                TiptapEditorWebView(
+                    initialTitle = uiState.title,
+                    initialJsonStr = uiState.contentJsonStr,
+                    onTitleChanged = viewModel::updateTitle,
+                    onContentChanged = viewModel::updateContent,
+                    collabUrl = uiState.collabUrl,
+                    roomId = uiState.roomId,
+                    token = uiState.token,
+                    userInfoName = uiState.userInfoName,
+                    userInfoColor = uiState.userInfoColor,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 

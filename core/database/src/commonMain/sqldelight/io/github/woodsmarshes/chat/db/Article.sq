@@ -142,7 +142,7 @@ LIMIT :limit OFFSET :offset;
 
 
 
--- Paging: boundaries (optional author filter)
+-- Paging: boundaries (optional author and status filter)
 articleBoundaries:
 SELECT t.id
 FROM (
@@ -159,6 +159,7 @@ FROM (
   FROM Article
   WHERE deleted_at IS NULL
     AND (:authorId IS NULL OR author_id = :authorId)
+    AND (CAST(:status AS TEXT) IS NULL OR status = CAST(:status AS TEXT))
   ORDER BY id DESC
 ) AS t
 WHERE page_boundary = 1
@@ -171,9 +172,10 @@ WHERE NOT EXISTS (
   FROM Article
   WHERE deleted_at IS NULL
     AND (:authorId IS NULL OR author_id = :authorId)
+    AND (CAST(:status AS TEXT) IS NULL OR status = CAST(:status AS TEXT))
 );
 
--- Paging: keyed range with author info (optional author filter)
+-- Paging: keyed range with author info (optional author and status filter)
 keyedArticlesWithAuthor:
 SELECT
     A.*,
@@ -192,6 +194,7 @@ JOIN UserEntity AS U ON A.author_id = U.id
 WHERE A.id <= :beginInclusive
   AND (A.id > :endExclusive OR :endExclusive IS NULL)
   AND (:authorId IS NULL OR A.author_id = :authorId)
+  AND (CAST(:status AS TEXT) IS NULL OR A.status = CAST(:status AS TEXT))
   AND A.deleted_at IS NULL
 ORDER BY A.id DESC;
 

@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 class RealtimeApi(
     private val client: HttpClient,
@@ -54,10 +56,16 @@ class RealtimeApi(
         connectionJob = scope.launch {
             log.info { "Starting connection loop..." }
 
-            var currentDelay = 1000L
-            val maxDelay = 10000L
+            var currentDelay = INITIAL_RETRY_DELAY_MS
+            val maxDelay = MAX_RETRY_DELAY_MS
+
+            suspend fun backoff() {
+                delay(currentDelay.milliseconds)
+                currentDelay = (currentDelay * 2).coerceAtMost(maxDelay)
+            }
 
             while (isActive) {
+                var connectedAt: TimeMark? = null
                 try {
                     log.info { "[RealtimeApi] connecting..." }
                     _connectionState.value = ConnectionState.Connecting
@@ -75,10 +83,22 @@ class RealtimeApi(
                     }
 
                     _connectionState.value = ConnectionState.Connected
-                    currentDelay = 1000L
+                    connectedAt = TimeSource.Monotonic.markNow()
                     log.info { "[RealtimeApi] connected, starting observeMessages" }
 
                     observeMessages()
+
+                    // The server closes idle sessions cleanly, which makes observeMessages
+                    // return instead of throwing. Without the backoff below the loop would
+                    // reconnect immediately forever while the state stayed "Connected".
+                    val uptimeMs = connectedAt.elapsedNow().inWholeMilliseconds
+                    if (uptimeMs >= STABLE_CONNECTION_MS) {
+                        currentDelay = INITIAL_RETRY_DELAY_MS
+                    }
+                    session = null
+                    _connectionState.value = ConnectionState.Disconnected("Connection closed by server")
+                    log.info { "[RealtimeApi] connection closed, backing off ${currentDelay}ms" }
+                    backoff()
 
                 } catch (e: Exception) {
                     if (e is CancellationException) {
@@ -93,8 +113,7 @@ class RealtimeApi(
                     _connectionState.value = ConnectionState.Disconnected("Error: ${e.message}", e)
 
                     log.info { "Retrying in ${currentDelay}ms..." }
-                    delay(currentDelay.milliseconds)
-                    currentDelay = (currentDelay * 2).coerceAtMost(maxDelay)
+                    backoff()
                 }
             }
         }
@@ -146,6 +165,14 @@ class RealtimeApi(
             }
             log.info { "[RealtimeApi] observeMessages() session closed" }
         }
+    }
+
+    private companion object {
+        const val INITIAL_RETRY_DELAY_MS = 1000L
+        const val MAX_RETRY_DELAY_MS = 10_000L
+
+        /** A connection that lasted this long is treated as healthy, so the backoff resets. */
+        const val STABLE_CONNECTION_MS = 30_000L
     }
 }
 

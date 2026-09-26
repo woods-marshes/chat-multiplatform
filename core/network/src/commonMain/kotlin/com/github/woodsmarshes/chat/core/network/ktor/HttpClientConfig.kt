@@ -108,6 +108,10 @@ fun createHttpClient(
 
     install(Auth) {
         bearer {
+            // The token holder caches the first non-null token for the whole client lifetime
+            // when caching is on, so a later login as a different account would keep sending
+            // the previous JWT. Read the token from the data source on every request instead.
+            cacheTokens = false
             loadTokens {
                 val jwt = authTokenDataSource.jwtToken.first()
                 if (!jwt.isNullOrEmpty()) {

@@ -49,8 +49,10 @@ const server = new Server({
     if (!token) {
       throw new Error('Not authorized: Token missing');
     }
+
+    const ktorAuthUrl = process.env.KTOR_AUTH_URL || 'http://localhost:9051/v1/auth/verify';
+    let userId;
     try {
-      const ktorAuthUrl = process.env.KTOR_AUTH_URL || 'http://localhost:9051/v1/auth/verify';
       // 远程调用 Ktor 服务端校验 JWT 合法性
       const response = await fetch(ktorAuthUrl, {
         headers: {
@@ -63,27 +65,41 @@ const server = new Server({
         throw new Error('Unauthorized');
       }
       const user = await response.json();
-      const userId = user.userId;
-
-      // 按房间授权：只有文章作者可写，其他已登录用户进入只读模式。
-      // 否则任何持有合法 token 的用户都能篡改他人的草稿。
-      let canWrite = false;
-      if (UUID_REGEX.test(documentName)) {
-        const ownership = await dbPool.query(
-          'SELECT author_id FROM articles WHERE id = $1::uuid',
-          [documentName]
-        );
-        canWrite = ownership.rows[0]?.author_id === userId;
-      }
-      if (!canWrite && connectionConfig) {
-        connectionConfig.readOnly = true;
-      }
-
-      return { userId }; // 注入上下文
+      userId = user.userId;
     } catch (e) {
       console.error('Authentication failed:', e.message);
       throw new Error('Unauthorized');
     }
+
+    if (!UUID_REGEX.test(documentName)) {
+      throw new Error('Forbidden: invalid document name');
+    }
+
+    // 按房间授权：作者可写；已发布文章的其他登录用户只读。
+    // 草稿必须拒绝：只放行写入是不够的，onLoadDocument 会把 articles.content
+    // （未发布正文）作为初始文档推给任何连上房间的人。
+    let article;
+    try {
+      const ownership = await dbPool.query(
+        'SELECT author_id, status, deleted_at FROM articles WHERE id = $1::uuid',
+        [documentName]
+      );
+      article = ownership.rows[0];
+    } catch (e) {
+      console.error('[onAuthenticate] Ownership lookup failed:', e.message);
+      throw new Error('Authorization unavailable');
+    }
+
+    const isAuthor = article?.author_id === userId;
+    const isPublished = article?.status === 'PUBLISHED' && article?.deleted_at == null;
+    if (!isAuthor && !isPublished) {
+      throw new Error('Forbidden');
+    }
+    if (!isAuthor && connectionConfig) {
+      connectionConfig.readOnly = true;
+    }
+
+    return { userId }; // 注入上下文
   },
 
   async onLoadDocument({ documentName }) {
@@ -132,4 +148,9 @@ const server = new Server({
   }
 });
 
-server.listen();
+server.listen().catch((e) => {
+  // EADDRINUSE and hook failures arrive here; without this the container dies on an
+  // unhandled rejection with a raw stack and no diagnosis.
+  console.error('[collab-server] failed to start:', e.message);
+  process.exit(1);
+});

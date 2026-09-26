@@ -40,8 +40,12 @@ interface ArticleDao {
         limit: Int = 50
     ): Flow<List<ListArticlesByAuthorAndStatusWithAuthor>>
 
-    // 分页（authorId 为 null 则查全量）
-    fun pagingSource(pageSize: Long, authorId: Uuid? = null): PagingSource<Uuid, KeyedArticlesWithAuthor>
+    // 分页（authorId 为 null 则查全量，status 为 null 则不过滤状态）
+    fun pagingSource(
+        pageSize: Long,
+        authorId: Uuid? = null,
+        status: ArticleStatus? = null,
+    ): PagingSource<Uuid, KeyedArticlesWithAuthor>
 
     // 删除逻辑
     suspend fun softDelete(id: Uuid, deletedAt: Instant)

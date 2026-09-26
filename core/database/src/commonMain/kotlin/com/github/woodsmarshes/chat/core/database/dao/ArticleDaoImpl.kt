@@ -87,7 +87,13 @@ class ArticleDaoImpl(
             .mapToList(ioContext)
     }
 
-    override fun pagingSource(pageSize: Long, authorId: Uuid?): PagingSource<Uuid, KeyedArticlesWithAuthor> {
+    override fun pagingSource(
+        pageSize: Long,
+        authorId: Uuid?,
+        status: ArticleStatus?,
+    ): PagingSource<Uuid, KeyedArticlesWithAuthor> {
+        // The status is bound as the enum (SQLDelight encodes it as its name) and cast to
+        // text in the query, which keeps the "no filter" case expressible as a null parameter.
         return QueryPagingSource(
             transacter = queries,
             context = ioContext,
@@ -96,6 +102,7 @@ class ArticleDaoImpl(
                     limit = limit,
                     referenceId = anchorId,
                     authorId = authorId,
+                    status = status,
                 )
             },
             queryProvider = { beginInclusive, endExclusive ->
@@ -103,6 +110,7 @@ class ArticleDaoImpl(
                     beginInclusive = beginInclusive,
                     endExclusive = endExclusive,
                     authorId = authorId,
+                    status = status,
                 )
             }
         )

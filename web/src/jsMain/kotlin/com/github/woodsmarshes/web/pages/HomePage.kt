@@ -30,11 +30,14 @@ val HomePage = FC<Props> {
             loading = cursor == null
             val result = ArticleRepository.listAll(beforeId = cursor, limit = 20)
             if (cursor == null) {
-                articles = result.sortedByDescending { it.updatedAt }
+                articles = result
             } else {
-                articles = articles + result.sortedByDescending { it.updatedAt }
+                articles = articles + result
             }
-            lastId = articles.lastOrNull()?.id
+            // beforeId is a keyset cursor on the article id, so the cursor must come from the
+            // raw page. Re-sorting by updatedAt would move it into an unrelated id range and
+            // make the next page duplicate and skip rows.
+            lastId = result.lastOrNull()?.id
             hasMore = result.size >= 20
             loading = false
         }

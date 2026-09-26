@@ -190,6 +190,8 @@
     <string name="article_save_draft">存草稿</string>
     <string name="article_publish">发布</string>
     <string name="article_not_found">文章未找到</string>
+    <string name="article_save_failed">保存失败</string>
+    <string name="article_untitled">无标题</string>
 
     <!-- Settings Theme Brand -->
     <string name="theme_miuix">Miuix (小米 HyperOS 风格)</string>

@@ -20,7 +20,7 @@ import react.dom.html.ReactHTML.div
 import react.dom.html.ReactHTML.h3
 import react.dom.html.ReactHTML.p
 import react.dom.html.ReactHTML.span
-import react.useEffectOnce
+import react.useEffect
 import react.useState
 import web.cssom.ClassName
 
@@ -73,7 +73,10 @@ val Sidebar = FC<SidebarProps> { props ->
         }
     }
 
-    useEffectOnce {
+    // Keyed on the inputs, not run-once: on an article page the author id only arrives after
+    // the article request resolves, and a run-once effect would leave the "other articles of
+    // this author" list showing the signed-in user's own articles.
+    useEffect(props.authorId, loggedIn) {
         if (props.authorId != null || loggedIn) {
             loadPage(null)
         } else {

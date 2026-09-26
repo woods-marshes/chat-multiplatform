@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -171,45 +172,69 @@ class ChatViewModel(
         val text = _input.value.text
         if (text.isBlank()) return
 
+        sendContent(
+            text = text,
+            replyToMessageId = _uiState.value.replyToMessage?.id,
+            clearInputOnSuccess = true,
+        )
+    }
+
+    /**
+     * Retry a failed bubble. The message carries its own content and reply target, so the
+     * draft box must not be reused here: it is empty for a message restored from the database
+     * (the tap would do nothing) and holds unrelated text once the user has typed again.
+     */
+    fun retryMessage(message: MessageUiModel) {
+        val content = message.content as? TextContent ?: return
+        if (content.text.isBlank()) return
+
+        sendContent(
+            text = content.text,
+            replyToMessageId = message.replyTo?.id,
+            clearInputOnSuccess = false,
+        )
+    }
+
+    private fun sendContent(text: String, replyToMessageId: Uuid?, clearInputOnSuccess: Boolean) {
+        // A double tap must not create a second message: the repository mints a fresh
+        // request id per call, so the duplicate would be a real second bubble.
+        if (_uiState.value.isSending) return
+        val conversationId = conversationUuid ?: return
+
         log.info { "[ChatVM] sendMessage triggered" }
 
-        _uiState.value = _uiState.value.copy(isSending = true)
+        _uiState.update { it.copy(isSending = true) }
 
         viewModelScope.launch {
-            val replyToId = _uiState.value.replyToMessage?.id
             val result = messageRepository.sendMessage(
-                conversationId = conversationUuid ?: return@launch,
+                conversationId = conversationId,
                 content = TextContent(text),
-                replyToMessageId = replyToId,
+                replyToMessageId = replyToMessageId,
             )
             result.onOk {
                 log.info { "[ChatVM] sendMessage result OK" }
                 // Clear the input only after a confirmed send: on failure the
                 // user keeps their draft instead of losing it.
-                _input.value = TextFieldValue()
-                _uiState.value = _uiState.value.copy(
-                    isSending = false,
-                    error = null,
-                )
+                if (clearInputOnSuccess) {
+                    _input.value = TextFieldValue()
+                }
+                _uiState.update { it.copy(isSending = false, error = null) }
                 clearReplyTo()
             }.onErr {
                 log.warn { "[ChatVM] sendMessage result ERR: ${it.message}" }
-                _uiState.value = _uiState.value.copy(
-                    isSending = false,
-                    error = strings.sendFailed,
-                )
+                _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
                 clearReplyTo()
             }
-            stopTyping(conversationUuid)
+            stopTyping(conversationId)
         }
     }
 
     fun setReplyTo(message: MessageUiModel) {
-        _uiState.value = _uiState.value.copy(replyToMessage = message)
+        _uiState.update { it.copy(replyToMessage = message) }
     }
 
     fun clearReplyTo() {
-        _uiState.value = _uiState.value.copy(replyToMessage = null)
+        _uiState.update { it.copy(replyToMessage = null) }
     }
 
     /**

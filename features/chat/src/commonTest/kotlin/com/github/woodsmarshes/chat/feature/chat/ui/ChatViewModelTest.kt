@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.chat.ui
 
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.paging.PagingData
 import com.github.michaelbull.result.Ok
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
@@ -20,6 +21,7 @@ import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.MessageState
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -54,13 +56,21 @@ class ChatViewModelTest {
     private val conversationId = Uuid.parse("00000000-0000-0000-0000-000000000001")
 
     private val sentMessages = mutableListOf<Pair<Uuid, MessageContent>>()
+    private val sentReplies = mutableListOf<Pair<Uuid, Uuid?>>()
     private val typingSignals = mutableListOf<Pair<Uuid, Boolean>>()
+    private var sendInvocations = 0
+    private var sendGate: (suspend () -> Unit)? = null
 
     private fun withViewModel(
         block: (ChatViewModel) -> Unit,
     ) {
         val messageRepository = FakeMessageRepository(
-            onSend = { id, content -> sentMessages += id to content },
+            onSend = { id, content, replyTo ->
+                sentMessages += id to content
+                sentReplies += id to replyTo
+            },
+            onSendStarted = { sendInvocations++ },
+            onSendGate = { sendGate?.invoke() },
             onTyping = { id, isTyping -> typingSignals += id to isTyping },
         )
         val userRepository = FakeUserRepository(MutableStateFlow(null))
@@ -212,6 +222,58 @@ class ChatViewModelTest {
         }
     }
 
+    /**
+     * A failed bubble restored from the database has no draft behind it, so the retry has to
+     * resend the message itself. Reusing the input box made the tap a silent no-op there and
+     * sent unrelated text once the user had typed again.
+     */
+    @Test
+    fun retrySendsTheFailedMessageItself() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            withViewModel { vm ->
+                val target = testMessage("target")
+                val failed = testMessage("failed").copy(
+                    content = TextContent("original text"),
+                    replyTo = target,
+                    sendStatus = MessageState.SendFailed("offline"),
+                )
+                vm.onInputChanged(TextFieldValue("unrelated draft"))
+
+                vm.retryMessage(failed)
+
+                assertEquals(1, sentMessages.size)
+                assertEquals(TextContent("original text"), sentMessages.single().second)
+                assertEquals(listOf<Uuid?>(target.id), sentReplies.map { it.second })
+                assertEquals("unrelated draft", vm.input.value.text, "a retry must not consume the draft")
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun doubleTapSendsTheMessageOnlyOnce() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val gate = CompletableDeferred<Unit>()
+            sendGate = { gate.await() }
+            withViewModel { vm ->
+                vm.onInputChanged(TextFieldValue("only once"))
+
+                vm.sendMessage()
+                vm.sendMessage()
+
+                assertEquals(1, sendInvocations, "the second tap must be rejected while a send is in flight")
+
+                gate.complete(Unit)
+                assertEquals(1, sentMessages.size)
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun testMessage(seed: String): MessageUiModel {
         val hex = seed.hashCode().toUInt().toString(16).padStart(12, '0').take(12)
         val id = Uuid.parse("00000000-0000-0000-0000-$hex")
@@ -230,7 +292,10 @@ class ChatViewModelTest {
     @AfterTest
     fun tearDown() {
         sentMessages.clear()
+        sentReplies.clear()
         typingSignals.clear()
+        sendInvocations = 0
+        sendGate = null
     }
 }
 
@@ -291,7 +356,9 @@ private class FakeConversationRepository(
 }
 
 private class FakeMessageRepository(
-    private val onSend: (Uuid, MessageContent) -> Unit = { _, _ -> },
+    private val onSend: (Uuid, MessageContent, Uuid?) -> Unit = { _, _, _ -> },
+    private val onSendStarted: () -> Unit = {},
+    private val onSendGate: suspend () -> Unit = {},
     private val onTyping: (Uuid, Boolean) -> Unit = { _, _ -> },
 ) : MessageRepository {
     override suspend fun retryPendingMessages() = Unit
@@ -306,7 +373,9 @@ private class FakeMessageRepository(
         content: MessageContent,
         replyToMessageId: Uuid?,
     ): com.github.michaelbull.result.Result<Unit, MessageError> {
-        onSend(conversationId, content)
+        onSendStarted()
+        onSendGate()
+        onSend(conversationId, content, replyToMessageId)
         return Ok(Unit)
     }
     override suspend fun revokeMessage(messageId: Uuid) = Unit

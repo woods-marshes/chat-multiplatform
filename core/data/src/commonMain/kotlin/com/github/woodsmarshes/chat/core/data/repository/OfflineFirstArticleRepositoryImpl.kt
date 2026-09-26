@@ -97,7 +97,11 @@ class OfflineFirstArticleRepositoryImpl(
             pagingSourceFactory = {
                 articleDao.pagingSource(
                     pageSize = limit.toLong(),
-                    authorId = authorId
+                    authorId = authorId,
+                    // The "all" tab mirrors the server, which only publishes PUBLISHED rows.
+                    // Without this filter the locally cached drafts of the signed-in user
+                    // would show up there and take the place of real articles.
+                    status = if (getMyArticle) null else ArticleStatus.PUBLISHED,
                 )
             }
         ).flow.map { pagingData ->

@@ -94,10 +94,16 @@ actual fun TiptapEditorWebView(
                 navigator: WebViewNavigator?,
                 callback: (String) -> Unit,
             ) {
+                // A malformed payload must be dropped, not turned into an empty title:
+                // the fallback would be persisted as the article title on the next save.
                 val title = runCatching {
                     json.parseToJsonElement(message.params).jsonObject["title"]?.jsonPrimitive?.content
-                }.getOrNull() ?: ""
-                currentOnTitleChanged(title)
+                }.getOrNull()
+                if (title == null) {
+                    log.warn { "[editor] ignoring malformed onTitleChanged payload" }
+                } else {
+                    currentOnTitleChanged(title)
+                }
                 callback("ok")
             }
         }
@@ -110,10 +116,16 @@ actual fun TiptapEditorWebView(
                 navigator: WebViewNavigator?,
                 callback: (String) -> Unit,
             ) {
+                // A malformed payload must be dropped, not replaced with "{}": the fallback
+                // would become the article body on the next save and wipe the real content.
                 val jsonStr = runCatching {
                     json.parseToJsonElement(message.params).jsonObject["json"]?.jsonPrimitive?.content
-                }.getOrNull() ?: "{}"
-                currentOnContentChanged(jsonStr)
+                }.getOrNull()
+                if (jsonStr == null) {
+                    log.warn { "[editor] ignoring malformed onContentChanged payload" }
+                } else {
+                    currentOnContentChanged(jsonStr)
+                }
                 callback("ok")
             }
         }
