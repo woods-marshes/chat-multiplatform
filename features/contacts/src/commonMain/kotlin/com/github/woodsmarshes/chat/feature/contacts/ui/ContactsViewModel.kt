@@ -9,12 +9,14 @@ import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.contacts.model.ContactsUiState
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ContactsViewModel(
@@ -24,6 +26,8 @@ class ContactsViewModel(
 
     // User-facing strings for ViewModel-produced messages (no CompositionLocal here).
     private val strings = getLocaleStrings()
+
+    private val log = KotlinLogging.logger {}
 
     private val _uiState = MutableStateFlow(ContactsUiState())
     val uiState: StateFlow<ContactsUiState> = _uiState.asStateFlow()
@@ -35,7 +39,12 @@ class ContactsViewModel(
         viewModelScope.launch {
             contactRepository.getFriendsFlow()
                 .onStart { _uiState.value = _uiState.value.copy(isLoading = true, error = null) }
-                .catch { e -> _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Unknown error") }
+                .catch { e ->
+                    // The raw exception text (Ktor request/URL dumps) must not reach the
+                    // user; the details stay in the log.
+                    log.error(e) { "[Contacts] loading friends failed" }
+                    _uiState.update { it.copy(isLoading = false, error = strings.loadFailed) }
+                }
                 .collect { pairs ->
                     val contacts = pairs.map { (_, user) ->
                         ContactUiModel(

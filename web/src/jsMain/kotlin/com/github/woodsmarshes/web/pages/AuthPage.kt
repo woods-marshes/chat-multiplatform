@@ -2,9 +2,12 @@ package com.github.woodsmarshes.web.pages
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
+import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.koinInject
+import io.ktor.client.call.body
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.promise
@@ -32,6 +35,22 @@ private fun parseQueryParams(): Map<String, String> {
         if (eq < 0) null
         else part.substring(0, eq) to part.substring(eq + 1)
     }.toMap()
+}
+
+/**
+ * Turns the typed API error into a readable message. Ktor's own exception text embeds the
+ * request URL and the raw response body, which must not be shown to the user.
+ */
+private suspend fun decodeAuthError(e: Throwable): String? {
+    val response = (e as? ResponseException)?.response ?: return null
+    val error = runCatching { response.body<AuthError>() }.getOrNull() ?: return null
+    return when (error) {
+        AuthError.InvalidCredentials -> "Invalid email or password"
+        AuthError.UserAlreadyExists -> "This email is already registered"
+        AuthError.WeakPassword -> "Password is too weak"
+        is AuthError.Unknown -> error.message
+        else -> null
+    }
 }
 
 val AuthPage = FC<Props> {
@@ -65,9 +84,11 @@ val AuthPage = FC<Props> {
                         userSettingDs.setUser(resp.user)
                     }
                 Router.navigate(returnUrl)
-            } catch (e: Exception) {
-                     println("Auth error: ${e.message}")
-                    errorMsg = e.message ?: "Authentication failed"
+    } catch (e: Exception) {
+        // Ktor's raw message contains the request URL and the response body; show the
+        // decoded API error instead.
+        console.log("Auth error: ${e.message}")
+        errorMsg = decodeAuthError(e) ?: "Authentication failed"
                     submitting = false
                 }
             }

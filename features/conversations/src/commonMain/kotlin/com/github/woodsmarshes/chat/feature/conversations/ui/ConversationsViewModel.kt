@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
@@ -46,10 +47,14 @@ class ConversationsViewModel(
             conversationRepository.getConversationListFlow()
                 .onStart { _uiState.value = _uiState.value.copy(isLoading = true) }
                 .catch { e ->
-                    _uiState.value = _uiState.value.copy(
-                        error = e.message ?: strings.loadFailed,
-                        isLoading = false,
-                    )
+                    // Keep the Ktor request/URL text out of the UI, it is not a user message.
+                    log.error(e) { "[Conversations] loading the list failed" }
+                    _uiState.update {
+                        it.copy(
+                            error = strings.loadFailed,
+                            isLoading = false,
+                        )
+                    }
                 }
                 .collect { conversations ->
                     _uiState.value = _uiState.value.copy(

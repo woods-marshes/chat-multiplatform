@@ -48,10 +48,12 @@ class ArticleDetailViewModel(
 
     val uiState: StateFlow<ArticleDetailUiState> = article
         .map { result ->
-            var state = ArticleDetailUiState(isLoading = false)
+            // The repository emits Ok(null) while it is still reading the cache and fetching,
+            // so a null article is a loading state, not an empty screen.
+            var state = ArticleDetailUiState(isLoading = true)
             result
-                .onOk { a -> state = state.copy(article = a) }
-                .onErr { e -> state = state.copy(error = e.toString()) }
+                .onOk { a -> state = state.copy(isLoading = a == null, article = a) }
+                .onErr { e -> state = state.copy(isLoading = false, error = e.toString()) }
             state
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArticleDetailUiState())

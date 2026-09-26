@@ -40,6 +40,10 @@ val ArticleViewPage = FC<Props> {
     // kept the first one mounted and never refetched.
     useEffect(articleId) {
         loading = true
+        // A route change must clear the previous article: an unparsable id would
+        // otherwise keep rendering the previously opened article under the new URL.
+        article = null
+        isOwn = false
         if (articleId != null) {
             val id = try { Uuid.parse(articleId) } catch (e: Exception) { null }
             if (id != null) {

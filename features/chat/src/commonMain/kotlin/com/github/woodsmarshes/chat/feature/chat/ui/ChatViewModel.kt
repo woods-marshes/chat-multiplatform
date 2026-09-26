@@ -80,7 +80,7 @@ class ChatViewModel(
             userRepository.getMeFlow()
                 .map { it?.id }
                 .collectLatest { ownUserId ->
-                    _uiState.value = _uiState.value.copy(ownUserId = ownUserId)
+                    _uiState.update { it.copy(ownUserId = ownUserId) }
                 }
         }
 
@@ -89,7 +89,7 @@ class ChatViewModel(
             // Chat header: live title/avatar from Room (group profile or peer user).
             viewModelScope.launch {
                 conversationRepository.getConversationHeaderFlow(convId).collect { header ->
-                    _uiState.value = _uiState.value.copy(header = header)
+                    _uiState.update { it.copy(header = header) }
                 }
             }
 
@@ -119,11 +119,13 @@ class ChatViewModel(
                     }
                     .distinctUntilChanged()
                     .collectLatest { (members, activeTypingUsers, count) ->
-                        _uiState.value = _uiState.value.copy(
-                            members = members,
-                            typingUsers = activeTypingUsers,
-                            memberCount = if (isGroup) count else null,
-                        )
+                        _uiState.update {
+                            it.copy(
+                                members = members,
+                                typingUsers = activeTypingUsers,
+                                memberCount = if (isGroup) count else null,
+                            )
+                        }
                     }
             }
         }
@@ -252,10 +254,12 @@ class ChatViewModel(
     // ---------------- Multi-select ----------------
 
     fun enterSelection(message: MessageUiModel) {
-        _uiState.value = _uiState.value.copy(
-            selectionMode = true,
-            selectedMessages = listOf(message),
-        )
+        _uiState.update {
+            it.copy(
+                selectionMode = true,
+                selectedMessages = listOf(message),
+            )
+        }
     }
 
     fun toggleSelection(message: MessageUiModel) {
@@ -269,29 +273,33 @@ class ChatViewModel(
         } else {
             current + message
         }
-        _uiState.value = _uiState.value.copy(
-            selectionMode = updated.isNotEmpty(),
-            selectedMessages = updated,
-        )
+        _uiState.update {
+            it.copy(
+                selectionMode = updated.isNotEmpty(),
+                selectedMessages = updated,
+            )
+        }
     }
 
     fun clearSelection() {
-        _uiState.value = _uiState.value.copy(
-            selectionMode = false,
-            selectedMessages = emptyList(),
-        )
+        _uiState.update {
+            it.copy(
+                selectionMode = false,
+                selectedMessages = emptyList(),
+            )
+        }
     }
 
     // ---------------- Forward ----------------
 
     fun startForward(messages: List<MessageUiModel>) {
         if (messages.isEmpty()) return
-        _uiState.value = _uiState.value.copy(forwardingMessages = messages)
+        _uiState.update { it.copy(forwardingMessages = messages) }
     }
 
     fun dismissForward() {
         if (!_uiState.value.isForwarding) {
-            _uiState.value = _uiState.value.copy(forwardingMessages = emptyList())
+            _uiState.update { it.copy(forwardingMessages = emptyList()) }
         }
     }
 
@@ -302,9 +310,12 @@ class ChatViewModel(
     fun forwardMessages(targetConversationId: Uuid) {
         val messages = _uiState.value.forwardingMessages
         if (messages.isEmpty()) return
+        // A second tap on the target dialog would cancel the running job after it already
+        // sent part of the batch and resend everything, duplicating the forwarded messages.
+        if (_uiState.value.isForwarding) return
         forwardJob?.cancel()
         forwardJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isForwarding = true)
+            _uiState.update { it.copy(isForwarding = true) }
             var failed = 0
             messages.forEach { message ->
                 messageRepository.sendMessage(
@@ -312,11 +323,13 @@ class ChatViewModel(
                     content = message.content,
                 ).onErr { failed++ }
             }
-            _uiState.value = _uiState.value.copy(
-                isForwarding = false,
-                forwardingMessages = emptyList(),
-                error = if (failed > 0) strings.forwardFailed else null,
-            )
+            _uiState.update {
+                it.copy(
+                    isForwarding = false,
+                    forwardingMessages = emptyList(),
+                    error = if (failed > 0) strings.forwardFailed else null,
+                )
+            }
         }
     }
 

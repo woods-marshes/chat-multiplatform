@@ -14,6 +14,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -81,31 +82,33 @@ class SettingsViewModel(
     }
 
     fun setShowOnlineStatus(show: Boolean) {
-        _uiState.value = _uiState.value.copy(showOnlineStatus = show)
-        persistPrivacy(privacy.copy(showOnlineStatus = show)) { reverted ->
-            _uiState.value = _uiState.value.copy(showOnlineStatus = reverted.showOnlineStatus)
+        // Only this field is rolled back on failure: reverting the whole snapshot would
+        // also undo a concurrent toggle of the other switch.
+        val previous = privacy.showOnlineStatus
+        _uiState.update { it.copy(showOnlineStatus = show) }
+        persistPrivacy(privacy.copy(showOnlineStatus = show)) {
+            _uiState.update { it.copy(showOnlineStatus = previous) }
         }
     }
 
     fun setAllowSearch(allow: Boolean) {
-        _uiState.value = _uiState.value.copy(allowSearch = allow)
-        persistPrivacy(privacy.copy(allowSearch = allow)) { reverted ->
-            _uiState.value = _uiState.value.copy(allowSearch = reverted.allowSearch)
+        val previous = privacy.allowSearch
+        _uiState.update { it.copy(allowSearch = allow) }
+        persistPrivacy(privacy.copy(allowSearch = allow)) {
+            _uiState.update { it.copy(allowSearch = previous) }
         }
     }
 
     /**
      * Optimistically persists the new privacy snapshot to the server and the
-     * local cache; on failure the toggle is reverted so the UI matches storage.
+     * local cache; on failure the caller restores the single field it owns.
      */
-    private fun persistPrivacy(next: PrivacySetting, onRevert: (PrivacySetting) -> Unit) {
-        val previous = privacy
+    private fun persistPrivacy(next: PrivacySetting, onRevert: () -> Unit) {
         privacy = next
         viewModelScope.launch {
             userRepository.updateGlobalSettings(privacy = next).onErr { err ->
                 log.error { "[SettingsVM] persist privacy failed, reverting: $err" }
-                privacy = previous
-                onRevert(previous)
+                onRevert()
             }
         }
     }
