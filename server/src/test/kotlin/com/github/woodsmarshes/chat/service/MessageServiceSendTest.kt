@@ -5,6 +5,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.GroupMetadata
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.JoinGroupContent
@@ -24,8 +25,10 @@ import com.github.woodsmarshes.chat.repository.GroupProfileRepository
 import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
+import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import io.mockk.coEvery
+import io.mockk.coJustRun
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
@@ -106,6 +109,74 @@ class MessageServiceSendTest {
         category = MessageCategory.NORMAL,
         createdAt = now,
         content = TextContent("hello"),
+    )
+
+    @Test
+    fun withdrawingTheLastFileMessageRemovesItsAttachment() = runBlocking {
+        val fileName = "report-${Uuid.random()}.pdf"
+        val fileMessage = message().copy(
+            content = FileContent(
+                url = "$PRIVATE_FILE_URL_PREFIX$fileName",
+                fileName = fileName,
+                mimeType = "application/pdf",
+                size = 3,
+            )
+        )
+        coEvery { messageRepository.getMessageRevokeContext(userId, fileMessage.id) } returns Triple(
+            Pair(userId, fileMessage),
+            participantForRevocation(),
+            conversationForRevocation(),
+        )
+        coEvery { messageRepository.revokeMessage(fileMessage.id) } returns true
+        coEvery { messageRepository.countLiveFileReferences(fileName) } returns 0L
+        coJustRun { fileService.deletePrivateFile(fileName) }
+
+        service.withdrawMessage(userId, fileMessage.id)
+
+        coVerify(exactly = 1) { fileService.deletePrivateFile(fileName) }
+    }
+
+    @Test
+    fun withdrawingAFileStillReferencedElsewhereKeepsIt() = runBlocking {
+        val fileName = "shared-${Uuid.random()}.pdf"
+        val fileMessage = message().copy(
+            content = FileContent(
+                url = "$PRIVATE_FILE_URL_PREFIX$fileName",
+                fileName = fileName,
+                mimeType = "application/pdf",
+                size = 3,
+            )
+        )
+        coEvery { messageRepository.getMessageRevokeContext(userId, fileMessage.id) } returns Triple(
+            Pair(userId, fileMessage),
+            participantForRevocation(),
+            conversationForRevocation(),
+        )
+        coEvery { messageRepository.revokeMessage(fileMessage.id) } returns true
+        coEvery { messageRepository.countLiveFileReferences(fileName) } returns 2L
+
+        service.withdrawMessage(userId, fileMessage.id)
+
+        coVerify(exactly = 0) { fileService.deletePrivateFile(any()) }
+    }
+
+    private fun participantForRevocation() = ConversationParticipant(
+        conversationId = conversationId,
+        userId = userId,
+        role = ConversationRole.MEMBER,
+        lastReadMessageId = null,
+        joinedAt = now,
+        settings = ParticipantSettings(),
+    )
+
+    private fun conversationForRevocation() = Conversation(
+        id = conversationId,
+        type = ConversationType.GROUP,
+        metadata = GroupMetadata(),
+        createdAt = now,
+        updatedAt = now,
+        deletedAt = null,
+        lastMessageId = null,
     )
 
     @Test

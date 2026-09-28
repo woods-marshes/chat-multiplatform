@@ -6,78 +6,6 @@ info:
 servers:
   - url: "https://chat_multiplatform"
 paths:
-  /protected/route/basic:
-    get:
-      description: ""
-      responses:
-        "200":
-          description: "OK"
-          content:
-            text/plain:
-              schema:
-                type: "string"
-              examples:
-                Example#1:
-                  value: ""
-  /protected/route/form:
-    get:
-      description: ""
-      responses:
-        "200":
-          description: "OK"
-          content:
-            text/plain:
-              schema:
-                type: "string"
-              examples:
-                Example#1:
-                  value: ""
-  /session/increment:
-    get:
-      description: ""
-      responses:
-        "200":
-          description: "OK"
-          content:
-            text/plain:
-              schema:
-                type: "string"
-              examples:
-                Example#1:
-                  value: ""
-  /articles:
-    get:
-      description: "Static plugin. Try to access `/static/index.html` <br> staticResources(\"\
-        /static\", \"static\")"
-      parameters:
-        - name: "sort"
-          in: "query"
-          required: false
-          schema:
-            type: "string"
-      responses:
-        "200":
-          description: "OK <br> Get all articles ..."
-          content:
-            '*/*':
-              schema:
-                type: "string"
-              examples:
-                Example#1:
-                  value: ""
-  /double-receive:
-    post:
-      description: ""
-      responses:
-        "200":
-          description: "OK"
-          content:
-            text/plain:
-              schema:
-                type: "string"
-              examples:
-                Example#1:
-                  value: ""
   /v1/auth/login:
     post:
       description: ""
@@ -1875,3 +1803,9 @@ components:
         preferences:
           nullable: true
           $ref: "#/components/schemas/UserPreference"
+  securitySchemes:
+    bearerAuth:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "JWT"
+      description: "JWT issued by /v1/auth/login or /v1/auth/refresh; send as the Authorization: Bearer header. The /ws endpoint additionally accepts the token as an access_token query parameter."

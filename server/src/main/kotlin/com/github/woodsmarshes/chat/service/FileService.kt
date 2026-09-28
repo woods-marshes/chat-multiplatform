@@ -96,6 +96,17 @@ class FileService(
     }
 
     /**
+     * Removes a private attachment that no live message references anymore:
+     * the bytes on disk and every conversation mapping recorded for it.
+     */
+    suspend fun deletePrivateFile(fileName: String) {
+        if (!isSafeFileName(fileName)) return
+        val file = File("$privateUploadDir/file", fileName)
+        if (file.isFile) file.delete()
+        privateFileRepository.deleteMappings(fileName)
+    }
+
+    /**
      * Whether a public /uploads/… URL currently resolves to a file on disk.
      * Used to let old messages re-attach their media; the tree is public by
      * design, so existence here grants no new access.

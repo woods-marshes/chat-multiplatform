@@ -17,7 +17,14 @@ interface EventBus {
 }
 
 class EventBusImpl : EventBus, AutoCloseable {
+    private val logger = org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
     private val droppedEvents = AtomicLong()
+
+    /** Events dropped at publish time because the buffer saturated. */
+    fun droppedCount(): Long = droppedEvents.get()
+
+    /** Current subscriber count on the message channel (ops/test visibility). */
+    fun messageSubscriberCount(): Int = _messageEvents.subscriptionCount.value
 
     // tryEmit never suspends, so events can be published inline from the
     // caller — emitting from separate launched coroutines would reorder
@@ -59,13 +66,15 @@ class EventBusImpl : EventBus, AutoCloseable {
             val total = droppedEvents.incrementAndGet()
             // Warn per drop but never flood: a sustained flood logs every 100th.
             if (total % 100L == 1L) {
-                org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
-                    .warn("EventBus buffer overflow: dropped {} event (total dropped: {})", kind, total)
+                logger.warn("EventBus buffer overflow: dropped {} event (total dropped: {})", kind, total)
             }
         }
     }
 
     override fun close() {
-        // SharedFlows hold no resources; kept for AutoCloseable symmetry.
+        val dropped = droppedEvents.get()
+        if (dropped > 0) {
+            logger.warn("EventBus shut down having dropped {} events in total", dropped)
+        }
     }
 }

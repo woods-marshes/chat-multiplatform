@@ -174,6 +174,20 @@ class MessageService(
             }
 
     /**
+     * When the withdrawn message was the last live reference to a private
+     * attachment, remove the bytes and its conversation mappings. A
+     * concurrent forward of the same URL re-registers the mapping on insert,
+     * so the only visible race is a forward whose file vanishes mid-flight.
+     */
+    private suspend fun cleanupAttachmentIfUnreferenced(message: Message) {
+        val content = message.content as? FileContent ?: return
+        if (!content.url.startsWith(PRIVATE_FILE_URL_PREFIX)) return
+        val fileName = content.url.substringAfterLast('/')
+        if (messageRepository.countLiveFileReferences(fileName) > 0L) return
+        fileService.deletePrivateFile(fileName)
+    }
+
+    /**
      * 撤回消息
      */
     suspend fun withdrawMessage(userId: Uuid, messageId: Uuid): Result<Message, MessageError> = coroutineBinding {
@@ -193,6 +207,8 @@ class MessageService(
         if (!success) {
             Err(MessageError.RevokeFailed).bind()
         }
+
+        cleanupAttachmentIfUnreferenced(message)
 
         // 发布撤回事件
         eventBus.publishMessageEvent(

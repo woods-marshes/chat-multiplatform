@@ -97,6 +97,14 @@ interface MessageRepository {
     suspend fun getMessageRevokeContext(userId: Uuid, messageId: Uuid): Triple<Pair<Uuid, Message>, ConversationParticipant, Conversation>?
 
     suspend fun revokeMessage(messageId: Uuid): Boolean
+
+    /**
+     * How many non-revoked file messages still carry [fileName]. For file
+     * messages the search text is the original file name, which makes this
+     * the liveness check before deleting an attachment from disk.
+     */
+    suspend fun countLiveFileReferences(fileName: String): Long
+
     suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>?
 }
 
@@ -439,6 +447,17 @@ class MessageDataSourceImpl : MessageRepository {
             it[Messages.content] = TextContent("")
             it[Messages.searchText] = ""
         } > 0
+    }
+
+    override suspend fun countLiveFileReferences(fileName: String): Long = dbQuery {
+        Messages
+            .selectAll()
+            .where {
+                (Messages.renderType eq MessageRenderType.FILE) and
+                    (Messages.searchText eq fileName) and
+                    Messages.revokedAt.isNull()
+            }
+            .count()
     }
 
     override suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>? = dbQuery<Pair<Message, List<User>>?> {
