@@ -11,7 +11,10 @@ import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
 import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
+import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
+import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
+import com.github.woodsmarshes.chat.utils.PUBLIC_UPLOAD_URL_PREFIX
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -25,6 +28,8 @@ class MessageService(
     private val conversationParticipantRepository: ConversationParticipantRepository,
     private val eventBus: EventBus,
     private val uploadStore: TemporaryUploadStore,
+    private val fileService: FileService,
+    private val privateFileRepository: PrivateFileRepository,
 ) {
     
     /**
@@ -107,7 +112,7 @@ class MessageService(
         }
 
         val trustedContent = if (content is MediaContent) {
-            uploadStore.retrieveAndConfirm(content.url)
+            resolveTrustedMedia(content)
                 ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
         } else {
             content
@@ -150,6 +155,23 @@ class MessageService(
             Err(MessageError.OperationFailed).bind()
         }
     }
+
+    /**
+     * An upload is trusted either while it is still pending in the upload
+     * store (first send) or once it has already been persisted as part of a
+     * message somewhere (forwarding / re-attaching an old URL). Public
+     * /uploads media additionally accepts an existing file on disk, since
+     * that tree is public by design.
+     */
+    private suspend fun resolveTrustedMedia(content: MediaContent): MediaContent? =
+        uploadStore.retrieveAndConfirm(content.url)
+            ?: when {
+                content.url.startsWith(PRIVATE_FILE_URL_PREFIX) ->
+                    content.takeIf { privateFileRepository.hasMapping(content.url.substringAfterLast('/')) }
+                content.url.startsWith(PUBLIC_UPLOAD_URL_PREFIX) ->
+                    content.takeIf { fileService.publicFileExists(content.url) }
+                else -> null
+            }
 
     /**
      * 撤回消息

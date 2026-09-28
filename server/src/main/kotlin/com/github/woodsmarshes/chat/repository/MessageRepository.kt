@@ -18,7 +18,9 @@ import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
+import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
+import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -36,6 +38,7 @@ import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.upsert
 import kotlin.collections.emptyMap
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -181,6 +184,16 @@ class MessageDataSourceImpl : MessageRepository {
             ?.also { row ->
                 val newMessageId = row[Messages.id].value
 
+                // Record which conversation each private attachment reached,
+                // atomically with the message: the download authorization for
+                // /v1/files/content/… is derived from these rows.
+                content.privateFileNames().forEach { fileName ->
+                    PrivateFiles.upsert {
+                        it[this.fileName] = fileName
+                        it[this.conversationId] = conversationId
+                    }
+                }
+
                 Conversations.update({
                     (Conversations.id eq conversationId) and (
                             (Conversations.lastMessageId.isNull()) or
@@ -214,6 +227,17 @@ class MessageDataSourceImpl : MessageRepository {
         replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_")
+
+    /** File names of private attachments carried by this content, if any. */
+    private fun MessageContent.privateFileNames(): List<String> = when (this) {
+        is Normal -> when (this) {
+            is FileContent -> listOfNotNull(
+                url.takeIf { it.startsWith(PRIVATE_FILE_URL_PREFIX) }?.substringAfterLast('/')
+            )
+            else -> emptyList()
+        }
+        is System -> emptyList()
+    }
 
     override suspend fun getHistory(
         conversationId: Uuid,

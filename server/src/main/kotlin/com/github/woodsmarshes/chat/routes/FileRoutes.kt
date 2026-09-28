@@ -171,12 +171,12 @@ fun Route.fileRoutes() {
 
     rateLimit(RateLimitName("files")) {
     // Chat attachments are not part of the public /uploads tree: they are
-    // served from here so that reaching them requires a valid token instead of
-    // knowing a URL. Per-conversation ownership is not modelled yet, so any
-    // authenticated caller with the name can fetch the file.
+    // served from here so that reaching them requires both a valid token and
+    // membership in a conversation the file was actually sent to.
     routingGet("/v1/files/content/{fileName}") {
+        val userId = call.extractUserId()
         val requested = call.parameters["fileName"].orEmpty()
-        val file = fileService.resolvePrivateFile(requested)
+        val file = fileService.resolveAuthorizedPrivateFile(requested, userId)
         if (file == null) {
             call.respond(HttpStatusCode.NotFound, FileError.NoFileProvided)
         } else {

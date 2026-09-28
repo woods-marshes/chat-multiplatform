@@ -18,6 +18,7 @@ val ALL_SCHEMA_TABLES: List<Table> = listOf(
     ConversationParticipants,
     Contacts,
     ContactRequests,
+    PrivateFiles,
     Articles,
     YjsDocuments,
 )

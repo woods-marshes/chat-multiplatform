@@ -16,6 +16,8 @@ import com.github.woodsmarshes.chat.repository.GroupProfileDataSourceImpl
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
 import com.github.woodsmarshes.chat.repository.MessageDataSourceImpl
 import com.github.woodsmarshes.chat.repository.MessageRepository
+import com.github.woodsmarshes.chat.repository.PrivateFileRepository
+import com.github.woodsmarshes.chat.repository.PrivateFileSourceImpl
 import com.github.woodsmarshes.chat.repository.UserDataSourceImpl
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserSettingDataSourceImpl
@@ -63,6 +65,10 @@ val repositoryModule = module {
 
     singleOf(::ArticleDataSourceImpl) {
         bind<ArticleRepository>()
+    }
+
+    singleOf(::PrivateFileSourceImpl) {
+        bind<PrivateFileRepository>()
     }
 
 }

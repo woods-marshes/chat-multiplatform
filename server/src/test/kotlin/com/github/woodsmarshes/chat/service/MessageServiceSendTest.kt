@@ -22,6 +22,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
 import com.github.woodsmarshes.chat.repository.MessageRepository
+import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import io.mockk.coEvery
@@ -44,6 +45,8 @@ class MessageServiceSendTest {
     private val participantRepository = mockk<ConversationParticipantRepository>()
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
     private val uploadStore = mockk<TemporaryUploadStore>()
+    private val fileService = mockk<FileService>()
+    private val privateFileRepository = mockk<PrivateFileRepository>()
 
     private val service = MessageService(
         groupProfileRepository = groupProfileRepository,
@@ -53,6 +56,8 @@ class MessageServiceSendTest {
         conversationParticipantRepository = participantRepository,
         eventBus = eventBus,
         uploadStore = uploadStore,
+        fileService = fileService,
+        privateFileRepository = privateFileRepository,
     )
 
     private val userId = Uuid.random()

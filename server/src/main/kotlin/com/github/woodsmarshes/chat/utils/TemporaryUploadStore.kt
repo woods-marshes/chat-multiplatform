@@ -10,7 +10,8 @@ import kotlin.time.Instant
 data class PendingUpload(
     val content: MediaContent,
     val physicalPaths: List<String>,
-    val createdAt: Instant = Clock.System.now()
+    val createdAt: Instant = Clock.System.now(),
+    val confirmed: Boolean = false,
 )
 
 interface TemporaryUploadStore {
@@ -27,17 +28,27 @@ class TemporaryUploadStoreImpl : TemporaryUploadStore, AutoCloseable {
     }
 
     override fun retrieveAndConfirm(url: String): MediaContent? {
-        return pendingMap.remove(url)?.content
+        // Confirming must not be destructive: re-attaching the same URL (e.g.
+        // forwarding) has to keep succeeding, and the cleanup job only ever
+        // deletes uploads that never made it into a message.
+        return pendingMap.computeIfPresent(url) { _, entry ->
+            if (entry.confirmed) entry else entry.copy(confirmed = true)
+        }?.content
     }
 
     override fun cleanExpiredFiles(expirationMinutes: Int) {
         val now = Clock.System.now()
         val iterator = pendingMap.entries.iterator()
         while (iterator.hasNext()) {
-            val entry = iterator.next()
-            val info = entry.value
-            if (now - info.createdAt > expirationMinutes.minutes) {
-                info.physicalPaths.forEach { path ->
+            val entry = iterator.next().value
+            if (now - entry.createdAt <= expirationMinutes.minutes) continue
+
+            if (entry.confirmed) {
+                // The file is referenced by a persisted message: keep the
+                // bytes, drop only the in-memory bookkeeping.
+                iterator.remove()
+            } else {
+                entry.physicalPaths.forEach { path ->
                     try {
                         val file = File(path)
                         if (file.exists()) file.delete()

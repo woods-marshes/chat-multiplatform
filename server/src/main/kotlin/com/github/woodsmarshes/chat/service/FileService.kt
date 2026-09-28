@@ -13,7 +13,10 @@ import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.MediaContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.error.FileError
+import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
+import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.utils.BlurHashEncoder
+import com.github.woodsmarshes.chat.utils.PUBLIC_UPLOAD_URL_PREFIX
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.WaveformGenerator
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,8 @@ import kotlin.uuid.Uuid
 
 class FileService(
     private val uploadStore: TemporaryUploadStore,
+    private val privateFileRepository: PrivateFileRepository,
+    private val participantRepository: ConversationParticipantRepository,
 ) {
     private val logger = LoggerFactory.getLogger(FileService::class.java)
     private val uploadDir: String = "uploads"
@@ -70,11 +75,46 @@ class FileService(
     }
 
     fun resolvePrivateFile(fileName: String): File? {
-        if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
-            return null
-        }
+        if (!isSafeFileName(fileName)) return null
         val file = File("$privateUploadDir/file", fileName)
         return if (file.isFile) file else null
+    }
+
+    /**
+     * Private attachments are downloadable only by members of a conversation
+     * the file was actually sent to. The mapping is recorded when the message
+     * is persisted, so a leaked URL alone grants nothing.
+     */
+    suspend fun resolveAuthorizedPrivateFile(fileName: String, requesterId: Uuid): File? {
+        val conversations = privateFileRepository.getConversationsForFile(fileName)
+        if (conversations.isEmpty()) return null
+        val isMember = conversations.any { conversationId ->
+            participantRepository.getConversationParticipant(requesterId, conversationId) != null
+        }
+        if (!isMember) return null
+        return resolvePrivateFile(fileName)
+    }
+
+    /**
+     * Whether a public /uploads/… URL currently resolves to a file on disk.
+     * Used to let old messages re-attach their media; the tree is public by
+     * design, so existence here grants no new access.
+     */
+    fun publicFileExists(url: String): Boolean {
+        if (!url.startsWith(PUBLIC_UPLOAD_URL_PREFIX)) return false
+        val relative = url.removePrefix("/").replace('/', File.separatorChar)
+        if (relative.contains("..")) return false
+        return File(relative).isFile
+    }
+
+    private fun isSafeFileName(fileName: String): Boolean {
+        // Reject path traversal attempts
+        if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+            return false
+        }
+        // Remove null bytes and trim
+        val cleaned = fileName.replace("\u0000", "").trim()
+        return cleaned.isNotEmpty() && cleaned != "."
     }
 
     suspend fun uploadFile(

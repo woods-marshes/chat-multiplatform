@@ -6,6 +6,8 @@ import com.github.woodsmarshes.chat.base.jwt.TokenConfig
 import com.github.woodsmarshes.chat.di.MainModule
 import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
+import com.github.woodsmarshes.chat.repository.database.schema.Messages
+import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.connectToH2Database
@@ -20,6 +22,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.fileProperties
@@ -35,8 +38,10 @@ private const val EXPIRED_FILE_CLEANUP_MINUTES = 30L
 fun Application.configureFrameworks() {
     val appConfig = extractServerConfig()
     requireProductionConfiguration(appConfig)
-    val database = configureDatabase(appConfig)
+    val dbType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"
+    val database = configureDatabase(appConfig, dbType)
     configureSchema(database)
+    configurePrivateFileBackfill(database, dbType)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
     configureFileCleanup()
 }
@@ -78,8 +83,7 @@ private val INSECURE_SECRETS = setOf(
     "jghN7qJJq4vDmvHVg",
 )
 
-private fun Application.configureDatabase(config: ServerConfig): Database {
-    val dbType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"
+private fun Application.configureDatabase(config: ServerConfig, dbType: String): Database {
     return when (dbType) {
         "postgres" -> {
             val dbConfig = config.databaseConfig
@@ -87,6 +91,26 @@ private fun Application.configureDatabase(config: ServerConfig): Database {
             connectToPostgresDatabase(dbConfig)
         }
         else -> connectToH2Database()
+    }
+}
+
+private fun configurePrivateFileBackfill(database: Database, dbType: String) {
+    // One-time backfill: attachments sent before download authorization was
+    // introduced have no private_files rows. Runs only on PostgreSQL (the
+    // production dialect — H2 dev/test data is disposable) and only while the
+    // mapping table is still empty, so steady-state boots pay one COUNT.
+    if (dbType != "postgres") return
+    transaction(database) {
+        if (PrivateFiles.selectAll().count() > 0) return@transaction
+        exec(
+            """
+            INSERT INTO private_files (file_name, conversation_id, created_at)
+            SELECT DISTINCT substring(m.content->>'url' from '[^/]+$'), m.conversation_id, now()
+            FROM messages m
+            WHERE m.content->>'type' = 'FILE' AND m.content->>'url' LIKE '/v1/files/content/%'
+            ON CONFLICT DO NOTHING
+            """.trimIndent()
+        )
     }
 }
 

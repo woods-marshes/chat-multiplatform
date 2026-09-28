@@ -5,6 +5,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
 import com.github.woodsmarshes.chat.repository.MessageRepository
+import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import io.mockk.coEvery
@@ -33,6 +34,8 @@ class MessageServiceTest {
         conversationParticipantRepository = participantRepository,
         eventBus = eventBus,
         uploadStore = uploadStore,
+        fileService = mockk<FileService>(),
+        privateFileRepository = mockk<PrivateFileRepository>(),
     )
 
     @Test
