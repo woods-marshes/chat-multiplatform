@@ -34,6 +34,7 @@ import org.jetbrains.exposed.v1.core.leftJoin
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -168,6 +169,17 @@ class MessageDataSourceImpl : MessageRepository {
             }
         }
 
+        // Allocate the delivery position under the conversation row lock,
+        // which serializes concurrent senders per conversation; clients use
+        // this to detect delivery gaps and repair them via REST sync.
+        Conversations.update({ Conversations.id eq conversationId }) {
+            it[nextSeq] = nextSeq + 1
+        }
+        val seq = Conversations
+            .selectAll()
+            .where { Conversations.id eq conversationId }
+            .single()[Conversations.nextSeq]
+
         Messages.insert {
             if (requestId != null) it[Messages.id] = requestId
             it[Messages.conversationId] = conversationId
@@ -178,6 +190,7 @@ class MessageDataSourceImpl : MessageRepository {
             it[Messages.renderType] = renderType
             it[Messages.replyToMessageId] = replyTo?.id
             it[Messages.createdAt] = Clock.System.now()
+            it[Messages.seq] = seq
         }
             .resultedValues
             ?.singleOrNull()

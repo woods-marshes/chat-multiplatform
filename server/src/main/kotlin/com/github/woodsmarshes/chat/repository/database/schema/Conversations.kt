@@ -15,4 +15,8 @@ object Conversations : UuidTable(name = "conversations", uuidVersion = UuidVersi
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at").clientDefault{ Clock.System.now() }
     val deletedAt = timestamp("deleted_at").nullable()
+
+    // Allocator for Messages.seq: the insert transaction bumps this under the
+    // conversation row lock, which serializes allocation per conversation.
+    val nextSeq = long("next_seq").default(0)
 }

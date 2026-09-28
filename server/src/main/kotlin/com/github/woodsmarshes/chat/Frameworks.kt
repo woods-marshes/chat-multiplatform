@@ -9,6 +9,7 @@ import com.github.woodsmarshes.chat.di.serviceModule
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
+import com.github.woodsmarshes.chat.repository.database.schema.backfillMessageSeq
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import com.github.woodsmarshes.chat.utils.connectToPostgresDatabase
@@ -27,6 +28,9 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.core.SortOrder
+import kotlin.uuid.Uuid
 import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.fileProperties
 import org.koin.ktor.ext.getKoin
@@ -44,6 +48,7 @@ fun Application.configureFrameworks() {
     val dbType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"
     val database = configureDatabase(appConfig, dbType)
     configureSchema(database)
+    backfillMessageSeq(database)
     configurePrivateFileBackfill(database, dbType)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
     configureFileCleanup()
@@ -119,11 +124,17 @@ private fun configurePrivateFileBackfill(database: Database, dbType: String) {
 
 private fun configureSchema(database: Database) {
     transaction(database) {
+        // Creates tables that do not exist yet (e.g. private_files on a
+        // fresh database). createMissingTablesAndColumns was considered for
+        // widening this to existing tables, but it re-issues named unique
+        // constraints that H2 has already created, so new columns on
+        // existing databases are applied with explicit idempotent DDL below.
         SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
-        // SchemaUtils.create skips existing tables, so databases created before
-        // an index was added to the schema never receive it; recreate it
-        // idempotently here.
+        // SchemaUtils.create skips existing tables, so databases created
+        // before these additions never receive them from the schema objects.
         exec("CREATE INDEX IF NOT EXISTS idx_conversation_participants_user_id ON conversation_participants (user_id)")
+        exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS seq BIGINT")
+        exec("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS next_seq BIGINT DEFAULT 0 NOT NULL")
     }
 }
 

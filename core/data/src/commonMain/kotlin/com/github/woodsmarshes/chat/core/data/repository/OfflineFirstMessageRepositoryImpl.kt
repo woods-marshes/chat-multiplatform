@@ -30,6 +30,7 @@ import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.MessageStatus
@@ -40,6 +41,8 @@ import com.github.woodsmarshes.chat.core.model.VideoContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
@@ -91,9 +94,14 @@ class OfflineFirstMessageRepositoryImpl(
     private var messageConsumptionJob: Job? = null
     private var outboxRetryJob: Job? = null
 
-//    private val _invalidationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-//    override val invalidationEvents: Flow<Unit>
-//        get() = _invalidationEvents.asSharedFlow()
+    /**
+     * Highest gap-free realtime seq seen per conversation. A jump in the
+     * stream means events were lost in flight (socket hiccup or a server-side
+     * drop); the missing span is then repaired from REST history.
+     */
+    private val seqMutex = Mutex()
+    private val deliveredSeqs = mutableMapOf<Uuid, Long>()
+    private val gapRepairs = mutableMapOf<Uuid, Job>()
 
     init {
         startMessageConsumption()
@@ -337,46 +345,121 @@ class OfflineFirstMessageRepositoryImpl(
             val isOwnMessage = currentUser != null && event.senderId == currentUser.id
             log.info { "[handleReceived] isOwnMessage=$isOwnMessage requestId=${event.requestId} serverMsgId=${message.id}" }
 
-            // Convert message to entities
-            val messageEntity = message.toMessageEntity()
-            val userEntity = message.toUserEntity()
-            val participantEntity = message.toParticipantEntity()
+            trackDeliverySeq(message)
+            persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage })
+            log.info { "[handleReceived] db transaction done" }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.error(e) { "[handleReceived] error: ${e.message}" }
+        }
+    }
 
-            // Insert into database using transaction
-            messageDao.transaction {
-                if (isOwnMessage) {
-                    val localRow = messageDao.getMessageById(Uuid.parse(event.requestId)).firstOrNull()
-                    if (localRow != null) {
-                        log.info { "[handleReceived] updating own msg: oldId=${event.requestId} -> newId=${message.id}" }
-                        messageDao.updateMessageStatus(
-                            oldId = Uuid.parse(event.requestId),
-                            newId = message.id,
-                            createdAt = message.createdAt,
-                            status = MessageStatus.SENT
-                        )
-                    } else {
-                        // Ack for a message sent from another own device: there
-                        // is no local SENDING row to promote, insert as SENT.
-                        messageDao.insertMessage(messageEntity)
-                    }
-                } else {
-                    messageDao.insertMessage(messageEntity)
+    private suspend fun trackDeliverySeq(message: Message) {
+        val seq = message.seq ?: return
+        val conversationId = message.conversationId
+        var gapDetected = false
+        seqMutex.withLock {
+            val last = deliveredSeqs[conversationId]
+            if (last == null || seq > last) {
+                if (last != null && seq > last + 1) {
+                    gapDetected = true
                 }
-                userEntity?.let { userDao.insertUser(it) }
-                participantEntity?.let { participantDao.insertParticipant(it) }
+                deliveredSeqs[conversationId] = seq
+            }
+            // An older seq re-arriving after a repair is a duplicate.
+        }
+        if (gapDetected) {
+            scheduleGapRepair(conversationId)
+        }
+    }
 
+    /** Only the single event-consumption coroutine schedules repairs. */
+    private fun scheduleGapRepair(conversationId: Uuid) {
+        if (gapRepairs[conversationId]?.isActive == true) return
+        gapRepairs[conversationId] = scope.launch {
+            try {
+                val fetched = syncConversationFromServer(conversationId)
+                val highest = fetched.maxOfOrNull { it.seq ?: 0L }
+                if (highest != null) {
+                    seqMutex.withLock {
+                        deliveredSeqs[conversationId] = maxOf(deliveredSeqs[conversationId] ?: 0L, highest)
+                    }
+                }
+                log.info { "[gap-repair] repaired ${fetched.size} message(s) in $conversationId" }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The cursor stays behind, so the next received event
+                // re-triggers the repair.
+                log.error(e) { "[gap-repair] failed for $conversationId" }
+            }
+        }
+    }
+
+    /**
+     * Pulls everything after the locally newest message of the conversation
+     * and persists it. The server keeps rows for the whole history, so this
+     * closes any delivery gap between the last stored message and now.
+     */
+    private suspend fun syncConversationFromServer(conversationId: Uuid): List<Message> {
+        val lastMessageId = conversationDao.getConversationById(conversationId)
+            .firstOrNull()?.last_message_id
+            ?: return emptyList() // nothing stored yet: initial paging covers history
+        val missed = conversationApi.syncMessages(
+            conversationId = conversationId,
+            afterId = lastMessageId,
+        )
+        missed.forEach { persistServerMessage(it, ownRequestId = null) }
+        return missed
+    }
+
+    private suspend fun syncAllConversationsFromServer() {
+        val conversations = conversationDao.getAllActiveConversations().firstOrNull().orEmpty()
+        conversations.forEach { conversation ->
+            runCatching { syncConversationFromServer(conversation.id) }
+                .onFailure { log.warn(it) { "[reconnect-sync] failed for ${conversation.id}" } }
+        }
+    }
+
+    /**
+     * Persists a message that the server has already stored. Own messages
+     * promote the local SENDING row (keyed by the requestId, which the server
+     * adopted as the primary key); everything else upserts by id, so repairs
+     * racing with the realtime stream stay idempotent. The conversation's
+     * last-message cursor only ever moves forward — a repair can carry
+     * messages older than the newest one already stored.
+     */
+    private suspend fun persistServerMessage(message: Message, ownRequestId: String?) {
+        val messageEntity = message.toMessageEntity()
+        val userEntity = message.toUserEntity()
+        val participantEntity = message.toParticipantEntity()
+
+        messageDao.transaction {
+            val existing = messageDao.getMessageById(ownRequestId?.let(Uuid::parse) ?: message.id).firstOrNull()
+            when {
+                existing == null -> messageDao.insertMessage(messageEntity)
+                ownRequestId != null -> messageDao.updateMessageStatus(
+                    oldId = Uuid.parse(ownRequestId),
+                    newId = message.id,
+                    createdAt = message.createdAt,
+                    status = MessageStatus.SENT
+                )
+                // A non-own duplicate (realtime race with a repair) — already
+                // stored, nothing to do.
+            }
+            userEntity?.let { userDao.insertUser(it) }
+            participantEntity?.let { participantDao.insertParticipant(it) }
+
+            val currentLast = conversationDao.getConversationById(message.conversationId)
+                .firstOrNull()?.last_message_id
+            if (currentLast == null || message.id > currentLast) {
                 conversationDao.updateLastMessage(
                     id = message.conversationId,
                     lastMessageId = message.id,
                     updatedAt = Clock.System.now()
                 )
             }
-            log.info { "[handleReceived] db transaction done" }
-//            _invalidationEvents.tryEmit(Unit)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            log.error(e) { "[handleReceived] error: ${e.message}" }
         }
     }
 
@@ -433,6 +516,9 @@ class OfflineFirstMessageRepositoryImpl(
             messageApi.connectionState.collectLatest { state ->
                 if (state is ConnectionState.Connected) {
                     retryPendingMessages()
+                    // Outside collectLatest so a state flip cannot cancel the
+                    // catch-up halfway through.
+                    scope.launch { syncAllConversationsFromServer() }
                 }
             }
         }

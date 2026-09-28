@@ -22,7 +22,13 @@ data class Message(
     @ProtoNumber(6) val revokedAt: Instant? = null,
     @ProtoNumber(7) val replyTo: Message? = null,
     @ProtoNumber(8) val content: MessageContent,
-    @ProtoNumber(9) val senderContext: MessageSenderContext? = null
+    @ProtoNumber(9) val senderContext: MessageSenderContext? = null,
+    /**
+     * Position of the message within its conversation, allocated gap-free by
+     * the server. Realtime consumers use it to detect delivery gaps and
+     * repair them from REST history; null on rows predating the column.
+     */
+    @ProtoNumber(10) val seq: Long? = null,
 )
 
 @Serializable

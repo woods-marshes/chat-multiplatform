@@ -101,7 +101,8 @@ fun ResultRow.toMessage(user: SimpleUser? = null, replyTo: Message? = null): Mes
     replyTo = replyTo,
     createdAt = this[Messages.createdAt],
     revokedAt = this[Messages.revokedAt],
-    senderContext = null
+    senderContext = null,
+    seq = this[Messages.seq],
 )
 
 fun ResultRow.toArticle(user: SimpleUser? = null): Article = Article(
@@ -154,6 +155,7 @@ fun ResultRow.toFilteredUser(replyTo: Message? = null): Message = Message(
     createdAt = this[Messages.createdAt],
     revokedAt = this[Messages.revokedAt],
     senderContext = toMessageSenderContext(),
+    seq = this[Messages.seq],
 )
 
 fun ResultRow.toContact() = Contact(
