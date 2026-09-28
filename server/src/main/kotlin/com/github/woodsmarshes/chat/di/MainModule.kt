@@ -8,7 +8,8 @@ import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.EventBusImpl
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStoreImpl
-import com.github.woodsmarshes.chat.websocket.MessageBroadcaster
+import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
+import com.github.woodsmarshes.chat.websocket.WebSocketRealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
@@ -35,5 +36,12 @@ val MainModule = module {
         WebSocketSessionManager()
     }
 
-    singleOf(::MessageBroadcaster)
+    single<RealtimeDelivery> {
+        WebSocketRealtimeDelivery(
+            sessions = get(),
+            participants = get(),
+            logger = get(),
+            scope = get(),
+        )
+    }
 }

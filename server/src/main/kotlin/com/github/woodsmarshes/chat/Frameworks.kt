@@ -16,7 +16,10 @@ import io.ktor.server.application.*
 import io.ktor.server.config.*
 import io.ktor.server.plugins.di.dependencies
 import io.ktor.util.logging.Logger
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -131,11 +134,17 @@ private fun Application.configureDependencyInjection(
     database: Database,
     log: Logger,
 ) {
+    // Background consumers (realtime event collectors, delivery dispatch,
+    // typing debounce) all run here; cancelled together on shutdown so tests
+    // and restarts never leak them.
+    val realtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     dependencies {
         provide<Logger> { log }
         provide<Database> { database }
         provide<ApplicationConfig> { serverConfig }
         provide<ServerConfig> { appConfig }
+        provide<CoroutineScope> { realtimeScope }
     }
 
     install(Koin) {
@@ -146,6 +155,7 @@ private fun Application.configureDependencyInjection(
     }
 
     monitor.subscribe(ApplicationStopped) {
+        realtimeScope.cancel()
         it.getKoin().close()
     }
 }

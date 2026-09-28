@@ -7,15 +7,12 @@ import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
-import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
-import com.github.woodsmarshes.chat.websocket.MessageBroadcaster
+import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.util.logging.Logger
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -25,11 +22,10 @@ import kotlin.uuid.Uuid
 class RealtimeService(
     private val log: Logger,
     private val eventBus: EventBus,
-    private val messageBroadcaster: MessageBroadcaster,
+    private val delivery: RealtimeDelivery,
     private val sessionManager: WebSocketSessionManager,
-    private val conversationParticipantRepository: ConversationParticipantRepository,
+    private val scope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val typingDebounceMap = ConcurrentHashMap<Uuid, Job>()
 
     init {
@@ -63,7 +59,7 @@ class RealtimeService(
         }
     }
 
-    private inline fun safeExecute(block: () -> Unit) {
+    private suspend fun safeExecute(block: suspend () -> Unit) {
         try {
             block()
         } catch (e: Exception) {
@@ -75,14 +71,9 @@ class RealtimeService(
         userId: Uuid,
         session: WebSocketServerSession,
     ) {
+        // Nothing to preload: delivery routes by the participant table, so a
+        // connection only registers itself.
         sessionManager.addUserSession(userId, session)
-
-        val userConversations = conversationParticipantRepository
-            .getUserConversationParticipants(userId)
-            .map { it.conversationId }
-            .toSet()
-
-        sessionManager.addUserToConversations(userId, userConversations)
     }
 
     /**
@@ -103,7 +94,7 @@ class RealtimeService(
     fun handleWebSocketException(
         exception: Exception,
         userId: Uuid,
-        session: WebSocketServerSession
+        session: WebSocketServerSession,
     ) {
         when (exception) {
             is ClosedReceiveChannelException -> {
@@ -116,7 +107,7 @@ class RealtimeService(
         // cleanup is handled by finally block in RealtimeRoutes
     }
 
-    private fun handleUserTyping(event: MessageEvent.UserTyping) {
+    private suspend fun handleUserTyping(event: MessageEvent.UserTyping) {
         typingDebounceMap[event.userId]?.cancel()
 
         typingDebounceMap[event.userId] = scope.launch {
@@ -127,12 +118,12 @@ class RealtimeService(
                 isTyping = event.isTyping,
                 timestamp = event.timestamp
             )
-            messageBroadcaster.sendRealtimeEventToConversation(event.conversationId, response)
+            delivery.sendToConversation(event.conversationId, response)
         }
     }
 
-    private fun handleReadMessage(event: MessageEvent.ReadMessage) {
-        messageBroadcaster.sendRealtimeEventToConversation(
+    private suspend fun handleReadMessage(event: MessageEvent.ReadMessage) {
+        delivery.sendToConversation(
             conversationId = event.conversationId,
             data = MessageEventResponse.Read(
                 messageId = event.messageId,
@@ -143,20 +134,20 @@ class RealtimeService(
         )
     }
 
-    private fun handleSendMessage(event: MessageEvent.SendMessage) {
-        messageBroadcaster.sendRealtimeEventToConversation(
+    private suspend fun handleSendMessage(event: MessageEvent.SendMessage) {
+        delivery.sendToConversation(
             conversationId = event.conversationId,
             data = MessageEventResponse.Received(
                 message = event.message,
                 conversationId = event.conversationId,
                 senderId = event.senderId,
-                requestId = event.requestId
+                requestId = event.requestId,
             )
         )
     }
 
-    private fun handleWithdrawMessage(event: MessageEvent.WithdrawMessage) {
-        messageBroadcaster.sendRealtimeEventToConversation(
+    private suspend fun handleWithdrawMessage(event: MessageEvent.WithdrawMessage) {
+        delivery.sendToConversation(
             conversationId = event.conversationId,
             data = MessageEventResponse.Withdrawn(
                 messageId = event.messageId,
@@ -168,14 +159,10 @@ class RealtimeService(
     }
 
 
-    private fun handleConversationEvent(event: ConversationEvent) {
+    private suspend fun handleConversationEvent(event: ConversationEvent) {
         when (event) {
             is ConversationEvent.ConversationCreated -> {
-                sessionManager.addUserToConversation(
-                    userId = event.creatorId,
-                    conversationId = event.conversationId,
-                )
-                messageBroadcaster.sendRealtimeEventToConversation(
+                delivery.sendToConversation(
                     conversationId = event.conversationId,
                     data = ConversationEventResponse.ConversationCreated(
                         conversationId = event.conversationId,
@@ -187,22 +174,20 @@ class RealtimeService(
             }
 
             is ConversationEvent.ConversationDeleted -> {
-                sessionManager.removeConversation(
-                    conversationId = event.conversationId
-                )?.toList()?.let {
-                    messageBroadcaster.sendRealtimeEventToUsers(
-                        userIds = it,
-                        data = ConversationEventResponse.ConversationDeleted(
-                            conversationId = event.conversationId,
-                            deleterId = event.deleterId,
-                            timestamp = event.timestamp
-                        )
+                // Participant rows outlive the soft-deleted conversation, so
+                // routing still reaches every former member.
+                delivery.sendToConversation(
+                    conversationId = event.conversationId,
+                    data = ConversationEventResponse.ConversationDeleted(
+                        conversationId = event.conversationId,
+                        deleterId = event.deleterId,
+                        timestamp = event.timestamp
                     )
-                }
+                )
             }
 
             is ConversationEvent.GroupJoinRequest -> {
-                messageBroadcaster.sendRealtimeEventToConversation(
+                delivery.sendToConversation(
                     conversationId = event.conversationId,
                     data = ConversationEventResponse.GroupJoinRequest(
                         requestId = event.requestId,
@@ -215,7 +200,7 @@ class RealtimeService(
             }
 
             is ConversationEvent.GroupJoinRequestHandled -> {
-                messageBroadcaster.sendRealtimeEventToUser(
+                delivery.sendToUser(
                     userId = event.applicantId,
                     data = ConversationEventResponse.GroupJoinRequestHandled(
                         requestId = event.requestId,
@@ -230,7 +215,7 @@ class RealtimeService(
             }
 
             is ConversationEvent.GroupProfileUpdated -> {
-                messageBroadcaster.sendRealtimeEventToConversation(
+                delivery.sendToConversation(
                     conversationId = event.conversationId,
                     data = ConversationEventResponse.GroupProfileUpdated(
                         conversationId = event.conversationId,
@@ -242,7 +227,7 @@ class RealtimeService(
             }
 
             is ConversationEvent.PersonalSettingsUpdated -> {
-                messageBroadcaster.sendRealtimeEventToUser(
+                delivery.sendToUser(
                     userId = event.userId,
                     data = ConversationEventResponse.PersonalSettingsUpdated(
                         conversationId = event.conversationId,
@@ -254,11 +239,7 @@ class RealtimeService(
             }
 
             is ConversationEvent.UserJoinedConversation -> {
-                sessionManager.addUsersToConversation(
-                    userIds = event.userId.toSet(),
-                    conversationId = event.conversationId
-                )
-                messageBroadcaster.sendRealtimeEventToConversation(
+                delivery.sendToConversation(
                     conversationId = event.conversationId,
                     data = ConversationEventResponse.UserJoinedConversation(
                         conversationId = event.conversationId,
@@ -270,11 +251,7 @@ class RealtimeService(
             }
 
             is ConversationEvent.UserLeftConversation -> {
-                sessionManager.removeUserFromConversation(
-                    userId = event.userId,
-                    conversationId = event.conversationId
-                )
-                messageBroadcaster.sendRealtimeEventToConversation(
+                delivery.sendToConversation(
                     conversationId = event.conversationId,
                     data = ConversationEventResponse.UserLeftConversation(
                         conversationId = event.conversationId,
@@ -286,7 +263,7 @@ class RealtimeService(
         }
     }
 
-    private fun handleContactEvent(event: ContactEvent) {
+    private suspend fun handleContactEvent(event: ContactEvent) {
         val response = when (event) {
             is ContactEvent.FriendRequestSent ->
                 ContactEventResponse.FriendRequestSent(
@@ -356,8 +333,6 @@ class RealtimeService(
             is ContactEvent.ContactUpdated -> listOf(event.userId, event.contactId)
         }
 
-        targetUsers.forEach { userId ->
-            messageBroadcaster.sendRealtimeEventToUser(userId, response)
-        }
+        delivery.sendToUsers(targetUsers, response)
     }
 }
