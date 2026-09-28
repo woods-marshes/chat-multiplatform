@@ -109,16 +109,21 @@ class ContactService(
                     if (!updated) {
                         null
                     } else {
-                        contactRepository.upsertContact(
+                        // A false upsert would leave the request ACCEPTED without
+                        // the contact rows it promises; failing here rolls the
+                        // whole block back.
+                        val bothContactsUpserted = contactRepository.upsertContact(
                             userId = userId,
                             contactId = contactRequest.senderId,
                             status = ContactStatus.FRIEND,
-                        )
-                        contactRepository.upsertContact(
+                        ) && contactRepository.upsertContact(
                             userId = contactRequest.senderId,
                             contactId = userId,
                             status = ContactStatus.FRIEND,
                         )
+                        if (!bothContactsUpserted) {
+                            Err(ContactError.OperationFailed).bind()
+                        }
                         conversationRepository.getExistingPrivateConversation(userId, contactRequest.senderId)?.id
                             ?: conversationRepository.insertConversation(
                                 ConversationType.PRIVATE,

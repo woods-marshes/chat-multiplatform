@@ -21,4 +21,11 @@ object ConversationParticipants : Table("conversation_participants") {
     val settings = jsonb<ParticipantSettings>("settings", ProjectJson)
 
     override val primaryKey = PrimaryKey(conversationId, userId)
+
+    init {
+        // Per-user participant lookups (e.g. on every WS connect) filter by
+        // userId alone, which the composite PK leading with conversation_id
+        // cannot serve.
+        index("idx_conversation_participants_user_id", false, userId)
+    }
 }

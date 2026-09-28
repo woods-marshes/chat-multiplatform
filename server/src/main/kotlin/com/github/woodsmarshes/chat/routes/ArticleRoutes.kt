@@ -9,6 +9,7 @@ import com.github.woodsmarshes.chat.core.network.dto.article.CreateArticleReques
 import com.github.woodsmarshes.chat.core.network.dto.article.UpdateArticleRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ArticleService
+import com.github.woodsmarshes.chat.utils.MAX_PAGE_SIZE
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
@@ -27,7 +28,7 @@ fun Route.articleRoutes() {
     get<V1.Articles> { params ->
         val articles = articleService.listArticles(
             beforeId = params.beforeId,
-            limit = params.limit,
+            limit = params.limit.coerceIn(1, MAX_PAGE_SIZE),
             authorId = params.authorId,
         ).getOrThrow()
         call.respond(articles.map { it.toListResponse() })
@@ -45,7 +46,7 @@ fun Route.articleRoutes() {
             val articles = articleService.listMyArticles(
                 userId = userId,
                 beforeId = params.parent.beforeId,
-                limit = params.parent.limit
+                limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE)
             ).getOrThrow()
             call.respond(articles.map { it.toListResponse() })
         }

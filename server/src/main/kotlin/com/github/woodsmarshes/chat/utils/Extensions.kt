@@ -17,9 +17,10 @@ suspend fun <T> dbQuery(block: suspend () -> T): T =
 
 fun ApplicationCall.extractUserId(): Uuid {
     val principal = this.principal<JWTPrincipal>()
-    val a = principal?.getClaim(Keys.USER_ID, String::class)
+    val claim = principal?.getClaim(Keys.USER_ID, String::class)
         ?: throw AuthenticationException("Invalid or missing User ID in Token")
-    return Uuid.parse(a)
+    return Uuid.parseOrNull(claim)
+        ?: throw AuthenticationException("Invalid User ID in Token")
 }
 
 fun ApplicationCall.extractUserIdFromWebSocket(): Uuid? {

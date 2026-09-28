@@ -23,6 +23,8 @@ import io.ktor.util.logging.Logger
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.isActive
 import org.koin.ktor.ext.inject
@@ -114,6 +116,14 @@ fun Route.realtimeRoutes() {
                             )
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: ClosedReceiveChannelException) {
+                    break
+                } catch (e: WebsocketDeserializeException) {
+                    // A single malformed frame must not tear down every device
+                    // session for this user; drop the frame and keep reading.
+                    log.warn("Malformed websocket frame from user $userId", e)
                 } catch (e: Exception) {
                     log.error("Exception while receiving message from user $userId", e)
                     break

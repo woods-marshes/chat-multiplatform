@@ -167,6 +167,9 @@ fun Route.fileRoutes() {
         )
     }
 
+    }
+
+    rateLimit(RateLimitName("files")) {
     // Chat attachments are not part of the public /uploads tree: they are
     // served from here so that reaching them requires a valid token instead of
     // knowing a URL. Per-conversation ownership is not modelled yet, so any

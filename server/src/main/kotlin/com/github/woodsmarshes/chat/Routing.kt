@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat
 
 import com.github.woodsmarshes.chat.exceptions.AppException
+import com.github.woodsmarshes.chat.exceptions.AuthenticationException
 import com.github.woodsmarshes.chat.routes.articleRoutes
 import com.github.woodsmarshes.chat.routes.authRoutes
 import com.github.woodsmarshes.chat.routes.contactRoutes
@@ -29,6 +30,10 @@ fun Application.configureRouting() {
             val domainError = cause.error
             val status = domainError.toHttpStatusCode()
             call.respond(status, domainError)
+        }
+
+        exception<AuthenticationException> { call, _ ->
+            call.respond(HttpStatusCode.Unauthorized, "Unauthorized")
         }
 
         status(HttpStatusCode.TooManyRequests) { call, status ->

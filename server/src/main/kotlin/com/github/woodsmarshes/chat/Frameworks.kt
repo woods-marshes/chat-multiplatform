@@ -6,17 +6,7 @@ import com.github.woodsmarshes.chat.base.jwt.TokenConfig
 import com.github.woodsmarshes.chat.di.MainModule
 import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
-import com.github.woodsmarshes.chat.repository.database.schema.Articles
-import com.github.woodsmarshes.chat.repository.database.schema.ContactRequests
-import com.github.woodsmarshes.chat.repository.database.schema.Contacts
-import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
-import com.github.woodsmarshes.chat.repository.database.schema.Conversations
-import com.github.woodsmarshes.chat.repository.database.schema.GroupJoinRequests
-import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
-import com.github.woodsmarshes.chat.repository.database.schema.Messages
-import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
-import com.github.woodsmarshes.chat.repository.database.schema.Users
-import com.github.woodsmarshes.chat.repository.database.schema.YjsDocuments
+import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import com.github.woodsmarshes.chat.utils.connectToPostgresDatabase
@@ -102,11 +92,11 @@ private fun Application.configureDatabase(config: ServerConfig): Database {
 
 private fun configureSchema(database: Database) {
     transaction(database) {
-        SchemaUtils.create(
-            Users, Conversations, UserSettings, GroupProfiles,
-            Messages, GroupJoinRequests, ConversationParticipants,
-            Contacts, ContactRequests, Articles, YjsDocuments
-        )
+        SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
+        // SchemaUtils.create skips existing tables, so databases created before
+        // an index was added to the schema never receive it; recreate it
+        // idempotently here.
+        exec("CREATE INDEX IF NOT EXISTS idx_conversation_participants_user_id ON conversation_participants (user_id)")
     }
 }
 

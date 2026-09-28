@@ -1,46 +1,25 @@
 package com.github.woodsmarshes.chat
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.openapi.OpenApiInfo
-import io.ktor.resources.*
-import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
-import io.ktor.server.html.*
-import io.ktor.server.http.content.*
-import io.ktor.server.plugins.autohead.*
-import io.ktor.server.plugins.cachingheaders.*
+import io.ktor.server.plugins.*
 import io.ktor.server.plugins.calllogging.*
+import io.ktor.server.plugins.cachingheaders.*
 import io.ktor.server.plugins.compression.*
-import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.defaultheaders.*
-import io.ktor.server.plugins.doublereceive.*
 import io.ktor.server.plugins.forwardedheaders.*
 import io.ktor.server.plugins.openapi.*
 import io.ktor.server.plugins.partialcontent.*
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
-import io.ktor.server.plugins.requestvalidation.RequestValidation
-import io.ktor.server.plugins.requestvalidation.ValidationResult
-import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.plugins.swagger.*
 import io.ktor.server.request.*
-import io.ktor.server.resources.*
-import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.openapi.OpenApiDocSource
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.css.*
-import kotlinx.html.*
-import org.koin.dsl.module
-import org.koin.ktor.plugin.Koin
-import org.koin.logger.slf4jLogger
 
 fun Application.configureHTTP() {
     install(CallLogging) {
@@ -66,8 +45,14 @@ fun Application.configureHTTP() {
             // If the HTTP request specifies more ranges, they will all be merged into a single range.
             maxRangeCount = 10
         }
-    install(ForwardedHeaders) // WARNING: for security, do not include this if not behind a reverse proxy
-    install(XForwardedHeaders) // WARNING: for security, do not include this if not behind a reverse proxy
+    // Only trust forwarded headers when the deployment actually sits behind a
+    // reverse proxy: on a directly exposed server clients could forge
+    // X-Forwarded-For to rotate rate-limit keys. With the plugins absent,
+    // request.origin falls back to the socket address.
+    if (environment.config.propertyOrNull("http.behindProxy")?.getString() == "true") {
+        install(ForwardedHeaders)
+        install(XForwardedHeaders)
+    }
     install(DefaultHeaders) {
         header("X-Engine", "Ktor") // will send this header with each response
     }
@@ -88,10 +73,11 @@ fun Application.configureHTTP() {
         // Without a requestKey every caller shares one bucket, so a single
         // client exhausting its budget locks out everyone behind the same
         // instance. Buckets are keyed per client instead.
-        register(RateLimitName("api")) {
+        register(RateLimitName("files")) {
+            // Attachment downloads: chattier than uploads, still bounded.
             rateLimiter(
-                limit = 1000,               // 允许的请求数
-                refillPeriod = 60.seconds,  // 重置周期
+                limit = 120,
+                refillPeriod = 60.seconds,
             )
             requestKey { call -> call.clientKey() }
         }
@@ -117,5 +103,7 @@ fun Application.configureHTTP() {
 
 private fun ApplicationCall.clientKey(): String {
     val userId = runCatching { extractUserId() }.getOrNull()
-    return if (userId != null) "user:$userId" else "ip:${request.local.remoteHost}"
+    // request.origin reflects the forwarded headers when the plugins are
+    // installed and equals the socket address otherwise.
+    return if (userId != null) "user:$userId" else "ip:${request.origin.remoteHost}"
 }

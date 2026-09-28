@@ -122,8 +122,12 @@ class ContactSourceImpl : ContactRepository {
         alias: String?,
         status: ContactStatus?
     ): Boolean = dbQuery {
+        // No explicit keys: the (user_id, contact_id) primary key is the
+        // conflict target. A where clause would be equivalent on PostgreSQL
+        // but is unsupported by H2's MERGE-based upsert.
         Contacts.upsert(
-            where = { (Contacts.userId eq userId) and (Contacts.contactId eq contactId) }
+            // Updating an existing row must not reset when the friendship began.
+            onUpdateExclude = listOf(Contacts.createdAt),
         ) {
             it[this.userId] = userId
             it[this.contactId] = contactId
@@ -141,7 +145,7 @@ class ContactSourceImpl : ContactRepository {
         status: ContactStatus
     ): Boolean = dbQuery {
         Contacts.upsert(
-            where = { (Contacts.userId eq userId) and (Contacts.contactId eq contactId) }
+            onUpdateExclude = listOf(Contacts.createdAt),
         ) {
             it[this.userId] = userId
             it[this.contactId] = contactId

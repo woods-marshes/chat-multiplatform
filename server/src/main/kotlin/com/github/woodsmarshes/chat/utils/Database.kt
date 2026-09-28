@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.utils
 
 import com.github.woodsmarshes.chat.base.DatabaseConfig
+import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.Dispatchers
@@ -10,36 +11,16 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import java.sql.DriverManager
 
-// Reverse order of SchemaUtils.create() — children before parents
-private val ALL_TABLES = listOf(
-    "contact_requests",
-    "contacts",
-    "conversation_participants",
-    "group_join_requests",
-    "messages",
-    "group_profiles",
-    "user_settings",
-    "conversations",
-    "users",
-)
-
 suspend fun clearDatabaseData(database: Database) {
     withContext(Dispatchers.IO) {
         transaction(database) {
-            ALL_TABLES.forEach { table ->
-                exec("DROP TABLE IF EXISTS $table CASCADE")
+            // Children first: reverse of the create order in ALL_SCHEMA_TABLES.
+            ALL_SCHEMA_TABLES.asReversed().forEach { table ->
+                exec("DROP TABLE IF EXISTS ${table.tableName} CASCADE")
             }
         }
     }
 }
-
-//suspend fun createDatabaseData(database: Database) {
-//    withContext(Dispatchers.IO) {
-//        transaction(database) {
-//            SchemaUtils.create(Groups, Users, Sessions, Messages, UserSessions)
-//        }
-//    }
-//}
 
 fun connectToH2Database(): Database {
     // Connecting to H2 embedded database

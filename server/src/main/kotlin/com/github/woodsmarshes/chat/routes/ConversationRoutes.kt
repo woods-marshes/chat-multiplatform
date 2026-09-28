@@ -14,6 +14,7 @@ import com.github.woodsmarshes.chat.service.ConversationLifecycleService
 import com.github.woodsmarshes.chat.service.ConversationSettingsService
 import com.github.woodsmarshes.chat.service.GroupMembershipService
 import com.github.woodsmarshes.chat.service.MessageService
+import com.github.woodsmarshes.chat.utils.MAX_PAGE_SIZE
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
@@ -128,7 +129,7 @@ fun Route.conversationRoutes() {
             val messages = messageService.getHistory(
                 userId = userId,
                 conversationId = params.parent.id,
-                limit = params.limit,
+                limit = params.limit.coerceIn(1, MAX_PAGE_SIZE),
                 beforeId = params.beforeId,
             ).getOrThrow()
             call.respond(messages)
@@ -141,7 +142,7 @@ fun Route.conversationRoutes() {
                 userId = userId,
                 conversationId = params.parent.parent.id,
                 keyword = params.keyword,
-                limit = params.parent.limit
+                limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE)
             ).getOrThrow()
             call.respond(messages)
         }
@@ -153,7 +154,7 @@ fun Route.conversationRoutes() {
                 userId = userId,
                 conversationId = params.parent.parent.id,
                 afterId = params.afterId,
-                limit = params.parent.limit
+                limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE)
             ).getOrThrow()
             call.respond(messages)
         }
