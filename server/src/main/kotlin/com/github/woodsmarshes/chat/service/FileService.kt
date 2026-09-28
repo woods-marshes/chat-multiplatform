@@ -61,7 +61,12 @@ class FileService(
         return cleaned
     }
 
-    init {
+    /**
+     * Creates the upload directory tree. Called once at boot by the
+     * composition layer — deliberately not a constructor side effect, so
+     * constructing the service (e.g. in tests) never touches the filesystem.
+     */
+    fun ensureUploadDirectories() {
         val dirs = FileType.entries.map { it.name.lowercase() }.toMutableList()
         dirs.add("thumbnails")
         dirs.add("covers")

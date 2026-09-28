@@ -23,10 +23,8 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
 import com.github.woodsmarshes.chat.repository.MessageRepository
-import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
-import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import io.mockk.coEvery
 import io.mockk.coJustRun
 import io.mockk.coVerify
@@ -47,9 +45,7 @@ class MessageServiceSendTest {
     private val contactRepository = mockk<ContactRepository>()
     private val participantRepository = mockk<ConversationParticipantRepository>()
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
-    private val uploadStore = mockk<TemporaryUploadStore>()
-    private val fileService = mockk<FileService>()
-    private val privateFileRepository = mockk<PrivateFileRepository>()
+    private val attachments = mockk<AttachmentLifecycle>()
 
     private val service = MessageService(
         groupProfileRepository = groupProfileRepository,
@@ -58,9 +54,7 @@ class MessageServiceSendTest {
         contactRepository = contactRepository,
         conversationParticipantRepository = participantRepository,
         eventBus = eventBus,
-        uploadStore = uploadStore,
-        fileService = fileService,
-        privateFileRepository = privateFileRepository,
+        attachments = attachments,
     )
 
     private val userId = Uuid.random()
@@ -112,7 +106,7 @@ class MessageServiceSendTest {
     )
 
     @Test
-    fun withdrawingTheLastFileMessageRemovesItsAttachment() = runBlocking {
+    fun withdrawingAFileMessageDelegatesAttachmentGcToTheLifecycle() = runBlocking {
         val fileName = "report-${Uuid.random()}.pdf"
         val fileMessage = message().copy(
             content = FileContent(
@@ -128,36 +122,13 @@ class MessageServiceSendTest {
             conversationForRevocation(),
         )
         coEvery { messageRepository.revokeMessage(fileMessage.id) } returns true
-        coEvery { messageRepository.countLiveFileReferences(fileName) } returns 0L
-        coJustRun { fileService.deletePrivateFile(fileName) }
+        coJustRun { attachments.gcAfterWithdraw(any()) }
 
         service.withdrawMessage(userId, fileMessage.id)
 
-        coVerify(exactly = 1) { fileService.deletePrivateFile(fileName) }
-    }
-
-    @Test
-    fun withdrawingAFileStillReferencedElsewhereKeepsIt() = runBlocking {
-        val fileName = "shared-${Uuid.random()}.pdf"
-        val fileMessage = message().copy(
-            content = FileContent(
-                url = "$PRIVATE_FILE_URL_PREFIX$fileName",
-                fileName = fileName,
-                mimeType = "application/pdf",
-                size = 3,
-            )
-        )
-        coEvery { messageRepository.getMessageRevokeContext(userId, fileMessage.id) } returns Triple(
-            Pair(userId, fileMessage),
-            participantForRevocation(),
-            conversationForRevocation(),
-        )
-        coEvery { messageRepository.revokeMessage(fileMessage.id) } returns true
-        coEvery { messageRepository.countLiveFileReferences(fileName) } returns 2L
-
-        service.withdrawMessage(userId, fileMessage.id)
-
-        coVerify(exactly = 0) { fileService.deletePrivateFile(any()) }
+        // Whether the file is actually deleted is decided inside the
+        // lifecycle (covered by AttachmentLifecycleTest).
+        coVerify(exactly = 1) { attachments.gcAfterWithdraw(fileMessage) }
     }
 
     private fun participantForRevocation() = ConversationParticipant(
@@ -203,7 +174,7 @@ class MessageServiceSendTest {
 
         assertTrue(result.isOk)
         assertEquals(persisted.id, result.get()!!.id)
-        coVerify(exactly = 0) { uploadStore.retrieveAndConfirm(any()) }
+        coVerify(exactly = 0) { attachments.resolveTrustedMedia(any()) }
         coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
     }

@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.di
 
+import com.github.woodsmarshes.chat.service.AttachmentLifecycle
 import com.github.woodsmarshes.chat.service.AuthService
 import com.github.woodsmarshes.chat.service.ContactService
 import com.github.woodsmarshes.chat.service.ConversationLifecycleService
@@ -20,6 +21,7 @@ val serviceModule = module {
     singleOf(::GroupMembershipService)
     singleOf(::ConversationSettingsService)
     singleOf(::FileService)
+    singleOf(::AttachmentLifecycle)
     singleOf(::MessageService)
     singleOf(::UserService)
     singleOf(::ArticleService)

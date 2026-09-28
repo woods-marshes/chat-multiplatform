@@ -15,6 +15,8 @@ import com.github.woodsmarshes.chat.core.model.System
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.VideoContent
+import com.github.woodsmarshes.chat.core.model.error.MessageError
+import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
@@ -23,6 +25,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.ResultRow
+import java.sql.SQLException
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -109,7 +112,33 @@ interface MessageRepository {
 }
 
 class MessageDataSourceImpl : MessageRepository {
+
+    private companion object {
+        /** 23503 = PostgreSQL FK violation, 23506 = H2 referential integrity. */
+        val FK_VIOLATION_SQL_STATES = setOf("23503", "23506")
+    }
+
     override suspend fun insertMessage(
+        conversationId: Uuid,
+        senderId: Uuid,
+        content: MessageContent,
+        category: MessageCategory,
+        renderType: MessageRenderType,
+        replyToMessageId: Uuid?,
+        requestId: Uuid?,
+    ): Pair<Message, Boolean>? =
+        // Constraint violations are translated here, at the SQL boundary: the
+        // service layer must not know vendor error codes. FK violations mean
+        // the conversation (or sender) vanished mid-flight; anything else is
+        // a generic storage failure.
+        try {
+            insertMessageInTransaction(conversationId, senderId, content, category, renderType, replyToMessageId, requestId)
+        } catch (e: SQLException) {
+            if (e.sqlState in FK_VIOLATION_SQL_STATES) throw AppException(MessageError.ConversationNotFound)
+            throw AppException(MessageError.OperationFailed)
+        }
+
+    private suspend fun insertMessageInTransaction(
         conversationId: Uuid,
         senderId: Uuid,
         content: MessageContent,

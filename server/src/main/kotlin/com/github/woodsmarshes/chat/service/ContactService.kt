@@ -23,7 +23,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
-import com.github.woodsmarshes.chat.utils.dbQuery
+import com.github.woodsmarshes.chat.utils.inTransaction
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -100,9 +100,8 @@ class ContactService(
 
                 // Atomic acceptance: the request update, both contact rows
                 // and (when new) the conversation + participants commit
-                // together or not at all. Repository calls inside dbQuery join
-                // this outer Exposed transaction instead of opening their own.
-                val conversationId = dbQuery {
+                // together or not at all — see inTransaction's contract.
+                val conversationId = inTransaction {
                     val updated = contactRequestRepository.updateRequestStatus(
                         contactRequestId, RequestStatus.ACCEPTED, remark
                     )
@@ -203,7 +202,7 @@ class ContactService(
     suspend fun deleteContact(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {
         // Atomic teardown: both contact rows and the private conversation
         // (when present) commit together or not at all.
-        val deletedConversationId = dbQuery {
+        val deletedConversationId = inTransaction {
             val result1 = contactRepository.updateContact(userId = userId, contactId = id, status = ContactStatus.DELETED)
             val result2 = contactRepository.updateContact(userId = id, contactId = userId, status = ContactStatus.DELETED)
             if (!result1 || !result2) {

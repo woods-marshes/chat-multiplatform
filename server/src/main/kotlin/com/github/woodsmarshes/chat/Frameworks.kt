@@ -10,6 +10,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.repository.database.schema.backfillMessageSeq
+import com.github.woodsmarshes.chat.service.FileService
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import com.github.woodsmarshes.chat.utils.connectToPostgresDatabase
@@ -51,6 +52,7 @@ fun Application.configureFrameworks() {
     backfillMessageSeq(database)
     configurePrivateFileBackfill(database, dbType)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
+    configureUploadDirectories()
     configureFileCleanup()
 }
 
@@ -169,6 +171,10 @@ private fun Application.configureDependencyInjection(
         realtimeScope.cancel()
         it.getKoin().close()
     }
+}
+
+private fun Application.configureUploadDirectories() {
+    getKoin().get<FileService>().ensureUploadDirectories()
 }
 
 private fun Application.configureFileCleanup() {

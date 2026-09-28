@@ -33,6 +33,10 @@ interface GroupProfileRepository {
         avatarUrl: String? = null,
     ): GroupProfile?
 
+    /**
+     * true = a matching row was updated; false = no profile row for
+     * [conversationId] — never a validation failure.
+     */
     suspend fun updateGroupProfile(
         conversationId: Uuid,
         name: String? = null,

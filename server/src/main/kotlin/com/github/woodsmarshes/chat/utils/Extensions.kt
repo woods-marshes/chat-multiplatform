@@ -9,10 +9,27 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import kotlin.uuid.Uuid
 
+/**
+ * Runs [block] inside an Exposed transaction. This is the only way any
+ * repository touches the database, and it has one property the whole
+ * layering rests on: when a transaction is already open for this coroutine
+ * (a service opened one via [inTransaction]), the block JOINS it instead of
+ * opening its own — repository calls inside a service unit of work commit
+ * and roll back together. Never replace a repository's dbQuery with
+ * newSuspendedTransaction: it would break those units of work silently.
+ */
 suspend fun <T> dbQuery(block: suspend () -> T): T =
     withContext(Dispatchers.IO) {
         suspendTransaction { block() }
     }
+
+/**
+ * A service-level unit of work: several repository calls that must commit
+ * or roll back as one. Implemented by [dbQuery], so every repository call
+ * inside joins this transaction — see [dbQuery] for the contract that makes
+ * that work.
+ */
+suspend fun <T> inTransaction(block: suspend () -> T): T = dbQuery(block)
 
 
 fun ApplicationCall.extractUserId(): Uuid {

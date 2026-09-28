@@ -12,7 +12,7 @@ import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
-import com.github.woodsmarshes.chat.utils.dbQuery
+import com.github.woodsmarshes.chat.utils.inTransaction
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -70,7 +70,7 @@ class ConversationSettingsService(
         if (conversationParticipantRepository.getConversationParticipant(newOwnerId, conversationId) == null) {
             throw AppException(ConversationError.NotParticipant)
         }
-        dbQuery {
+        inTransaction {
             val demoted = conversationParticipantRepository.updateConversationParticipantRole(
                 userId = currentOwnerId, conversationId = conversationId, role = ConversationRole.ADMIN
             )
@@ -87,6 +87,8 @@ class ConversationSettingsService(
     }
 
     suspend fun updatePersonalSettings(conversationId: Uuid, userId: Uuid, req: ParticipantSettings): Result<Unit, ConversationError> = coroutineBinding {
+        // Per the repository contract, false means no matching participant
+        // row — the caller is not a member, not a generic failure.
         val success = conversationParticipantRepository.updateParticipantSettings(
             userId = userId, conversationId = conversationId, settings = req
         )
@@ -98,7 +100,7 @@ class ConversationSettingsService(
                 )
             )
         } else {
-            Err(ConversationError.OperationFailed).bind()
+            Err(ConversationError.NotParticipant).bind()
         }
     }
 }

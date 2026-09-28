@@ -35,12 +35,19 @@ import kotlin.uuid.Uuid
 interface ConversationParticipantRepository {
     suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant?
 
+    /**
+     * true = a matching row was updated; false = no matching row (the target
+     * is missing or not visible to this actor) — never a validation failure.
+     */
     suspend fun updateParticipantSettings(userId: Uuid, conversationId: Uuid, settings: ParticipantSettings): Boolean
 
+    /** Same contract as [updateParticipantSettings]. */
     suspend fun updateReadLastMessage(userId: Uuid, conversationId: Uuid, messageId: Uuid): Boolean
 
+    /** Same contract as [updateParticipantSettings]. */
     suspend fun updateConversationParticipantRole(userId: Uuid, conversationId: Uuid, role: ConversationRole): Boolean
 
+    /** Same contract as [updateParticipantSettings]. */
     suspend fun deleteConversationParticipant(userId: Uuid, conversationId: Uuid): Boolean
 
     suspend fun getConversationParticipant(userId: Uuid, conversationId: Uuid): ConversationParticipant?

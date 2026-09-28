@@ -32,6 +32,10 @@ interface ContactRepository {
         alias: String? = null
     ): Contact?
 
+    /**
+     * true = a matching row was updated; false = the contact does not exist
+     * for this user — never a validation failure.
+     */
     suspend fun updateContact(
         userId: Uuid,
         contactId: Uuid,

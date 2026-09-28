@@ -9,16 +9,13 @@ import com.github.woodsmarshes.chat.core.model.*
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
+import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
-import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
-import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
-import com.github.woodsmarshes.chat.utils.PUBLIC_UPLOAD_URL_PREFIX
-import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import kotlin.time.Clock
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
-import java.sql.SQLException
 
 class MessageService(
     private val groupProfileRepository: GroupProfileRepository,
@@ -27,9 +24,7 @@ class MessageService(
     private val contactRepository: ContactRepository,
     private val conversationParticipantRepository: ConversationParticipantRepository,
     private val eventBus: EventBus,
-    private val uploadStore: TemporaryUploadStore,
-    private val fileService: FileService,
-    private val privateFileRepository: PrivateFileRepository,
+    private val attachments: AttachmentLifecycle,
 ) {
     
     /**
@@ -112,7 +107,7 @@ class MessageService(
         }
 
         val trustedContent = if (content is MediaContent) {
-            resolveTrustedMedia(content)
+            attachments.resolveTrustedMedia(content)
                 ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
         } else {
             content
@@ -147,44 +142,13 @@ class MessageService(
             )
 
             message
-        } catch (e: SQLException) {
-            // SQL state 23503 (PostgreSQL) / 23506 (H2) = foreign key violation
-            if (e.sqlState in setOf("23503", "23506")) {
-                Err(MessageError.ConversationNotFound).bind()
-            }
-            Err(MessageError.OperationFailed).bind()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: AppException) {
+            // The repository translates constraint failures into domain
+            // errors at the SQL boundary; surface them as ordinary Errs.
+            Err(e.error as? MessageError ?: MessageError.OperationFailed).bind()
         }
-    }
-
-    /**
-     * An upload is trusted either while it is still pending in the upload
-     * store (first send) or once it has already been persisted as part of a
-     * message somewhere (forwarding / re-attaching an old URL). Public
-     * /uploads media additionally accepts an existing file on disk, since
-     * that tree is public by design.
-     */
-    private suspend fun resolveTrustedMedia(content: MediaContent): MediaContent? =
-        uploadStore.retrieveAndConfirm(content.url)
-            ?: when {
-                content.url.startsWith(PRIVATE_FILE_URL_PREFIX) ->
-                    content.takeIf { privateFileRepository.hasMapping(content.url.substringAfterLast('/')) }
-                content.url.startsWith(PUBLIC_UPLOAD_URL_PREFIX) ->
-                    content.takeIf { fileService.publicFileExists(content.url) }
-                else -> null
-            }
-
-    /**
-     * When the withdrawn message was the last live reference to a private
-     * attachment, remove the bytes and its conversation mappings. A
-     * concurrent forward of the same URL re-registers the mapping on insert,
-     * so the only visible race is a forward whose file vanishes mid-flight.
-     */
-    private suspend fun cleanupAttachmentIfUnreferenced(message: Message) {
-        val content = message.content as? FileContent ?: return
-        if (!content.url.startsWith(PRIVATE_FILE_URL_PREFIX)) return
-        val fileName = content.url.substringAfterLast('/')
-        if (messageRepository.countLiveFileReferences(fileName) > 0L) return
-        fileService.deletePrivateFile(fileName)
     }
 
     /**
@@ -208,7 +172,7 @@ class MessageService(
             Err(MessageError.RevokeFailed).bind()
         }
 
-        cleanupAttachmentIfUnreferenced(message)
+        attachments.gcAfterWithdraw(message)
 
         // 发布撤回事件
         eventBus.publishMessageEvent(
