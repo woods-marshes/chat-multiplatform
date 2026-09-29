@@ -25,6 +25,7 @@ class RealtimeService(
     private val delivery: RealtimeDelivery,
     private val sessionManager: WebSocketSessionManager,
     private val scope: CoroutineScope,
+    private val typingDebounceMs: Long = 1_000L,
 ) {
     private val typingDebounceMap = ConcurrentHashMap<Uuid, Job>()
 
@@ -111,7 +112,7 @@ class RealtimeService(
         typingDebounceMap[event.userId]?.cancel()
 
         typingDebounceMap[event.userId] = scope.launch {
-            delay(1000)
+            delay(typingDebounceMs)
             val response = MessageEventResponse.UserTyping(
                 conversationId = event.conversationId,
                 userId = event.userId,
