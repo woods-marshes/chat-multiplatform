@@ -15,6 +15,7 @@ import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
 import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
+import com.github.woodsmarshes.chat.core.network.ktor.jwtExpiryEpochMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -77,7 +78,13 @@ class AuthRepositoryImpl(
         databaseHolder.getOrCreateDatabase(resp.user.id)
         userDao.insertUser(resp.user.toUserEntity())
         authTokenDataSource.setToken(
-            AuthToken(jwtToken = resp.accessToken, refreshToken = null, expiryTimestamp = null)
+            AuthToken(
+                jwtToken = resp.accessToken,
+                refreshToken = null,
+                // Decoded from the JWT payload; drives the client's
+                // proactive refresh margin.
+                expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
+            )
         )
     }
 

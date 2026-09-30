@@ -55,6 +55,7 @@ fun createHttpClient(
     httpClientEngine: HttpClientEngine,
     config: NetworkConfig,
     authTokenDataSource: AuthTokenDataSource,
+    tokenRefresher: TokenRefresher,
     httpEventBus: HttpEventBus,
 ) = HttpClient(httpClientEngine) {
     val log = KotlinLogging.logger {}
@@ -120,7 +121,12 @@ fun createHttpClient(
                     null
                 }
             }
-            // refreshTokens { ... } // (可选) 令牌刷新逻辑
+            // refreshTokens: on a 401 the bearer plugin re-runs the request
+            // with whatever this returns; a null result (credentials dead)
+            // lets the request fail and the logged-out state take over.
+            refreshTokens {
+                tokenRefresher.refreshAfter401(client)?.let { BearerTokens(it.first, it.second) }
+            }
         }
     }
 

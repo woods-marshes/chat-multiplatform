@@ -36,6 +36,7 @@ class RealtimeApi(
     private val client: HttpClient,
     private val config: com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig,
     private val authTokenDataSource: AuthTokenDataSource,
+    private val tokenRefresher: com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher,
     private val scope: CoroutineScope
 ) {
     val log = KotlinLogging.logger {}
@@ -73,9 +74,14 @@ class RealtimeApi(
                     log.info { "[RealtimeApi] connecting..." }
                     _connectionState.value = ConnectionState.Connecting
 
-                    val token = authTokenDataSource.jwtToken
-                        .filterNotNull()
-                        .first { it.isNotEmpty() }
+                    // Circuit breaker: with dead credentials (refresh rejected
+                    // with 401) the stored session is cleared and the loop
+                    // stops — the logged-out state takes over from here.
+                    val token = tokenRefresher.currentOrRefreshed(client)
+                    if (token == null) {
+                        _connectionState.value = ConnectionState.Disconnected("Session expired")
+                        return@launch
+                    }
 
                     session = client.webSocketSession(config.wsUrl) {
                         url {
