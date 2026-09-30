@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -91,6 +92,24 @@ class ChatViewModel(
                 conversationRepository.getConversationHeaderFlow(convId).collect { header ->
                     _uiState.update { it.copy(header = header) }
                 }
+            }
+
+            // Read receipts: while this chat is open, every newest message is
+            // acknowledged. The Read event drives both the unread badge (own
+            // list) and the peer's read indicator; the distinct-until-changed
+            // cursor means one receipt per message, not per recomposition.
+            viewModelScope.launch {
+                conversationRepository.getConversationListFlow()
+                    .map { conversations ->
+                        conversations
+                            .firstOrNull { it.id == convId }
+                            ?.lastMessage?.id
+                    }
+                    .filterNotNull()
+                    .distinctUntilChanged()
+                    .collect { lastMessageId ->
+                        messageRepository.markAsRead(convId, lastMessageId)
+                    }
             }
 
             // Members + typing indicator, combined with a 1s ticker so stale
@@ -233,6 +252,11 @@ class ChatViewModel(
 
     fun setReplyTo(message: MessageUiModel) {
         _uiState.update { it.copy(replyToMessage = message) }
+    }
+
+    /** Called by the UI after an error has been displayed once. */
+    fun consumeError() {
+        _uiState.update { it.copy(error = null) }
     }
 
     fun clearReplyTo() {

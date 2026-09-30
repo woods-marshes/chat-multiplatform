@@ -102,6 +102,15 @@ fun ChatScreen(
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
     val strings = LocalStrings.current
 
+    // Send/forward failures surface once as a snackbar; the ViewModel clears
+    // the state after display so a rotation does not replay the toast.
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.consumeError()
+        }
+    }
+
     // 记录最新一条消息的 ID
     val latestMessage = if (lazyMessages.itemCount > 0) lazyMessages[0] else null
     val latestMessageId = latestMessage?.id?.toString()
@@ -111,7 +120,7 @@ fun ChatScreen(
     // 是否为初次进入页面
     val isFirstLoad = remember { mutableStateOf(true) }
 
-    LaunchedEffect(latestMessageId) {
+    LaunchedEffect(latestMessageId, uiState.ownUserId) {
         if (latestMessageId != null) {
             val isOwn = latestMessage.sender?.id == uiState.ownUserId
             if (isFirstLoad.value) {
