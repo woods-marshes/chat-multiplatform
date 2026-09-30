@@ -88,6 +88,12 @@ class OfflineFirstMessageRepositoryImpl(
 
         /** Give up on unacked messages older than this. */
         val MESSAGE_TTL = 24.hours
+
+        /** Server-side sync page size; a short page ends a repair walk. */
+        const val SYNC_PAGE_SIZE = 50
+
+        /** Hard cap so a pathological repair cannot loop forever. */
+        const val MAX_SYNC_PAGES = 40
     }
     val ownUser = userSettingDataSource.user
 
@@ -399,19 +405,30 @@ class OfflineFirstMessageRepositoryImpl(
 
     /**
      * Pulls everything after the locally newest message of the conversation
-     * and persists it. The server keeps rows for the whole history, so this
-     * closes any delivery gap between the last stored message and now.
+     * and persists it. The server orders sync pages ascending and returns at
+     * most [SYNC_PAGE_SIZE] rows, so the loop walks the gap forward with a
+     * keyset cursor until the last page comes back short — a hole of any size
+     * is closed, not just the newest 50.
      */
     private suspend fun syncConversationFromServer(conversationId: Uuid): List<Message> {
         val lastMessageId = conversationDao.getConversationById(conversationId)
             .firstOrNull()?.last_message_id
             ?: return emptyList() // nothing stored yet: initial paging covers history
-        val missed = conversationApi.syncMessages(
-            conversationId = conversationId,
-            afterId = lastMessageId,
-        )
-        missed.forEach { persistServerMessage(it, ownRequestId = null) }
-        return missed
+
+        val fetched = mutableListOf<Message>()
+        var afterId = lastMessageId
+        for (pagesLeft in MAX_SYNC_PAGES downTo 1) {
+            val page = conversationApi.syncMessages(
+                conversationId = conversationId,
+                afterId = afterId,
+            )
+            if (page.isEmpty()) break
+            page.forEach { persistServerMessage(it, ownRequestId = null) }
+            fetched += page
+            if (page.size < SYNC_PAGE_SIZE) break
+            afterId = page.maxOf { it.id }
+        }
+        return fetched
     }
 
     private suspend fun syncAllConversationsFromServer() {

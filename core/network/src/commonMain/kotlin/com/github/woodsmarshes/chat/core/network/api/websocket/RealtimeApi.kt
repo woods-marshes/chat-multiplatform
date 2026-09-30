@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -41,7 +42,9 @@ class RealtimeApi(
     private var session: DefaultClientWebSocketSession? = null
 
     private var connectionJob: Job? = null
-    private val _events = MutableSharedFlow<RealtimeEvent>(replay = 0)
+    // Buffering decouples the socket read loop from DB-writing consumers: a
+    // slow consumer must not backpressure the TCP read side into a stall.
+    private val _events = MutableSharedFlow<RealtimeEvent>(replay = 0, extraBufferCapacity = 64)
     val events = _events.asSharedFlow()
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
@@ -160,7 +163,14 @@ class RealtimeApi(
                     log.info { "[RealtimeApi] received event: ${event::class.simpleName}" }
                     _events.emit(event)
                 } catch (e: WebsocketDeserializeException) {
+                    // The converter raises these for frame-type mismatches;
+                    // skip the frame and keep the session alive.
                     log.error(e) { "[RealtimeApi] deserialize error: ${e.message}" }
+                } catch (e: SerializationException) {
+                    // Raw undecodable payloads (bad protobuf tags, unknown
+                    // event types from a newer server) escape unwrapped —
+                    // dropping the frame beats tearing the session down.
+                    log.error(e) { "[RealtimeApi] undecodable frame: ${e.message}" }
                 }
             }
             log.info { "[RealtimeApi] observeMessages() session closed" }
