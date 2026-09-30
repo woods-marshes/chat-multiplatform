@@ -10,6 +10,8 @@ import com.github.woodsmarshes.chat.service.GroupMembershipService
 import com.github.woodsmarshes.chat.service.UserService
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receive
 import io.ktor.server.resources.get
 import io.ktor.server.resources.put
@@ -32,9 +34,11 @@ fun Route.userRoutes() {
         }
 
         // 搜索用户
-        get<V1.Users.Search> { params ->
-            val results = userService.searchUsers(params.keyword).getOrThrow()
-            call.respond(results)
+        rateLimit(RateLimitName("search")) {
+            get<V1.Users.Search> { params ->
+                val results = userService.searchUsers(params.keyword).getOrThrow()
+                call.respond(results)
+            }
         }
 
         // 获取自己的资料

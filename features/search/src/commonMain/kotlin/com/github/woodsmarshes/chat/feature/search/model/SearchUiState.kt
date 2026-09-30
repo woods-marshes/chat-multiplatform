@@ -14,6 +14,4 @@ data class SearchUiState(
     val results: List<SearchResultUiModel> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    /** True for search types that have no data source yet (e.g. settings). */
-    val notSupported: Boolean = false,
 )

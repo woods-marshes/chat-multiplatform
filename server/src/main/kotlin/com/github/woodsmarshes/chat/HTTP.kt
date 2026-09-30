@@ -98,6 +98,15 @@ fun Application.configureHTTP() {
             )
             requestKey { call -> call.clientKey() }
         }
+
+        register(RateLimitName("search")) {
+            // LIKE scans over user/group tables; one of them is anonymous.
+            rateLimiter(
+                limit = 30,
+                refillPeriod = 60.seconds,
+            )
+            requestKey { call -> call.clientKey() }
+        }
     }
 }
 

@@ -17,6 +17,8 @@ import com.github.woodsmarshes.chat.service.MessageService
 import com.github.woodsmarshes.chat.utils.MAX_PAGE_SIZE
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.receive
 import io.ktor.server.resources.delete
 import io.ktor.server.resources.get
@@ -32,9 +34,11 @@ fun Route.conversationRoutes() {
     val settingsService by inject<ConversationSettingsService>()
     val messageService by inject<MessageService>()
     // 搜索群组
-    get<V1.Conversations.Search> { params ->
-        val groups = lifecycleService.searchGroups(params.keyword).getOrThrow()
-        call.respond(groups)
+    rateLimit(RateLimitName("search")) {
+        get<V1.Conversations.Search> { params ->
+            val groups = lifecycleService.searchGroups(params.keyword).getOrThrow()
+            call.respond(groups)
+        }
     }
 
     // 检查群组handle是否存在

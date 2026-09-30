@@ -34,6 +34,8 @@ import org.koin.core.parameter.parametersOf
 fun SearchScreen(
     onBack: () -> Unit,
     type: SearchType,
+    onOpenProfile: (userId: String) -> Unit,
+    onOpenGroupInfo: (conversationId: String) -> Unit,
     viewModel: SearchViewModel = koinViewModel(parameters = { parametersOf(type) }),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -55,10 +57,6 @@ fun SearchScreen(
                     ) {
                         val hasQuery = uiState.query.trim().length >= 2
                         when {
-                            uiState.notSupported -> EmptyContent(
-                                message = strings.searchNotSupported,
-                                modifier = Modifier.fillMaxSize(),
-                            )
                             uiState.isLoading && uiState.results.isEmpty() -> LoadingContent(
                                 message = strings.loading,
                                 modifier = Modifier.fillMaxSize(),
@@ -80,11 +78,11 @@ fun SearchScreen(
                                     when (result) {
                                         is SearchResultUiModel.Contact -> ContactItem(
                                             contact = result.contact,
-                                            onClick = { /* TODO: open contact profile */ },
+                                            onClick = { onOpenProfile(result.contact.id.toString()) },
                                         )
                                         is SearchResultUiModel.Conversation -> ConversationItem(
                                             conversation = result.conversation,
-                                            onClick = { /* TODO: open conversation */ },
+                                            onClick = { onOpenGroupInfo(result.conversation.id.toString()) },
                                         )
                                     }
                                 }

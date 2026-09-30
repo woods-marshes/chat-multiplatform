@@ -36,12 +36,6 @@ class SearchViewModel(
 
     private var searchJob: Job? = null
 
-    init {
-        if (searchType == SearchType.SETTING) {
-            _uiState.value = _uiState.value.copy(notSupported = true)
-        }
-    }
-
     fun onQueryChanged(query: String) {
         _uiState.value = _uiState.value.copy(query = query)
         // Below the minimum length: drop stale results immediately instead of
@@ -90,7 +84,6 @@ class SearchViewModel(
             when (searchType) {
                 SearchType.CONTACT -> runContactSearch(query)
                 SearchType.CONVERSATION -> runConversationSearch(query)
-                SearchType.SETTING -> Unit // surfaced via notSupported from init
             }
         }
     }

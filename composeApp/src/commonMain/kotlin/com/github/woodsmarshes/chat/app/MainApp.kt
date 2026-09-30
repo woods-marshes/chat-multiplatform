@@ -185,7 +185,7 @@ private fun MainContent(
         settingsEntry(
             onBack = { navigator.goBack() },
             onLogout = { sessionManager.logout() },
-            onSearchClick = { navigator.navigate(SearchNavKey(SearchType.SETTING)) },
+            onSearchClick = { navigator.navigate(SearchNavKey(SearchType.CONVERSATION)) },
         )
         chatEntry(
             onBack = { navigator.goBack() },
@@ -229,6 +229,8 @@ private fun MainContent(
         )
         searchEntry(
             onBack = { navigator.goBack() },
+            onOpenProfile = { userId -> navigator.navigate(ProfileNavKey(userId)) },
+            onOpenGroupInfo = { conversationId -> navigator.navigate(GroupInfoNavKey(conversationId)) },
             metadata = listPaneMeta,
         )
     }

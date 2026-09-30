@@ -13,17 +13,20 @@ data class SearchNavKey(
 enum class SearchType {
     CONVERSATION,
     CONTACT,
-    SETTING,
 }
 
 fun EntryProviderScope<NavKey>.searchEntry(
     onBack: () -> Unit,
+    onOpenProfile: (userId: String) -> Unit,
+    onOpenGroupInfo: (conversationId: String) -> Unit,
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<SearchNavKey>(metadata = metadata) { key ->
         SearchScreen(
             onBack = onBack,
-            type = key.type
+            type = key.type,
+            onOpenProfile = onOpenProfile,
+            onOpenGroupInfo = onOpenGroupInfo,
         )
     }
 }
