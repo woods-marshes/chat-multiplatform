@@ -40,6 +40,7 @@ import kotlin.uuid.Uuid
  * incremental sync, read cursors, blocked contacts and the private
  * attachment mapping + GC lifecycle.
  */
+@OptIn(kotlin.uuid.ExperimentalUuidApi::class)
 class MessageFlowDatabaseTest {
 
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
@@ -87,11 +88,13 @@ class MessageFlowDatabaseTest {
     }
 
     private suspend fun sendMessage(senderId: Uuid, conversationId: Uuid, content: MessageContent): Message =
+        // Production clients mint v7 request ids (time-ordered), which the
+        // server relies on for the last-message cursor; mirror that here.
         service.sendMessage(
             userId = senderId,
             conversationId = conversationId,
             content = content,
-            requestId = Uuid.random().toString(),
+            requestId = Uuid.generateV7().toString(),
         ).get()!!
 
     private suspend fun sendText(senderId: Uuid, conversationId: Uuid, text: String): Message =
