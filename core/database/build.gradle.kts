@@ -67,6 +67,12 @@ sqldelight {
             generateAsync = true
             packageName.set("io.github.woodsmarshes.chat.db")
             dialect("app.cash.sqldelight:sqlite-3-38-dialect:${libs.versions.sqlDelight.get()}")
+            // The generated schema JSON is committed (generate the task after
+            // every schema change) and each schema change must ship an
+            // incrementing db/N.sqm migration; verifyMigrations fails the
+            // build when migrations no longer reach the committed schema.
+            schemaOutputDirectory = file("src/commonMain/sqldelight/schema")
+            verifyMigrations.set(true)
         }
     }
 }
