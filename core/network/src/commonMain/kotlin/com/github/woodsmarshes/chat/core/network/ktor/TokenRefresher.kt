@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.network.ktor
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
+import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.network.api.V1
 import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
 import io.ktor.client.HttpClient
@@ -9,6 +10,7 @@ import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.auth.AuthCircuitBreaker
 import io.ktor.client.plugins.resources.post
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
@@ -49,65 +51,92 @@ private const val REFRESH_MARGIN_MS = 60_000L
  * Single-flight JWT refresher shared by the bearer plugin (REST 401s) and the
  * websocket loop (pre-handshake expiry check).
  *
- * Failure semantics are deliberate: only a 401 from the refresh call proves
- * the credentials are dead — that clears the stored session so the logged-out
- * state tears everything down. Any other failure (offline, timeout, 5xx)
- * keeps the current token, which the server may still accept.
+ * Works against an independent rotating refresh token (A-8): the access JWT
+ * lives for one hour, the opaque refresh token for thirty days, and every
+ * refresh rotates it server-side.
  */
 class TokenRefresher(private val tokens: AuthTokenDataSource) {
+
+    private sealed interface Outcome {
+        data class Success(val response: AuthResponse) : Outcome
+        /** The server rejected the refresh token: the session is dead. */
+        data object Dead : Outcome
+        /** Offline, timeout or 5xx — stored tokens are kept untouched. */
+        data object Transient : Outcome
+    }
 
     private val mutex = Mutex()
 
     /**
-     * The stored token if still fresh, otherwise a refreshed one. Returns
-     * null only when the refresh was rejected with 401 (credentials dead).
+     * The stored access token if still fresh, otherwise a freshly refreshed
+     * one. Returns null only when the refresh was rejected with 401
+     * (credentials dead — the stored session has been cleared).
      */
     suspend fun currentOrRefreshed(client: HttpClient): String? = mutex.withLock {
         val jwt = tokens.jwtToken.first() ?: return null
         val expiry = tokens.expiryTimestamp.first()
         val now = Clock.System.now().toEpochMilliseconds()
         if (expiry == null || expiry - now > REFRESH_MARGIN_MS) return jwt
-        refreshLocked(client, jwt)
-    }
 
-    /** Refresh after a 401; null means the credentials are dead. */
-    suspend fun refreshAfter401(client: HttpClient): Pair<String, String>? = mutex.withLock {
-        val jwt = tokens.jwtToken.first() ?: return null
-        refreshLocked(client, jwt)?.let { Pair(it, it) }
+        // No refresh token (legacy session from before A-8): keep using the
+        // long-lived access token until the server rejects it with a 401.
+        val refresh = tokens.refreshToken.first() ?: return jwt
+
+        when (val outcome = refreshLocked(client, refresh)) {
+            is Outcome.Success -> {
+                persist(outcome.response)
+                outcome.response.accessToken
+            }
+            Outcome.Dead -> null
+            Outcome.Transient -> jwt // the old token may still be accepted
+        }
     }
 
     /**
-     * MUST be called under [mutex]. The refresh endpoint authenticates with
-     * the outgoing (now expired) JWT, which the server exchanges for a fresh
-     * one — the sliding-renewal contract.
+     * Refresh after a REST 401. Null means the credentials are dead; the
+     * bearer plugin then lets the original request fail with its 401.
      */
-    private suspend fun refreshLocked(client: HttpClient, current: String): String? {
+    suspend fun refreshAfter401(client: HttpClient): BearerTokensResult? = mutex.withLock {
+        val refresh = tokens.refreshToken.first() ?: return null
+        when (val outcome = refreshLocked(client, refresh)) {
+            is Outcome.Success -> {
+                persist(outcome.response)
+                BearerTokensResult(outcome.response.accessToken, outcome.response.refreshToken ?: refresh)
+            }
+            Outcome.Dead -> null
+            Outcome.Transient -> null
+        }
+    }
+
+    /** MUST be called under [mutex]. */
+    private suspend fun refreshLocked(client: HttpClient, refreshToken: String): Outcome {
         return try {
             val response: AuthResponse = client.post(V1.Auth.Refresh()) {
                 // Circuit-break the bearer plugin: without this the refresh
                 // call would carry (and 401-retry on) the same dead token.
                 attributes.put(AuthCircuitBreaker, Unit)
-                header(HttpHeaders.Authorization, "Bearer $current")
+                header(HttpHeaders.Authorization, "Bearer $refreshToken")
             }.body()
-            tokens.setToken(
-                com.github.woodsmarshes.chat.core.model.AuthToken(
-                    jwtToken = response.accessToken,
-                    refreshToken = null,
-                    expiryTimestamp = jwtExpiryEpochMs(response.accessToken),
-                )
-            )
-            response.accessToken
+            Outcome.Success(response)
         } catch (e: ClientRequestException) {
-            if (e.response.status == HttpStatusCode.Unauthorized) {
-                tokens.clearAuthToken()
-                null
-            } else {
-                current // transient server issue: keep the old credentials
-            }
+            if (e.response.status == HttpStatusCode.Unauthorized) Outcome.Dead else Outcome.Transient
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            current // offline/timeout: the server may still accept the old token
+            Outcome.Transient
         }
     }
+
+    private suspend fun persist(response: AuthResponse) {
+        tokens.setToken(
+            AuthToken(
+                jwtToken = response.accessToken,
+                refreshToken = response.refreshToken,
+                expiryTimestamp = jwtExpiryEpochMs(response.accessToken),
+            )
+        )
+    }
 }
+
+/** Platform-neutral carrier for the bearer plugin's refreshed token pair. */
+data class BearerTokensResult(val accessToken: String, val refreshToken: String)

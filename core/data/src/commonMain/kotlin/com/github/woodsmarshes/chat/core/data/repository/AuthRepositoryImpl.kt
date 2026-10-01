@@ -16,6 +16,7 @@ import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
 import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import com.github.woodsmarshes.chat.core.network.ktor.jwtExpiryEpochMs
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -28,6 +29,8 @@ class AuthRepositoryImpl(
     private val authApi: AuthApi,
     private val databaseHolder: DatabaseHolder,
 ) : AuthRepository {
+
+    private val log = KotlinLogging.logger {}
 
     override val jwtToken: Flow<String?> = authTokenDataSource.jwtToken
 
@@ -80,7 +83,9 @@ class AuthRepositoryImpl(
         authTokenDataSource.setToken(
             AuthToken(
                 jwtToken = resp.accessToken,
-                refreshToken = null,
+                // The rotating refresh token; drives /v1/auth/refresh and the
+                // server-side logout revocation.
+                refreshToken = resp.refreshToken,
                 // Decoded from the JWT payload; drives the client's
                 // proactive refresh margin.
                 expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
@@ -89,12 +94,16 @@ class AuthRepositoryImpl(
     }
 
     /**
-     * Clears the persisted session only. Closing the per-user database is not
-     * done here: it belongs to the session owner (SessionManager), which can
-     * wait for the authenticated UI and its in-flight queries to tear down
-     * before the driver goes away.
+     * Best-effort server-side revocation of the refresh session, then clears
+     * the local session. A network failure must never block a logout — the
+     * refresh token expires on its own within 30 days.
      */
     override suspend fun logout() {
+        val refresh = authTokenDataSource.refreshToken.first()
+        if (!refresh.isNullOrEmpty()) {
+            runCatching { authApi.logout(refresh) }
+                .onFailure { log.warn(it) { "[Auth] server-side session revocation failed" } }
+        }
         userSettingDataSource.clearUserSetting()
         authTokenDataSource.clearAuthToken()
     }

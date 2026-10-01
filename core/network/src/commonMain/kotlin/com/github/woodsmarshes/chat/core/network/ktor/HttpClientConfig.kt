@@ -125,7 +125,9 @@ fun createHttpClient(
             // with whatever this returns; a null result (credentials dead)
             // lets the request fail and the logged-out state take over.
             refreshTokens {
-                tokenRefresher.refreshAfter401(client)?.let { BearerTokens(it.first, it.second) }
+                tokenRefresher.refreshAfter401(client)?.let {
+                    io.ktor.client.plugins.auth.providers.BearerTokens(it.accessToken, it.refreshToken)
+                }
             }
         }
     }
