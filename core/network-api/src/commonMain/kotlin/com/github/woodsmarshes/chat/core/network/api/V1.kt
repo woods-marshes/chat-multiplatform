@@ -22,6 +22,9 @@ class V1 {
 
         @Resource("/verify")
         class Verify(val parent: Auth = Auth())
+
+        @Resource("/logout")
+        class Logout(val parent: Auth = Auth())
     }
 
     @Resource("/users")

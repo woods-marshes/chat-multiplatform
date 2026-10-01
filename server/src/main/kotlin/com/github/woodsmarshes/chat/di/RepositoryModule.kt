@@ -2,6 +2,8 @@ package com.github.woodsmarshes.chat.di
 
 import com.github.woodsmarshes.chat.repository.ArticleDataSourceImpl
 import com.github.woodsmarshes.chat.repository.ArticleRepository
+import com.github.woodsmarshes.chat.repository.AuthSessionRepository
+import com.github.woodsmarshes.chat.repository.AuthSessionSourceImpl
 import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestSourceImpl
@@ -69,6 +71,10 @@ val repositoryModule = module {
 
     singleOf(::PrivateFileSourceImpl) {
         bind<PrivateFileRepository>()
+    }
+
+    singleOf(::AuthSessionSourceImpl) {
+        bind<AuthSessionRepository>()
     }
 
 }

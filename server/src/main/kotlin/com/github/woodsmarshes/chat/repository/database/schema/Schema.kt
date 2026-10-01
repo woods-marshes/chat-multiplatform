@@ -18,6 +18,7 @@ import kotlin.uuid.Uuid
  */
 val ALL_SCHEMA_TABLES: List<Table> = listOf(
     Users,
+    AuthSessions,
     Conversations,
     UserSettings,
     GroupProfiles,

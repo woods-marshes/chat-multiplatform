@@ -6,6 +6,7 @@ import com.github.woodsmarshes.chat.base.jwt.TokenConfig
 import com.github.woodsmarshes.chat.di.MainModule
 import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
+import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
@@ -39,8 +40,9 @@ import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import kotlin.time.Duration.Companion.minutes
 
-private const val DEFAULT_JWT_EXPIRY_MS = 15L * 24 * 60 * 60 * 1000 // 15 days
+private const val DEFAULT_JWT_EXPIRY_MS = 1L * 60 * 60 * 1000 // 1 hour access token
 private const val EXPIRED_FILE_CLEANUP_MINUTES = 30L
+private const val SESSION_SWEEP_MINUTES = 60L
 
 @OptIn(KoinExperimentalAPI::class)
 fun Application.configureFrameworks() {
@@ -53,6 +55,7 @@ fun Application.configureFrameworks() {
     configurePrivateFileBackfill(database, dbType)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
     configureUploadDirectories()
+    configureSessionCleanup()
     configureFileCleanup()
 }
 
@@ -175,6 +178,16 @@ private fun Application.configureDependencyInjection(
 
 private fun Application.configureUploadDirectories() {
     getKoin().get<FileService>().ensureUploadDirectories()
+}
+
+private fun Application.configureSessionCleanup() {
+    launch(Dispatchers.IO) {
+        val sessions = getKoin().get<AuthSessionRepository>()
+        while (isActive) {
+            sessions.deleteExpiredSessions()
+            delay(SESSION_SWEEP_MINUTES.minutes)
+        }
+    }
 }
 
 private fun Application.configureFileCleanup() {

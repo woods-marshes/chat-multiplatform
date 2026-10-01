@@ -47,8 +47,19 @@ fun Route.authRoutes() {
                 )
                 return@post
             }
-            val res = authService.refreshToken(authHeader).getOrThrow()
+            val res = authService.refreshSession(authHeader).getOrThrow()
             call.respond(res)
+        }
+
+        // Revokes the session behind the presented refresh token; idempotent
+        // and cheap, so it shares the auth limiter's budget.
+        post<V1.Auth.Logout> {
+            val authHeader = call.request.header(HttpHeaders.Authorization)
+                ?.removePrefix("Bearer ")
+            if (authHeader != null) {
+                authService.logoutSession(authHeader).getOrThrow()
+            }
+            call.respond(mapOf("success" to true))
         }
     }
 

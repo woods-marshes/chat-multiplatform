@@ -1,11 +1,11 @@
 package com.github.woodsmarshes.chat.service
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.base.ServerConfig
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.github.woodsmarshes.chat.base.hashing.HashingService
 import com.github.woodsmarshes.chat.base.hashing.SaltedHash
 import com.github.woodsmarshes.chat.base.jwt.TokenClaim
@@ -15,19 +15,28 @@ import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.dto.auth.LoginRequest
 import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.exceptions.AppException
+import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
+import com.github.woodsmarshes.chat.utils.inTransaction
 import com.github.woodsmarshes.chat.utils.Keys
+import java.security.MessageDigest
+import java.security.SecureRandom
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.uuid.Uuid
 
 class AuthService(
     private val userRepository: UserRepository,
     private val userSettingRepository: UserSettingRepository,
+    private val authSessionRepository: AuthSessionRepository,
     private val hashingService: HashingService,
     private val tokenService: TokenService,
     private val appConfig: ServerConfig,
 ) {
     private val tokenConfig get() = appConfig.tokenConfig
+    private val secureRandom = SecureRandom()
 
     suspend fun register(request: RegisterRequest): Result<AuthResponse, AuthError> = coroutineBinding {
         if (request.password.length < MIN_PASSWORD_LENGTH) {
@@ -46,14 +55,12 @@ class AuthService(
         ) ?: Err(AuthError.InsertionFailed).bind()
         userSettingRepository.initSettings(user.id)
             ?: Err(AuthError.InsertionFailed).bind()
-        val token = tokenService.generateToken(
-            config = appConfig.tokenConfig,
-            TokenClaim(
-                name = Keys.USER_ID,
-                value = user.id.toString(),
-            )
+
+        AuthResponse(
+            user = user,
+            accessToken = issueAccessToken(user.id),
+            refreshToken = issueRefreshToken(user.id),
         )
-        AuthResponse(user, token)
     }
 
     suspend fun login(request: LoginRequest): Result<AuthResponse, AuthError> = coroutineBinding {
@@ -64,46 +71,83 @@ class AuthService(
             SaltedHash(
                 hash = authInfo.passwordHash,
                 salt = authInfo.salt,
-            )
+            ),
         )
         if (!isValidPassword) {
             Err(AuthError.InvalidCredentials).bind()
         }
-        val token = tokenService.generateToken(
-            config = appConfig.tokenConfig,
-            TokenClaim(
-                name = Keys.USER_ID,
-                value = authInfo.userId.toString(),
-            )
+        AuthResponse(
+            user = authInfo.domainUser,
+            accessToken = issueAccessToken(authInfo.userId),
+            refreshToken = issueRefreshToken(authInfo.userId),
         )
-        AuthResponse(authInfo.domainUser, token)
     }
 
-    suspend fun refreshToken(rawToken: String): Result<AuthResponse, AuthError> = coroutineBinding {
-        // An expired token must never mint a new one: without a dedicated
-        // refresh token there is otherwise a ~30-day sliding window on any
-        // stolen access token.
-        val jwt = try {
-            JWT.require(Algorithm.HMAC256(tokenConfig.secret))
-                .withAudience(tokenConfig.audience)
-                .withIssuer(tokenConfig.issuer)
-                .build()
-                .verify(rawToken)
-        } catch (e: Exception) {
-            Err(AuthError.InvalidCredentials).bind()
+    /**
+     * Exchanges a live refresh token for a fresh access JWT and a rotated
+     * refresh token. The old session is revoked inside the same transaction,
+     * so a replayed token stops working immediately.
+     */
+    suspend fun refreshSession(refreshToken: String): Result<AuthResponse, AuthError> = coroutineBinding {
+        val tokenHash = sha256(refreshToken)
+        val session = authSessionRepository.findActiveSession(tokenHash)
+            ?: Err(AuthError.InvalidCredentials).bind()
+        val user = userRepository.getUserById(session.userId)
+            ?: Err(AuthError.InvalidCredentials).bind()
+
+        val rotated = inTransaction {
+            val revoked = authSessionRepository.revokeSession(tokenHash)
+            val newRefreshToken = newOpaqueToken()
+            val created = revoked && authSessionRepository.createSession(
+                userId = session.userId,
+                tokenHash = sha256(newRefreshToken),
+                expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
+            )
+            if (!created) throw AppException(AuthError.InsertionFailed)
+            newRefreshToken
         }
-        val userId = Uuid.parseOrNull(jwt.getClaim(Keys.USER_ID).asString())
-            ?: Err(AuthError.InvalidCredentials).bind()
-        val user = userRepository.getUserById(userId)
-            ?: Err(AuthError.InvalidCredentials).bind()
-        val newToken = tokenService.generateToken(
-            config = tokenConfig,
-            TokenClaim(name = Keys.USER_ID, value = userId.toString()),
+
+        AuthResponse(
+            user = user,
+            accessToken = issueAccessToken(session.userId),
+            refreshToken = rotated,
         )
-        AuthResponse(user, newToken)
     }
+
+    /** Revokes the session behind [refreshToken]; idempotent. */
+    suspend fun logoutSession(refreshToken: String): Result<Unit, AuthError> = coroutineBinding {
+        authSessionRepository.revokeSession(sha256(refreshToken))
+    }
+
+    /** Mints an opaque refresh token and persists only its hash. */
+    private suspend fun issueRefreshToken(userId: Uuid): String {
+        val raw = newOpaqueToken()
+        val stored = authSessionRepository.createSession(
+            userId = userId,
+            tokenHash = sha256(raw),
+            expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
+        )
+        if (!stored) throw AppException(AuthError.InsertionFailed)
+        return raw
+    }
+
+    private fun issueAccessToken(userId: Uuid): String = tokenService.generateToken(
+        config = tokenConfig,
+        TokenClaim(name = Keys.USER_ID, value = userId.toString()),
+    )
+
+    private fun newOpaqueToken(): String =
+        ByteArray(REFRESH_TOKEN_BYTES).also { secureRandom.nextBytes(it) }
+            .joinToString("") { "%02x".format(it) }
+
+    private fun sha256(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray())
+            .joinToString("") { "%02x".format(it) }
 
     private companion object {
         const val MIN_PASSWORD_LENGTH = 8
+        const val REFRESH_TOKEN_BYTES = 48
+        const val REFRESH_TOKEN_TTL_DAYS = 30L
     }
 }
