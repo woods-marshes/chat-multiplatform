@@ -77,7 +77,7 @@ miuix = "0.9.3"
 coil = "3.6.3"
 
 composewebview = "1.0.3"
-nucleus = "2.5.16"
+nucleus = "2.5.18"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin-version" }
