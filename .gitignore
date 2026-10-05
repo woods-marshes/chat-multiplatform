@@ -116,3 +116,5 @@ features/*/src/commonMain/composeResources/files/*.html
 
 # Re-include Gradle wrapper jar (overrides *.jar above)
 !gradle/wrapper/gradle-wrapper.jar
+# ZCode agent workspace (must never be committed)
+.zcode/
