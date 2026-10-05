@@ -103,6 +103,7 @@ fun ResultRow.toMessage(user: SimpleUser? = null, replyTo: Message? = null): Mes
     revokedAt = this[Messages.revokedAt],
     senderContext = null,
     seq = this[Messages.seq],
+    clientRequestId = this[Messages.clientRequestId],
 )
 
 fun ResultRow.toArticle(user: SimpleUser? = null): Article = Article(
@@ -156,6 +157,7 @@ fun ResultRow.toFilteredUser(replyTo: Message? = null): Message = Message(
     revokedAt = this[Messages.revokedAt],
     senderContext = toMessageSenderContext(),
     seq = this[Messages.seq],
+    clientRequestId = this[Messages.clientRequestId],
 )
 
 fun ResultRow.toContact() = Contact(

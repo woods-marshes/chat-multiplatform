@@ -447,23 +447,37 @@ class OfflineFirstMessageRepositoryImpl(
      * last-message cursor only ever moves forward — a repair can carry
      * messages older than the newest one already stored.
      */
+    /**
+     * Persists a message the server has stored. Own messages (matched via the
+     * echoed clientRequestId) RENAME the local SENDING row to the server id —
+     * the server owns message identity, the client just relabels. Other
+     * messages upsert by id, so repairs racing the realtime stream stay
+     * idempotent. The conversation's last-message cursor only moves forward.
+     */
     private suspend fun persistServerMessage(message: Message, ownRequestId: String?) {
         val messageEntity = message.toMessageEntity()
         val userEntity = message.toUserEntity()
         val participantEntity = message.toParticipantEntity()
 
+        // The rename key: prefer the echoed clientRequestId; REST-repaired
+        // messages carry it in the model itself.
+        val localRequestId = ownRequestId ?: message.clientRequestId?.toString()
+
         messageDao.transaction {
-            val existing = messageDao.getMessageById(ownRequestId?.let(Uuid::parse) ?: message.id).firstOrNull()
+            val existing = when {
+                localRequestId != null ->
+                    messageDao.getMessageById(Uuid.parse(localRequestId)).firstOrNull()
+                else -> messageDao.getMessageById(message.id).firstOrNull()
+            }
             when {
                 existing == null -> messageDao.insertMessage(messageEntity)
-                ownRequestId != null -> messageDao.updateMessageStatus(
-                    oldId = Uuid.parse(ownRequestId),
+                localRequestId != null && existing.id != message.id -> messageDao.updateMessageStatus(
+                    oldId = Uuid.parse(localRequestId),
                     newId = message.id,
                     createdAt = message.createdAt,
                     status = MessageStatus.SENT
                 )
-                // A non-own duplicate (realtime race with a repair) — already
-                // stored, nothing to do.
+                // Same id already stored (repair duplicate) — nothing to do.
             }
             userEntity?.let { userDao.insertUser(it) }
             participantEntity?.let { participantDao.insertParticipant(it) }

@@ -23,9 +23,13 @@ object Messages : UuidTable(name = "messages", uuidVersion = UuidVersion.V7) {
     // Per-conversation delivery order, allocated gap-free in the insert
     // transaction; clients detect delivery gaps from it.
     val seq = long("seq").nullable()
+    // The sender's outbox id (UUIDv7 from the client). Stored separately from
+    // the primary key so the server, not the client, owns message identity;
+    // unique per sender+conversation for idempotent retries.
+    val clientRequestId = uuid("client_request_id").nullable()
 
     init {
         uniqueIndex(conversationId, id)
+        uniqueIndex(senderId, conversationId, clientRequestId)
     }
-
 }

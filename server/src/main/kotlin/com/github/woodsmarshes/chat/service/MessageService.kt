@@ -358,4 +358,5 @@ class MessageService(
         is FileContent -> MessageRenderType.FILE
         else -> MessageRenderType.OTHER
     }
+
 }

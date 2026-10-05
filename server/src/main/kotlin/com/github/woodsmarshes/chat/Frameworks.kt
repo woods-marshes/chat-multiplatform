@@ -140,6 +140,12 @@ private fun configureSchema(database: Database) {
         exec("CREATE INDEX IF NOT EXISTS idx_conversation_participants_user_id ON conversation_participants (user_id)")
         exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS seq BIGINT")
         exec("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS next_seq BIGINT DEFAULT 0 NOT NULL")
+        exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS client_request_id UUID")
+        // Unique across (sender, conversation, client_request_id): NULLs are
+        // distinct in both H2 and PostgreSQL, so system messages coexist.
+        exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_request_id ON messages (user_id, conversation_id, client_request_id)"
+        )
     }
 }
 

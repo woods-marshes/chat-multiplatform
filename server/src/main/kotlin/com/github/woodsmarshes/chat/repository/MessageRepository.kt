@@ -188,15 +188,15 @@ class MessageDataSourceImpl : MessageRepository {
             }
         }
 
-        // Outbox resends reuse the client-generated id; the first insert wins
+        // Outbox resends reuse the client's request id; the first insert wins
         // and any later one is a no-op that returns the persisted message.
-        // (Check-then-insert: a concurrent duplicate would surface as a unique
-        // violation and simply fail that one request.)
+        // The primary key stays server-owned (UuidTable v7) — the request id
+        // lives in client_request_id, unique per sender+conversation.
         if (requestId != null) {
             val existing = Messages
                 .selectAll()
                 .where {
-                    (Messages.id eq requestId) and
+                    (Messages.clientRequestId eq requestId) and
                         (Messages.conversationId eq conversationId) and
                         (Messages.senderId eq senderId)
                 }
@@ -218,7 +218,6 @@ class MessageDataSourceImpl : MessageRepository {
             .single()[Conversations.nextSeq]
 
         Messages.insert {
-            if (requestId != null) it[Messages.id] = requestId
             it[Messages.conversationId] = conversationId
             it[Messages.senderId] = senderId
             it[Messages.content] = content
@@ -228,6 +227,7 @@ class MessageDataSourceImpl : MessageRepository {
             it[Messages.replyToMessageId] = replyTo?.id
             it[Messages.createdAt] = Clock.System.now()
             it[Messages.seq] = seq
+            it[Messages.clientRequestId] = requestId
         }
             .resultedValues
             ?.singleOrNull()
@@ -265,7 +265,7 @@ class MessageDataSourceImpl : MessageRepository {
         Messages
             .selectAll()
             .where {
-                (Messages.id eq requestId) and
+                (Messages.clientRequestId eq requestId) and
                     (Messages.conversationId eq conversationId) and
                     (Messages.senderId eq senderId)
             }

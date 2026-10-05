@@ -35,8 +35,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+@OptIn(ExperimentalUuidApi::class)
 class MessageServiceSendTest {
 
     private val groupProfileRepository = mockk<GroupProfileRepository>()
@@ -59,7 +61,7 @@ class MessageServiceSendTest {
 
     private val userId = Uuid.random()
     private val conversationId = Uuid.random()
-    private val requestId = Uuid.random()
+    private val requestId = Uuid.generateV7() // production clients mint v7 ids
     private val now = Clock.System.now()
 
     private fun givenMembership() {
@@ -97,12 +99,14 @@ class MessageServiceSendTest {
         coEvery { groupProfileRepository.getGroupProfile(conversationId) } returns null
     }
 
-    private fun message(id: Uuid = Uuid.random()) = Message(
+    private fun message(id: Uuid = Uuid.generateV7()) = Message(
         id = id,
         conversationId = conversationId,
         category = MessageCategory.NORMAL,
         createdAt = now,
         content = TextContent("hello"),
+        // The server echoes the sender's outbox id back for the rename.
+        clientRequestId = requestId,
     )
 
     @Test

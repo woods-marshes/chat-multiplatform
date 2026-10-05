@@ -30,6 +30,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -145,7 +146,7 @@ class MessageFlowDatabaseTest {
             userId = alice,
             conversationId = conversationId,
             content = TextContent("hello"),
-            requestId = Uuid.random().toString(),
+            requestId = Uuid.generateV7().toString(),
         )
 
         assertEquals(MessageError.UserBlocked, result.getError())
@@ -170,7 +171,7 @@ class MessageFlowDatabaseTest {
                 userId = mallory,
                 conversationId = conversationId,
                 content = TextContent("intrude"),
-                requestId = Uuid.random().toString(),
+                requestId = Uuid.generateV7().toString(),
             ).getError(),
         )
     }
@@ -201,7 +202,7 @@ class MessageFlowDatabaseTest {
             userId = alice,
             conversationId = conversationId,
             content = TextContent("still there?"),
-            requestId = Uuid.random().toString(),
+            requestId = Uuid.generateV7().toString(),
         )
 
         assertEquals(MessageError.StrangerChatDenied, result.getError())
@@ -213,7 +214,7 @@ class MessageFlowDatabaseTest {
         val bob = TestDb.user("bob")
         TestDb.contacts(alice, bob)
         val conversationId = TestDb.privateConversation(alice, bob)
-        val requestId = Uuid.random().toString()
+        val requestId = Uuid.generateV7().toString()
 
         val first = service.sendMessage(
             alice, conversationId, TextContent("only once"), requestId = requestId,
@@ -222,11 +223,38 @@ class MessageFlowDatabaseTest {
             alice, conversationId, TextContent("only once"), requestId = requestId,
         ).get()!!
 
+        // Same message body, same echoed request id, but the SERVER id is
+        // what identifies it — the replay returns the persisted row.
         assertEquals(first.id, replay.id)
+        assertEquals(requestId, replay.clientRequestId?.toString())
         val rows = transaction(TestDb.database) {
             Messages.selectAll().where { Messages.conversationId eq conversationId }.toList()
         }
         assertEquals(1, rows.size)
+    }
+
+    @Test
+    fun serverOwnsMessageIdentityRegardlessOfRequestIdValue() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        TestDb.contacts(alice, bob)
+        val conversationId = TestDb.privateConversation(alice, bob)
+
+        // Even a random v4 request id is accepted (it is just an outbox
+        // correlation key now) and the stored id is a server-minted v7 —
+        // a hostile id can no longer poison id-ordered cursors.
+        val v4RequestId = Uuid.random().toString()
+        val sent = service.sendMessage(
+            alice, conversationId, TextContent("any id works"), requestId = v4RequestId,
+        ).get()!!
+
+        assertTrue(sent.id != Uuid.parse(v4RequestId))
+        assertEquals(Uuid.parse(v4RequestId), sent.clientRequestId)
+        val stored = transaction(TestDb.database) {
+            Messages.selectAll().where { Messages.conversationId eq conversationId }.single()
+        }
+        assertEquals(sent.id, stored[Messages.id].value)
+        assertEquals(Uuid.parse(v4RequestId), stored[Messages.clientRequestId])
     }
 
     @Test

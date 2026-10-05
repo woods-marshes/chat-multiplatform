@@ -29,6 +29,12 @@ data class Message(
      * repair them from REST history; null on rows predating the column.
      */
     @ProtoNumber(10) val seq: Long? = null,
+    /**
+     * The sender's outbox id for this message (server-echoed). The sending
+     * client matches it against its local SENDING row and renames that row
+     * to [id]; absent on system messages and pre-A-8 rows.
+     */
+    @ProtoNumber(11) val clientRequestId: Uuid? = null,
 )
 
 @Serializable

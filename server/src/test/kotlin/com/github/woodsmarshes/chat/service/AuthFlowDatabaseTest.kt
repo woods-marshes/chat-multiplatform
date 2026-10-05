@@ -83,7 +83,6 @@ class AuthFlowDatabaseTest {
 
         // Rotation revokes the presented token and mints a fresh one. The
         // repo is queried by hash, so raw tokens are hashed before lookup.
-
         assertNull(authSessionRepository.findActiveSession(sha256(secondRefresh)))
         assertNotNull(authSessionRepository.findActiveSession(sha256(thirdRefresh)))
 
