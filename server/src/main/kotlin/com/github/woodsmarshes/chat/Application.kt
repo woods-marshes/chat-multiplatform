@@ -25,6 +25,7 @@ fun Application.module() {
     }
     configureSockets()
     configureSecurity()
+    configureObservability()
     configureHTTP()
     configureRouting()
 }

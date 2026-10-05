@@ -4,6 +4,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.atomic.AtomicLong
 
 interface EventBus {
@@ -16,9 +17,10 @@ interface EventBus {
     fun publishMessageEvent(event: MessageEvent)
 }
 
-class EventBusImpl : EventBus, AutoCloseable {
+class EventBusImpl(private val meterRegistry: MeterRegistry? = null) : EventBus, AutoCloseable {
     private val logger = org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
     private val droppedEvents = AtomicLong()
+    private val droppedCounter = meterRegistry?.counter("chat.eventbus.dropped")
 
     /** Events dropped at publish time because the buffer saturated. */
     fun droppedCount(): Long = droppedEvents.get()
@@ -64,6 +66,7 @@ class EventBusImpl : EventBus, AutoCloseable {
     private fun <T> emitCountingDrops(flow: MutableSharedFlow<T>, event: T, kind: String) {
         if (!flow.tryEmit(event)) {
             val total = droppedEvents.incrementAndGet()
+            droppedCounter?.increment()
             // Warn per drop but never flood: a sustained flood logs every 100th.
             if (total % 100L == 1L) {
                 logger.warn("EventBus buffer overflow: dropped {} event (total dropped: {})", kind, total)

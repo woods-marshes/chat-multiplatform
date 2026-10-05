@@ -6,7 +6,9 @@ import io.ktor.http.content.*
 import io.ktor.openapi.OpenApiInfo
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
-import io.ktor.server.plugins.calllogging.*
+import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.callid.callIdMdc
+import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.cachingheaders.*
 import io.ktor.server.plugins.compression.*
 import io.ktor.server.plugins.defaultheaders.*
@@ -25,9 +27,10 @@ fun Application.configureHTTP() {
     install(CallLogging) {
         level = org.slf4j.event.Level.INFO
         filter { call -> call.request.path().startsWith("/v1") || call.request.path().startsWith("/ws") }
+        callIdMdc("requestId")
         format { call ->
             val status = call.response.status()
-            "Status=$status, ${call.request.httpMethod.value} ${call.request.path()}"
+            "Status=$status, requestId=${call.callId ?: "n/a"}, ${call.request.httpMethod.value} ${call.request.path()}"
         }
     }
     routing {

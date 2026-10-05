@@ -1,15 +1,23 @@
 package com.github.woodsmarshes.chat.utils
 
 import com.github.woodsmarshes.chat.base.DatabaseConfig
+import com.github.woodsmarshes.chat.prometheusRegistry
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import com.zaxxer.hikari.metrics.micrometer.MicrometerMetricsTrackerFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import java.sql.DriverManager
+import java.util.concurrent.CopyOnWriteArrayList
+
+/** Every Hikari pool created since boot; observability binds them to Micrometer. */
+private val hikariDataSources = CopyOnWriteArrayList<HikariDataSource>()
+
+fun registeredHikariDataSources(): List<HikariDataSource> = hikariDataSources.toList()
 
 suspend fun clearDatabaseData(database: Database) {
     withContext(Dispatchers.IO) {
@@ -35,6 +43,7 @@ fun connectToH2Database(): Database {
         transactionIsolation = "TRANSACTION_SERIALIZABLE"
     }
     val dataSource = HikariDataSource(hikariConfig)
+    hikariDataSources.add(dataSource)
     return Database.connect(
         datasource = dataSource
     )
@@ -51,8 +60,11 @@ fun connectToPostgresDatabase(config: DatabaseConfig): Database {
         // serialization failures that nothing retries.
         isReadOnly = false
         transactionIsolation = "TRANSACTION_READ_COMMITTED"
+        // Pool saturation/latency straight into the Prometheus registry.
+        metricsTrackerFactory = MicrometerMetricsTrackerFactory(prometheusRegistry)
     }
     val dataSource = HikariDataSource(hikariConfig)
+    hikariDataSources.add(dataSource)
     return Database.connect(
         datasource = dataSource
     )
