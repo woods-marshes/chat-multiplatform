@@ -7,7 +7,10 @@ import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
 import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
+import com.github.woodsmarshes.chat.feature.conversations.navigation.ChatGroupInfoNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ConversationsNavKey
+import com.github.woodsmarshes.chat.feature.conversations.navigation.GroupInfoNavKey
+import com.github.woodsmarshes.chat.feature.profile.navigation.ChatProfileNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
@@ -22,7 +25,10 @@ val navConfiguration = SavedStateConfiguration {
             subclass(ContactsNavKey::class)
             subclass(SettingsNavKey::class)
             subclass(ChatNavKey::class)
+            subclass(GroupInfoNavKey::class)
+            subclass(ChatGroupInfoNavKey::class)
             subclass(ProfileNavKey::class)
+            subclass(ChatProfileNavKey::class)
             subclass(SearchNavKey::class)
             subclass(ArticleListNavKey::class)
             subclass(ArticleDetailNavKey::class)

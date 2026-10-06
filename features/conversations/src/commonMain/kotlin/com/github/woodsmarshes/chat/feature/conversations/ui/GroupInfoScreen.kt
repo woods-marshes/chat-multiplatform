@@ -47,6 +47,7 @@ fun GroupInfoScreen(
     conversationId: String,
     onBack: () -> Unit,
     onOpenChat: (conversationId: String) -> Unit,
+    isExtraPane: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: GroupInfoViewModel = koinViewModel(parameters = { parametersOf(conversationId) }),
 ) {
@@ -60,7 +61,7 @@ fun GroupInfoScreen(
             ChatTopAppBar(
                 title = strings.groupInfoTitle,
                 showBackButton = !inMultiPane,
-                showCloseButton = inMultiPane,
+                showCloseButton = inMultiPane && isExtraPane,
                 onBackClick = onBack,
             )
         },
@@ -120,18 +121,23 @@ fun GroupInfoScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 val conversationId = uiState.conversationId
                 if (uiState.isMember && conversationId != null) {
-                    Button(
-                        onClick = { onOpenChat(conversationId) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Chat,
-                            contentDescription = null,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(strings.openChat)
+                    // When already shown as the trailing extraPane alongside
+                    // the active chat window, the chat is already open in the
+                    // center pane — omit the redundant "Enter chat" button.
+                    if (!(inMultiPane && isExtraPane)) {
+                        Button(
+                            onClick = { onOpenChat(conversationId) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Chat,
+                                contentDescription = null,
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(strings.openChat)
+                        }
                     }
                 } else {
                     Button(

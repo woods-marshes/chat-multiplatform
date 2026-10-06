@@ -55,6 +55,7 @@ fun ProfileScreen(
     userId: String,
     onBack: () -> Unit,
     onOpenChat: (conversationId: String) -> Unit,
+    isExtraPane: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = koinViewModel(parameters = { parametersOf(userId) }),
 ) {
@@ -71,7 +72,7 @@ fun ProfileScreen(
             ChatTopAppBar(
                 title = strings.profileTitle,
                 showBackButton = !inMultiPane,
-                showCloseButton = inMultiPane,
+                showCloseButton = inMultiPane && isExtraPane,
                 onBackClick = onBack,
             )
         },

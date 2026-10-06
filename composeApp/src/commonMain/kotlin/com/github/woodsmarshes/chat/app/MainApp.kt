@@ -79,10 +79,12 @@ import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.chatEntry
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.contactsEntry
+import com.github.woodsmarshes.chat.feature.conversations.navigation.ChatGroupInfoNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ConversationsNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.GroupInfoNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.conversationsEntry
 import com.github.woodsmarshes.chat.feature.conversations.navigation.groupInfoEntry
+import com.github.woodsmarshes.chat.feature.profile.navigation.ChatProfileNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.profileEntry
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
@@ -185,12 +187,13 @@ private fun MainContent(
         navigator.navigate(key)
     }
 
-    // Profile and GroupInfo both occupy the rightmost extraPane; switching
-    // between them replaces the top extra entry in place so closing takes one step.
+    // ChatProfileNavKey and ChatGroupInfoNavKey both occupy the rightmost
+    // extraPane alongside an active ChatScreen; switching between them replaces
+    // the top extra entry in place so closing takes one step.
     val openExtraPane: (NavKey) -> Unit = { key ->
         val stack = navigationState.currentSubStack
         val top = stack.lastOrNull()
-        if (top is ProfileNavKey || top is GroupInfoNavKey) {
+        if (top is ChatProfileNavKey || top is ChatGroupInfoNavKey) {
             stack.removeAt(stack.lastIndex)
         }
         navigator.navigate(key)
@@ -209,14 +212,20 @@ private fun MainContent(
                 openDetailFromList(ChatNavKey(conversationId, isGroup))
             },
             onGroupInfoClick = { conversationId ->
-                openExtraPane(GroupInfoNavKey(conversationId))
+                // Picking a group from the search bar is a list-level selection:
+                // open it in the primary detailPane (replacing any previous chat)
+                // rather than in the trailing extraPane beside an unrelated chat.
+                openDetailFromList(GroupInfoNavKey(conversationId))
             },
             selectedConversationId = {
                 val stack = navigationState.subStacks[ConversationsNavKey]
-                stack?.lastOrNull { it is ChatNavKey || it is GroupInfoNavKey }?.let {
+                stack?.lastOrNull {
+                    it is ChatNavKey || it is GroupInfoNavKey || it is ChatGroupInfoNavKey
+                }?.let {
                     when (it) {
                         is ChatNavKey -> it.conversationId
                         is GroupInfoNavKey -> it.conversationId
+                        is ChatGroupInfoNavKey -> it.conversationId
                         else -> null
                     }
                 }
@@ -224,7 +233,7 @@ private fun MainContent(
             metadata = listPaneMeta,
         )
         contactsEntry(
-            onNavigateToProfile = { openExtraPane(ProfileNavKey(it)) },
+            onNavigateToProfile = { openDetailFromList(ProfileNavKey(it)) },
             selectedUserId = {
                 val stack = navigationState.subStacks[ContactsNavKey]
                 (stack?.lastOrNull { it is ProfileNavKey } as? ProfileNavKey)?.userId
@@ -239,9 +248,9 @@ private fun MainContent(
         )
         chatEntry(
             onBack = { navigator.goBack() },
-            onNavigateToProfile = { openExtraPane(ProfileNavKey(it)) },
+            onNavigateToProfile = { openExtraPane(ChatProfileNavKey(it)) },
             onNavigateToGroupInfo = { conversationId ->
-                openExtraPane(GroupInfoNavKey(conversationId))
+                openExtraPane(ChatGroupInfoNavKey(conversationId))
             },
             metadata = detailPaneMeta,
         )
@@ -250,14 +259,16 @@ private fun MainContent(
             onOpenChat = { conversationId ->
                 openChatFromInfo(conversationId, true)
             },
-            metadata = extraPaneMeta,
+            detailMetadata = detailPaneMeta,
+            extraMetadata = extraPaneMeta,
         )
         profileEntry(
             onBack = { navigator.goBack() },
             onOpenChat = { conversationId ->
                 openChatFromInfo(conversationId, false)
             },
-            metadata = extraPaneMeta,
+            detailMetadata = detailPaneMeta,
+            extraMetadata = extraPaneMeta,
         )
         articleListEntry(
             onArticleClick = { id, authorId ->
@@ -293,8 +304,8 @@ private fun MainContent(
         )
         searchEntry(
             onBack = { navigator.goBack() },
-            onOpenProfile = { userId -> openExtraPane(ProfileNavKey(userId)) },
-            onOpenGroupInfo = { conversationId -> openExtraPane(GroupInfoNavKey(conversationId)) },
+            onOpenProfile = { userId -> openDetailFromList(ProfileNavKey(userId)) },
+            onOpenGroupInfo = { conversationId -> openDetailFromList(GroupInfoNavKey(conversationId)) },
             metadata = listPaneMeta,
         )
     }
@@ -324,7 +335,7 @@ private fun MainContent(
 
     val navigationSuiteLayout = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo)
     val openProfile: () -> Unit = {
-        currentUser?.let { user -> openExtraPane(ProfileNavKey(user.id.toString())) }
+        currentUser?.let { user -> openDetailFromList(ProfileNavKey(user.id.toString())) }
     }
 
     // Compact layouts keep the account affordance in top bars; medium+ pins
