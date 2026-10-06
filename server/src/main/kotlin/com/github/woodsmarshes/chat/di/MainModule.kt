@@ -6,11 +6,14 @@ import com.github.woodsmarshes.chat.base.jwt.TokenService
 import com.github.woodsmarshes.chat.base.jwt.TokenServiceImpl
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.EventBusImpl
+import com.github.woodsmarshes.chat.prometheusRegistry
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStoreImpl
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
+import com.github.woodsmarshes.chat.websocket.SessionIndex
 import com.github.woodsmarshes.chat.websocket.WebSocketRealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
+import io.micrometer.core.instrument.MeterRegistry
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -24,6 +27,12 @@ val MainModule = module {
         bind<HashingService>()
     }
 
+    // The Prometheus registry backs both EventBusImpl's drop counter and the
+    // MicrometerMetrics plugin; register it explicitly so singleOf's
+    // reflective constructor injection can resolve the MeterRegistry
+    // parameter (Kotlin default values do not apply to Koin).
+    single<MeterRegistry> { prometheusRegistry }
+
     singleOf(::EventBusImpl) {
         bind<EventBus>()
     }
@@ -32,8 +41,13 @@ val MainModule = module {
         bind<TemporaryUploadStore>()
     }
 
+    // One shared session index: WebSocketSessionManager records live
+    // connections into it and RealtimeDelivery looks targets up in the
+    // same index — separate instances would silently never meet.
+    single { SessionIndex() }
+
     single {
-        WebSocketSessionManager()
+        WebSocketSessionManager(sessions = get())
     }
 
     single<RealtimeDelivery> {

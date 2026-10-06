@@ -25,5 +25,17 @@ val serviceModule = module {
     singleOf(::MessageService)
     singleOf(::UserService)
     singleOf(::ArticleService)
-    singleOf(::RealtimeService)
+
+    // Reflective singleOf would also try to resolve typingDebounceMs — a
+    // Long with a Kotlin default value, which Koin's constructor injection
+    // ignores — and fail; list the dependencies explicitly instead.
+    single {
+        RealtimeService(
+            log = get(),
+            eventBus = get(),
+            delivery = get(),
+            sessionManager = get(),
+            scope = get(),
+        )
+    }
 }
