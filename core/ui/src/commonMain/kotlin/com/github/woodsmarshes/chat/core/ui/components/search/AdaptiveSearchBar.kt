@@ -19,13 +19,16 @@ import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -77,6 +80,30 @@ import kotlinx.coroutines.launch
  * @param onExpandedChange notified when the search view expands or collapses.
  * @param searchViewContent results rendered inside the expanded search view.
  */
+/**
+ * A search bar state that deliberately skips saveable restoration.
+ *
+ * Nav entry decorators keep saveable state alive across top-level tab
+ * switches, so rememberSearchBarState() resurrects a search view the user
+ * left expanded — arriving on a tab with the search already open (and its
+ * old query firing behind the collapsed-looking bar) reads as a bug.
+ * Every arrival starts collapsed and empty; within one visit the state
+ * behaves normally.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun rememberFreshSearchBarState(): SearchBarState =
+    remember {
+        SearchBarState(
+            initialValue = SearchBarValue.Collapsed,
+            // Mirrors material3's standard-motion defaults (MotionScheme
+            // SlowSpatial / DefaultSpatial) — the public constructor
+            // requires the specs explicitly.
+            animationSpecForExpand = spring(dampingRatio = 0.9f, stiffness = 200f),
+            animationSpecForCollapse = spring(dampingRatio = 0.9f, stiffness = 700f),
+        )
+    }
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
@@ -87,7 +114,7 @@ fun AdaptiveSearchBar(
     onQueryChange: (String) -> Unit,
     onSearchQuery: (String) -> Unit,
     modifier: Modifier = Modifier,
-    state: SearchBarState = rememberSearchBarState(),
+    state: SearchBarState = rememberFreshSearchBarState(),
     placeholder: String? = null,
     navigationIcon: ImageVector? = null,
     onNavigationIconClick: (() -> Unit)? = null,
@@ -108,6 +135,14 @@ fun AdaptiveSearchBar(
     val currentOnQueryChange by rememberUpdatedState(onQueryChange)
     val currentOnSearchQuery by rememberUpdatedState(onSearchQuery)
     val currentOnExpandedChange by rememberUpdatedState(onExpandedChange)
+
+    // Clear any saveable-restored query when arriving in a collapsed state so
+    // an old query does not fire through the debounced stream behind the pill.
+    LaunchedEffect(Unit) {
+        if (state.targetValue == SearchBarValue.Collapsed && textFieldState.text.isNotEmpty()) {
+            textFieldState.edit { replace(0, length, "") }
+        }
+    }
 
     // Raw query stream for callers that mirror the text in their own state.
     LaunchedEffect(textFieldState) {
@@ -137,6 +172,16 @@ fun AdaptiveSearchBar(
             onSearch = { query ->
                 val trimmed = query.trim()
                 currentOnSearchQuery(if (trimmed.length >= minQueryLength) trimmed else "")
+            },
+            // Only focusable once expanded: on Compose Desktop LocalInputModeManager
+            // defaults to InputMode.Touch, and M3's InputField expands unconditionally
+            // on onFocusChanged when in touch mode — so any focus reassignment on tab
+            // switch otherwise pops the search view open by itself. Pointer clicks on
+            // the collapsed pill still expand via DetectClickFromInteractionSource,
+            // and the expanded view's FocusRequester focuses the input field as soon
+            // as expansion starts.
+            modifier = Modifier.focusProperties {
+                canFocus = state.targetValue == SearchBarValue.Expanded
             },
             placeholder = placeholder?.let { hint -> { Text(hint) } },
             leadingIcon = {

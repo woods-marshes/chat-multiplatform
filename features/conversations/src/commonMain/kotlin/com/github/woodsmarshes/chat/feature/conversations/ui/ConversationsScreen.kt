@@ -33,7 +33,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberSearchBarState
+import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,7 +69,7 @@ fun ConversationsScreen(
     viewModel: ConversationsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val searchBarState = rememberSearchBarState()
+    val searchBarState = rememberFreshSearchBarState()
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
     var searchQuery by remember { mutableStateOf("") }

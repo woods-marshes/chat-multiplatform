@@ -12,8 +12,9 @@ fun EntryProviderScope<NavKey>.settingsEntry(
     onBack: () -> Unit,
     onLogout: () -> Unit,
     onSearchClick: () -> Unit,
+    metadata: Map<String, Any> = emptyMap(),
 ) {
-    entry<SettingsNavKey> {
+    entry<SettingsNavKey>(metadata = metadata) {
         SettingsScreen(onBack = onBack, onLogout = onLogout, onSearchClick = onSearchClick)
     }
 }

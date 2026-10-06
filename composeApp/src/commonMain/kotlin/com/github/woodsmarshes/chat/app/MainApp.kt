@@ -186,6 +186,7 @@ private fun MainContent(
             onBack = { navigator.goBack() },
             onLogout = { sessionManager.logout() },
             onSearchClick = { navigator.navigate(SearchNavKey(SearchType.CONVERSATION)) },
+            metadata = listPaneMeta,
         )
         chatEntry(
             onBack = { navigator.goBack() },
