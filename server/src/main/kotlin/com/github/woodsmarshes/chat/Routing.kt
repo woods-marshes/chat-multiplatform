@@ -16,14 +16,16 @@ import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
 import io.ktor.server.plugins.autohead.*
 import java.io.File
-import io.ktor.server.plugins.doublereceive.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.resources.Resources
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 fun Application.configureRouting() {
-    install(DoubleReceive)
+    // DoubleReceive must NOT be installed here: its body cache disposal
+    // discards the request ByteReadChannel, racing the WebSocket upgrade's
+    // reader loop with a concurrent read that kills the socket. Nothing in
+    // this app reads a request body twice.
     install(AutoHeadResponse)
     install(StatusPages) {
         exception<AppException> { call, cause ->
