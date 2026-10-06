@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
+import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
@@ -159,6 +160,27 @@ fun ConversationResponse.toGroupOwnerUserEntity(): UserEntity? {
         role = userInfo.role
     )
 }
+
+/**
+ * Builds a cache-only user row from a message sender reference. SimpleUser
+ * carries no email/bio; upsertUser's COALESCE keeps any richer row already
+ * stored by a user-detail flow intact. Without this, syncing a group's
+ * last message from a sender the cache has never seen violates the
+ * MessageEntity.user_id foreign key and aborts the whole conversation
+ * sync — leaving the list stale.
+ */
+fun SimpleUser.toUserEntity(): UserEntity = UserEntity(
+    id = this.id,
+    username = this.username,
+    email = null,
+    display_name = this.displayName,
+    avatar = this.avatarUrl,
+    bio = null,
+    created_at = this.createdAt,
+    updated_at = this.updatedAt,
+    deleted_at = this.deletedAt,
+    role = this.role,
+)
 
 private fun SimpleMessage.getRenderType(): MessageRenderType {
     return when (this.content) {

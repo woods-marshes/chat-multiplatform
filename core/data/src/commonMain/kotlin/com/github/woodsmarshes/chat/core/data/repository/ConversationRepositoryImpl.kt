@@ -175,20 +175,24 @@ class ConversationRepositoryImpl(
             userDao.insertUsers(
                 privateResponses.mapNotNull { it.toUserEntity() }
                         + groupResponses.mapNotNull { it.toGroupOwnerUserEntity() }
+                        // A group's last message can come from any member (or
+                        // from self in a private chat); MessageEntity.user_id
+                        // has a foreign key, so every sender needs a row.
+                        + responses.mapNotNull { it.lastMessage?.sender?.toUserEntity() }
             )
             groupProfileDao.insertGroupProfiles(groupResponses.mapNotNull { it.toGroupProfileEntity() })
             participantDao.insertParticipants(responses.map { it.toParticipantEntity() })
             // The sync API carries no peer participant row for private chats;
             // seed it once so peer lookups (name, avatar) resolve.
             participantDao.insertParticipantsIfAbsent(responses.mapNotNull { it.toPeerParticipantEntity() })
-            // A single malformed lastMessage must not abort the whole sync.
-            messageDao.insertMessages(
-                responses.mapNotNull { response ->
-                    runCatching { response.toMessageEntity() }
-                        .onFailure { log.warn(it) { "Skipping unpersistable last message" } }
-                        .getOrNull()
+            // A single malformed lastMessage must not abort the whole sync:
+            // each insert runs in its own transaction, so one row violating a
+            // foreign key (sender, conversation, anything) skips only itself.
+            responses.mapNotNull { response -> response.toMessageEntity() }
+                .forEach { message ->
+                    runCatching { messageDao.insertMessage(message) }
+                        .onFailure { log.warn(it) { "Skipping unpersistable last message ${message.id}" } }
                 }
-            )
         }
     }
 
