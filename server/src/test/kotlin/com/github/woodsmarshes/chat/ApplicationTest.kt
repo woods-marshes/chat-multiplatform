@@ -17,7 +17,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 
-@OptIn(KoinInternalApi::class)
 class ApplicationTest {
 
     @Test
@@ -91,7 +90,17 @@ class ApplicationTest {
      * constructor parameters are not all registered (as happened with
      * EventBusImpl's MeterRegistry in 8fc6d68) fails here at test time
      * instead of on the first business request in production.
+     *
+     * This intentionally does NOT use koin-test's Module.verify(): its
+     * constructor introspection is blind to this codebase's registration
+     * style, verified by mutation against the three 8fc6d68-era breakages
+     * (interface-bound `single<Interface> { Impl(...) }` definitions have
+     * no primary constructor to introspect; default-valued params are only
+     * warned about; primitives like the RealtimeService Long are
+     * whitelisted; get() calls inside definition lambdas are not checked).
+     * Actual instantiation is the only check that catches all of them.
      */
+    @OptIn(KoinInternalApi::class)
     @Test
     fun everyKoinDefinitionResolves() = testApplication {
         environment {
