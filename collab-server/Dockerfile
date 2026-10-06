@@ -3,8 +3,11 @@ FROM node:25-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-# 使用 --legacy-peer-deps 确保对等依赖安全安装
-RUN npm ci --legacy-peer-deps
+# Plain npm ci: hocuspocus and tiptap declare runtime packages (y-protocols,
+# y-prosemirror, ...) as peer dependencies, so peers MUST be auto-installed.
+# --legacy-peer-deps skipped them and the container crashed on boot with
+# ERR_MODULE_NOT_FOUND.
+RUN npm ci
 
 COPY . .
 
