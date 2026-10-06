@@ -17,3 +17,5 @@ jwt:
   audience: ${JWT_AUDIENCE:API}
   realm: "Ktor Server"
   secret: ${JWT_SECRET:my-local-test-secret-key-change-in-prod}
+metrics:
+  token: ${METRICS_TOKEN:}

@@ -48,7 +48,10 @@ private const val METRICS_ROUTE = "/metrics"
  */
 fun Application.configureObservability() {
     val sessionManager = getKoin().get<WebSocketSessionManager>()
-    val metricsToken = environment.config.propertyOrNull("metrics.token")?.getString()
+    // Blank counts as unconfigured: the yaml default is an empty string
+    // (compose feeds METRICS_TOKEN), so development without the variable
+    // stays open while a deployment that sets it gets the gate.
+    val metricsToken = environment.config.propertyOrNull("metrics.token")?.getString()?.takeIf { it.isNotBlank() }
 
     // Cap label cardinality: scanners hitting unregistered paths would
     // otherwise create one request-timer series per URL.
