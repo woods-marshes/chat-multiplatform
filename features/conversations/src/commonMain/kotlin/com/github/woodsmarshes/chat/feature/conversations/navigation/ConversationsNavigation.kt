@@ -11,6 +11,7 @@ data object ConversationsNavKey : NavKey
 fun EntryProviderScope<NavKey>.conversationsEntry(
     onNavigateToChat: (conversationId: String, isGroup: Boolean) -> Unit,
     onGroupInfoClick: (conversationId: String) -> Unit,
+    selectedConversationId: () -> String? = { null },
     onMenuClick: (() -> Unit)? = null,
     metadata: Map<String, Any> = emptyMap(),
 ) {
@@ -18,6 +19,7 @@ fun EntryProviderScope<NavKey>.conversationsEntry(
         ConversationsScreen(
             onConversationClick = onNavigateToChat,
             onGroupInfoClick = onGroupInfoClick,
+            selectedConversationId = selectedConversationId(),
             onMenuClick = onMenuClick,
         )
     }

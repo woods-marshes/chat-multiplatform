@@ -33,6 +33,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -64,6 +65,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ConversationsScreen(
     onConversationClick: (conversationId: String, isGroup: Boolean) -> Unit,
     onGroupInfoClick: (conversationId: String) -> Unit,
+    selectedConversationId: String? = null,
     onMenuClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: ConversationsViewModel = koinViewModel(),
@@ -73,6 +75,7 @@ fun ConversationsScreen(
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
     var searchQuery by remember { mutableStateOf("") }
+    val inMultiPane = isInListDetailScene()
 
     Scaffold(
         topBar = {
@@ -162,6 +165,7 @@ fun ConversationsScreen(
                     ) { conv ->
                         ConversationItem(
                             conversation = conv,
+                            selected = inMultiPane && conv.id.toString() == selectedConversationId,
                             onClick = {
                                 onConversationClick(
                                     conv.id.toString(),

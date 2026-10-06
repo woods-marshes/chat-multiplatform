@@ -46,7 +46,7 @@ fun SettingsScreen(
         topBar = {
             ChatTopAppBar(
                 title = LocalStrings.current.settingsTitle,
-                showBackButton = true,
+                showBackButton = false,
                 onBackClick = onBack,
                 onSearchClick = onSearchClick,
                 showAccountAffordance = true,

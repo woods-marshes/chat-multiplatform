@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ fun ConversationItem(
     conversation: ConversationUiModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
 ) {
     val bubbleColors = LocalBubbleColors.current
     val convName = conversation.name ?: LocalStrings.current.unnamed
@@ -48,8 +50,14 @@ fun ConversationItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.secondaryContainer
+                else Color.Transparent
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 头像 + 未读角标
@@ -94,15 +102,17 @@ fun ConversationItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = convName,
-                color = bubbleColors.onSurfaceColor,
+                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else bubbleColors.onSurfaceColor,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(3.dp))
             LastMessagePreview(
                 lastMessage = lastMsg,
+                fallbackSubtitle = conversation.description?.takeIf { it.isNotBlank() }
+                    ?: conversation.handle?.takeIf { it.isNotBlank() }?.let { "@$it" },
                 unreadCount = conversation.unreadCount,
                 bubbleColors = bubbleColors,
             )
@@ -133,12 +143,13 @@ fun ConversationItem(
 @Composable
 private fun LastMessagePreview(
     lastMessage: LastMessageInfo?,
+    fallbackSubtitle: String? = null,
     unreadCount: Int,
     bubbleColors: com.github.woodsmarshes.chat.core.ui.theme.BubbleColorTokens,
 ) {
     if (lastMessage == null) {
         Text(
-            text = LocalStrings.current.noMessages,
+            text = fallbackSubtitle ?: LocalStrings.current.noMessages,
             color = bubbleColors.timestampColor,
             fontSize = 13.sp,
             maxLines = 1,

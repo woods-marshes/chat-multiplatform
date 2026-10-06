@@ -103,8 +103,10 @@ class ConversationsViewModel(
         searchJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSearching = true, searchError = null)
             conversationRepository.searchGroups(query).onOk { groups ->
+                val existingById = _uiState.value.conversations.associateBy { it.id }
                 _uiState.value = _uiState.value.copy(
                     searchResults = groups.map { group ->
+                        val existing = existingById[group.conversationId]
                         ConversationUiModel(
                             id = group.conversationId,
                             type = ConversationType.GROUP,
@@ -112,6 +114,8 @@ class ConversationsViewModel(
                             avatarUrl = group.avatarUrl,
                             description = group.description,
                             handle = group.handle,
+                            lastMessage = existing?.lastMessage,
+                            memberAvatars = existing?.memberAvatars.orEmpty(),
                         )
                     },
                     isSearching = false,

@@ -74,6 +74,7 @@ import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.components.ChatConversationTopBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.bubble.messageItems
 import com.github.woodsmarshes.chat.core.ui.components.bubble.rememberFormatter
 import com.github.woodsmarshes.chat.core.ui.components.input.ChatInputBar
@@ -267,6 +268,7 @@ fun ChatScreen(
                 }
                 else -> null
             }
+            val inMultiPane = isInListDetailScene()
             ChatConversationTopBar(
                 title = header?.title ?: strings.chatTitle,
                 subtitle = subtitle,
@@ -274,6 +276,7 @@ fun ChatScreen(
                     ?: (header?.title ?: strings.chatTitle),
                 avatarUrl = typingUser?.avatarUrl ?: header?.avatarUrl,
                 onBack = onBack,
+                showBackButton = !inMultiPane,
                 onHeaderClick = openDetails,
                 actions = {
                     if (openDetails != null && header != null) {

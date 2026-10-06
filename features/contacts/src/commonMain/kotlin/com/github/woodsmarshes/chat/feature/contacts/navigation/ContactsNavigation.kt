@@ -10,12 +10,14 @@ data object ContactsNavKey : NavKey
 
 fun EntryProviderScope<NavKey>.contactsEntry(
     onNavigateToProfile: (userId: String) -> Unit,
+    selectedUserId: () -> String? = { null },
     onMenuClick: (() -> Unit)? = null,
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<ContactsNavKey>(metadata = metadata) {
         ContactsScreen(
             onContactClick = onNavigateToProfile,
+            selectedUserId = selectedUserId(),
             onMenuClick = onMenuClick,
         )
     }

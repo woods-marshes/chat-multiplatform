@@ -18,12 +18,14 @@ data class ArticleDetailNavKey(val id: Uuid, val authorId: Uuid) : NavKey
 fun EntryProviderScope<NavKey>.articleListEntry(
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
     onCreateClick: () -> Unit,
+    selectedArticleId: () -> Uuid? = { null },
     metadata: Map<String, Any> = emptyMap(),
 ) {
     entry<ArticleListNavKey>(metadata = metadata) {
         ArticleListScreen(
             onArticleClick = onArticleClick,
             onCreateClick = onCreateClick,
+            selectedArticleId = selectedArticleId(),
         )
     }
 }

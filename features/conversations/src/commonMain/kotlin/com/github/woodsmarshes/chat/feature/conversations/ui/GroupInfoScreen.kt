@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.ui.SenderUser
 import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
@@ -51,13 +52,15 @@ fun GroupInfoScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val strings = LocalStrings.current
+    val inMultiPane = isInListDetailScene()
 
     Scaffold(
         modifier = modifier,
         topBar = {
             ChatTopAppBar(
                 title = strings.groupInfoTitle,
-                showBackButton = true,
+                showBackButton = !inMultiPane,
+                showCloseButton = inMultiPane,
                 onBackClick = onBack,
             )
         },

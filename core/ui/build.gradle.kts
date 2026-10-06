@@ -30,6 +30,7 @@ kotlin {
                 api(libs.compose.material3)
                 api(libs.compose.material3.adaptive)
                 api(libs.compose.material3.adaptive.layout)
+                api(libs.compose.material3.adaptiveNavigation3)
 
                 api(libs.androidx.navigationevent)
 

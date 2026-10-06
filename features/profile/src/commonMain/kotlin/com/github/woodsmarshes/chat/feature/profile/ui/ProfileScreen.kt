@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
@@ -62,13 +63,15 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val inMultiPane = isInListDetailScene()
 
     Scaffold(
         modifier = modifier,
         topBar = {
             ChatTopAppBar(
                 title = strings.profileTitle,
-                showBackButton = true,
+                showBackButton = !inMultiPane,
+                showCloseButton = inMultiPane,
                 onBackClick = onBack,
             )
         },

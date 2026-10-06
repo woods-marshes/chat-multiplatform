@@ -14,6 +14,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -44,6 +45,7 @@ private val indexLetters = ('A'..'Z').map { it.toString() } + "#"
 @Composable
 fun ContactsScreen(
     onContactClick: (String) -> Unit,
+    selectedUserId: String? = null,
     onMenuClick: (() -> Unit)? = null,
     viewModel: ContactsViewModel = koinViewModel(),
 ) {
@@ -53,6 +55,7 @@ fun ContactsScreen(
     val searchBarState = rememberFreshSearchBarState()
     val strings = LocalStrings.current
     var searchQuery by remember { mutableStateOf("") }
+    val inMultiPane = isInListDetailScene()
 
     Scaffold(
         topBar = {
@@ -128,6 +131,7 @@ fun ContactsScreen(
                     ) { contact ->
                         ContactItem(
                             contact = contact,
+                            selected = inMultiPane && contact.id.toString() == selectedUserId,
                             onClick = { onContactClick(contact.id.toString()) },
                         )
                     }

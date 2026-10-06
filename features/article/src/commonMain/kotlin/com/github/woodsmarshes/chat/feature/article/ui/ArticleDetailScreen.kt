@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.serialization.json.JsonElement
 import kotlin.uuid.Uuid
@@ -49,21 +51,14 @@ fun ArticleDetailScreen(
         LocalStrings.current.articleCollaborativeEditFab
     }
 
+    val inMultiPane = isInListDetailScene()
+
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(article?.title ?: LocalStrings.current.articleTitle)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = LocalStrings.current.backCd,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(),
+            ChatTopAppBar(
+                title = article?.title ?: LocalStrings.current.articleTitle,
+                showBackButton = !inMultiPane,
+                onBackClick = onBack,
             )
         },
         floatingActionButton = {

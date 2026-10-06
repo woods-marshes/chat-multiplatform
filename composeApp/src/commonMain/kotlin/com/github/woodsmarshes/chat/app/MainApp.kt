@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.WindowAdaptiveInfo
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -166,20 +167,68 @@ private fun MainContent(
 
     val strings = LocalStrings.current
 
-    val listPaneMeta = remember { ListDetailSceneStrategy.listPane() }
+    val listPaneMeta = remember {
+        ListDetailSceneStrategy.listPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
+    }
     val detailPaneMeta = remember { ListDetailSceneStrategy.detailPane() }
+    val extraPaneMeta = remember {
+        ListDetailSceneStrategy.extraPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
+    }
+
+    // Selecting a primary detail from the list replaces any open detail AND
+    // dismisses any trailing extraPane (profile / group info) from the previous item.
+    val openDetailFromList: (NavKey) -> Unit = { key ->
+        val stack = navigationState.currentSubStack
+        if (stack.size > 1) {
+            stack.subList(1, stack.size).clear()
+        }
+        navigator.navigate(key)
+    }
+
+    // Profile and GroupInfo both occupy the rightmost extraPane; switching
+    // between them replaces the top extra entry in place so closing takes one step.
+    val openExtraPane: (NavKey) -> Unit = { key ->
+        val stack = navigationState.currentSubStack
+        val top = stack.lastOrNull()
+        if (top is ProfileNavKey || top is GroupInfoNavKey) {
+            stack.removeAt(stack.lastIndex)
+        }
+        navigator.navigate(key)
+    }
+
+    val openChatFromInfo: (String, Boolean) -> Unit = { conversationId, isGroup ->
+        if (navigationState.currentTopLevelKey != ConversationsNavKey) {
+            navigator.navigate(ConversationsNavKey)
+        }
+        openDetailFromList(ChatNavKey(conversationId, isGroup))
+    }
+
     val entryProvider = entryProvider {
         conversationsEntry(
             onNavigateToChat = { conversationId, isGroup ->
-                navigator.navigate(ChatNavKey(conversationId , isGroup))
+                openDetailFromList(ChatNavKey(conversationId, isGroup))
             },
             onGroupInfoClick = { conversationId ->
-                navigator.navigate(GroupInfoNavKey(conversationId))
+                openExtraPane(GroupInfoNavKey(conversationId))
+            },
+            selectedConversationId = {
+                val stack = navigationState.subStacks[ConversationsNavKey]
+                stack?.lastOrNull { it is ChatNavKey || it is GroupInfoNavKey }?.let {
+                    when (it) {
+                        is ChatNavKey -> it.conversationId
+                        is GroupInfoNavKey -> it.conversationId
+                        else -> null
+                    }
+                }
             },
             metadata = listPaneMeta,
         )
         contactsEntry(
-            onNavigateToProfile = { navigator.navigate(ProfileNavKey(it)) },
+            onNavigateToProfile = { openExtraPane(ProfileNavKey(it)) },
+            selectedUserId = {
+                val stack = navigationState.subStacks[ContactsNavKey]
+                (stack?.lastOrNull { it is ProfileNavKey } as? ProfileNavKey)?.userId
+            },
             metadata = listPaneMeta,
         )
         settingsEntry(
@@ -190,29 +239,43 @@ private fun MainContent(
         )
         chatEntry(
             onBack = { navigator.goBack() },
-            onNavigateToProfile = { navigator.navigate(ProfileNavKey(it)) },
+            onNavigateToProfile = { openExtraPane(ProfileNavKey(it)) },
             onNavigateToGroupInfo = { conversationId ->
-                navigator.navigate(GroupInfoNavKey(conversationId))
+                openExtraPane(GroupInfoNavKey(conversationId))
             },
             metadata = detailPaneMeta,
         )
         groupInfoEntry(
             onBack = { navigator.goBack() },
             onOpenChat = { conversationId ->
-                navigator.navigate(ChatNavKey(conversationId, true))
+                openChatFromInfo(conversationId, true)
             },
-            metadata = detailPaneMeta,
+            metadata = extraPaneMeta,
         )
         profileEntry(
             onBack = { navigator.goBack() },
             onOpenChat = { conversationId ->
-                navigator.navigate(ChatNavKey(conversationId, false))
+                openChatFromInfo(conversationId, false)
             },
-            metadata = detailPaneMeta,
+            metadata = extraPaneMeta,
         )
         articleListEntry(
-            onArticleClick = { id, authorId -> navigator.navigate(ArticleDetailNavKey(id, authorId)) },
-            onCreateClick = { navigator.navigate(ArticleEditorNavKey()) },
+            onArticleClick = { id, authorId ->
+                openDetailFromList(ArticleDetailNavKey(id, authorId))
+            },
+            onCreateClick = {
+                openDetailFromList(ArticleEditorNavKey())
+            },
+            selectedArticleId = {
+                val stack = navigationState.subStacks[ArticleListNavKey]
+                stack?.lastOrNull { it is ArticleDetailNavKey || it is ArticleEditorNavKey }?.let {
+                    when (it) {
+                        is ArticleDetailNavKey -> it.id
+                        is ArticleEditorNavKey -> it.id
+                        else -> null
+                    }
+                }
+            },
             metadata = listPaneMeta,
         )
         articleDetailEntry(
@@ -230,8 +293,8 @@ private fun MainContent(
         )
         searchEntry(
             onBack = { navigator.goBack() },
-            onOpenProfile = { userId -> navigator.navigate(ProfileNavKey(userId)) },
-            onOpenGroupInfo = { conversationId -> navigator.navigate(GroupInfoNavKey(conversationId)) },
+            onOpenProfile = { userId -> openExtraPane(ProfileNavKey(userId)) },
+            onOpenGroupInfo = { conversationId -> openExtraPane(GroupInfoNavKey(conversationId)) },
             metadata = listPaneMeta,
         )
     }
@@ -261,7 +324,7 @@ private fun MainContent(
 
     val navigationSuiteLayout = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(windowAdaptiveInfo)
     val openProfile: () -> Unit = {
-        currentUser?.let { user -> navigator.navigate(ProfileNavKey(user.id.toString())) }
+        currentUser?.let { user -> openExtraPane(ProfileNavKey(user.id.toString())) }
     }
 
     // Compact layouts keep the account affordance in top bars; medium+ pins
@@ -337,7 +400,21 @@ private fun MainContent(
                         // must get an explicit background or they render black.
                         .background(MaterialTheme.colorScheme.background)
                 ) {
-                    val strategy = rememberListDetailSceneStrategy<NavKey>()
+                    val baseDirective = calculatePaneScaffoldDirective(windowAdaptiveInfo)
+                    val isExpandedOrWider = windowAdaptiveInfo.windowSizeClass
+                        .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
+                    val directive = remember(baseDirective, isExpandedOrWider) {
+                        baseDirective.copy(
+                            // Allow List + Detail + Extra (e.g. Conversations +
+                            // Chat + Profile/GroupInfo) side-by-side on desktop
+                            // expanded windows, with a 1.dp hairline divider gap
+                            // instead of the default 24.dp empty gutter.
+                            maxHorizontalPartitions = if (isExpandedOrWider) 3 else baseDirective.maxHorizontalPartitions,
+                            horizontalPartitionSpacerSize = 1.dp,
+                            defaultPanePreferredWidth = 320.dp,
+                        )
+                    }
+                    val strategy = rememberListDetailSceneStrategy<NavKey>(directive = directive)
 
                     NavDisplay(
                         entries = navigationState.toEntries(entryProvider),

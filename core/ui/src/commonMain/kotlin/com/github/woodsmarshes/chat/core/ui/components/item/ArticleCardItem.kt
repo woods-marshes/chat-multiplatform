@@ -41,6 +41,7 @@ fun LazyListScope.articleItems(
     itemCount: Int,
     itemProvider: (Int) -> ArticleListUiModel?,
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
+    selectedArticleId: Uuid? = null,
 ) {
     items(
         count = itemCount,
@@ -50,6 +51,7 @@ fun LazyListScope.articleItems(
         val article = itemProvider(index) ?: return@items
         ArticleCardItem(
             article = article,
+            selected = article.id == selectedArticleId,
             onClick = { onArticleClick(article.id, article.authorId) },
         )
     }
@@ -60,12 +62,20 @@ fun ArticleCardItem(
     article: ArticleListUiModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .clickable(onClick = onClick),
+        colors = if (selected) {
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            )
+        } else {
+            CardDefaults.cardColors()
+        },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

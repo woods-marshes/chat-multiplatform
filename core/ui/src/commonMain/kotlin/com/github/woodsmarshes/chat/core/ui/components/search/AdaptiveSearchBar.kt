@@ -1,7 +1,10 @@
 package com.github.woodsmarshes.chat.core.ui.components.search
 
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -36,6 +39,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.FlowPreview
@@ -180,9 +184,11 @@ fun AdaptiveSearchBar(
             // the collapsed pill still expand via DetectClickFromInteractionSource,
             // and the expanded view's FocusRequester focuses the input field as soon
             // as expansion starts.
-            modifier = Modifier.focusProperties {
-                canFocus = state.targetValue == SearchBarValue.Expanded
-            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusProperties {
+                    canFocus = state.targetValue == SearchBarValue.Expanded
+                },
             placeholder = placeholder?.let { hint -> { Text(hint) } },
             leadingIcon = {
                 if (state.targetValue == SearchBarValue.Expanded) {
@@ -221,23 +227,31 @@ fun AdaptiveSearchBar(
     }
 
     // Collapsed pill. Ctrl+K expands it from the keyboard on desktop.
-    SearchBar(
-        state = state,
-        inputField = inputField,
-        modifier = modifier.onPreviewKeyEvent { event ->
-            if (
-                event.type == KeyEventType.KeyDown &&
-                event.key == Key.K &&
-                event.isCtrlPressed &&
-                state.targetValue == SearchBarValue.Collapsed
-            ) {
-                scope.launch { state.animateToExpanded() }
-                true
-            } else {
-                false
-            }
-        },
-    )
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        SearchBar(
+            state = state,
+            inputField = inputField,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onPreviewKeyEvent { event ->
+                    if (
+                        event.type == KeyEventType.KeyDown &&
+                        event.key == Key.K &&
+                        event.isCtrlPressed &&
+                        state.targetValue == SearchBarValue.Collapsed
+                    ) {
+                        scope.launch { state.animateToExpanded() }
+                        true
+                    } else {
+                        false
+                    }
+                },
+        )
+    }
 
     // Expanded search view: docked popup on medium+ widths (keeps the detail
     // pane of a list-detail layout visible), full screen otherwise.

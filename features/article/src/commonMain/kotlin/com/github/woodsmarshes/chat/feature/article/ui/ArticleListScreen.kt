@@ -45,6 +45,7 @@ import androidx.paging.PagingData
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.articleItems
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.flow.Flow
@@ -58,10 +59,12 @@ private val log = KotlinLogging.logger {}
 fun ArticleListScreen(
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
     onCreateClick: () -> Unit,
+    selectedArticleId: Uuid? = null,
     viewModel: ArticleListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val pagerState = rememberPagerState(pageCount = { 2 })
+    val inMultiPane = isInListDetailScene()
 
     // Sync tab → pager
     LaunchedEffect(uiState.selectedTabIndex) {
@@ -128,6 +131,7 @@ fun ArticleListScreen(
                 }
                 ArticleListContent(
                     articlesFlow = flow,
+                    selectedArticleId = if (inMultiPane) selectedArticleId else null,
                     onArticleClick = onArticleClick,
                 )
             }
@@ -172,6 +176,7 @@ fun ArticleListScreen(
 @Composable
 private fun ArticleListContent(
     articlesFlow: Flow<PagingData<ArticleListUiModel>>,
+    selectedArticleId: Uuid? = null,
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
 ) {
     val articles = articlesFlow.collectAsLazyPagingItems()
@@ -232,6 +237,7 @@ private fun ArticleListContent(
                         itemCount = articles.itemCount,
                         itemProvider = { articles[it] },
                         onArticleClick = onArticleClick,
+                        selectedArticleId = selectedArticleId,
                     )
 
                     when (articles.loadState.append) {
