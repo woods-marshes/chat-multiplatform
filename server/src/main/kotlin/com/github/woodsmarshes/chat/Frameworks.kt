@@ -38,6 +38,7 @@ import org.koin.fileProperties
 import org.koin.ktor.ext.getKoin
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
+import java.security.MessageDigest
 import kotlin.time.Duration.Companion.minutes
 
 private const val DEFAULT_JWT_EXPIRY_MS = 1L * 60 * 60 * 1000 // 1 hour access token
@@ -47,6 +48,7 @@ private const val SESSION_SWEEP_MINUTES = 60L
 @OptIn(KoinExperimentalAPI::class)
 fun Application.configureFrameworks() {
     val appConfig = extractServerConfig()
+    logEffectiveJwtConfig(appConfig)
     requireProductionConfiguration(appConfig)
     val dbType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"
     val database = configureDatabase(appConfig, dbType)
@@ -91,9 +93,33 @@ private fun Application.requireProductionConfiguration(config: ServerConfig) {
     }
 }
 
+/**
+ * Fingerprints the effective JWT settings at boot: a verifier/issuer
+ * mismatch between environments then shows up here as a differing
+ * fingerprint instead of as unexplained 401s on business routes. Only the
+ * last 8 hex chars of the secret's SHA-256 are logged — never the secret.
+ */
+private fun Application.logEffectiveJwtConfig(config: ServerConfig) {
+    val tokenConfig = config.tokenConfig
+    val fingerprint = MessageDigest.getInstance("SHA-256")
+        .digest(tokenConfig.secret.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+        .takeLast(8)
+    environment.log.info(
+        "JWT config: issuer='${tokenConfig.issuer}', audience='${tokenConfig.audience}', " +
+            "realm='${tokenConfig.realm}', expiresIn=${tokenConfig.expiresIn / 1000}s, " +
+            "secretSha256=...$fingerprint"
+    )
+}
+
 private val INSECURE_SECRETS = setOf(
     "my-local-test-secret-key-change-in-prod",
     "jghN7qJJq4vDmvHVg",
+    // The demo values shipped in the checked-in .env that compose.yml feeds
+    // the container: without these entries, `docker compose up` in
+    // production passes the guard while running on published secrets.
+    "demo-jwt-secret-must-be-changed-for-production-use",
+    "demo-password-please-change-in-production",
 )
 
 private fun Application.configureDatabase(config: ServerConfig, dbType: String): Database {

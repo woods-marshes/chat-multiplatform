@@ -6,14 +6,14 @@ ktor:
         port: 9051
     development: ${KTOR_DEVELOPMENT:true}
 database:
-    type: ${DATABASE_TYPE:"h2"} # "h2" for in-memory or "postgres" for PostgreSQL
+    type: ${DATABASE_TYPE:h2} # "h2" for in-memory or "postgres" for PostgreSQL
 postgres:
-  url: ${POSTGRES_URL:"jdbc:postgresql://localhost:5432/ktor"}
-  username: ${POSTGRES_USERNAME:"postgres"}
-  password: ${POSTGRES_PASSWORD:"jghN7qJJq4vDmvHVg"}
+  url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/ktor}
+  username: ${POSTGRES_USERNAME:postgres}
+  password: ${POSTGRES_PASSWORD:jghN7qJJq4vDmvHVg}
 jwt:
-  domain: ${JWT_DOMAIN:"https://jwt-provider-domain/"}
-  issuer: ${JWT_ISSUER:"chat-server"}
-  audience: ${JWT_AUDIENCE:"API"}
+  domain: ${JWT_DOMAIN:https://jwt-provider-domain/}
+  issuer: ${JWT_ISSUER:chat-server}
+  audience: ${JWT_AUDIENCE:API}
   realm: "Ktor Server"
-  secret: ${JWT_SECRET:"my-local-test-secret-key-change-in-prod"}
+  secret: ${JWT_SECRET:my-local-test-secret-key-change-in-prod}
