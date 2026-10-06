@@ -65,6 +65,8 @@ fun ConversationItem(
             if (conversation.type == ConversationType.GROUP) {
                 ConversationAvatar(
                     participants = conversation.memberAvatars,
+                    name = conversation.name,
+                    avatarUrl = conversation.avatarUrl,
                     size = 52.dp,
                 )
             } else {

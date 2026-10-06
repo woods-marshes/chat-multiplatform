@@ -31,10 +31,22 @@ import top.yukonga.miuix.kmp.basic.Text
 fun ConversationAvatar(
     participants: List<SenderUser>,
     modifier: Modifier = Modifier,
+    name: String? = null,
+    avatarUrl: String? = null,
     size: Dp = 48.dp,
     onClick: (() -> Unit)? = null,
 ) {
-    val bubbleColors = LocalBubbleColors.current
+    if (avatarUrl != null || participants.isEmpty()) {
+        UserAvatar(
+            name = name,
+            avatarUrl = avatarUrl,
+            modifier = modifier,
+            size = size,
+            onClick = onClick,
+        )
+        return
+    }
+
     val baseModifier = modifier
         .size(size)
         .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
@@ -42,13 +54,13 @@ fun ConversationAvatar(
     val displayParticipants = participants.take(4)
 
     when (displayParticipants.size) {
-        0 -> EmptyAvatar(baseModifier)
         1 -> {
             val p = displayParticipants[0]
             UserAvatar(
                 name = p.displayName ?: p.username,
                 avatarUrl = p.avatarUrl,
                 size = size,
+                onClick = onClick,
             )
         }
         else -> {
@@ -77,22 +89,4 @@ private fun offsetsForIndex(index: Int, offset: Dp): Pair<Dp, Dp> = when (index)
     2 -> Pair(-offset, offset)
     3 -> Pair(offset, offset)
     else -> Pair(0.dp, 0.dp)
-}
-
-@Composable
-private fun EmptyAvatar(modifier: Modifier) {
-    val bubbleColors = LocalBubbleColors.current
-    Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(bubbleColors.otherBackground),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "#",
-            color = bubbleColors.otherContent,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
 }
