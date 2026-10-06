@@ -116,6 +116,8 @@ dependencies {
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.ktor.client.websockets)
+    testImplementation(libs.exposed.migration.jdbc)
+    testImplementation(libs.exposed.migration.core)
     testImplementation(libs.mockk)
 
     implementation(libs.h2)
@@ -124,8 +126,6 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.kotlin.datetime)
     implementation(libs.exposed.json)
-    implementation(libs.exposed.migration.jdbc)
-    implementation(libs.exposed.migration.core)
 
     //Commons Codec - Password Hash
     implementation(libs.commons.codec)

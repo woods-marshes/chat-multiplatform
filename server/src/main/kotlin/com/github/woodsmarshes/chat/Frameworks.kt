@@ -160,6 +160,11 @@ private fun configureSchema(database: Database) {
         // widening this to existing tables, but it re-issues named unique
         // constraints that H2 has already created, so new columns on
         // existing databases are applied with explicit idempotent DDL below.
+        // The same defects (FK-index drops, constraint re-issue, unmapped
+        // column drops) were measured in the newer MigrationUtils diff on
+        // exposed-migration 1.5.0 — see SchemaDiffTest, the tripwire that
+        // flags when Exposed's H2 metadata readback is fixed and this block
+        // can finally be diff-driven.
         SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
         // SchemaUtils.create skips existing tables, so databases created
         // before these additions never receive them from the schema objects.
