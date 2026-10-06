@@ -17,6 +17,7 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
 class RealtimeService(
@@ -112,7 +113,7 @@ class RealtimeService(
         typingDebounceMap[event.userId]?.cancel()
 
         typingDebounceMap[event.userId] = scope.launch {
-            delay(typingDebounceMs)
+            delay(typingDebounceMs.milliseconds)
             val response = MessageEventResponse.UserTyping(
                 conversationId = event.conversationId,
                 userId = event.userId,
