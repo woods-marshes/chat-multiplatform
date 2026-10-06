@@ -81,6 +81,13 @@ class NavigationState(
 
 /**
  * Convert NavigationState into NavEntries.
+ *
+ * Only the CURRENT tab's entries are returned. The AOSP sample this mirrors
+ * flattens every visited tab's stack into one list, which only works while
+ * no scene strategy pairs entries across tabs: with ListDetailSceneStrategy
+ * metadata, a chat detail page from the previous tab kept rendering next to
+ * the newly selected tab's list, and every tab stayed composed so per-screen
+ * remember state (an expanded search bar) leaked across switches.
  */
 @Composable
 fun NavigationState.toEntries(
@@ -98,7 +105,5 @@ fun NavigationState.toEntries(
         )
     }
 
-    return topLevelStack
-        .flatMap { decoratedEntries[it] ?: emptyList() }
-        .toMutableStateList()
+    return decoratedEntries.getValue(currentTopLevelKey).toMutableStateList()
 }
