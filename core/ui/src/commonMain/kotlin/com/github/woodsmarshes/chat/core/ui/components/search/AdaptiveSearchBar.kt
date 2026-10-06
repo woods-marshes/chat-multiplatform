@@ -92,7 +92,11 @@ fun AdaptiveSearchBar(
     navigationIcon: ImageVector? = null,
     onNavigationIconClick: (() -> Unit)? = null,
     trailingAffordance: (@Composable () -> Unit)? = null,
-    minQueryLength: Int = 2,
+    // 1, not 2: group and contact names can legitimately be a single
+    // character (a group named "3"), and one CJK character carries as much
+    // information as a whole Latin word. The debounce already protects the
+    // server from per-keystroke load.
+    minQueryLength: Int = 1,
     debounceMillis: Long = 300L,
     onExpandedChange: ((Boolean) -> Unit)? = null,
     searchViewContent: @Composable ColumnScope.() -> Unit,
