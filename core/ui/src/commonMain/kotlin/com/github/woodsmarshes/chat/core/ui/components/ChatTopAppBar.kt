@@ -111,30 +111,12 @@ fun ChatTopAppBar(
             },
             actions = {
                 if (onSearchClick != null) {
-                    Surface(
-                        onClick = onSearchClick,
-                        shape = RoundedCornerShape(percent = 50),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.defaultMinSize(minWidth = 120.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = LocalStrings.current.searchTitle,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                    IconButton(onClick = onSearchClick) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = LocalStrings.current.searchTitle,
+                        )
                     }
-                    Spacer(Modifier.width(8.dp))
                 }
                 actions()
                 if (showAccountAffordance) {
