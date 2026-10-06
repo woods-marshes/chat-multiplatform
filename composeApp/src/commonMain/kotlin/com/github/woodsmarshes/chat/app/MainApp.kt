@@ -425,10 +425,22 @@ private fun MainContent(
                             defaultPanePreferredWidth = 320.dp,
                         )
                     }
-                    val strategy = rememberListDetailSceneStrategy<NavKey>(directive = directive)
+                    // shouldHandleSinglePaneLayout = true keeps all list/detail/extra
+                    // routes inside ThreePaneScaffoldScene even on compact/medium
+                    // single-pane windows. Falling back to SinglePaneSceneStrategy
+                    // on 1-pane windows triggers a NavDisplay sceneToExcludedEntryMap
+                    // bug where transitioning between ThreePaneScaffoldScene and
+                    // SinglePaneScene (or popping back within SinglePaneScene) leaves
+                    // the target entry in LocalEntriesToExcludeFromCurrentScene,
+                    // resulting in a blank white screen.
+                    val strategy = rememberListDetailSceneStrategy<NavKey>(
+                        shouldHandleSinglePaneLayout = true,
+                        directive = directive,
+                    )
+                    val currentEntries = navigationState.toEntries(entryProvider)
 
                     NavDisplay(
-                        entries = navigationState.toEntries(entryProvider),
+                        entries = currentEntries,
                         sceneStrategies = listOf(strategy),
                         onBack = { navigator.goBack() },
                         modifier = Modifier.fillMaxSize() // 将安全边界交给外层 Column 处理，这里保持 fillMaxSize

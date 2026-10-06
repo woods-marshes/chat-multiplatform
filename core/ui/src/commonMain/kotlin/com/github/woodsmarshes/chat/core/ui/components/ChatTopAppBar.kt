@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation3.LocalListDetailSceneScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,15 +34,25 @@ import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 
 /**
  * Whether the current composable is rendered inside a multi-pane
- * ListDetailScene (i.e. [LocalListDetailSceneScope] is present).
+ * ListDetailScene with more than one pane visible side-by-side.
  *
  * When `true`, detail panes omit their leading back arrow (the list pane is
  * already visible alongside them), list panes highlight the active item, and
- * extra panes show a close (`X`) button instead of a back arrow.
+ * extra panes show a close (`X`) button instead of a back arrow. When `false`
+ * (single-pane compact/medium layouts), detail and extra panes show a standard
+ * back arrow.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun isInListDetailScene(): Boolean = LocalListDetailSceneScope.current != null
+fun isInListDetailScene(): Boolean {
+    val scope = LocalListDetailSceneScope.current ?: return false
+    val value = scope.scaffoldTransitionScope.scaffoldStateTransition.targetState
+    var visiblePanes = 0
+    if (value.primary != PaneAdaptedValue.Hidden) visiblePanes++
+    if (value.secondary != PaneAdaptedValue.Hidden) visiblePanes++
+    if (value.tertiary != PaneAdaptedValue.Hidden) visiblePanes++
+    return visiblePanes > 1
+}
 
 /**
  * 共享 TopAppBar（参考 NiA 的 NiaTopAppBar，所有 Screen 统一使用）。
