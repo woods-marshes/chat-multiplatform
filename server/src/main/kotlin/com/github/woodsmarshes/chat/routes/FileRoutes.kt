@@ -16,6 +16,8 @@ import com.github.woodsmarshes.chat.utils.toHttpStatusCode
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
+import com.github.michaelbull.result.get
+import com.github.michaelbull.result.getError
 import com.github.michaelbull.result.mapBoth
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
@@ -29,10 +31,13 @@ import io.ktor.server.routing.get as routingGet
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.util.logging.Logger
+import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readRemaining
+import kotlinx.coroutines.CancellationException
 import kotlinx.io.readByteArray
 import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
+import java.io.File
 
 private val logger = LoggerFactory.getLogger("FileRoutes")
 
@@ -40,6 +45,27 @@ private val logger = LoggerFactory.getLogger("FileRoutes")
 private fun maxBytesFor(type: FileType): Long =
     FileUploadConfig.maxFileSize[type.name.lowercase()] ?: 100L * 1024 * 1024
 
+private const val UPLOAD_CHUNK_BYTES = 64L * 1024
+
+/**
+ * Streams the part body into [file] without ever buffering it whole, up to
+ * [cap] bytes. Returns the written byte count, or null when the cap was
+ * exceeded (the partial file must then be removed by the caller).
+ */
+private suspend fun ByteReadChannel.copyToFileWithCap(file: File, cap: Long): Long? {
+    var total = 0L
+    file.outputStream().use { out ->
+        while (true) {
+            val packet = readRemaining(UPLOAD_CHUNK_BYTES)
+            if (packet.exhausted()) return total
+            val chunk = packet.readByteArray()
+            total += chunk.size
+            if (total > cap) return null
+            out.write(chunk)
+        }
+    }
+    return total
+}
 
 fun Route.fileRoutes() {
     val fileService by inject<FileService>()
@@ -53,35 +79,56 @@ fun Route.fileRoutes() {
         val multipartData = call.receiveMultipart()
         var result: MediaContent? = null
         var error: FileError? = null
+        var staged: FileService.StagedUpload? = null
 
         multipartData.forEachPart { part ->
                 try {
                     if (error != null) return@forEachPart
                     when (part) {
                         is PartData.FileItem -> {
-                            val rawFileName = part.originalFileName ?: "unknown"
-                            val sanitized = fileService.sanitizeFileName(rawFileName)
-                            if (sanitized == null) {
-                                error = FileError.NoFileProvided
+                            // Exactly one file part per request: extra parts
+                            // used to be fully processed and silently dropped
+                            // (last one won), multiplying disk and media work
+                            // behind a single rate-limited request.
+                            if (staged != null) {
+                                error = FileError.MultipleFiles
                                 return@forEachPart
                             }
-                            val mimeType = part.contentType?.toString() ?: "application/octet-stream"
-
-                            // Read one byte past the cap: an oversized upload is
-                            // rejected without ever buffering the whole body.
-                            val fileBytes = part.provider().readRemaining(maxBytes + 1).readByteArray()
-                            if (fileBytes.size > maxBytes) {
-                                logger.warn("Upload rejected for {}: exceeds cap of {} bytes", type, maxBytes)
-                                error = FileError.FileTooLarge
+                            val stagedResult = fileService.stageUpload(type, part.originalFileName ?: "unknown")
+                            val s = stagedResult.get()
+                            if (s == null) {
+                                error = stagedResult.getError()
                                 return@forEachPart
                             }
 
-                            result = fileService.uploadFile(
-                                fileType = type,
-                                fileName = sanitized,
-                                fileData = fileBytes,
-                                mimeType = mimeType
-                            ).getOrThrow()
+                            // Ownership: the route holds the staged bytes from
+                            // the moment streaming starts until finalizeUpload
+                            // reports success. EVERY other exit from this block
+                            // — size cap exceeded, stream failure, cancellation
+                            // — goes through the finally, so no branch can
+                            // forget to remove a half-written file.
+                            var finalizeSucceeded = false
+                            try {
+                                // Stream one byte past the cap: an oversized
+                                // upload is rejected without ever buffering
+                                // the whole body.
+                                val written = part.provider().copyToFileWithCap(s.file, maxBytes)
+                                if (written == null) {
+                                    logger.warn("Upload rejected for {}: exceeds cap of {} bytes", type, maxBytes)
+                                    error = FileError.FileTooLarge
+                                    return@forEachPart
+                                }
+                                staged = s
+                                val media = fileService.finalizeUpload(
+                                    staged = s,
+                                    mimeType = part.contentType?.toString() ?: "application/octet-stream",
+                                    byteSize = written,
+                                )
+                                if (media.isOk) finalizeSucceeded = true
+                                result = media.getOrThrow()
+                            } finally {
+                                if (!finalizeSucceeded) s.file.delete()
+                            }
                         }
                         is PartData.FormItem -> { /* reserved */ }
                         else -> {}
@@ -91,9 +138,11 @@ fun Route.fileRoutes() {
                 }
             }
 
+        val failure = error
+        val success = result
         val outcome: Result<MediaContent, FileError> = when {
-            error != null -> Err(error)
-            result != null -> Ok(result)
+            failure != null -> Err(failure)
+            success != null -> Ok(success)
             else -> Err(FileError.NoFileProvided)
         }
         outcome.mapBoth(
@@ -104,15 +153,46 @@ fun Route.fileRoutes() {
 
     post<V1.Files.Avatar> { params ->
         val userId = call.extractUserId()
+        val targetId = params.targetId
         val maxBytes = maxBytesFor(FileType.AVATAR)
+
+        // Group avatars need owner rights — checked BEFORE any bytes are
+        // written; a late permission failure used to leave the file behind.
+        if (params.isGroup) {
+            if (targetId == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, "targetId is required for GROUP")
+            }
+            settingsService.checkGroupAvatarPermission(targetId, userId).mapBoth(
+                success = { },
+                failure = { err -> return@post call.respond(err.toHttpStatusCode(), err) },
+            )
+        }
+
         val multipartData = call.receiveMultipart()
         var uploadedUrl: String? = null
         var error: FileError? = null
 
-        multipartData.forEachPart { part ->
+        // Ownership handover: the request owns the avatar file until the
+        // reference update has been dispatched — any unwinding before that
+        // (multipart failure, cancellation) deletes it in the finally below.
+        // Once dispatched the outcome, not this request, owns the file:
+        // - a returned Err means definitely not written → deleted below;
+        // - any exception means the commit outcome is UNKNOWN — group
+        //   settings commit the profile row before publishing events, and
+        //   a commit-phase connection error is equally indeterminate —
+        //   so the file is kept (a reclaimable orphan beats a dangling
+        //   database reference).
+        var referenceDispatched = false
+
+        try {
+            multipartData.forEachPart { part ->
                 try {
                     if (error != null) return@forEachPart
                     if (part is PartData.FileItem) {
+                        if (uploadedUrl != null) {
+                            error = FileError.MultipleFiles
+                            return@forEachPart
+                        }
                         val fileBytes = part.provider().readRemaining(maxBytes + 1).readByteArray()
                         if (fileBytes.size > maxBytes) {
                             error = FileError.FileTooLarge
@@ -132,39 +212,51 @@ fun Route.fileRoutes() {
                 }
             }
 
-        error?.let { failure ->
-            return@post call.respond(failure.toHttpStatusCode(), failure)
-        }
-        val url = uploadedUrl
-        if (url == null) {
-            return@post call.respond(HttpStatusCode.BadRequest, FileError.NoFileProvided)
-        }
-
-        val updateResult = if (params.isGroup) {
-            val targetId = params.targetId
-            if (targetId != null) {
-                settingsService.updateGroupSettings(
-                    conversationId = targetId,
-                    userId = userId,
-                    req = UpdateConversationSettingsRequest(avatarUrl = url),
-                )
-            } else {
-                return@post call.respond(HttpStatusCode.BadRequest, "targetId is required for GROUP")
+            error?.let { failure ->
+                return@post call.respond(failure.toHttpStatusCode(), failure)
             }
-        } else {
-            userService.updateProfile(
-                userId = userId,
-                req = UpdateProfileRequest(avatarUrl = url),
+            val url = uploadedUrl
+            if (url == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, FileError.NoFileProvided)
+            }
+
+            referenceDispatched = true
+            val updateResult = try {
+                if (params.isGroup) {
+                    settingsService.updateGroupSettings(
+                        conversationId = targetId!!,
+                        userId = userId,
+                        req = UpdateConversationSettingsRequest(avatarUrl = url),
+                    )
+                } else {
+                    userService.updateProfile(
+                        userId = userId,
+                        req = UpdateProfileRequest(avatarUrl = url),
+                    )
+                }
+            } catch (e: CancellationException) {
+                // Commit outcome unknown — the file is kept. Log the URL so a
+                // future reconciliation pass can find the kept orphan.
+                logger.warn("Avatar reference update cancelled; keeping {} for reconciliation", url)
+                throw e
+            } catch (e: Exception) {
+                logger.error("Avatar reference update threw; keeping {} for reconciliation", url, e)
+                throw e
+            }
+
+            updateResult.mapBoth(
+                success = { call.respond(mapOf("url" to url)) },
+                failure = { err ->
+                    fileService.deletePublicUpload(url)
+                    logger.error("Failed to update avatar reference: {}", err)
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Avatar upload succeeded but profile update failed"))
+                }
             )
-        }
-
-        updateResult.mapBoth(
-            success = { call.respond(mapOf("url" to url)) },
-            failure = { err ->
-                logger.error("Failed to update avatar reference: {}", err)
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Avatar upload succeeded but profile update failed"))
+        } finally {
+            if (!referenceDispatched) {
+                uploadedUrl?.let { fileService.deletePublicUpload(it) }
             }
-        )
+        }
     }
 
     }

@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.service
 
 import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.model.ConversationRole
@@ -21,6 +22,23 @@ class ConversationSettingsService(
     private val groupProfileRepository: GroupProfileRepository,
     private val eventBus: EventBus,
 ) {
+    /**
+     * Upload precheck for group avatars: the same owner-only rule that
+     * updateGroupSettings enforces, run BEFORE any bytes are written so a
+     * permission failure cannot leave an orphaned file behind.
+     */
+    suspend fun checkGroupAvatarPermission(
+        conversationId: Uuid,
+        userId: Uuid,
+    ): Result<Unit, ConversationError> {
+        val (participant, conversation) = conversationParticipantRepository.getConversationParticipantWithConversation(
+            userId, conversationId
+        ) ?: return Err(ConversationError.NotParticipant)
+        if (conversation.deletedAt != null) return Err(ConversationError.Deleted)
+        if (participant.role != ConversationRole.OWNER) return Err(ConversationError.PermissionDenied)
+        return Ok(Unit)
+    }
+
     suspend fun updateGroupSettings(conversationId: Uuid, userId: Uuid, req: UpdateConversationSettingsRequest): Result<Unit, ConversationError> = coroutineBinding {
         val (participant, conversation) = conversationParticipantRepository.getConversationParticipantWithConversation(
             userId, conversationId

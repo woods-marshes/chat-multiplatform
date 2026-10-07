@@ -21,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -35,6 +36,13 @@ object TestDb {
 
     /** Drops and recreates every table: a clean slate per test. */
     fun reset() {
+        // App tests legitimately close their own pool on ApplicationStopped,
+        // and Exposed's global default transaction database is whoever
+        // connected last — so repository dbQuery calls would otherwise ride
+        // a closed pool from a torn-down test app. Pin the default back to
+        // the shared test database; every H2 pool in this JVM points at the
+        // same in-memory instance, so this only fixes routing, not data.
+        TransactionManager.defaultDatabase = database
         runBlocking { clearDatabaseData(database) }
         transaction(database) {
             SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())

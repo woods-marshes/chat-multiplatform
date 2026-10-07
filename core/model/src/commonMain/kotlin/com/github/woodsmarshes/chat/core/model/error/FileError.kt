@@ -10,6 +10,7 @@ sealed interface FileError : DomainError {
     @Serializable data object ProcessingFailed : FileError // 图片压缩、视频截帧失败等
     @Serializable data object IoError : FileError
     @Serializable data object NoFileProvided : FileError
+    @Serializable data object MultipleFiles : FileError // 单次请求只允许一个文件
 
     @Serializable data class Unknown(override val message: String? = null) : FileError
 }

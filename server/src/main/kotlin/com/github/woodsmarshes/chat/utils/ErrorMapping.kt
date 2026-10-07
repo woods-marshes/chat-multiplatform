@@ -51,6 +51,7 @@ fun FileError.mapToStatus(): HttpStatusCode = when (this) {
     FileError.UploadFailed -> HttpStatusCode.InternalServerError
     FileError.ProcessingFailed -> HttpStatusCode.UnprocessableEntity
     FileError.IoError -> HttpStatusCode.InternalServerError
+    FileError.MultipleFiles -> HttpStatusCode.BadRequest
     is FileError.Unknown -> HttpStatusCode.InternalServerError
 }
 

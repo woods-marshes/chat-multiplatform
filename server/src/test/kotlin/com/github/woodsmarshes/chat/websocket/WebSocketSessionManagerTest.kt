@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
+import java.util.concurrent.CountDownLatch
 
 /**
  * Minimal stand-in for [WebSocketServerSession]: the session index only uses
@@ -128,5 +129,60 @@ class WebSocketSessionManagerTest {
         manager.addUserSession(userB, FakeSession())
 
         assertEquals(2, manager.getSessionStats()["activeUsers"])
+    }
+
+    @Test
+    fun `reconnection racing the last old connection's removal keeps the new session`() {
+        // The pre-compute implementation lost the new session here: remove()
+        // saw an empty set between the isEmpty() check and the map deletion
+        // while add() was already putting the new session into that same set.
+        repeat(500) { round ->
+            val oldSession = FakeSession()
+            val newSession = FakeSession()
+            manager.addUserSession(userA, oldSession)
+
+            val start = CountDownLatch(1)
+            val threads = listOf(
+                Thread { start.await(); manager.removeUserSession(oldSession) },
+                Thread { start.await(); manager.addUserSession(userA, newSession) },
+            )
+            threads.forEach { it.start() }
+            start.countDown()
+            threads.forEach { it.join() }
+
+            assertTrue(manager.isUserOnline(userA), "round $round: user went offline")
+            assertEquals(userA, manager.getUserIdBySession(newSession), "round $round: new session unindexed")
+            assertTrue(manager.getUserSessions(userA).contains(newSession), "round $round: new session undeliverable")
+            assertNull(manager.getUserIdBySession(oldSession), "round $round: old session still indexed")
+
+            manager.removeUserSession(newSession)
+        }
+    }
+
+    @Test
+    fun `churn from many threads leaves no index residue`() {
+        val users = List(4) { Uuid.random() }
+        val threads = 8
+        val rounds = 200
+        val start = CountDownLatch(1)
+        val workers = (0 until threads).map { t ->
+            Thread {
+                start.await()
+                repeat(rounds) { r ->
+                    val user = users[(t + r) % users.size]
+                    val session = FakeSession()
+                    manager.addUserSession(user, session)
+                    check(manager.getUserIdBySession(session) == user) { "session lost its owner" }
+                    manager.removeUserSession(session)
+                }
+            }
+        }
+        workers.forEach { it.start() }
+        start.countDown()
+        workers.forEach { it.join() }
+
+        // Every session was added and removed again: nothing may remain.
+        assertEquals(0, manager.getSessionStats()["activeUsers"])
+        users.forEach { assertFalse(manager.isUserOnline(it)) }
     }
 }

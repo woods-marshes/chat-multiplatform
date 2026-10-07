@@ -12,12 +12,29 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.sql.Connection
 import java.sql.DriverManager
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /** Every Hikari pool created since boot; observability binds them to Micrometer. */
 private val hikariDataSources = CopyOnWriteArrayList<HikariDataSource>()
 
+/** The pool behind each [Database] created via [connectToH2Database]/[connectToPostgresDatabase]. */
+private val dataSourceByDatabase = ConcurrentHashMap<Database, HikariDataSource>()
+
 fun registeredHikariDataSources(): List<HikariDataSource> = hikariDataSources.toList()
+
+/**
+ * Closes only the pool behind [database] and unregisters it. Owners stop
+ * their own pool this way (ApplicationStopped) — a global "close everything"
+ * would also kill pools belonging to other Database instances in the same
+ * JVM, e.g. the shared in-memory database used by the test suite.
+ */
+fun closeHikariDataSource(database: Database) {
+    dataSourceByDatabase.remove(database)?.let { dataSource ->
+        runCatching { dataSource.close() }
+        hikariDataSources.remove(dataSource)
+    }
+}
 
 suspend fun clearDatabaseData(database: Database) {
     withContext(Dispatchers.IO) {
@@ -42,11 +59,7 @@ fun connectToH2Database(): Database {
         isReadOnly = false
         transactionIsolation = "TRANSACTION_SERIALIZABLE"
     }
-    val dataSource = HikariDataSource(hikariConfig)
-    hikariDataSources.add(dataSource)
-    return Database.connect(
-        datasource = dataSource
-    )
+    return connectThroughHikari(HikariDataSource(hikariConfig))
 }
 
 fun connectToPostgresDatabase(config: DatabaseConfig): Database {
@@ -63,11 +76,14 @@ fun connectToPostgresDatabase(config: DatabaseConfig): Database {
         // Pool saturation/latency straight into the Prometheus registry.
         metricsTrackerFactory = MicrometerMetricsTrackerFactory(prometheusRegistry)
     }
-    val dataSource = HikariDataSource(hikariConfig)
+    return connectThroughHikari(HikariDataSource(hikariConfig))
+}
+
+private fun connectThroughHikari(dataSource: HikariDataSource): Database {
     hikariDataSources.add(dataSource)
-    return Database.connect(
-        datasource = dataSource
-    )
+    val database = Database.connect(datasource = dataSource)
+    dataSourceByDatabase[database] = dataSource
+    return database
 }
 
 fun connectToH2(): Connection = DriverManager.getConnection("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1", "root", "")

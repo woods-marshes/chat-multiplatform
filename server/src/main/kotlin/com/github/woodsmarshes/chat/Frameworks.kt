@@ -13,12 +13,14 @@ import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.repository.database.schema.backfillMessageSeq
 import com.github.woodsmarshes.chat.service.FileService
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
+import com.github.woodsmarshes.chat.utils.closeHikariDataSource
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import com.github.woodsmarshes.chat.utils.connectToPostgresDatabase
 import io.ktor.server.application.*
 import io.ktor.server.config.*
 import io.ktor.server.plugins.di.dependencies
 import io.ktor.util.logging.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -210,6 +212,11 @@ private fun Application.configureDependencyInjection(
     monitor.subscribe(ApplicationStopped) {
         realtimeScope.cancel()
         it.getKoin().close()
+        // Release THIS application's pooled connections and housekeeping
+        // threads; repeated boots in one JVM (tests, restarts) otherwise
+        // accumulate idle pools forever. Only the pool created above is
+        // ours to stop — other Database instances in the JVM are not.
+        closeHikariDataSource(database)
     }
 }
 
@@ -221,7 +228,16 @@ private fun Application.configureSessionCleanup() {
     launch(Dispatchers.IO) {
         val sessions = getKoin().get<AuthSessionRepository>()
         while (isActive) {
-            sessions.deleteExpiredSessions()
+            try {
+                sessions.deleteExpiredSessions()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // One failed sweep (e.g. a transient database outage) must not
+                // kill the loop for the rest of the process lifetime; the next
+                // pass retries after the usual interval.
+                log.error("Session cleanup sweep failed; retrying next cycle", e)
+            }
             delay(SESSION_SWEEP_MINUTES.minutes)
         }
     }
@@ -231,7 +247,13 @@ private fun Application.configureFileCleanup() {
     launch(Dispatchers.IO) {
         val uploadStore = getKoin().get<TemporaryUploadStore>()
         while (isActive) {
-            uploadStore.cleanExpiredFiles(EXPIRED_FILE_CLEANUP_MINUTES.toInt())
+            try {
+                uploadStore.cleanExpiredFiles(EXPIRED_FILE_CLEANUP_MINUTES.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.error("Upload cleanup sweep failed; retrying next cycle", e)
+            }
             delay(10.minutes)
         }
     }

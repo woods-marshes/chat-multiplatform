@@ -20,7 +20,16 @@ val serviceModule = module {
     singleOf(::ConversationLifecycleService)
     singleOf(::GroupMembershipService)
     singleOf(::ConversationSettingsService)
-    singleOf(::FileService)
+    // Reflective singleOf would also try to resolve maxImagePixels — a Long
+    // with a Kotlin default value, which Koin's constructor injection
+    // ignores — and fail; list the dependencies explicitly instead.
+    single {
+        FileService(
+            uploadStore = get(),
+            privateFileRepository = get(),
+            participantRepository = get(),
+        )
+    }
     singleOf(::AttachmentLifecycle)
     singleOf(::MessageService)
     singleOf(::UserService)

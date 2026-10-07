@@ -125,6 +125,6 @@ class MyFeatureTest : KoinTest {
 ## 当前测试状态
 
 - 客户端：8 个模块已配好测试依赖，但**零测试文件**
-- 服务端：仅 1 个占位测试
+- 服务端：已有多组测试——认证流程（含注册原子性/并发）、联系人生命周期、附件访问与上传限制、群成员、消息 seq/幂等、WebSocket 实时投递、可观测性端点等
 - Android：2 个占位测试
 - Feature 模块：**无测试配置**——需要添加 `commonTest` source set 和 `kotlin.test` 依赖

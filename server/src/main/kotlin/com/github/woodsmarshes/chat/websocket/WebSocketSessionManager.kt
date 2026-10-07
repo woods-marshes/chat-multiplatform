@@ -13,18 +13,31 @@ class SessionIndex {
     private val bySession = ConcurrentHashMap<WebSocketServerSession, Uuid>()
 
     fun add(userId: Uuid, session: WebSocketServerSession) {
-        byUser.computeIfAbsent(userId) { ConcurrentHashMap.newKeySet() }.add(session)
+        // Register in the session index first so remove() always finds the
+        // owner once byUser knows about the session.
         bySession[session] = userId
+        // All per-user set mutations and the empty-entry removal must run
+        // inside compute: CHM serializes computes per key, so a reconnection
+        // racing the last old connection's removal can no longer drop the
+        // set that already contains the new session.
+        byUser.compute(userId) { _, existing ->
+            (existing ?: ConcurrentHashMap.newKeySet<WebSocketServerSession>()).apply {
+                add(session)
+            }
+        }
     }
 
     fun remove(session: WebSocketServerSession): Uuid? {
         val userId = bySession.remove(session) ?: return null
-        byUser[userId]?.let { userSessions ->
-            userSessions.remove(session)
-            // Drop the per-user entry once its last session is gone so
-            // getActiveUsers()/size() never report disconnected users.
-            if (userSessions.isEmpty()) {
-                byUser.remove(userId, userSessions)
+        byUser.compute(userId) { _, userSessions ->
+            when (userSessions) {
+                null -> null
+                else -> {
+                    userSessions.remove(session)
+                    // Drop the per-user entry once its last session is gone so
+                    // getActiveUsers()/size() never report disconnected users.
+                    if (userSessions.isEmpty()) null else userSessions
+                }
             }
         }
         return userId

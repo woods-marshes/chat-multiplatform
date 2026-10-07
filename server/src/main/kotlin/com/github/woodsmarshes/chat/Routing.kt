@@ -15,6 +15,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
 import io.ktor.server.plugins.autohead.*
+import io.ktor.server.plugins.BadRequestException
 import java.io.File
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.resources.Resources
@@ -42,6 +43,20 @@ fun Application.configureRouting() {
             val retryAfter = call.response.headers["Retry-After"]
             call.respondText(text = "429: Too many requests. Wait for $retryAfter seconds.", status = status)
         }
+
+        // Malformed JSON, missing required fields or an unsupported content
+        // type surface from call.receive<T>() as BadRequestException — a
+        // client error, not a server fault; the catch-all below used to
+        // report it as a 500 and pollute error metrics and logs. Deliberately
+        // NOT mapping IllegalArgumentException here: that would hide real
+        // server bugs behind a 400.
+        exception<BadRequestException> { call, cause ->
+            this@configureRouting.environment.log.warn(
+                "Malformed request to ${call.request.local.uri}: ${cause.message}"
+            )
+            call.respondText(text = "Malformed request body", status = HttpStatusCode.BadRequest)
+        }
+
         exception<Throwable> { call, cause ->
             this@configureRouting.environment.log.error("Unhandled exception: ${cause.message}", cause)
             call.respondText(
