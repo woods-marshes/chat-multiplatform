@@ -14,9 +14,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +57,7 @@ fun ProfileScreen(
     userId: String,
     onBack: () -> Unit,
     onOpenChat: (conversationId: String) -> Unit,
+    onEditProfile: (() -> Unit)? = null,
     isExtraPane: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = koinViewModel(parameters = { parametersOf(userId) }),
@@ -74,6 +77,16 @@ fun ProfileScreen(
                 showBackButton = !inMultiPane,
                 showCloseButton = inMultiPane && isExtraPane,
                 onBackClick = onBack,
+                actions = {
+                    if (uiState.isOwnProfile && onEditProfile != null) {
+                        IconButton(onClick = onEditProfile) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = strings.editProfile,
+                            )
+                        }
+                    }
+                },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -140,6 +153,22 @@ fun ProfileScreen(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
+                if (uiState.isOwnProfile && onEditProfile != null) {
+                    FilledTonalButton(
+                        onClick = onEditProfile,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(strings.editProfile)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 Button(
                     onClick = { viewModel.startChat(onChatReady = onOpenChat) },
                     enabled = !uiState.isStartingChat,

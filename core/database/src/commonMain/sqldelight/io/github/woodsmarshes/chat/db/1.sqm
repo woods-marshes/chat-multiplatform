@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS MessageAttempt (
+    message_id TEXT NOT NULL PRIMARY KEY,
+    started_at_ms INTEGER NOT NULL,
+    last_attempt_ms INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS MessageSyncCursor (
+    conversation_id TEXT NOT NULL PRIMARY KEY,
+    after_id TEXT NOT NULL
+);

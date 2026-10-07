@@ -196,4 +196,61 @@
     <!-- Settings Theme Brand -->
     <string name="theme_miuix">Miuix (小米 HyperOS 风格)</string>
     <string name="theme_material3">Material 3 (Google 原生风格)</string>
+    <string name="theme_miuix_desc">小米 HyperOS 视觉语言与组件风格</string>
+    <string name="theme_material3_desc">Google Material Design 3 原生规范</string>
+    <string name="follow_system_desc">自动匹配系统深浅色外观设置</string>
+    <string name="light_mode_desc">始终使用明亮浅色界面</string>
+    <string name="dark_mode_desc">始终使用柔和深色界面</string>
+
+    <!-- Settings Categories & Details -->
+    <string name="select_settings_hint">选择一个设置项查看详情</string>
+    <string name="settings_category_profile">个人资料与账户</string>
+    <string name="settings_category_profile_desc">头像、昵称、简介与账户管理</string>
+    <string name="settings_category_appearance">外观主题</string>
+    <string name="settings_category_appearance_desc">主题风格与深色模式</string>
+    <string name="settings_category_notifications">通知与隐私</string>
+    <string name="settings_category_notifications_desc">消息提示音、在线状态与搜索权限</string>
+    <string name="settings_category_about">关于</string>
+    <string name="settings_category_about_desc">版本、开发者、源码仓库与开源许可</string>
+
+    <!-- Profile Edit -->
+    <string name="edit_profile">个人资料与账户</string>
+    <string name="change_avatar">更换头像</string>
+    <string name="uploading_avatar">正在上传头像…</string>
+    <string name="display_name_label">昵称</string>
+    <string name="display_name_placeholder">输入你的显示昵称</string>
+    <string name="bio_label">个人简介</string>
+    <string name="bio_placeholder">介绍一下你自己…</string>
+    <string name="username_label">用户名</string>
+    <string name="save_changes">保存修改</string>
+    <string name="saving">保存中…</string>
+    <string name="profile_saved">个人资料已更新</string>
+    <string name="profile_save_failed">保存个人资料失败</string>
+    <string name="avatar_upload_success">头像已更新</string>
+    <string name="avatar_upload_failed">头像上传失败</string>
+    <string name="logout_desc">退出当前登录账户并断开实时消息连接</string>
+    <string name="logout_confirm_title">确认退出登录？</string>
+    <string name="logout_confirm_message">退出后将断开当前会话连接并返回登录界面，本地缓存的数据不会丢失。</string>
+
+    <!-- Notifications & Privacy Details -->
+    <string name="section_notification_prefs">消息通知</string>
+    <string name="notification_sound_desc">收到新消息时播放提示音</string>
+    <string name="section_privacy_prefs">隐私权限</string>
+    <string name="show_online_status_desc">允许其他用户看到你的在线状态</string>
+    <string name="allow_search_desc">允许其他用户通过用户名或邮箱搜索到你</string>
+
+    <!-- About & Licenses -->
+    <string name="about_app_description">跨平台实时通讯与多人协作写作客户端，基于 Kotlin Multiplatform 与 Compose Multiplatform 构建。</string>
+    <string name="about_section_version">版本与环境</string>
+    <string name="about_version_name_label">应用版本</string>
+    <string name="about_build_version_label">内部版本号</string>
+    <string name="about_runtime_label">技术栈</string>
+    <string name="about_license_label">开源协议</string>
+    <string name="about_section_project">开发者与项目</string>
+    <string name="about_developer_label">开发者</string>
+    <string name="about_github_repo">GitHub 源码仓库</string>
+    <string name="about_issue_tracker">问题反馈与建议</string>
+    <string name="open_source_licenses">第三方开源软件许可</string>
+    <string name="open_source_licenses_desc">查看本应用使用的全部开源依赖库及其许可证</string>
+    <string name="open_source_licenses_count_fmt">共 %s 个开源依赖项 · 点击查看许可证详情</string>
 </resources>

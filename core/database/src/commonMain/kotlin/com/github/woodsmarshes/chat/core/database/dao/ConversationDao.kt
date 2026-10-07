@@ -1,6 +1,8 @@
 package com.github.woodsmarshes.chat.core.database.dao
 
+import app.cash.sqldelight.SuspendingTransactionWithoutReturn
 import com.github.woodsmarshes.chat.core.model.ConversationMetadata
+import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.GetConversationListView
 import kotlinx.coroutines.flow.Flow

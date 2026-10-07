@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -99,13 +100,11 @@ class ChatViewModel(
             // list) and the peer's read indicator; the distinct-until-changed
             // cursor means one receipt per message, not per recomposition.
             viewModelScope.launch {
-                conversationRepository.getConversationListFlow()
-                    .map { conversations ->
-                        conversations
-                            .firstOrNull { it.id == convId }
-                            ?.lastMessage?.id
-                    }
-                    .filterNotNull()
+                conversationRepository.getConversationListFlow().mapNotNull { conversations ->
+                    conversations
+                        .firstOrNull { it.id == convId }
+                        ?.lastMessage?.id
+                }
                     .distinctUntilChanged()
                     .collect { lastMessageId ->
                         messageRepository.markAsRead(convId, lastMessageId)
@@ -157,7 +156,7 @@ class ChatViewModel(
             log.info { "[ChatVM-messages] getMeFlow emitted userId=$userId" }
         }
         .flatMapLatest { ownUserId ->
-            val uid = ownUserId ?: Uuid.NIL
+            val uid = ownUserId ?: return@flatMapLatest flowOf(PagingData.empty())
             log.info { "[ChatVM-messages] flatMapLatest calling getMessages(ownUserId=$uid)" }
             conversationUuid?.let { convId ->
                 messageRepository.getMessages(
@@ -201,19 +200,26 @@ class ChatViewModel(
     }
 
     /**
-     * Retry a failed bubble. The message carries its own content and reply target, so the
-     * draft box must not be reused here: it is empty for a message restored from the database
-     * (the tap would do nothing) and holds unrelated text once the user has typed again.
+     * Retry a failed bubble by re-sending the SAME record, never by sending its text again:
+     * a fresh send mints a new request id, which leaves the failed bubble in place and makes
+     * the server store a second message when the first attempt had actually been delivered.
+     * The draft box is deliberately untouched — a message restored from the database has no
+     * draft behind it.
      */
     fun retryMessage(message: MessageUiModel) {
-        val content = message.content as? TextContent ?: return
-        if (content.text.isBlank()) return
+        if (_uiState.value.isSending) return
 
-        sendContent(
-            text = content.text,
-            replyToMessageId = message.replyTo?.id,
-            clearInputOnSuccess = false,
-        )
+        _uiState.update { it.copy(isSending = true) }
+        viewModelScope.launch {
+            messageRepository.retryMessage(message.id)
+                .onOk {
+                    _uiState.update { it.copy(isSending = false, error = null) }
+                }
+                .onErr { error ->
+                    log.warn { "[ChatVM] retryMessage failed: ${error.message}" }
+                    _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
+                }
+        }
     }
 
     private fun sendContent(text: String, replyToMessageId: Uuid?, clearInputOnSuccess: Boolean) {

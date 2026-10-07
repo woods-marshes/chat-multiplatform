@@ -2,16 +2,20 @@ package com.github.woodsmarshes.chat.core.database.dao
 
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
+import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.GetConversationMemberAvatars
 import io.github.woodsmarshes.chat.db.GetParticipantsExcludingUser
 import io.github.woodsmarshes.chat.db.GetParticipantsWithUserInfo
 import io.github.woodsmarshes.chat.db.ParticipantEntity
-import io.github.woodsmarshes.chat.db.UserEntity
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface ParticipantDao {
+    val boundDatabase: ChatDatabase?
+
+    fun bindToCurrentDatabase(): ParticipantDao
+
     // 写入
     suspend fun insertParticipant(participant: ParticipantEntity)
     suspend fun insertParticipantIfAbsent(participant: ParticipantEntity)

@@ -13,6 +13,8 @@ import com.github.woodsmarshes.chat.feature.conversations.navigation.GroupInfoNa
 import com.github.woodsmarshes.chat.feature.profile.navigation.ChatProfileNavKey
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
+import com.github.woodsmarshes.chat.feature.settings.navigation.OpenSourceLicensesNavKey
+import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsDetailNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
@@ -24,6 +26,8 @@ val navConfiguration = SavedStateConfiguration {
             subclass(ConversationsNavKey::class)
             subclass(ContactsNavKey::class)
             subclass(SettingsNavKey::class)
+            subclass(SettingsDetailNavKey::class)
+            subclass(OpenSourceLicensesNavKey::class)
             subclass(ChatNavKey::class)
             subclass(GroupInfoNavKey::class)
             subclass(ChatGroupInfoNavKey::class)

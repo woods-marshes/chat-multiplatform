@@ -10,7 +10,7 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.data.model.toUiModel
-import com.github.woodsmarshes.chat.core.data.paging.MessageRemoteMediator
+import com.github.woodsmarshes.chat.core.data.paging.MessageMediatorFactory
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
@@ -38,17 +38,31 @@ import com.github.woodsmarshes.chat.core.model.Normal
 import com.github.woodsmarshes.chat.core.model.System
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
+import com.github.woodsmarshes.chat.core.common.session.SessionExecutor
+import com.github.woodsmarshes.chat.core.common.session.SessionStoppedException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CompletableJob
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
@@ -56,9 +70,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.get
-import org.koin.core.parameter.parametersOf
+import kotlin.concurrent.Volatile
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
@@ -72,8 +87,9 @@ class OfflineFirstMessageRepositoryImpl(
     private val conversationApi: ConversationApi,
     private val conversationDao: ConversationDao,
     private val userSettingDataSource: UserSettingDataSource,
-    private val scope: CoroutineScope
-) : MessageRepository, KoinComponent {
+    private val scope: CoroutineScope,
+    private val mediatorFactory: MessageMediatorFactory,
+) : MessageRepository {
     private val log = KotlinLogging.logger {}
 
     private companion object {
@@ -97,11 +113,28 @@ class OfflineFirstMessageRepositoryImpl(
     }
     val ownUser = userSettingDataSource.user
 
-    private var messageConsumptionJob: Job? = null
-    private var outboxRetryJob: Job? = null
+    private val sendMutex = Mutex()
+    private val syncMutex = Mutex()
+    private val lifecycle = com.github.woodsmarshes.chat.core.common.session.ResourceSession(
+        dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default,
+        create = { RunningSession(this, scope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Default) },
+        prepare = { session ->
+            startMessageConsumption(session)
+            startOutboxRetryLoop(session)
+        },
+        beforeStop = { it.job.cancel() },
+        dispose = { session ->
+            session.job.join()
+            seqMutex.withLock {
+                deliveredSeqs.clear()
+                gapRepairs.clear()
+            }
+            _typingUsers.value = emptyMap()
+        },
+    )
 
     /**
-     * Highest gap-free realtime seq seen per conversation. A jump in the
+     * In-memory delivery high-water mark used to trigger repair. A jump in the
      * stream means events were lost in flight (socket hiccup or a server-side
      * drop); the missing span is then repaired from REST history.
      */
@@ -109,9 +142,36 @@ class OfflineFirstMessageRepositoryImpl(
     private val deliveredSeqs = mutableMapOf<Uuid, Long>()
     private val gapRepairs = mutableMapOf<Uuid, Job>()
 
-    init {
-        startMessageConsumption()
-        startOutboxRetryLoop()
+    private class SessionElement(
+        val owner: OfflineFirstMessageRepositoryImpl,
+    ) : AbstractCoroutineContextElement(SessionElement) {
+        companion object Key : CoroutineContext.Key<SessionElement>
+    }
+
+    /**
+     * One active session lifecycle. Its [job] is an independent [SupervisorJob]
+     * controlled explicitly via [startSession] and [stopSession] (which cancels
+     * and awaits [job] before returning), rather than an `invokeOnCompletion`
+     * callback on [scope] that would neither propagate cancellation immediately
+     * nor wait for session cleanup to finish.
+     */
+    private class RunningSession(
+        repository: OfflineFirstMessageRepositoryImpl,
+        dispatcher: CoroutineContext,
+    ) {
+        val job: CompletableJob = SupervisorJob()
+        val scope = CoroutineScope(job + dispatcher + SessionElement(repository))
+    }
+
+    private fun isActiveSession(session: RunningSession): Boolean = lifecycle.isCurrent(session)
+
+    override suspend fun startSession() = lifecycle.start()
+
+    override suspend fun stopSession() {
+        check(currentCoroutineContext()[SessionElement]?.owner !== this) {
+            "stopSession() must not be called from inside a message worker"
+        }
+        lifecycle.stop()
     }
 
     @OptIn(ExperimentalPagingApi::class)
@@ -122,16 +182,15 @@ class OfflineFirstMessageRepositoryImpl(
         limit: Int
     ): Flow<PagingData<MessageUiModel>> {
         log.info { "[getMessages] called, conversationId=$conversationId ownUserId=$ownUserId" }
+        val pagingDao = (messageDao as? com.github.woodsmarshes.chat.core.database.dao.MessageDaoImpl)?.pinForPaging() ?: messageDao
         return Pager(
             config = PagingConfig(
                 pageSize = limit,
                 enablePlaceholders = false,
             ),
-            remoteMediator = get<MessageRemoteMediator> {
-                parametersOf(ownUserId, conversationId, isGroup)
-            },
+            remoteMediator = mediatorFactory.create(ownUserId, conversationId, isGroup),
             pagingSourceFactory = {
-                messageDao.pagingSource(
+                pagingDao.pagingSource(
                     conversationId = conversationId,
                     pageSize = limit.toLong()
                 )
@@ -152,76 +211,59 @@ class OfflineFirstMessageRepositoryImpl(
         replyToMessageId: Uuid?,
     ): Result<Unit, MessageError> {
         return try {
-            val currentUser = ownUser.firstOrNull()
-                ?: return Err(MessageError.PermissionDenied).also {
-                    log.warn { "[sendMessage] PermissionDenied: ownUser is null" }
+            lifecycle.execute {
+                val currentUser = ownUser.firstOrNull()
+                    ?: return@execute Err(MessageError.PermissionDenied).also {
+                        log.warn { "[sendMessage] PermissionDenied: ownUser is null" }
+                    }
+
+                val requestId = Uuid.generateV7()
+                log.info { "[sendMessage] sending, requestId=$requestId conversationId=$conversationId" }
+
+                val request = MessageRequest.Send(
+                    senderId = currentUser.id,
+                    conversationId = conversationId,
+                    content = content,
+                    requestId = requestId.toString(),
+                    replyToMessageId = replyToMessageId,
+                )
+
+                messageDao.transaction {
+                    messageDao.insertMessage(
+                        message = MessageEntity(
+                            id = requestId,
+                            conversation_id = conversationId,
+                            user_id = currentUser.id,
+                            category = when (content) {
+                                is System -> MessageCategory.SYSTEM
+                                is Normal -> MessageCategory.NORMAL
+                            },
+                            render_type = determineRenderType(content),
+                            content = content,
+                            reply_to_message_id = replyToMessageId,
+                            created_at = Clock.System.now(),
+                            revoked_at = null,
+                            local_send_status = MessageStatus.SENDING
+                        )
+                    )
+                    messageDao.startAttempt(requestId, Clock.System.now())
+                    conversationDao.updateLastMessage(
+                        id = conversationId,
+                        lastMessageId = requestId,
+                        updatedAt = Clock.System.now()
+                    )
                 }
-
-            val requestId = Uuid.generateV7()
-            log.info { "[sendMessage] sending, requestId=$requestId conversationId=$conversationId" }
-
-            // The socket send is a silent no-op when disconnected; without this
-            // guard the message would sit in SENDING forever.
-            if (messageApi.connectionState.value !is ConnectionState.Connected) {
-                log.warn { "[sendMessage] socket not connected, persisting as FAILED" }
-                messageDao.insertMessage(
-                    message = MessageEntity(
-                        id = requestId,
-                        conversation_id = conversationId,
-                        user_id = currentUser.id,
-                        category = when (content) {
-                            is System -> MessageCategory.SYSTEM
-                            is Normal -> MessageCategory.NORMAL
-                        },
-                        render_type = determineRenderType(content),
-                        content = content,
-                        reply_to_message_id = replyToMessageId,
-                        created_at = Clock.System.now(),
-                        revoked_at = null,
-                        local_send_status = MessageStatus.FAILED
-                    )
-                )
-                return Err(MessageError.OperationFailed)
+                // The durable outbox row must exist before any acknowledgement.
+                sendMutex.withLock {
+                    if (messageApi.connectionState.value is ConnectionState.Connected) {
+                        messageApi.send(request)
+                    }
+                }
+                Ok(Unit)
             }
-
-            val request = MessageRequest.Send(
-                senderId = currentUser.id,
-                conversationId = conversationId,
-                content = content,
-                requestId = requestId.toString(),
-                replyToMessageId = replyToMessageId,
-            )
-
-            messageApi.send(request)
-            log.info { "[sendMessage] ws send done, inserting local msg id=$requestId" }
-
-            messageDao.transaction {
-                messageDao.insertMessage(
-                    message = MessageEntity(
-                        id = requestId,
-                        conversation_id = conversationId,
-                        user_id = currentUser.id,
-                        category = when (content) {
-                            is System -> MessageCategory.SYSTEM
-                            is Normal -> MessageCategory.NORMAL
-                        },
-                        render_type = determineRenderType(content),
-                        content = content,
-                        reply_to_message_id = replyToMessageId,
-                        created_at = Clock.System.now(),
-                        revoked_at = null,
-                        local_send_status = MessageStatus.SENDING
-                    )
-                )
-                conversationDao.updateLastMessage(
-                    id = conversationId,
-                    lastMessageId = requestId,
-                    updatedAt = Clock.System.now()
-                )
-            }
-//            _invalidationEvents.tryEmit(Unit)
-            log.info { "[sendMessage] local insert done, requestId=$requestId" }
-            Ok(Unit)
+        } catch (e: SessionStoppedException) {
+            log.warn { "[sendMessage] refused: session is not active" }
+            Err(MessageError.PermissionDenied)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -232,14 +274,18 @@ class OfflineFirstMessageRepositoryImpl(
 
     override suspend fun revokeMessage(messageId: Uuid) {
         try {
-            val currentUser = ownUser.firstOrNull() ?: return
+            lifecycle.execute {
+                val currentUser = ownUser.firstOrNull() ?: return@execute
 
-            val request = MessageRequest.Withdraw(
-                senderId = currentUser.id,
-                messageId = messageId
-            )
+                val request = MessageRequest.Withdraw(
+                    senderId = currentUser.id,
+                    messageId = messageId
+                )
 
-            messageApi.send(request)
+                messageApi.send(request)
+            }
+        } catch (_: SessionStoppedException) {
+            log.warn { "[revokeMessage] refused: session is not active" }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -249,15 +295,19 @@ class OfflineFirstMessageRepositoryImpl(
 
     override suspend fun markAsRead(conversationId: Uuid, messageId: Uuid) {
         try {
-            val currentUser = ownUser.firstOrNull() ?: return
+            lifecycle.execute {
+                val currentUser = ownUser.firstOrNull() ?: return@execute
 
-            val request = MessageRequest.Read(
-                senderId = currentUser.id,
-                conversationId = conversationId,
-                messageId = messageId
-            )
+                val request = MessageRequest.Read(
+                    senderId = currentUser.id,
+                    conversationId = conversationId,
+                    messageId = messageId
+                )
 
-            messageApi.send(request)
+                messageApi.send(request)
+            }
+        } catch (_: SessionStoppedException) {
+            log.warn { "[markAsRead] refused: session is not active" }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -273,15 +323,19 @@ class OfflineFirstMessageRepositoryImpl(
 
     override suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean) {
         try {
-            val currentUser = ownUser.firstOrNull() ?: return
+            lifecycle.execute {
+                val currentUser = ownUser.firstOrNull() ?: return@execute
 
-            val request = MessageRequest.Typing(
-                senderId = currentUser.id,
-                conversationId = conversationId,
-                isTyping = isTyping,
-            )
+                val request = MessageRequest.Typing(
+                    senderId = currentUser.id,
+                    conversationId = conversationId,
+                    isTyping = isTyping,
+                )
 
-            messageApi.send(request)
+                messageApi.send(request)
+            }
+        } catch (_: SessionStoppedException) {
+            log.warn { "[sendTyping] refused: session is not active" }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -289,7 +343,8 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
-    private fun handleUserTyping(event: MessageEventResponse.UserTyping) {
+    private fun handleUserTyping(session: RunningSession, event: MessageEventResponse.UserTyping) {
+        if (!session.job.isActive || !isActiveSession(session)) return
         val now = Clock.System.now().toEpochMilliseconds()
         _typingUsers.update { all ->
             // Drop stale entries in case a "stopped typing" event was lost.
@@ -309,41 +364,51 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
-    private fun startMessageConsumption() {
-        messageConsumptionJob?.cancel()
-        messageConsumptionJob = scope.launch {
+    private suspend fun startMessageConsumption(session: RunningSession) {
+        val subscriptionReady = CompletableDeferred<Unit>()
+        val job = session.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             log.info { "[ws-consume] starting event consumption" }
             try {
-                messageApi.events.collectLatest { event ->
-                    log.info { "[ws-consume] received event: ${event::class.simpleName}" }
-                    when (event) {
-                        is MessageEventResponse.Received -> {
-                            log.info { "[ws-consume] handling Received: requestId=${event.requestId} senderId=${event.senderId} msgId=${event.message.id}" }
-                            handleReceivedMessage(event)
-                        }
-                        is MessageEventResponse.Withdrawn -> {
-                            handleWithdrawnMessage(event)
-                        }
-                        is MessageEventResponse.Read -> {
-                            handleReadMessage(event)
-                        }
-                        is MessageEventResponse.UserTyping -> {
-                            handleUserTyping(event)
-                        }
-                        else -> {
-                            log.debug { "[ws-consume] unknown event: ${event::class.simpleName}" }
+                messageApi.events
+                    .onSubscription { subscriptionReady.complete(Unit) }
+                    .collect { event ->
+                        log.info { "[ws-consume] received event: ${event::class.simpleName}" }
+                        when (event) {
+                            is MessageEventResponse.Received -> {
+                                log.info { "[ws-consume] handling Received: requestId=${event.requestId} senderId=${event.senderId} msgId=${event.message.id}" }
+                                handleReceivedMessage(session, event)
+                            }
+                            is MessageEventResponse.Withdrawn -> {
+                                handleWithdrawnMessage(event)
+                            }
+                            is MessageEventResponse.Read -> {
+                                handleReadMessage(event)
+                            }
+                            is MessageEventResponse.UserTyping -> {
+                                handleUserTyping(session, event)
+                            }
+                            else -> {
+                                log.debug { "[ws-consume] unknown event: ${event::class.simpleName}" }
+                            }
                         }
                     }
-                }
             } catch (e: CancellationException) {
+                subscriptionReady.cancel(e)
                 throw e
             } catch (e: Exception) {
+                subscriptionReady.completeExceptionally(e)
                 log.error(e) { "[ws-consume] error in event consumption: ${e.message}" }
             }
         }
+        job.invokeOnCompletion { cause ->
+            if (cause != null && !subscriptionReady.isCompleted) {
+                subscriptionReady.completeExceptionally(cause)
+            }
+        }
+        subscriptionReady.await()
     }
 
-    private suspend fun handleReceivedMessage(event: MessageEventResponse.Received) {
+    private suspend fun handleReceivedMessage(session: RunningSession, event: MessageEventResponse.Received) {
         try {
             val message = event.message
             val currentUser = ownUser.firstOrNull()
@@ -351,149 +416,122 @@ class OfflineFirstMessageRepositoryImpl(
             val isOwnMessage = currentUser != null && event.senderId == currentUser.id
             log.info { "[handleReceived] isOwnMessage=$isOwnMessage requestId=${event.requestId} serverMsgId=${message.id}" }
 
-            trackDeliverySeq(message)
             persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage })
+            trackDeliverySeq(session, message)
             log.info { "[handleReceived] db transaction done" }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.error(e) { "[handleReceived] error: ${e.message}" }
+            scheduleGapRepair(session, event.message.conversationId)
         }
     }
 
-    private suspend fun trackDeliverySeq(message: Message) {
+    private suspend fun trackDeliverySeq(session: RunningSession, message: Message) {
         val seq = message.seq ?: return
         val conversationId = message.conversationId
         var gapDetected = false
         seqMutex.withLock {
+            if (!session.job.isActive || !isActiveSession(session)) return
             val last = deliveredSeqs[conversationId]
             if (last == null || seq > last) {
-                if (last != null && seq > last + 1) {
+                if (last == null || seq > last + 1) {
                     gapDetected = true
                 }
-                deliveredSeqs[conversationId] = seq
+                if (!gapDetected) deliveredSeqs[conversationId] = seq
             }
             // An older seq re-arriving after a repair is a duplicate.
         }
         if (gapDetected) {
-            scheduleGapRepair(conversationId)
+            scheduleGapRepair(session, conversationId)
         }
     }
 
-    /** Only the single event-consumption coroutine schedules repairs. */
-    private fun scheduleGapRepair(conversationId: Uuid) {
-        if (gapRepairs[conversationId]?.isActive == true) return
-        gapRepairs[conversationId] = scope.launch {
-            try {
-                val fetched = syncConversationFromServer(conversationId)
-                val highest = fetched.maxOfOrNull { it.seq ?: 0L }
-                if (highest != null) {
-                    seqMutex.withLock {
-                        deliveredSeqs[conversationId] = maxOf(deliveredSeqs[conversationId] ?: 0L, highest)
+    /** Schedules a gap repair as a child of [session] so [stopSession] cancels and awaits it. */
+    private suspend fun scheduleGapRepair(session: RunningSession, conversationId: Uuid) {
+        seqMutex.withLock {
+            if (!session.job.isActive || !isActiveSession(session)) return
+            if (gapRepairs[conversationId]?.isActive == true) return
+            gapRepairs[conversationId] = session.scope.launch {
+                try {
+                    val fetched = syncConversationFromServer(conversationId)
+                    val highest = fetched.maxOfOrNull { it.seq ?: 0L }
+                    if (highest != null) {
+                        seqMutex.withLock {
+                            if (session.job.isActive && isActiveSession(session)) {
+                                deliveredSeqs[conversationId] = maxOf(deliveredSeqs[conversationId] ?: 0L, highest)
+                            }
+                        }
                     }
+                    log.info { "[gap-repair] repaired ${fetched.size} message(s) in $conversationId" }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // The cursor stays behind, so the next received event
+                    // re-triggers the repair.
+                    log.error(e) { "[gap-repair] failed for $conversationId" }
                 }
-                log.info { "[gap-repair] repaired ${fetched.size} message(s) in $conversationId" }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // The cursor stays behind, so the next received event
-                // re-triggers the repair.
-                log.error(e) { "[gap-repair] failed for $conversationId" }
             }
         }
     }
 
-    /**
-     * Pulls everything after the locally newest message of the conversation
-     * and persists it. The server orders sync pages ascending and returns at
-     * most [SYNC_PAGE_SIZE] rows, so the loop walks the gap forward with a
-     * keyset cursor until the last page comes back short — a hole of any size
-     * is closed, not just the newest 50.
-     */
-    private suspend fun syncConversationFromServer(conversationId: Uuid): List<Message> {
-        val lastMessageId = conversationDao.getConversationById(conversationId)
-            .firstOrNull()?.last_message_id
-            ?: return emptyList() // nothing stored yet: initial paging covers history
-
+    /** Resume REST history from the last page committed atomically with its cursor. */
+    private suspend fun syncConversationFromServer(conversationId: Uuid): List<Message> = syncMutex.withLock {
+        // Preview ids may point past holes or belong to pending client messages.
+        var afterId = messageDao.getSyncCursor(conversationId) ?: Uuid.NIL
         val fetched = mutableListOf<Message>()
-        var afterId = lastMessageId
-        for (pagesLeft in MAX_SYNC_PAGES downTo 1) {
-            val page = conversationApi.syncMessages(
-                conversationId = conversationId,
-                afterId = afterId,
-            )
-            if (page.isEmpty()) break
-            page.forEach { persistServerMessage(it, ownRequestId = null) }
+        repeat(MAX_SYNC_PAGES) {
+            val page = conversationApi.syncMessages(conversationId = conversationId, afterId = afterId)
+            if (page.isEmpty()) return@withLock fetched
+            val next = page.maxOf { it.id }
+            check(next > afterId) { "Message sync cursor did not advance" }
+            messageDao.transaction {
+                page.forEach { persistServerMessage(it, ownRequestId = null) }
+                messageDao.setSyncCursor(conversationId, next)
+            }
             fetched += page
-            if (page.size < SYNC_PAGE_SIZE) break
-            afterId = page.maxOf { it.id }
+            afterId = next
+            if (page.size < SYNC_PAGE_SIZE) return@withLock fetched
         }
-        return fetched
+        error("Message sync page budget exhausted; resume on the next sweep")
     }
-
     private suspend fun syncAllConversationsFromServer() {
         val conversations = conversationDao.getAllActiveConversations().firstOrNull().orEmpty()
         conversations.forEach { conversation ->
-            runCatching { syncConversationFromServer(conversation.id) }
-                .onFailure { log.warn(it) { "[reconnect-sync] failed for ${conversation.id}" } }
+            try {
+                syncConversationFromServer(conversation.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.warn(e) { "[reconnect-sync] failed for ${conversation.id}" }
+            }
         }
     }
 
-    /**
-     * Persists a message that the server has already stored. Own messages
-     * promote the local SENDING row (keyed by the requestId, which the server
-     * adopted as the primary key); everything else upserts by id, so repairs
-     * racing with the realtime stream stay idempotent. The conversation's
-     * last-message cursor only ever moves forward — a repair can carry
-     * messages older than the newest one already stored.
-     */
-    /**
-     * Persists a message the server has stored. Own messages (matched via the
-     * echoed clientRequestId) RENAME the local SENDING row to the server id —
-     * the server owns message identity, the client just relabels. Other
-     * messages upsert by id, so repairs racing the realtime stream stay
-     * idempotent. The conversation's last-message cursor only moves forward.
-     */
+    /** Merge server data and all local references within one transaction. */
     private suspend fun persistServerMessage(message: Message, ownRequestId: String?) {
-        val messageEntity = message.toMessageEntity()
-        val userEntity = message.toUserEntity()
-        val participantEntity = message.toParticipantEntity()
-
-        // The rename key: prefer the echoed clientRequestId; REST-repaired
-        // messages carry it in the model itself.
-        val localRequestId = ownRequestId ?: message.clientRequestId?.toString()
-
+        val ownId = ownUser.firstOrNull()?.id
+        val candidate = if (message.sender?.id == ownId) {
+            ownRequestId?.let(Uuid::parseOrNull) ?: message.clientRequestId
+        } else null
         messageDao.transaction {
-            val existing = when {
-                localRequestId != null ->
-                    messageDao.getMessageById(Uuid.parse(localRequestId)).firstOrNull()
-                else -> messageDao.getMessageById(message.id).firstOrNull()
+            message.replyTo?.let { persistServerMessage(it, ownRequestId = null) }
+            message.toUserEntity()?.let { userDao.insertUser(it) }
+            message.toParticipantEntity()?.let { participantDao.insertParticipant(it) }
+            val local = candidate?.let { messageDao.getMessageById(it).firstOrNull() }
+            val matchingId = candidate?.takeIf {
+                local != null && local.user_id == message.sender?.id &&
+                    local.conversation_id == message.conversationId &&
+                    local.local_send_status in listOf(MessageStatus.SENDING, MessageStatus.FAILED)
             }
-            when {
-                existing == null -> messageDao.insertMessage(messageEntity)
-                localRequestId != null && existing.id != message.id -> messageDao.updateMessageStatus(
-                    oldId = Uuid.parse(localRequestId),
-                    newId = message.id,
-                    createdAt = message.createdAt,
-                    status = MessageStatus.SENT
-                )
-                // Same id already stored (repair duplicate) — nothing to do.
-            }
-            userEntity?.let { userDao.insertUser(it) }
-            participantEntity?.let { participantDao.insertParticipant(it) }
-
+            messageDao.mergeServerMessage(message.toMessageEntity(MessageStatus.SENT), matchingId)
             val currentLast = conversationDao.getConversationById(message.conversationId)
                 .firstOrNull()?.last_message_id
             if (currentLast == null || message.id > currentLast) {
-                conversationDao.updateLastMessage(
-                    id = message.conversationId,
-                    lastMessageId = message.id,
-                    updatedAt = Clock.System.now()
-                )
+                conversationDao.updateLastMessage(message.conversationId, message.id, message.createdAt)
             }
         }
     }
-
     private suspend fun handleWithdrawnMessage(event: MessageEventResponse.Withdrawn) {
         try {
             messageDao.revokeMessage(event.messageId, event.timestamp)
@@ -522,64 +560,100 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
-    private fun stopMessageConsumption() {
-        messageConsumptionJob?.cancel()
-        messageConsumptionJob = null
-        outboxRetryJob?.cancel()
-        outboxRetryJob = null
+    suspend fun cleanup() {
+        stopSession()
     }
 
-    fun cleanup() {
-        stopMessageConsumption()
-    }
+    internal suspend fun inMemorySessionStateCountsForTest(): Triple<Int, Int, Int> =
+        seqMutex.withLock {
+            Triple(deliveredSeqs.size, gapRepairs.size, _typingUsers.value.size)
+        }
 
     /**
-     * Outbox driver: `SENDING` rows double as the outbox. Retries trigger on
-     * WS (re)connect and every [RETRY_POLL_INTERVAL]; messages still unacked
-     * after [MESSAGE_TTL] are marked FAILED so bubbles stop spinning. Resends
-     * reuse the original requestId, which the server uses as the message
-     * primary key, making replays idempotent.
+     * Outbox driver: `SENDING` rows double as the outbox. `FAILED` rows are
+     * deliberately excluded — a failure may be a permanent rejection (no
+     * permission, removed from the group, unsupported content), so retrying it
+     * automatically would loop, and only the user can decide to try again via
+     * [retryMessage]. Retries trigger on WS (re)connect and every
+     * [RETRY_POLL_INTERVAL]; messages still unacked after [MESSAGE_TTL] are
+     * marked FAILED based on the attempt clock, not message creation time. A resend reuses the original
+     * request id, which the server matches against `client_request_id` before
+     * inserting, making replays idempotent.
      */
-    private fun startOutboxRetryLoop() {
-        outboxRetryJob?.cancel()
-        outboxRetryJob = scope.launch {
-            // Resend as soon as the socket comes back up.
-            messageApi.connectionState.collectLatest { state ->
-                if (state is ConnectionState.Connected) {
-                    retryPendingMessages()
-                    // Outside collectLatest so a state flip cannot cancel the
-                    // catch-up halfway through.
-                    scope.launch { syncAllConversationsFromServer() }
+    private suspend fun startOutboxRetryLoop(session: RunningSession) {
+        val connectionSubscribed = CompletableDeferred<Unit>()
+        val retryJob = session.scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                // Resend as soon as the socket comes back up.
+                messageApi.connectionState
+                    .onSubscription { connectionSubscribed.complete(Unit) }
+                    .collectLatest { state ->
+                        if (state is ConnectionState.Connected) {
+                            retryPendingMessagesInternal()
+                            syncAllConversationsFromServer()
+                        }
+                    }
+            } catch (e: CancellationException) {
+                connectionSubscribed.cancel(e)
+                throw e
+            } catch (t: Throwable) {
+                connectionSubscribed.completeExceptionally(t)
+                throw t
+            }
+        }
+        retryJob.invokeOnCompletion { cause ->
+            if (cause != null && !connectionSubscribed.isCompleted) {
+                connectionSubscribed.completeExceptionally(cause)
+            }
+        }
+        session.scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(RETRY_POLL_INTERVAL)
+                try {
+                    if (ownUser.firstOrNull() == null) continue
+                    sendMutex.withLock { expireStaleMessages() }
+                    retryPendingMessagesInternal()
+                    if (messageApi.connectionState.value is ConnectionState.Connected) syncAllConversationsFromServer()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.warn(e) { "Outbox sweep failed; retrying on the next tick" }
                 }
             }
         }
-        scope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(RETRY_POLL_INTERVAL)
-                expireStaleMessages()
-                retryPendingMessages()
-            }
-        }
+        connectionSubscribed.await()
     }
 
     override suspend fun retryPendingMessages() {
-        if (messageApi.connectionState.value !is ConnectionState.Connected) return
+        try {
+            lifecycle.execute { retryPendingMessagesInternal() }
+        } catch (_: SessionStoppedException) {
+            log.warn { "[retryPendingMessages] refused: session is not active" }
+        }
+    }
+
+    private suspend fun retryPendingMessagesInternal() = sendMutex.withLock {
+        if (messageApi.connectionState.value !is ConnectionState.Connected) return@withLock
         val retryCutoff = Clock.System.now() - RETRY_DELAY
-        val pending = messageDao.getRetryableMessages(retryCutoff)
-        if (pending.isEmpty()) return
+        val currentUserId = ownUser.firstOrNull()?.id ?: return@withLock
+        val pending = messageDao.getRetryableMessages(retryCutoff).filter { it.user_id == currentUserId }
+        if (pending.isEmpty()) return@withLock
 
         log.info { "[outbox] resending ${pending.size} pending message(s)" }
         for (entity in pending) {
+            val current = messageDao.getMessageById(entity.id).firstOrNull() ?: continue
+            if (current.local_send_status != MessageStatus.SENDING) continue
             val request = MessageRequest.Send(
-                senderId = entity.user_id,
-                conversationId = entity.conversation_id,
+                senderId = current.user_id,
+                conversationId = current.conversation_id,
                 // The row keeps the reply target, and the server stores it on insert:
                 // dropping it here would silently degrade a retried reply to a plain message.
-                replyToMessageId = entity.reply_to_message_id,
-                content = entity.content,
+                replyToMessageId = current.reply_to_message_id,
+                content = current.content,
                 requestId = entity.id.toString()
             )
             try {
+                messageDao.recordAttempt(entity.id, entity.created_at, Clock.System.now())
                 messageApi.send(request)
             } catch (e: CancellationException) {
                 throw e
@@ -589,6 +663,59 @@ class OfflineFirstMessageRepositoryImpl(
                 log.warn(e) { "[outbox] resend interrupted" }
                 break
             }
+        }
+    }
+
+    /**
+     * Re-sends a single failed message under its original request identity.
+     *
+     * The row moves back into the outbox before the socket write, so a retry
+     * that is not acknowledged here is picked up by the periodic sweep and the
+     * reconnect trigger rather than being lost. Id and timestamp are preserved:
+     * the bubble keeps its place in the timeline, and the server matches the
+     * original `client_request_id` instead of storing a second message.
+     */
+    override suspend fun retryMessage(messageId: Uuid): Result<Unit, MessageError> {
+        return try {
+            lifecycle.execute {
+                sendMutex.withLock {
+                    val message = messageDao.getMessageById(messageId).firstOrNull()
+                        ?: return@withLock Err(MessageError.MessageNotFound)
+
+                    if (message.user_id != ownUser.firstOrNull()?.id) return@withLock Err(MessageError.PermissionDenied)
+                    if (message.local_send_status != MessageStatus.FAILED) {
+                        // A SENDING row is already owned by the outbox, and re-sending a
+                        // SENT one would resurrect a delivered message.
+                        log.warn { "[retryMessage] $messageId is ${message.local_send_status}, ignoring" }
+                        return@withLock Ok(Unit)
+                    }
+
+                    if (!messageDao.claimFailedMessage(messageId, Clock.System.now())) return@withLock Ok(Unit)
+
+                    if (messageApi.connectionState.value !is ConnectionState.Connected) {
+                        // Left in SENDING on purpose: the outbox resends it on reconnect.
+                        return@withLock Err(MessageError.OperationFailed)
+                    }
+
+                    val request = MessageRequest.Send(
+                        senderId = message.user_id,
+                        conversationId = message.conversation_id,
+                        content = message.content,
+                        requestId = message.id.toString(),
+                        replyToMessageId = message.reply_to_message_id,
+                    )
+                    messageApi.send(request)
+                    Ok(Unit)
+                }
+            }
+        } catch (_: SessionStoppedException) {
+            log.warn { "[retryMessage] refused: session is not active" }
+            Err(MessageError.PermissionDenied)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.error(e) { "[retryMessage] resend failed for $messageId" }
+            Err(MessageError.Unknown(e.message))
         }
     }
 

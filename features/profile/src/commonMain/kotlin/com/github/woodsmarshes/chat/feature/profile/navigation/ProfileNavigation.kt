@@ -20,6 +20,7 @@ data class ChatProfileNavKey(val userId: String) : NavKey
 fun EntryProviderScope<NavKey>.profileEntry(
     onBack: () -> Unit,
     onOpenChat: (conversationId: String) -> Unit,
+    onEditProfile: (() -> Unit)? = null,
     detailMetadata: Map<String, Any> = emptyMap(),
     extraMetadata: Map<String, Any> = detailMetadata,
 ) {
@@ -28,6 +29,7 @@ fun EntryProviderScope<NavKey>.profileEntry(
             userId = key.userId,
             onBack = onBack,
             onOpenChat = onOpenChat,
+            onEditProfile = onEditProfile,
             isExtraPane = false,
         )
     }
@@ -36,6 +38,7 @@ fun EntryProviderScope<NavKey>.profileEntry(
             userId = key.userId,
             onBack = onBack,
             onOpenChat = onOpenChat,
+            onEditProfile = onEditProfile,
             isExtraPane = true,
         )
     }

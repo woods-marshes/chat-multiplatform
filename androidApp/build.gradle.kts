@@ -46,4 +46,5 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.slf4j.simple)
+    implementation(libs.filekit.dialogs)
 }

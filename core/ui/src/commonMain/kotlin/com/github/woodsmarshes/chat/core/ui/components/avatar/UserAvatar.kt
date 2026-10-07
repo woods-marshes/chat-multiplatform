@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +25,17 @@ import coil3.request.crossfade
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import top.yukonga.miuix.kmp.basic.Text
 
+val LocalServerBaseUrl = staticCompositionLocalOf { "http://127.0.0.1:9051" }
+
+fun resolveMediaUrl(url: String?, baseUrl: String): String? {
+    val trimmed = url?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return if (trimmed.startsWith("/")) {
+        "${baseUrl.trimEnd('/')}$trimmed"
+    } else {
+        trimmed
+    }
+}
+
 @Composable
 fun UserAvatar(
     name: String?,
@@ -38,6 +50,7 @@ fun UserAvatar(
     val initials = (name?.take(1)?.uppercase() ?: "?").take(2)
     val bgColor = avatarColor(name)
     val bubbleColors = LocalBubbleColors.current
+    val resolvedAvatarUrl = resolveMediaUrl(avatarUrl, LocalServerBaseUrl.current)
 
     val interactionModifier = when {
         onClick != null && onLongPress != null -> Modifier.combinedClickable(
@@ -55,9 +68,9 @@ fun UserAvatar(
             .then(interactionModifier),
         contentAlignment = Alignment.Center,
     ) {
-        if (avatarUrl != null) {
+        if (resolvedAvatarUrl != null) {
             SubcomposeAsyncImage(
-                model = avatarUrl,
+                model = resolvedAvatarUrl,
                 contentDescription = name ?: "Avatar",
                 modifier = Modifier
                     .size(size)

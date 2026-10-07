@@ -44,6 +44,10 @@ fun ArticleEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // A save is only meaningful once the editor holds the real document: before
+    // that, the body is still the placeholder default.
+    val canSave = uiState.isLoaded && !uiState.isSaving && !uiState.isCollaborativeEditing
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -61,11 +65,11 @@ fun ArticleEditorScreen(
                 actions = {
                     TextButton(
                         onClick = { viewModel.saveArticle(ArticleStatus.DRAFT) },
-                        enabled = !uiState.isSaving && !uiState.isCollaborativeEditing,
+                        enabled = canSave,
                     ) { Text(LocalStrings.current.articleSaveDraft) }
                     TextButton(
                         onClick = { viewModel.saveArticle(ArticleStatus.PUBLISHED) },
-                        enabled = !uiState.isSaving && !uiState.isCollaborativeEditing,
+                        enabled = canSave,
                     ) { Text(LocalStrings.current.articlePublish) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),

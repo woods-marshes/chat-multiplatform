@@ -14,6 +14,7 @@ plugins {
     alias(libs.plugins.room3) apply false
     alias(libs.plugins.android.lint) apply false
     alias(libs.plugins.nucleus) apply false
+    alias(libs.plugins.aboutLibraries) apply false
     alias(libs.plugins.project.root)
 }
 

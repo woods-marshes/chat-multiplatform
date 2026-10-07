@@ -7,6 +7,7 @@ data class ProfileUiState(
     val avatarUrl: String? = null,
     val bio: String? = null,
     val email: String? = null,
+    val isOwnProfile: Boolean = false,
     // True until the first emission arrives (cached row or refresh result).
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,

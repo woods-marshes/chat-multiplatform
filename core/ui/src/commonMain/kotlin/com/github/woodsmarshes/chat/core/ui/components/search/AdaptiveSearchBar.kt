@@ -46,6 +46,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Material 3 adaptive search bar following the official composition: a
@@ -157,7 +158,7 @@ fun AdaptiveSearchBar(
     // Debounced search stream; below-minimum queries are reported as empty.
     LaunchedEffect(textFieldState, minQueryLength, debounceMillis) {
         snapshotFlow { textFieldState.text.toString().trim() }
-            .debounce(debounceMillis)
+            .debounce(debounceMillis.milliseconds)
             .distinctUntilChanged()
             .collect { query ->
                 currentOnSearchQuery(if (query.length >= minQueryLength) query else "")

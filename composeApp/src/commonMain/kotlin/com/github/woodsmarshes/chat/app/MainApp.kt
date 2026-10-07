@@ -90,8 +90,12 @@ import com.github.woodsmarshes.chat.feature.profile.navigation.profileEntry
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchType
 import com.github.woodsmarshes.chat.feature.search.navigation.searchEntry
+import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
+import com.github.woodsmarshes.chat.feature.settings.navigation.OpenSourceLicensesNavKey
+import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsDetailNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
+import com.github.woodsmarshes.chat.feature.settings.ui.SettingsDetailScreen
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, kotlin.uuid.ExperimentalUuidApi::class)
 @Composable
@@ -172,6 +176,20 @@ private fun MainContent(
     val listPaneMeta = remember {
         ListDetailSceneStrategy.listPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
     }
+    val settingsListPaneMeta = remember {
+        ListDetailSceneStrategy.listPane(
+            detailPlaceholder = {
+                SettingsDetailScreen(
+                    category = SettingsCategory.PROFILE,
+                    onBack = { navigator.goBack() },
+                    onLogout = { sessionManager.logout() },
+                    onOpenLicenses = {
+                        navigator.navigate(OpenSourceLicensesNavKey)
+                    },
+                )
+            }
+        ) + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
+    }
     val detailPaneMeta = remember { ListDetailSceneStrategy.detailPane() }
     val extraPaneMeta = remember {
         ListDetailSceneStrategy.extraPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
@@ -244,7 +262,22 @@ private fun MainContent(
             onBack = { navigator.goBack() },
             onLogout = { sessionManager.logout() },
             onSearchClick = { navigator.navigate(SearchNavKey(SearchType.CONVERSATION)) },
-            metadata = listPaneMeta,
+            onCategoryClick = { category ->
+                openDetailFromList(SettingsDetailNavKey(category))
+            },
+            onOpenLicenses = {
+                navigator.navigate(OpenSourceLicensesNavKey)
+            },
+            selectedCategory = {
+                val stack = navigationState.subStacks[SettingsNavKey]
+                when (val top = stack?.lastOrNull { it is SettingsDetailNavKey || it is OpenSourceLicensesNavKey }) {
+                    is SettingsDetailNavKey -> top.category
+                    is OpenSourceLicensesNavKey -> SettingsCategory.ABOUT
+                    else -> null
+                }
+            },
+            metadata = settingsListPaneMeta,
+            detailMetadata = detailPaneMeta,
         )
         chatEntry(
             onBack = { navigator.goBack() },
@@ -266,6 +299,12 @@ private fun MainContent(
             onBack = { navigator.goBack() },
             onOpenChat = { conversationId ->
                 openChatFromInfo(conversationId, false)
+            },
+            onEditProfile = {
+                if (navigationState.currentTopLevelKey != SettingsNavKey) {
+                    navigator.navigate(SettingsNavKey)
+                }
+                openDetailFromList(SettingsDetailNavKey(SettingsCategory.PROFILE))
             },
             detailMetadata = detailPaneMeta,
             extraMetadata = extraPaneMeta,
@@ -312,6 +351,18 @@ private fun MainContent(
 
     val isMediumOrLarger = windowAdaptiveInfo.windowSizeClass
         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+
+    // Keep Settings in two-pane mode on medium/expanded windows by seeding
+    // the default PROFILE detail entry whenever the Settings sub-stack has
+    // only its root list entry.
+    LaunchedEffect(navigationState.currentTopLevelKey, isMediumOrLarger) {
+        if (isMediumOrLarger && navigationState.currentTopLevelKey == SettingsNavKey) {
+            val settingsStack = navigationState.subStacks[SettingsNavKey]
+            if (settingsStack != null && settingsStack.size == 1) {
+                settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
+            }
+        }
+    }
 
     val isTopLevelRoute = navigationState.currentKey in navigationState.topLevelKeys
 
@@ -362,7 +413,15 @@ private fun MainContent(
                         val selected = item.navKey == navigationState.currentTopLevelKey
                         item(
                             selected = selected,
-                            onClick = { navigator.navigate(item.navKey) },
+                            onClick = {
+                                navigator.navigate(item.navKey)
+                                if (isMediumOrLarger && item.navKey == SettingsNavKey) {
+                                    val settingsStack = navigationState.subStacks[SettingsNavKey]
+                                    if (settingsStack != null && settingsStack.size == 1) {
+                                        settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
+                                    }
+                                }
+                            },
                             icon = {
                                 Icon(
                                     imageVector = if (selected) item.selectedIcon

@@ -10,6 +10,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 interface UserRepository {
+    /**
+     * Binds the current session's database and starts accepting session-bound
+     * user operations. Idempotent while the current session is already running;
+     * waits if a previous session is still stopping.
+     */
+    suspend fun startSession() = Unit
+
+    /**
+     * Refuses new session-bound user operations, cancels all in-flight ones,
+     * and suspends until they (including their `finally` blocks) have exited.
+     * Idempotent.
+     */
+    suspend fun stopSession() = Unit
+
     fun getMeFlow(): Flow<User?>
 
     suspend fun syncMe(): Result<User, UserError>
@@ -19,6 +33,11 @@ interface UserRepository {
         avatarUrl: String? = null,
         bio: String? = null
     ): Result<User, UserError>
+
+    suspend fun uploadMyAvatar(
+        bytes: ByteArray,
+        onProgress: suspend (bytesSent: Long, total: Long?) -> Unit = { _, _ -> },
+    ): Result<String, UserError> = error("uploadMyAvatar not implemented")
 
     fun getGlobalSettingsFlow(): Flow<UserSetting?>
 

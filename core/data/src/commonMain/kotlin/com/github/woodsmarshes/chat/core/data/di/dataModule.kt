@@ -18,7 +18,8 @@ import com.github.woodsmarshes.chat.core.data.repository.UserRepositoryImpl
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
-import kotlin.uuid.Uuid
+import com.github.woodsmarshes.chat.core.data.paging.ArticleMediatorFactory
+import com.github.woodsmarshes.chat.core.data.paging.MessageMediatorFactory
 import org.koin.dsl.module
 
 @OptIn(ExperimentalPagingApi::class)
@@ -30,27 +31,24 @@ val dataModule = module {
     singleOf(::ContactRepositoryImpl) bind ContactRepository::class
     singleOf(::OfflineFirstArticleRepositoryImpl) bind ArticleRepository::class
 
-    factory { (getMyArticle: Boolean, authorId: Uuid?) ->
-        ArticleRemoteMediator(
-            getMyArticle = getMyArticle,
-            authorId = authorId,
-            articleApi = get(),
-            articleDao = get(),
-            userDao = get(),
-            appDispatchers = get()
-        )
+    single<ArticleMediatorFactory> {
+        val api = get<com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi>()
+        val articles = get<com.github.woodsmarshes.chat.core.database.dao.ArticleDao>()
+        val users = get<com.github.woodsmarshes.chat.core.database.dao.UserDao>()
+        val holder = get<com.github.woodsmarshes.chat.core.database.di.DatabaseHolder>()
+        val dispatchers = get<com.github.woodsmarshes.chat.core.common.AppDispatchers>()
+        ArticleMediatorFactory { own, author -> ArticleRemoteMediator(own, author, api, articles, users, dispatchers, holder) }
+    }
+    single<MessageMediatorFactory> {
+        val api = get<com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi>()
+        val messages = get<com.github.woodsmarshes.chat.core.database.dao.MessageDao>()
+        val users = get<com.github.woodsmarshes.chat.core.database.dao.UserDao>()
+        val participants = get<com.github.woodsmarshes.chat.core.database.dao.ParticipantDao>()
+        val holder = get<com.github.woodsmarshes.chat.core.database.di.DatabaseHolder>()
+        val dispatchers = get<com.github.woodsmarshes.chat.core.common.AppDispatchers>()
+        MessageMediatorFactory { own, conversation, group ->
+            MessageRemoteMediator(own, conversation, group, dispatchers, holder, api, messages, users, participants)
+        }
     }
 
-    factory { (ownUserId: Uuid, conversationId: Uuid, isGroup: Boolean) ->
-        MessageRemoteMediator(
-            ownUserId = ownUserId,
-            conversationId = conversationId,
-            isGroup = isGroup,
-            appDispatchers = get(),
-            conversationApi = get(),
-            messageDao = get(),
-            userDao = get(),
-            participantDao = get(),
-        )
-    }
 }

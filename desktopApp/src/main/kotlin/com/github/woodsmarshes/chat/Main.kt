@@ -13,10 +13,12 @@ import dev.nucleusframework.application.DecoratedWindow
 import dev.nucleusframework.application.NucleusBackend
 import dev.nucleusframework.application.nucleusApplication
 import dev.nucleusframework.window.TitleBar
+import io.github.vinceglb.filekit.FileKit
 import org.jetbrains.compose.resources.painterResource
 import org.koin.dsl.module
 
 fun main() {
+    FileKit.init(appId = "com.github.woodsmarshes.chat")
     val platformContext = DesktopContext()
     nucleusApplication(backend = NucleusBackend.Tao) {
         initKoin(
@@ -27,7 +29,7 @@ fun main() {
         DecoratedWindow(
             onCloseRequest = ::exitApplication,
             title = "Chat",
-            state = rememberWindowState(size = DpSize(1200.dp, 800.dp)),
+            state = rememberWindowState(size = DpSize(1200.dp, 860.dp)),
             icon = painterResource(resource = Res.drawable.app_icon),
         ) {
             // Provides the drag region and window control buttons on Tao

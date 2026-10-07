@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.logback.classic)
     implementation(libs.koin.core)
+    implementation(libs.filekit.dialogs)
 
     // Nucleus Tao windowing stack: required to host the native desktop
     // WebView (dev.nucleusframework:composewebview) used by the article

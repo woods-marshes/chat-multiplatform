@@ -59,6 +59,13 @@ interface MessageDao {
 
     suspend fun failStaleMessages(giveUpBefore: Instant)
 
+    suspend fun startAttempt(id: Uuid, now: Instant)
+    suspend fun claimFailedMessage(id: Uuid, now: Instant): Boolean
+    suspend fun recordAttempt(id: Uuid, createdAt: Instant, now: Instant)
+    suspend fun mergeServerMessage(message: MessageEntity, localId: Uuid?)
+    suspend fun getSyncCursor(conversationId: Uuid): Uuid?
+    suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid)
+
     // 删除
     suspend fun deleteMessage(id: Uuid)
 

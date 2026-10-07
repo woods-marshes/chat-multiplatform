@@ -12,7 +12,7 @@ import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.data.model.toArticleListUiModel
 import com.github.woodsmarshes.chat.core.data.model.toCoreArticle
 import com.github.woodsmarshes.chat.core.data.model.toDBArticle
-import com.github.woodsmarshes.chat.core.data.paging.ArticleRemoteMediator
+import com.github.woodsmarshes.chat.core.data.paging.ArticleMediatorFactory
 import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
@@ -25,29 +25,39 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.get
-import org.koin.core.parameter.parametersOf
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class OfflineFirstArticleRepositoryImpl(
     private val articleApi: ArticleApi,
     private val articleDao: ArticleDao,
-    private val scope: CoroutineScope
-) : ArticleRepository, KoinComponent {
+    private val databaseHolder: DatabaseHolder,
+    private val mediatorFactory: ArticleMediatorFactory
+) : ArticleRepository {
+    private suspend fun <T> sessionOperation(block: suspend () -> Result<T, ArticleError>): Result<T, ArticleError> =
+        databaseHolder.sessionGate.executeResult({ ArticleError.Unknown(it.message) }, block)
+
+    private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> =
+        databaseHolder.sessionGate.observeSession(factory)
+
     private val log = KotlinLogging.logger {}
 
     override suspend fun getArticle(
         getMyArticle: Boolean,
         articleId: Uuid
-    ): Flow<Result<Article?, ArticleError>> = flow {
+    ): Flow<Result<Article?, ArticleError>> = sessionFlow { flow {
         var fetchedFromNetwork = false
 
         articleDao.getByIdWithAuthor(articleId).collect { row ->
@@ -77,6 +87,7 @@ class OfflineFirstArticleRepositoryImpl(
             // else: content is still null after network — stay silent (article doesn't exist)
         }
     }
+    }
 //    override val invalidationEvents: Flow<Unit>
 //        get() = _invalidationEvents.asSharedFlow()
 
@@ -86,16 +97,15 @@ class OfflineFirstArticleRepositoryImpl(
         limit: Int,
         authorId: Uuid?
     ): Flow<PagingData<ArticleListUiModel>> {
+        val pagingDao = (articleDao as? com.github.woodsmarshes.chat.core.database.dao.ArticleDaoImpl)?.pinForPaging() ?: articleDao
         return Pager(
             config = PagingConfig(
                 pageSize = limit,
                 enablePlaceholders = false,
             ),
-            remoteMediator = get<ArticleRemoteMediator> {
-                parametersOf(getMyArticle, authorId)
-            },
+            remoteMediator = mediatorFactory.create(getMyArticle, authorId),
             pagingSourceFactory = {
-                articleDao.pagingSource(
+                pagingDao.pagingSource(
                     pageSize = limit.toLong(),
                     authorId = authorId,
                     // The "all" tab mirrors the server, which only publishes PUBLISHED rows.
@@ -115,7 +125,7 @@ class OfflineFirstArticleRepositoryImpl(
         content: JsonElement?,
         status: ArticleStatus,
         excerpt: String?,
-    ): Result<Unit, ArticleError> = coroutineBinding {
+    ): Result<Unit, ArticleError> = sessionOperation { coroutineBinding {
         val article = bindApi(ArticleError::Unknown) {
             articleApi.saveArticle(
                 id = id,
@@ -128,18 +138,18 @@ class OfflineFirstArticleRepositoryImpl(
             )
         }
         articleDao.upsert(article.toDBArticle())
-    }
+    } }
 
-    override suspend fun createBlankArticle(): Result<Article, ArticleError> = coroutineBinding {
+    override suspend fun createBlankArticle(): Result<Article, ArticleError> = sessionOperation { coroutineBinding {
         bindApi(ArticleError::Unknown) {
             articleApi.createBlank()
         }
             .also {
                 articleDao.upsert(it.toDBArticle())
             }
-    }
+    } }
 
-    override suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError> = coroutineBinding {
+    override suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError> = sessionOperation { coroutineBinding {
         bindApi(ArticleError::Unknown) {
             articleApi.deleteArticle(id)
         }.also {
@@ -148,5 +158,5 @@ class OfflineFirstArticleRepositoryImpl(
                 deletedAt = Clock.System.now()
             )
         }
-    }
+    } }
 }

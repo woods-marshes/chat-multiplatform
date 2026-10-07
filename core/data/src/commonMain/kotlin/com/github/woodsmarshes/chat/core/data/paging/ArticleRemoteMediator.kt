@@ -15,8 +15,11 @@ import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.KeyedArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListAllArticlesWithAuthor
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlin.uuid.Uuid
 
 @ExperimentalPagingApi
@@ -27,14 +30,15 @@ class ArticleRemoteMediator(
     private val articleDao: ArticleDao,
     private val userDao: UserDao,
     private val appDispatchers: AppDispatchers,
-) : RemoteMediator<Uuid, KeyedArticlesWithAuthor>() {
+    private val databaseHolder: DatabaseHolder,
+) : SessionBoundRemoteMediator<Uuid, KeyedArticlesWithAuthor>(databaseHolder.sessionGate) {
     private val log = KotlinLogging.logger {}
 
-    override suspend fun load(
+    override suspend fun loadInSession(
         loadType: LoadType,
         state: PagingState<Uuid, KeyedArticlesWithAuthor>
     ): MediatorResult {
-        return try {
+        return run {
             val cursor: Uuid? = when (loadType) {
                 LoadType.REFRESH -> {
                     log.debug(tag = "ArticleRemoteMediator", message = "REFRESH triggering, cursor = null")
@@ -64,6 +68,7 @@ class ArticleRemoteMediator(
                 )
             }
 
+            currentCoroutineContext().ensureActive()
             if (response.isEmpty()) {
                 return MediatorResult.Success(endOfPaginationReached = true)
             }
@@ -74,19 +79,20 @@ class ArticleRemoteMediator(
                 .distinct()
 
             withContext(appDispatchers.io) {
-                userDao.insertUsers(users)
-                articleDao.upsertAll(articles)
+                val db = checkNotNull(currentCoroutineContext()[BoundDatabaseElement]?.database)
+                db.articleQueries.transaction {
+                    userDao.insertUsers(users)
+                    articleDao.upsertAll(articles)
+                }
             }
 
             MediatorResult.Success(
                 endOfPaginationReached = response.size < pageSize
             )
-        } catch (e: CancellationException) {
-            // Never swallow structured-concurrency cancellation.
-            throw e
-        } catch (e: Exception) {
-            log.error(tag = "ArticleRemoteMediator", message = "Load failed", throwable = e)
-            MediatorResult.Error(e)
         }
+    }
+
+    override fun onLoadFailure(failure: Exception) {
+        log.error(tag = "ArticleRemoteMediator", message = "Load failed", throwable = failure)
     }
 }

@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.core.common.utils.debug
 import com.github.woodsmarshes.chat.core.common.utils.error
 import com.github.woodsmarshes.chat.core.common.utils.verbose
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
+import com.github.woodsmarshes.chat.core.datastore.AuthTokenSnapshot
 import com.github.woodsmarshes.chat.core.model.error.DomainError
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
@@ -22,7 +23,10 @@ import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.UserAgent
+import io.ktor.client.plugins.api.Send
+import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.auth.Auth
+import io.ktor.client.plugins.auth.AuthCircuitBreaker
 import io.ktor.client.plugins.auth.providers.BearerTokens
 import io.ktor.client.plugins.auth.providers.bearer
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -44,11 +48,37 @@ import io.ktor.http.parameters
 import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.serialization.kotlinx.protobuf.protobuf
+import io.ktor.util.AttributeKey
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.first
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
+
+private val RequestAuthSnapshotKey = AttributeKey<AuthTokenSnapshot>("RequestAuthSnapshot")
+
+internal fun interface RequestAuthBoundHook {
+    suspend fun onBound()
+}
+
+/**
+ * Optional test hook invoked immediately after a request binds its
+ * [AuthTokenSnapshot] in `RequestAuthBindingPlugin` and before the `Auth`
+ * plugin or send guard selects its `Authorization` header.
+ */
+internal val OnRequestAuthBoundHookKey = AttributeKey<RequestAuthBoundHook>("OnRequestAuthBoundHook")
+
+/**
+ * Thrown before a request is transmitted when the active credential
+ * generation changed after the request bound its session identity, so a
+ * request created for one session is never sent with another session's
+ * `Authorization` header.
+ */
+class StaleRequestGenerationException(
+    val requestGeneration: Long,
+    val currentGeneration: Long,
+) : IllegalStateException(
+    "Request bound to credential generation $requestGeneration cannot be sent under generation $currentGeneration"
+)
 
 expect fun httpEngine(): HttpClientEngineFactory<*>
 fun createHttpClient(
@@ -107,30 +137,89 @@ fun createHttpClient(
         pingIntervalMillis = 30_000
     }
 
+    install(
+        createClientPlugin("RequestAuthBindingPlugin") {
+            onRequest { request, _ ->
+                if (!request.attributes.contains(AuthCircuitBreaker) &&
+                    !request.attributes.contains(RequestAuthSnapshotKey)
+                ) {
+                    request.attributes.put(RequestAuthSnapshotKey, authTokenDataSource.currentSnapshot())
+                    request.attributes.getOrNull(OnRequestAuthBoundHookKey)?.onBound()
+                }
+            }
+        }
+    )
+
     install(Auth) {
         bearer {
             // The token holder caches the first non-null token for the whole client lifetime
             // when caching is on, so a later login as a different account would keep sending
             // the previous JWT. Read the token from the data source on every request instead.
             cacheTokens = false
+            sendWithoutRequest { request ->
+                !request.attributes.contains(AuthCircuitBreaker)
+            }
             loadTokens {
-                val jwt = authTokenDataSource.jwtToken.first()
+                val snapshot = authTokenDataSource.currentSnapshot()
+                val jwt = snapshot.jwtToken
                 if (!jwt.isNullOrEmpty()) {
-                    BearerTokens(jwt, null)
+                    BearerTokens(jwt, snapshot.refreshToken)
                 } else {
                     null
                 }
             }
             // refreshTokens: on a 401 the bearer plugin re-runs the request
-            // with whatever this returns; a null result (credentials dead)
-            // lets the request fail and the logged-out state take over.
+            // with whatever this returns; a null result (credentials dead or
+            // request belonged to an older session generation) lets the
+            // request fail without refreshing or replaying as a new account.
+            // The request's generation is strictly its bound snapshot's
+            // generation — never re-derived from the token string.
             refreshTokens {
-                tokenRefresher.refreshAfter401(client)?.let {
+                val boundSnapshot = response.call.request.attributes.getOrNull(RequestAuthSnapshotKey)
+                    ?: return@refreshTokens null
+                val sentAccessToken = response.call.request.headers[HttpHeaders.Authorization]
+                    ?.removePrefix("Bearer ")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                tokenRefresher.refreshAfter401(
+                    client = client,
+                    requestGeneration = boundSnapshot.generation,
+                    requestAccessToken = sentAccessToken ?: boundSnapshot.jwtToken,
+                )?.let {
                     io.ktor.client.plugins.auth.providers.BearerTokens(it.accessToken, it.refreshToken)
                 }
             }
         }
     }
+
+    // Installed after Auth so its Send hook runs inside Auth's Send hook,
+    // right before the engine transmits both initial requests and 401 replays.
+    // Ensures a request bound to session A is refused if the active credential
+    // generation changed before transmission (instead of going out with
+    // session B's Authorization header from loadTokens), while still allowing
+    // same-generation token rotation.
+    install(
+        createClientPlugin("RequestAuthSendGuardPlugin") {
+            on(Send) { request ->
+                val bound = request.attributes.getOrNull(RequestAuthSnapshotKey)
+                if (bound != null) {
+                    val latest = authTokenDataSource.currentSnapshot()
+                    if (latest.generation != bound.generation) {
+                        throw StaleRequestGenerationException(
+                            requestGeneration = bound.generation,
+                            currentGeneration = latest.generation,
+                        )
+                    }
+                    val tokenToUse = latest.jwtToken ?: bound.jwtToken
+                    request.headers.remove(HttpHeaders.Authorization)
+                    if (!tokenToUse.isNullOrEmpty()) {
+                        request.headers.append(HttpHeaders.Authorization, "Bearer $tokenToUse")
+                    }
+                }
+                proceed(request)
+            }
+        }
+    )
 
     expectSuccess = true
     HttpResponseValidator {

@@ -78,6 +78,14 @@ kotlin {
             }
         }
 
+        jvmTest {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.mockk)
+            }
+        }
+
         matching { it.name == "androidMain" }.configureEach {
             dependencies {
                 implementation(libs.ktor.client.okhttp)

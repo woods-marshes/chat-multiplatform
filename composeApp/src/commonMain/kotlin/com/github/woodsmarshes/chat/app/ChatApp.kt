@@ -12,6 +12,8 @@ import com.github.woodsmarshes.chat.app.session.SessionManager
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
+import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.ui.components.avatar.LocalServerBaseUrl
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarState
 import com.github.woodsmarshes.chat.core.ui.components.feedback.LocalSnackbarState
 import com.github.woodsmarshes.chat.core.ui.components.feedback.rememberAppSnackbarState
@@ -25,6 +27,7 @@ import org.koin.compose.koinInject
 fun ChatApp() {
     val sessionManager = koinInject<SessionManager>()
     val userSettingDataSource = koinInject<UserSettingDataSource>()
+    val networkConfig = koinInject<NetworkConfig>()
 
     val userPreference by userSettingDataSource.preference.collectAsStateWithLifecycle(null)
     val themeConfig = remember(userPreference) {
@@ -36,7 +39,10 @@ fun ChatApp() {
 
     val snackbarState = rememberAppSnackbarState()
     ProvideLyricistStrings {
-        CompositionLocalProvider(LocalSnackbarState provides snackbarState) {
+        CompositionLocalProvider(
+            LocalSnackbarState provides snackbarState,
+            LocalServerBaseUrl provides networkConfig.baseUrl,
+        ) {
             AppTheme(themeConfig = themeConfig) {
                 MainApp(sessionManager = sessionManager, snackbarState = snackbarState)
             }

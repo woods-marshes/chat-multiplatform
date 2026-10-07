@@ -1,6 +1,8 @@
 package com.github.woodsmarshes.chat.core.database.dao
 
+import app.cash.sqldelight.SuspendingTransactionWithoutReturn
 import com.github.woodsmarshes.chat.core.model.ContactStatus
+import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ContactEntity
 import io.github.woodsmarshes.chat.db.GetAllContactsWithUserInfo
 import io.github.woodsmarshes.chat.db.SearchContacts
@@ -9,6 +11,19 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface ContactDao {
+    val boundDatabase: ChatDatabase?
+
+    /**
+     * Captures the [ChatDatabase] active at the moment this method is called
+     * and returns a [ContactDao] handle pinned to that exact database instance,
+     * so subsequent DAO calls and transactions on the returned handle never
+     * dynamically resolve a different session's database after a suspension
+     * point.
+     */
+    fun bindToCurrentDatabase(): ContactDao
+
+    suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit)
+
     // 写入与同步
     suspend fun insertContact(contact: ContactEntity)
     suspend fun insertContacts(contacts: List<ContactEntity>)

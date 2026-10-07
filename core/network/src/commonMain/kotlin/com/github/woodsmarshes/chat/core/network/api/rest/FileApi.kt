@@ -29,6 +29,7 @@ class FileApi(
         onProgress: suspend (bytesSent: Long, total: Long?) -> Unit
     ): MediaContent {
         return client.post(V1.Files.Upload(type = fileType)) {
+            headers.remove(HttpHeaders.ContentType)
             // 设置多部分表单内容
             setBody(
                 MultiPartFormDataContent(
@@ -60,6 +61,7 @@ class FileApi(
         onProgress: suspend (bytesSent: Long, total: Long?) -> Unit
     ): String {
         val response = client.post(V1.Files.Avatar(isGroup = isGroup, targetId = targetId)) {
+            headers.remove(HttpHeaders.ContentType)
             setBody(
                 MultiPartFormDataContent(
                     formData {

@@ -4,11 +4,9 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
-import com.github.woodsmarshes.chat.core.data.model.toUserEntity
-import com.github.woodsmarshes.chat.core.database.dao.UserDao
-import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
+import com.github.woodsmarshes.chat.core.model.AuthSessionSnapshot
 import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
@@ -18,44 +16,46 @@ import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import com.github.woodsmarshes.chat.core.network.ktor.jwtExpiryEpochMs
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 class AuthRepositoryImpl(
     private val authTokenDataSource: AuthTokenDataSource,
     private val userSettingDataSource: UserSettingDataSource,
-    private val userDao: UserDao,
     private val authApi: AuthApi,
-    private val databaseHolder: DatabaseHolder,
 ) : AuthRepository {
 
     private val log = KotlinLogging.logger {}
 
     override val jwtToken: Flow<String?> = authTokenDataSource.jwtToken
 
+    override fun observeAuthSession(): Flow<AuthSessionSnapshot> =
+        authTokenDataSource.sessionSnapshot
+
     /**
-     * Pure mapping of persisted auth state: logged in means both a token and
-     * a usable cached user exist. Database opening is deliberately NOT done
-     * here — that is the SessionManager's job, driven by an eagerly collected
-     * session flow rather than whatever happens to be subscribed.
+     * Pure mapping of the unified persisted [AuthSessionSnapshot]: logged in
+     * means both a token and a usable cached user exist in the same snapshot.
+     * Database opening and per-session user initialization are owned by
+     * `SessionManager`, keeping authentication and resource lifecycle separate.
      */
-    override fun observeIsLoggedIn(): Flow<Boolean> {
-        return combine(
-            authTokenDataSource.jwtToken,
-            userSettingDataSource.user,
-        ) { jwt, user -> !jwt.isNullOrEmpty() && user != null }
-    }
+    override fun observeIsLoggedIn(): Flow<Boolean> =
+        authTokenDataSource.sessionSnapshot
+            .map { it.isLoggedIn }
+            .distinctUntilChanged()
 
     override suspend fun login(
         email: String,
         password: String
     ): Result<User, AuthError> = coroutineBinding {
+        val requestEpoch = authTokenDataSource.beginAuthRequest()
         val resp = bindApi(AuthError::Unknown) {
             authApi.login(email, password)
         }
-        persistAuthResponse(resp)
-        resp.user
+        commitAuthResponse(requestEpoch, resp).bind()
     }
 
     override suspend fun register(
@@ -63,67 +63,104 @@ class AuthRepositoryImpl(
         email: String,
         password: String
     ): Result<User, AuthError> = coroutineBinding {
+        val requestEpoch = authTokenDataSource.beginAuthRequest()
         val resp = bindApi(AuthError::Unknown) {
             authApi.register(username, email, password)
         }
-        persistAuthResponse(resp)
-        resp.user
+        commitAuthResponse(requestEpoch, resp).bind()
     }
 
     /**
-     * Persists user + token atomically: the token write is a single DataStore
-     * transaction and the user cache is written before the token, so a crash
-     * mid-way can only leave "user without token" (safe, treated as logged
-     * out) rather than "token without usable user".
+     * Commits [resp] to persisted credential and user settings only if
+     * [requestEpoch] has not been invalidated by an intervening [logout] or
+     * newer login/register request while the network call was in flight.
+     * Does NOT open or write the per-user SQLite database here: `SessionManager`
+     * opens the database and seeds the authenticated user only after any
+     * previous session's workers have stopped.
      */
-    private suspend fun persistAuthResponse(resp: AuthResponse) {
-        userSettingDataSource.setUser(resp.user)
-        databaseHolder.getOrCreateDatabase(resp.user.id)
-        userDao.insertUser(resp.user.toUserEntity())
-        authTokenDataSource.setToken(
-            AuthToken(
-                jwtToken = resp.accessToken,
-                // The rotating refresh token; drives /v1/auth/refresh and the
-                // server-side logout revocation.
-                refreshToken = resp.refreshToken,
-                // Decoded from the JWT payload; drives the client's
-                // proactive refresh margin.
-                expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
-            )
-        )
+    private suspend fun commitAuthResponse(
+        requestEpoch: Long,
+        resp: AuthResponse,
+    ): Result<User, AuthError> {
+        val committed = authTokenDataSource.withCredentialLock {
+            if (!authTokenDataSource.isAuthRequestValidLocked(requestEpoch)) {
+                return@withCredentialLock false
+            }
+            withContext(NonCancellable) {
+                val committedGen = authTokenDataSource.commitSessionLocked(
+                    requestEpoch = requestEpoch,
+                    user = resp.user,
+                    token = AuthToken(
+                        jwtToken = resp.accessToken,
+                        // The rotating refresh token; drives /v1/auth/refresh and the
+                        // server-side logout revocation.
+                        refreshToken = resp.refreshToken,
+                        // Decoded from the JWT payload; drives the client's
+                        // proactive refresh margin.
+                        expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
+                    ),
+                )
+                committedGen != null
+            }
+        }
+        if (!committed) {
+            val staleRefresh = resp.refreshToken
+            if (!staleRefresh.isNullOrEmpty()) {
+                runCatching { authApi.logout(staleRefresh) }
+                    .onFailure { log.warn(it) { "[Auth] failed to revoke superseded auth session" } }
+            }
+            return Err(AuthError.Unknown("Authentication request was superseded or cancelled by logout"))
+        }
+        return Ok(resp.user)
     }
 
     /**
-     * Best-effort server-side revocation of the refresh session, then clears
-     * the local session. A network failure must never block a logout — the
-     * refresh token expires on its own within 30 days.
+     * Captures the current refresh token, invalidates any in-flight login or
+     * refresh requests, and clears local credentials atomically before
+     * performing best-effort server-side revocation of the captured refresh
+     * token. Because local state is cleared and generation is advanced before
+     * the network call, a new login completing while server revocation is in
+     * flight is never overwritten or cleared.
      */
     override suspend fun logout() {
-        val refresh = authTokenDataSource.refreshToken.first()
-        if (!refresh.isNullOrEmpty()) {
-            runCatching { authApi.logout(refresh) }
+        val capturedRefresh = withContext(NonCancellable) {
+            authTokenDataSource.withCredentialLock {
+                authTokenDataSource.invalidateAndClearLocked()
+            }
+        }
+        if (!capturedRefresh.isNullOrEmpty()) {
+            runCatching { authApi.logout(capturedRefresh) }
                 .onFailure { log.warn(it) { "[Auth] server-side session revocation failed" } }
         }
-        userSettingDataSource.clearUserSetting()
-        authTokenDataSource.clearAuthToken()
     }
 
     override suspend fun tryAutoLogin(): Result<User, AuthError> {
-        val token = authTokenDataSource.jwtToken.first()
-        if (token.isNullOrEmpty()) {
+        val snapshot = authTokenDataSource.currentSnapshot()
+        if (snapshot.jwtToken.isNullOrEmpty()) {
             return Err(AuthError.InvalidCredentials)
         }
         val cachedUser = userSettingDataSource.user.first()
         if (cachedUser != null) {
-            databaseHolder.getOrCreateDatabase(cachedUser.id)
             return Ok(cachedUser)
         }
-        // No cached user: refresh the token and persist the response so the
-        // next launch has a usable session instead of relying on a cache
-        // that never existed.
+        // No cached user: refresh the token and persist the response only if
+        // the captured credential generation is still current. Database
+        // opening and user initialization are handled by SessionManager.
         return try {
             val resp = authApi.refreshToken()
-            persistAuthResponse(resp)
+            val updated = authTokenDataSource.commitRefreshedSessionIfCurrent(
+                expectedGeneration = snapshot.generation,
+                expectedRefreshToken = snapshot.refreshToken,
+                user = resp.user,
+                token = AuthToken(
+                    jwtToken = resp.accessToken,
+                    refreshToken = resp.refreshToken ?: snapshot.refreshToken,
+                    expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
+                ),
+            )
+            if (!updated) {
+                return Err(AuthError.InvalidCredentials)
+            }
             Ok(resp.user)
         } catch (e: CancellationException) {
             throw e

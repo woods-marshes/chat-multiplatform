@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.database.dao
 
 import com.github.woodsmarshes.chat.core.model.GroupSettings
+import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.GetGroupWithLastMessage
 import io.github.woodsmarshes.chat.db.GroupProfileEntity
 import kotlinx.coroutines.flow.Flow
@@ -8,6 +9,10 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface GroupProfileDao {
+    val boundDatabase: ChatDatabase?
+
+    fun bindToCurrentDatabase(): GroupProfileDao
+
     // 写入与同步
     suspend fun insertGroupProfile(groupProfile: GroupProfileEntity)
     suspend fun insertGroupProfiles(groupProfiles: List<GroupProfileEntity>)

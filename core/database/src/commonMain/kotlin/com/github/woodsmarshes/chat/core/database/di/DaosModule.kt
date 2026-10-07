@@ -22,42 +22,49 @@ val daosModule = module {
         UserDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
             ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
     single<ParticipantDao> {
         ParticipantDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
     single<MessageDao> {
         MessageDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
     single<GroupProfileDao> {
         GroupProfileDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
     single<ConversationDao> {
         ConversationDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
     single<ArticleDao> {
         ArticleDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
     single<ContactDao> {
         ContactDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
         )
     }
 }

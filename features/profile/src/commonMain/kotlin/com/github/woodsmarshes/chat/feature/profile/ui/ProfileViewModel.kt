@@ -51,6 +51,13 @@ class ProfileViewModel(
 
     private fun observeUser(userId: Uuid) {
         viewModelScope.launch {
+            userRepository.getMeFlow().collect { me ->
+                _uiState.value = _uiState.value.copy(
+                    isOwnProfile = me?.id == userId,
+                )
+            }
+        }
+        viewModelScope.launch {
             userRepository.getUserFlow(userId).collect { user ->
                 if (user != null) {
                     hasCachedUser = true

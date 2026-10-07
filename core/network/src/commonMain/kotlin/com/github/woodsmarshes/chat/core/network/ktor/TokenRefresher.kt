@@ -14,9 +14,11 @@ import io.ktor.client.request.post
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 
 /** Expiry of a JWT, decoded from its payload without verifying the signature. */
@@ -48,12 +50,31 @@ private fun decodeBase64Url(data: String): ByteArray {
 private const val REFRESH_MARGIN_MS = 60_000L
 
 /**
+ * Signals that the server rejected a refresh token with HTTP 401 Unauthorized,
+ * indicating the refresh session is permanently dead.
+ */
+class RefreshUnauthorizedException(
+    message: String = "Refresh token rejected with 401 Unauthorized",
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+/**
  * Single-flight JWT refresher shared by the bearer plugin (REST 401s) and the
  * websocket loop (pre-handshake expiry check).
  *
  * Works against an independent rotating refresh token (A-8): the access JWT
  * lives for one hour, the opaque refresh token for thirty days, and every
  * refresh rotates it server-side.
+ *
+ * Every refresh attempt binds the `(generation, refreshToken)` snapshot
+ * observed when the attempt starts:
+ *  - A successful refresh only updates [tokens] if that exact session
+ *    generation and refresh token are still current, preventing a late refresh
+ *    from overwriting a newer login.
+ *  - A 401 refresh rejection only clears [tokens] if that exact session
+ *    generation and refresh token are still current, preventing a failed
+ *    refresh from an old session from clearing a newly logged-in account or a
+ *    same-account re-login.
  */
 class TokenRefresher(private val tokens: AuthTokenDataSource) {
 
@@ -65,59 +86,226 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
         data object Transient : Outcome
     }
 
+    private sealed interface RefreshResolution {
+        data class Refreshed(val accessToken: String, val refreshToken: String) : RefreshResolution
+        data object DeadOrSuperseded : RefreshResolution
+        data object Transient : RefreshResolution
+    }
+
+    private class InFlightRefresh(
+        val generation: Long,
+        val refreshToken: String,
+        val deferred: CompletableDeferred<RefreshResolution>,
+    )
+
     private val mutex = Mutex()
+    private var inFlight: InFlightRefresh? = null
 
     /**
-     * The stored access token if still fresh, otherwise a freshly refreshed
-     * one. Returns null only when the refresh was rejected with 401
-     * (credentials dead — the stored session has been cleared).
+     * Test seam for the refresh HTTP call; production uses the default Ktor
+     * `/v1/auth/refresh` request with [AuthCircuitBreaker].
      */
-    suspend fun currentOrRefreshed(client: HttpClient): String? = mutex.withLock {
-        val jwt = tokens.jwtToken.first() ?: return null
-        val expiry = tokens.expiryTimestamp.first()
-        val now = Clock.System.now().toEpochMilliseconds()
-        if (expiry == null || expiry - now > REFRESH_MARGIN_MS) return jwt
-
-        // No refresh token (legacy session from before A-8): keep using the
-        // long-lived access token until the server rejects it with a 401.
-        val refresh = tokens.refreshToken.first() ?: return jwt
-
-        when (val outcome = refreshLocked(client, refresh)) {
-            is Outcome.Success -> {
-                persist(outcome.response)
-                outcome.response.accessToken
-            }
-            Outcome.Dead -> null
-            Outcome.Transient -> jwt // the old token may still be accepted
-        }
-    }
-
-    /**
-     * Refresh after a REST 401. Null means the credentials are dead; the
-     * bearer plugin then lets the original request fail with its 401.
-     */
-    suspend fun refreshAfter401(client: HttpClient): BearerTokensResult? = mutex.withLock {
-        val refresh = tokens.refreshToken.first() ?: return null
-        when (val outcome = refreshLocked(client, refresh)) {
-            is Outcome.Success -> {
-                persist(outcome.response)
-                BearerTokensResult(outcome.response.accessToken, outcome.response.refreshToken ?: refresh)
-            }
-            Outcome.Dead -> null
-            Outcome.Transient -> null
-        }
-    }
-
-    /** MUST be called under [mutex]. */
-    private suspend fun refreshLocked(client: HttpClient, refreshToken: String): Outcome {
-        return try {
-            val response: AuthResponse = client.post(V1.Auth.Refresh()) {
+    internal var executeRefreshRequest: suspend (client: HttpClient, refreshToken: String) -> AuthResponse =
+        { client, refreshToken ->
+            client.post(V1.Auth.Refresh()) {
                 // Circuit-break the bearer plugin: without this the refresh
                 // call would carry (and 401-retry on) the same dead token.
                 attributes.put(AuthCircuitBreaker, Unit)
                 header(HttpHeaders.Authorization, "Bearer $refreshToken")
             }.body()
+        }
+
+    /**
+     * The stored access token if still fresh, otherwise a freshly refreshed
+     * one. Returns null when the refresh was rejected with 401 (credentials
+     * dead — the stored session has been cleared if still current) or when the
+     * session generation was superseded while refreshing.
+     */
+    suspend fun currentOrRefreshed(client: HttpClient): String? =
+        currentOrRefreshedWith { refreshToken -> executeRefreshRequest(client, refreshToken) }
+
+    suspend fun currentOrRefreshedWith(
+        refreshRequest: suspend (refreshToken: String) -> AuthResponse,
+    ): String? {
+        val snapshot = tokens.currentSnapshot()
+        val jwt = snapshot.jwtToken ?: return null
+        val expiry = snapshot.expiryTimestamp
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (expiry == null || expiry - now > REFRESH_MARGIN_MS) return jwt
+
+        // No refresh token (legacy session from before A-8): keep using the
+        // long-lived access token until the server rejects it with a 401.
+        val refresh = snapshot.refreshToken
+        if (refresh.isNullOrEmpty()) return jwt
+
+        return when (val resolution = refreshForSnapshot(snapshot.generation, refresh, null, refreshRequest)) {
+            is RefreshResolution.Refreshed -> resolution.accessToken
+            RefreshResolution.DeadOrSuperseded -> null
+            RefreshResolution.Transient -> {
+                // Keep using the old access token only if the same session
+                // generation is still active.
+                val latest = tokens.currentSnapshot()
+                if (latest.generation == snapshot.generation) jwt else null
+            }
+        }
+    }
+
+    /**
+     * Refresh after a REST 401. Null means the credentials are dead or the
+     * failing request belonged to a superseded credential generation; the
+     * bearer plugin then lets the original request fail with its 401 instead
+     * of refreshing or replaying under a different session's credentials.
+     *
+     * When [requestGeneration] matches the active session and
+     * [requestAccessToken] differs from the currently stored access token,
+     * an earlier refresh in the same session has already rotated the token and
+     * the rotated token pair is returned without issuing a duplicate refresh.
+     */
+    suspend fun refreshAfter401(
+        client: HttpClient,
+        requestGeneration: Long? = null,
+        requestAccessToken: String? = null,
+    ): BearerTokensResult? =
+        refreshAfter401With(
+            requestGeneration = requestGeneration,
+            requestAccessToken = requestAccessToken,
+        ) { refreshToken ->
+            executeRefreshRequest(client, refreshToken)
+        }
+
+    suspend fun refreshAfter401With(
+        requestGeneration: Long? = null,
+        requestAccessToken: String? = null,
+        refreshRequest: suspend (refreshToken: String) -> AuthResponse,
+    ): BearerTokensResult? {
+        val snapshot = tokens.currentSnapshot()
+        if (requestGeneration != null && snapshot.generation != requestGeneration) {
+            return null
+        }
+        val currentJwt = snapshot.jwtToken
+        val refresh = snapshot.refreshToken
+        if (currentJwt.isNullOrEmpty() || refresh.isNullOrEmpty()) return null
+
+        if (requestAccessToken != null && requestAccessToken != currentJwt) {
+            return BearerTokensResult(currentJwt, refresh)
+        }
+
+        return when (
+            val resolution = refreshForSnapshot(
+                expectedGeneration = snapshot.generation,
+                expectedRefreshToken = refresh,
+                requestAccessToken = requestAccessToken,
+                refreshRequest = refreshRequest,
+            )
+        ) {
+            is RefreshResolution.Refreshed -> BearerTokensResult(resolution.accessToken, resolution.refreshToken)
+            RefreshResolution.DeadOrSuperseded -> null
+            RefreshResolution.Transient -> null
+        }
+    }
+
+    private suspend fun refreshForSnapshot(
+        expectedGeneration: Long,
+        expectedRefreshToken: String,
+        requestAccessToken: String?,
+        refreshRequest: suspend (refreshToken: String) -> AuthResponse,
+    ): RefreshResolution {
+        val (flight, isOwner) = mutex.withLock {
+            val latest = tokens.currentSnapshot()
+            if (latest.generation != expectedGeneration) {
+                return RefreshResolution.DeadOrSuperseded
+            }
+            val latestRefresh = latest.refreshToken
+            val latestJwt = latest.jwtToken
+            if (latestRefresh != expectedRefreshToken ||
+                (requestAccessToken != null && !latestJwt.isNullOrEmpty() && latestJwt != requestAccessToken)
+            ) {
+                return if (!latestJwt.isNullOrEmpty() && !latestRefresh.isNullOrEmpty()) {
+                    RefreshResolution.Refreshed(latestJwt, latestRefresh)
+                } else {
+                    RefreshResolution.DeadOrSuperseded
+                }
+            }
+
+            val existing = inFlight
+            if (existing != null &&
+                existing.generation == expectedGeneration &&
+                existing.refreshToken == expectedRefreshToken &&
+                !existing.deferred.isCompleted
+            ) {
+                existing to false
+            } else {
+                val created = InFlightRefresh(
+                    generation = expectedGeneration,
+                    refreshToken = expectedRefreshToken,
+                    deferred = CompletableDeferred(),
+                )
+                inFlight = created
+                created to true
+            }
+        }
+
+        if (!isOwner) {
+            return flight.deferred.await()
+        }
+
+        return try {
+            val outcome = performRefreshRequest(expectedRefreshToken, refreshRequest)
+            val resolution = withContext(NonCancellable) {
+                when (outcome) {
+                    is Outcome.Success -> {
+                        val newAccess = outcome.response.accessToken
+                        val newRefresh = outcome.response.refreshToken ?: expectedRefreshToken
+                        val updated = tokens.updateTokenIfCurrent(
+                            expectedGeneration = expectedGeneration,
+                            expectedRefreshToken = expectedRefreshToken,
+                            token = AuthToken(
+                                jwtToken = newAccess,
+                                refreshToken = newRefresh,
+                                expiryTimestamp = jwtExpiryEpochMs(newAccess),
+                            ),
+                        )
+                        if (updated) {
+                            RefreshResolution.Refreshed(newAccess, newRefresh)
+                        } else {
+                            RefreshResolution.DeadOrSuperseded
+                        }
+                    }
+                    Outcome.Dead -> {
+                        tokens.clearIfCurrent(
+                            expectedGeneration = expectedGeneration,
+                            expectedRefreshToken = expectedRefreshToken,
+                        )
+                        RefreshResolution.DeadOrSuperseded
+                    }
+                    Outcome.Transient -> RefreshResolution.Transient
+                }
+            }
+            flight.deferred.complete(resolution)
+            resolution
+        } catch (t: Throwable) {
+            flight.deferred.completeExceptionally(t)
+            throw t
+        } finally {
+            withContext(NonCancellable) {
+                mutex.withLock {
+                    if (inFlight === flight) {
+                        inFlight = null
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun performRefreshRequest(
+        refreshToken: String,
+        refreshRequest: suspend (refreshToken: String) -> AuthResponse,
+    ): Outcome {
+        return try {
+            val response = refreshRequest(refreshToken)
             Outcome.Success(response)
+        } catch (e: RefreshUnauthorizedException) {
+            Outcome.Dead
         } catch (e: ClientRequestException) {
             if (e.response.status == HttpStatusCode.Unauthorized) Outcome.Dead else Outcome.Transient
         } catch (e: CancellationException) {
@@ -125,16 +313,6 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
         } catch (e: Exception) {
             Outcome.Transient
         }
-    }
-
-    private suspend fun persist(response: AuthResponse) {
-        tokens.setToken(
-            AuthToken(
-                jwtToken = response.accessToken,
-                refreshToken = response.refreshToken,
-                expiryTimestamp = jwtExpiryEpochMs(response.accessToken),
-            )
-        )
     }
 }
 

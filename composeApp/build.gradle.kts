@@ -102,6 +102,12 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+        jvmTest.dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.sqldelight.sqlite.driver)
+            implementation(libs.mockk)
+        }
     }
 }
 

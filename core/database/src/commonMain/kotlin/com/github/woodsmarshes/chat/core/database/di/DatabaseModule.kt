@@ -5,6 +5,8 @@ import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlSchema
 import com.github.woodsmarshes.chat.core.common.di.PlatformContext
+import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
+import com.github.woodsmarshes.chat.core.database.session.ManagedDatabaseSessionGate
 import com.github.woodsmarshes.chat.core.database.utils.articleStatsAdapter
 import com.github.woodsmarshes.chat.core.database.utils.conversationMetadataAdapter
 import com.github.woodsmarshes.chat.core.database.utils.groupSettingsAdapter
@@ -21,14 +23,31 @@ import io.github.woodsmarshes.chat.db.GroupProfileEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.ParticipantEntity
 import io.github.woodsmarshes.chat.db.UserEntity
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
+import kotlin.concurrent.Volatile
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 import kotlin.uuid.Uuid
 
 val databaseModule = module {
-    singleOf(::DatabaseHolder)
+    single { DatabaseHolder(get()) }
+}
+
+/**
+ * Coroutine context element that pins DAO write operations within a
+ * session-bound call to the exact [ChatDatabase] instance captured when the
+ * operation started, preventing dynamic process-singleton DAOs from
+ * redirecting a stale operation's write into a newer session's database.
+ */
+class BoundDatabaseElement(
+    val database: ChatDatabase,
+) : AbstractCoroutineContextElement(BoundDatabaseElement) {
+    companion object Key : CoroutineContext.Key<BoundDatabaseElement>
 }
 
 suspend fun createDatabase(driverFactory: suspend (SqlSchema<QueryResult.AsyncValue<Unit>>) -> SqlDriver): ChatDatabase {
@@ -116,35 +135,70 @@ expect suspend fun provideDbDriver(
  */
 class DatabaseHolder(
     private val platformContext: PlatformContext,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val mutex = Mutex()
+    @Volatile
     private var currentDb: ChatDatabase? = null
     private var currentDriver: SqlDriver? = null
     private var currentUserId: Uuid? = null
+    @Volatile
+    private var currentGeneration: Long = 0L
 
-    suspend fun getOrCreateDatabase(userId: Uuid): ChatDatabase = mutex.withLock {
+    private val managedSessionGate = ManagedDatabaseSessionGate(
+        dispatcher = dispatcher,
+        activeDbProvider = { currentDb },
+        activeGenerationProvider = { currentGeneration },
+    )
+
+    val sessionGate: DatabaseSessionGate
+        get() = managedSessionGate
+
+    suspend fun getOrCreateDatabase(userId: Uuid, generation: Long? = null): ChatDatabase = mutex.withLock {
         if (currentUserId == userId && currentDb != null) {
+            if (generation != null) {
+                if (generation != currentGeneration) managedSessionGate.stop()
+                currentGeneration = generation
+            }
+            managedSessionGate.start()
             return@withLock currentDb!!
         }
 
+        managedSessionGate.stop()
         closeLocked()
 
         val dbName = "chat_${userId}.db"
-        currentDb = createDatabase { schema ->
-            provideDbDriver(schema, platformContext, dbName).also { currentDriver = it }
+        try {
+            val openedDb = createDatabase { schema ->
+                provideDbDriver(schema, platformContext, dbName).also { currentDriver = it }
+            }
+            currentDb = openedDb
+            currentUserId = userId
+            currentGeneration = if (generation != null && generation > 0L) generation else 1L
+            managedSessionGate.start()
+            openedDb
+        } catch (t: Throwable) {
+            managedSessionGate.stop()
+            closeLocked()
+            throw t
         }
-        currentUserId = userId
-        currentDb!!
     }
 
     /**
-     * Closes the active database only when it still belongs to [userId].
-     * Guards the logout grace window: if another user logged in while the
-     * authenticated UI was tearing down, their freshly opened database must
-     * not be closed by a stale logout sequence.
+     * Cancels all active database query observation Flows and PagingSource
+     * loads and suspends until they have exited.
      */
-    suspend fun closeDatabaseIfCurrent(userId: Uuid) = mutex.withLock {
-        if (currentUserId == userId) {
+    suspend fun stopDatabaseSession() {
+        managedSessionGate.stop()
+    }
+
+    /**
+     * Closes the active database only when it still belongs to [userId] and,
+     * when [generation] is supplied, the same session generation.
+     */
+    suspend fun closeDatabaseIfCurrent(userId: Uuid, generation: Long? = null) = mutex.withLock {
+        if (currentUserId == userId && (generation == null || currentGeneration == generation)) {
+            managedSessionGate.stop()
             closeLocked()
         }
     }
@@ -155,6 +209,7 @@ class DatabaseHolder(
         currentDriver = null
         currentDb = null
         currentUserId = null
+        currentGeneration = 0L
     }
 
     fun getActiveDatabase(): ChatDatabase {

@@ -10,10 +10,36 @@ import kotlin.uuid.Uuid
 
 interface MessageRepository {
     /**
+     * Starts the session-bound message consumers and outbox workers. Idempotent
+     * while the current session is already running; waits if a previous session
+     * is still stopping before starting the new one.
+     */
+    suspend fun startSession()
+
+    /**
+     * Cancels all session-bound message workers (event consumption, reconnect
+     * sync, periodic sweep, and in-flight gap repairs), waits for them to exit,
+     * and then clears in-memory session state (seq high-water marks, gap repair
+     * handles, and typing indicators). Idempotent.
+     */
+    suspend fun stopSession()
+
+    /**
      * Resends outbox messages whose original send was never acknowledged.
-     * Idempotent: the server keys retried messages by their requestId.
+     * Idempotent: a retry keeps the original request id, which the server
+     * matches against `client_request_id` before inserting a new message.
      */
     suspend fun retryPendingMessages()
+
+    /**
+     * Re-sends one failed message under its original request identity.
+     *
+     * The record keeps its id and timestamp, so the retry neither adds a second
+     * bubble nor reorders the timeline, and the server deduplicates it against
+     * the first attempt instead of storing another message. The stored reply
+     * target is reused, so a retried reply does not degrade to a plain message.
+     */
+    suspend fun retryMessage(messageId: Uuid): Result<Unit, MessageError>
 
 //    val invalidationEvents: Flow<Unit>
 

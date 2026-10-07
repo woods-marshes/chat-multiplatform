@@ -235,14 +235,14 @@ WHERE id = :oldId;
 -- Outbox: messages still pending after `retryAfter` are eligible for resend.
 getRetryableMessages:
 SELECT * FROM MessageEntity
-WHERE local_send_status = 'SENDING' AND created_at < :retryAfter
+WHERE local_send_status = 'SENDING' AND COALESCE((SELECT last_attempt_ms FROM MessageAttempt WHERE message_id = lower(hex(MessageEntity.id))), created_at) < :retryAfter
 ORDER BY created_at ASC;
 
 -- Outbox: give up on messages older than the TTL so bubbles stop spinning.
 failStaleMessages:
 UPDATE MessageEntity
 SET local_send_status = 'FAILED'
-WHERE local_send_status = 'SENDING' AND created_at < :giveUpBefore;
+WHERE local_send_status = 'SENDING' AND COALESCE((SELECT started_at_ms FROM MessageAttempt WHERE message_id = lower(hex(MessageEntity.id))), created_at) < :giveUpBefore;
 
 -- 撤回消息
 revokeMessage:
@@ -267,3 +267,43 @@ SELECT COUNT(*) FROM MessageEntity
 WHERE conversation_id = :conversationId
 AND user_id != :myUserId
 AND (:lastReadMessageId IS NULL OR id > :lastReadMessageId);
+-- Attempt clocks are independent of the immutable message timeline.
+CREATE TABLE MessageAttempt (
+    message_id TEXT NOT NULL PRIMARY KEY,
+    started_at_ms INTEGER NOT NULL,
+    last_attempt_ms INTEGER NOT NULL
+);
+
+CREATE TABLE MessageSyncCursor (
+    conversation_id TEXT NOT NULL PRIMARY KEY,
+    after_id TEXT NOT NULL
+);
+
+startAttempt:
+INSERT INTO MessageAttempt(message_id, started_at_ms, last_attempt_ms)
+VALUES (:messageId, :nowMs, :nowMs)
+ON CONFLICT(message_id) DO UPDATE SET started_at_ms = excluded.started_at_ms, last_attempt_ms = excluded.last_attempt_ms;
+
+recordAttempt:
+INSERT INTO MessageAttempt(message_id, started_at_ms, last_attempt_ms)
+VALUES (:messageId, :createdAtMs, :nowMs)
+ON CONFLICT(message_id) DO UPDATE SET last_attempt_ms = excluded.last_attempt_ms;
+
+clearAttempt:
+DELETE FROM MessageAttempt WHERE message_id = :messageId;
+
+replaceReplyReferences:
+UPDATE MessageEntity SET reply_to_message_id = :newId WHERE reply_to_message_id = :oldId;
+
+replaceConversationReferences:
+UPDATE ConversationEntity SET last_message_id = :newId WHERE last_message_id = :oldId;
+
+replaceReadReferences:
+UPDATE ParticipantEntity SET last_read_message_id = :newId WHERE last_read_message_id = :oldId;
+
+getSyncCursor:
+SELECT after_id FROM MessageSyncCursor WHERE conversation_id = :conversationId;
+
+setSyncCursor:
+INSERT INTO MessageSyncCursor(conversation_id, after_id) VALUES (:conversationId, :afterId)
+ON CONFLICT(conversation_id) DO UPDATE SET after_id = excluded.after_id;

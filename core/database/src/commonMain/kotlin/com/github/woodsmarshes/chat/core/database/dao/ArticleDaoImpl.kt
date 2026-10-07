@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.database.dao
 
 import androidx.paging.PagingSource
+import com.github.woodsmarshes.chat.core.database.session.SessionBoundPagingSource
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
@@ -14,6 +15,12 @@ import io.github.woodsmarshes.chat.db.ListAllArticlesWithAuthor
 import io.github.woodsmarshes.chat.db.ListArticlesByAuthorAndStatusWithAuthor
 import io.github.woodsmarshes.chat.db.ListArticlesByAuthorWithAuthor
 import kotlinx.coroutines.flow.Flow
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
+import com.github.woodsmarshes.chat.core.database.session.DirectDatabaseSessionGate
+import com.github.woodsmarshes.chat.core.database.session.sessionBoundQueryFlow
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -21,40 +28,42 @@ import kotlin.uuid.Uuid
 class ArticleDaoImpl(
     private val dbProvider: () -> ChatDatabase,
     private val ioContext: CoroutineContext,
+    private val sessionGate: DatabaseSessionGate = DirectDatabaseSessionGate(dbProvider),
 ) : ArticleDao {
+    private suspend fun writeQueries() = (currentCoroutineContext()[BoundDatabaseElement]?.database ?: dbProvider()).also { currentCoroutineContext().ensureActive() }.articleQueries
+
+    fun pinForPaging(): ArticleDaoImpl {
+        val db = dbProvider()
+        return ArticleDaoImpl({ db }, ioContext, com.github.woodsmarshes.chat.core.database.session.PinnedDatabaseSessionGate(db, sessionGate))
+    }
+
     private val queries
         get() = dbProvider().articleQueries
 
     override suspend fun upsert(article: Article) {
-        queries.upsertArticle(article)
+        writeQueries().upsertArticle(article)
     }
 
     override suspend fun upsertAll(articles: List<Article>) {
         if (articles.isEmpty()) return
-        queries.transaction {
+        writeQueries().transaction {
             articles.forEach { upsert(it) }
         }
     }
 
     override fun getById(id: Uuid): Flow<Article?> {
-        return queries.getArticleById(id)
-            .asFlow()
-            .mapToOneOrNull(ioContext)
+        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.articleQueries.getArticleById(id) }, { it.executeAsOneOrNull() })
     }
 
     override fun getByIdWithAuthor(id: Uuid): Flow<GetArticleByIdWithAuthor?> {
-        return queries.getArticleByIdWithAuthor(id)
-            .asFlow()
-            .mapToOneOrNull(ioContext)
+        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.articleQueries.getArticleByIdWithAuthor(id) }, { it.executeAsOneOrNull() })
     }
 
     override fun listAll(
         offset: Long,
         limit: Int
     ): Flow<List<ListAllArticlesWithAuthor>> {
-        return queries.listAllArticlesWithAuthor(limit = limit.toLong(), offset = offset)
-            .asFlow()
-            .mapToList(ioContext)
+        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.articleQueries.listAllArticlesWithAuthor(limit = limit.toLong(), offset = offset) }, { it.executeAsList() })
     }
 
     override fun listByAuthor(
@@ -62,13 +71,11 @@ class ArticleDaoImpl(
         offset: Long,
         limit: Int
     ): Flow<List<ListArticlesByAuthorWithAuthor>> {
-        return queries.listArticlesByAuthorWithAuthor(
+        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.articleQueries.listArticlesByAuthorWithAuthor(
             author_id = authorId,
             limit = limit.toLong(),
             offset = offset
-        )
-            .asFlow()
-            .mapToList(ioContext)
+        ) }, { it.executeAsList() })
     }
 
     override fun listByAuthorAndStatus(
@@ -77,14 +84,12 @@ class ArticleDaoImpl(
         offset: Long,
         limit: Int
     ): Flow<List<ListArticlesByAuthorAndStatusWithAuthor>> {
-        return queries.listArticlesByAuthorAndStatusWithAuthor(
+        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.articleQueries.listArticlesByAuthorAndStatusWithAuthor(
             author_id = authorId,
             status = status,
             limit = limit.toLong(),
             offset = offset
-        )
-            .asFlow()
-            .mapToList(ioContext)
+        ) }, { it.executeAsList() })
     }
 
     override fun pagingSource(
@@ -94,7 +99,9 @@ class ArticleDaoImpl(
     ): PagingSource<Uuid, KeyedArticlesWithAuthor> {
         // The status is bound as the enum (SQLDelight encodes it as its name) and cast to
         // text in the query, which keeps the "no filter" case expressible as a null parameter.
-        return QueryPagingSource(
+        return SessionBoundPagingSource(sessionGate, sessionGate.boundDatabase, sessionGate.currentGeneration) { db ->
+        val queries = db.articleQueries
+        QueryPagingSource(
             transacter = queries,
             context = ioContext,
             pageBoundariesProvider = { anchorId, limit ->
@@ -114,16 +121,17 @@ class ArticleDaoImpl(
                 )
             }
         )
+        }
     }
 
     override suspend fun softDelete(id: Uuid, deletedAt: Instant) {
-        queries.softDeleteArticle(
+        writeQueries().softDeleteArticle(
             deleted_at = deletedAt,
             id = id
         )
     }
 
     override suspend fun hardDelete(id: Uuid) {
-        queries.hardDeleteArticle(id)
+        writeQueries().hardDeleteArticle(id)
     }
 }

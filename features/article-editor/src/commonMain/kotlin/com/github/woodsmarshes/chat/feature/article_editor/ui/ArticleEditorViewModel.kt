@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonObject
 import kotlin.uuid.Uuid
 
 class ArticleEditorViewModel(
@@ -78,6 +78,7 @@ class ArticleEditorViewModel(
                                     title = article.title,
                                     contentJsonStr = jsonStr,
                                     isLoading = false,
+                                    isLoaded = true,
                                     isNew = false,
                                     collabUrl = resolvedCollabUrl,
                                     roomId = id.toString(),
@@ -119,6 +120,7 @@ class ArticleEditorViewModel(
                                 blankArticle.content
                             ),
                             isLoading = false,
+                            isLoaded = true,
                             isNew = true,
                             collabUrl = resolvedCollabUrl,
                             roomId = blankArticle.id.toString(),
@@ -144,6 +146,13 @@ class ArticleEditorViewModel(
     }
 
     fun saveArticle(status: ArticleStatus) {
+        // Second line of defence behind the disabled buttons: until the document
+        // has loaded, contentJsonStr is the placeholder default and saving it
+        // would overwrite the stored article body.
+        if (!_uiState.value.isLoaded) {
+            log.warn { "[editor] ignoring save request before the document loaded" }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
             // A parse failure must never silently replace the document with
@@ -152,6 +161,14 @@ class ArticleEditorViewModel(
                 ProjectJson.parseToJsonElement(_uiState.value.contentJsonStr)
             } catch (e: Exception) {
                 log.error(e) { "Editor content is not valid JSON; refusing to save" }
+                _uiState.update { it.copy(isSaving = false, error = strings.articleSaveFailed) }
+                return@launch
+            }
+            // A Tiptap document is always a JSON object; anything else means the
+            // editor state is corrupt. The empty object stays valid on purpose:
+            // the server seeds newly created articles with `{}`.
+            if (content !is JsonObject) {
+                log.error { "Editor content is not a JSON object; refusing to save" }
                 _uiState.update { it.copy(isSaving = false, error = strings.articleSaveFailed) }
                 return@launch
             }

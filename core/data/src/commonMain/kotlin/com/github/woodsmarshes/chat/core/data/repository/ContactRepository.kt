@@ -9,6 +9,21 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 interface ContactRepository {
+    /**
+     * Binds the current session's database for both `ContactDao` and `UserDao`
+     * and starts accepting session-bound contact operations. Idempotent while
+     * the current session is already running on the same database; waits if a
+     * previous session is still stopping.
+     */
+    suspend fun startSession() = Unit
+
+    /**
+     * Refuses new session-bound contact operations, cancels all in-flight ones,
+     * and suspends until they (including their `finally` blocks and active
+     * database transactions) have exited. Idempotent.
+     */
+    suspend fun stopSession() = Unit
+
     fun getFriendsFlow(): Flow<List<Pair<Contact, User>>>
 
     suspend fun syncFriends(): Result<Unit, ContactError>

@@ -58,6 +58,7 @@ class ChatViewModelTest {
     private val sentMessages = mutableListOf<Pair<Uuid, MessageContent>>()
     private val sentReplies = mutableListOf<Pair<Uuid, Uuid?>>()
     private val typingSignals = mutableListOf<Pair<Uuid, Boolean>>()
+    private val retriedMessageIds = mutableListOf<Uuid>()
     private var sendInvocations = 0
     private var sendGate: (suspend () -> Unit)? = null
 
@@ -72,6 +73,7 @@ class ChatViewModelTest {
             onSendStarted = { sendInvocations++ },
             onSendGate = { sendGate?.invoke() },
             onTyping = { id, isTyping -> typingSignals += id to isTyping },
+            onRetry = { messageId -> retriedMessageIds += messageId },
         )
         val userRepository = FakeUserRepository(MutableStateFlow(null))
         val conversationRepository = FakeConversationRepository()
@@ -223,28 +225,30 @@ class ChatViewModelTest {
     }
 
     /**
-     * A failed bubble restored from the database has no draft behind it, so the retry has to
-     * resend the message itself. Reusing the input box made the tap a silent no-op there and
-     * sent unrelated text once the user had typed again.
+     * A retry must reuse the failed record's identity. Sending the text again minted a fresh
+     * request id, which left the failed bubble in place and made the server store a second
+     * message whenever the first attempt had actually been delivered. The reply target now
+     * travels with the stored row, so the ViewModel no longer passes one.
      */
     @Test
-    fun retrySendsTheFailedMessageItself() {
+    fun retryReusesTheFailedMessagesIdentity() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
             withViewModel { vm ->
-                val target = testMessage("target")
                 val failed = testMessage("failed").copy(
                     content = TextContent("original text"),
-                    replyTo = target,
                     sendStatus = MessageState.SendFailed("offline"),
                 )
                 vm.onInputChanged(TextFieldValue("unrelated draft"))
 
                 vm.retryMessage(failed)
 
-                assertEquals(1, sentMessages.size)
-                assertEquals(TextContent("original text"), sentMessages.single().second)
-                assertEquals(listOf<Uuid?>(target.id), sentReplies.map { it.second })
+                assertEquals(
+                    listOf(failed.id),
+                    retriedMessageIds,
+                    "the retry must target the failed record itself",
+                )
+                assertEquals(emptyList(), sentMessages, "a retry must not create a new message")
                 assertEquals("unrelated draft", vm.input.value.text, "a retry must not consume the draft")
             }
         } finally {
@@ -360,8 +364,15 @@ private class FakeMessageRepository(
     private val onSendStarted: () -> Unit = {},
     private val onSendGate: suspend () -> Unit = {},
     private val onTyping: (Uuid, Boolean) -> Unit = { _, _ -> },
+    private val onRetry: (Uuid) -> Unit = {},
 ) : MessageRepository {
+    override suspend fun startSession() = Unit
+    override suspend fun stopSession() = Unit
     override suspend fun retryPendingMessages() = Unit
+    override suspend fun retryMessage(messageId: Uuid): com.github.michaelbull.result.Result<Unit, MessageError> {
+        onRetry(messageId)
+        return Ok(Unit)
+    }
     override fun getMessages(
         ownUserId: Uuid,
         conversationId: Uuid,

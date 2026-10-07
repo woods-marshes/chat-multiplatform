@@ -16,8 +16,11 @@ import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlin.uuid.Uuid
 
 @ExperimentalPagingApi
@@ -26,18 +29,19 @@ class MessageRemoteMediator(
     private val conversationId: Uuid,
     private val isGroup: Boolean,
     private val appDispatchers: AppDispatchers,
+    private val databaseHolder: DatabaseHolder,
     private val conversationApi: ConversationApi,
     private val messageDao: MessageDao,
     private val userDao: UserDao,
     private val participantDao: ParticipantDao,
-) : RemoteMediator<Uuid, KeyedMessagesWithRelations>(){
+) : SessionBoundRemoteMediator<Uuid, KeyedMessagesWithRelations>(databaseHolder.sessionGate) {
     private val log = KotlinLogging.logger {}
 
-    override suspend fun load(
+    override suspend fun loadInSession(
         loadType: LoadType,
         state: PagingState<Uuid, KeyedMessagesWithRelations>
     ): MediatorResult {
-        return try {
+        return run {
             val lastMsgId = when (loadType) {
                 LoadType.REFRESH -> {
                     log.debug(tag = "MessageRemoteMediator", message = "loadType is REFRESH")
@@ -59,6 +63,7 @@ class MessageRemoteMediator(
                 limit = pageSize,
                 beforeId = lastMsgId
             )
+            currentCoroutineContext().ensureActive()
             if (response.isEmpty()) {
                 return MediatorResult.Success(endOfPaginationReached = true)
             }
@@ -130,13 +135,10 @@ class MessageRemoteMediator(
             MediatorResult.Success(
                 endOfPaginationReached = response.size < pageSize
             )
-        } catch (e: CancellationException) {
-            // Never swallow structured-concurrency cancellation.
-            throw e
-        } catch (e: Exception) {
-            log.error(tag = "MessageRemoteMediator", message = "Load failed", throwable = e)
-            MediatorResult.Error(e)
         }
     }
 
+    override fun onLoadFailure(failure: Exception) {
+        log.error(tag = "MessageRemoteMediator", message = "Load failed", throwable = failure)
+    }
 }
