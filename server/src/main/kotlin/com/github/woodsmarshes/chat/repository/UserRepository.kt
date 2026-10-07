@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.repository
 
+import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility.*
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
@@ -24,7 +25,6 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.updateReturning
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -95,13 +95,16 @@ class UserDataSourceImpl : UserRepository {
         avatarUrl: String?,
         bio: String?,
     ): User? = dbQuery {
-        Users.updateReturning(where = { Users.id eq userId }) {
+        // updateReturning has no H2 implementation (it throws
+        // UnsupportedByDialectException for the dev/test dialect), so the
+        // plain update + re-read keeps the same contract on both dialects.
+        val updated = Users.update(where = { Users.id eq userId }) {
             displayName?.let { displayName -> it[Users.displayName] = displayName }
             avatarUrl?.let { avatarUrl -> it[Users.avatarUrl] = avatarUrl }
             bio?.let { bio -> it[Users.bio] = bio }
             it[updatedAt] = Clock.System.now()
-        }.singleOrNull()
-            ?.toUser()
+        }
+        if (updated > 0) getUserById(userId) else null
     }
 
     override suspend fun deleteUser(userId: Uuid) = dbQuery {
@@ -128,10 +131,14 @@ class UserDataSourceImpl : UserRepository {
             }
     }
 
+    // Friendship requires an actual FRIEND row: a BLOCKED or DELETED entry
+    // must not count, or FRIENDS-visible profiles would leak the email to
+    // users the owner has blocked. Mirrors ContactRepository.areFriends.
     private suspend fun areFriends(userId1: Uuid, userId2: Uuid): Boolean = dbQuery {
         Contacts.selectAll()
             .where {
-                (Contacts.userId eq userId1) and (Contacts.contactId eq userId2)
+                (Contacts.userId eq userId1) and (Contacts.contactId eq userId2) and
+                        (Contacts.status eq ContactStatus.FRIEND)
             }
             .limit(1)
             .count() > 0

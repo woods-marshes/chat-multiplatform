@@ -9,6 +9,7 @@ sealed interface ContactError : DomainError {
     @Serializable data object AlreadyFriends : ContactError       // 已经是好友
     @Serializable data object RequestAlreadySent : ContactError   // 请求已发送
     @Serializable data object RequestNotFound : ContactError      // 请求不存在
+    @Serializable data object NotBlocked : ContactError           // 当前没有拉黑关系，无法解除
     @Serializable data object PermissionDenied : ContactError     // 权限不足（操作了不属于自己的请求）
 
     // 操作失败（数据库更新失败等）

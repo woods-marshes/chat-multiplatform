@@ -161,4 +161,57 @@ class ContactFlowDatabaseTest {
         assertEquals(Unit, approved.get())
         assertEquals(ContactStatus.FRIEND, contactRepository.getContact(alice, bob)!!.status)
     }
+
+    @Test
+    fun unblockingAStrangerWithoutABlockedRowIsRejected() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+
+        val result = service.unblockUser(alice, bob)
+
+        // The old implementation upserted FRIEND here, fabricating a one-way
+        // friendship with a user alice never interacted with.
+        assertEquals(ContactError.NotBlocked, result.getError())
+        assertNull(contactRepository.getContact(alice, bob))
+    }
+
+    @Test
+    fun unblockingABlockedStrangerDoesNotCreateFriendship() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        service.blockUser(alice, bob)
+
+        val result = service.unblockUser(alice, bob)
+
+        assertEquals(Unit, result.get())
+        assertEquals(ContactStatus.DELETED, contactRepository.getContact(alice, bob)!!.status)
+        assertNull(contactRepository.getContact(bob, alice))
+    }
+
+    @Test
+    fun unblockingABlockedFriendRestoresTheFriendship() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        TestDb.contacts(alice, bob)
+        service.blockUser(alice, bob)
+        assertEquals(ContactStatus.BLOCKED, contactRepository.getContact(alice, bob)!!.status)
+
+        val result = service.unblockUser(alice, bob)
+
+        assertEquals(Unit, result.get())
+        assertEquals(ContactStatus.FRIEND, contactRepository.getContact(alice, bob)!!.status)
+        assertEquals(ContactStatus.FRIEND, contactRepository.getContact(bob, alice)!!.status)
+    }
+
+    @Test
+    fun doubleUnblockIsRejected() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        service.blockUser(alice, bob)
+        assertEquals(Unit, service.unblockUser(alice, bob).get())
+
+        val second = service.unblockUser(alice, bob)
+
+        assertEquals(ContactError.NotBlocked, second.getError())
+    }
 }

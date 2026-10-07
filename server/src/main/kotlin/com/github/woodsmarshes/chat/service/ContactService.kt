@@ -242,7 +242,31 @@ class ContactService(
     }
 
     suspend fun unblockUser(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {
-        val success = contactRepository.upsertContactStatus(userId = userId, contactId = id, status = ContactStatus.FRIEND)
+        // Unblock only operates on an existing BLOCKED row. This used to be an
+        // unconditional upsert of FRIEND, which let any user fabricate a
+        // one-way friendship with a stranger they had never contacted.
+        val current = contactRepository.getContact(userId, id)
+        if (current?.status != ContactStatus.BLOCKED) {
+            Err(ContactError.NotBlocked).bind()
+        }
+        // Friendship is written as a mirrored pair and blocking only touches
+        // the blocker's own row, so the other side still holds the pre-block
+        // state: restore FRIEND only if the pair were actually friends.
+        // Unblocking a blocked stranger leaves no friendship behind.
+        val mirrorStatus = contactRepository.getContact(id, userId)?.status
+        val restoredStatus = if (mirrorStatus == ContactStatus.FRIEND) {
+            ContactStatus.FRIEND
+        } else {
+            ContactStatus.DELETED
+        }
+        // Conditional update: between the read above and this write the row
+        // could change; never create or blindly overwrite.
+        val success = contactRepository.updateContactStatusIf(
+            userId = userId,
+            contactId = id,
+            expected = ContactStatus.BLOCKED,
+            newStatus = restoredStatus,
+        )
         if (success) {
             eventBus.publishContactEvent(
                 ContactEvent.UserUnblocked(

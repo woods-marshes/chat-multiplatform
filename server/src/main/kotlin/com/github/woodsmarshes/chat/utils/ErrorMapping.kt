@@ -38,6 +38,7 @@ fun ContactError.mapToStatus(): HttpStatusCode = when (this) {
     ContactError.RequestAlreadySent -> HttpStatusCode.Conflict  // 409 请求已发送
 
     ContactError.RequestNotFound -> HttpStatusCode.NotFound     // 404
+    ContactError.NotBlocked -> HttpStatusCode.Conflict          // 409 当前没有拉黑关系
 
     ContactError.OperationFailed -> HttpStatusCode.InternalServerError // 500
     is ContactError.Unknown -> HttpStatusCode.InternalServerError

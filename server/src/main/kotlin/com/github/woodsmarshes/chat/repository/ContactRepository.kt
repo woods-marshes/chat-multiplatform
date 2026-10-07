@@ -9,8 +9,12 @@ import com.github.woodsmarshes.chat.repository.database.schema.ConversationParti
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+// `alias` as a member property (a contact's alias column) would shadow the
+// extension used to alias the TABLE for the self-join below.
+import org.jetbrains.exposed.v1.core.alias as tableAlias
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.innerJoin
 import org.jetbrains.exposed.v1.core.neq
@@ -56,6 +60,19 @@ interface ContactRepository {
         userId: Uuid,
         contactId: Uuid,
         status: ContactStatus
+    ): Boolean
+
+    /**
+     * Status transition guarded by the current status: updates only when the
+     * row exists AND is in [expected] state. Unlike [upsertContactStatus] it
+     * can never create a row, so callers can rely on it to never fabricate a
+     * relationship.
+     */
+    suspend fun updateContactStatusIf(
+        userId: Uuid,
+        contactId: Uuid,
+        expected: ContactStatus,
+        newStatus: ContactStatus
     ): Boolean
 
     suspend fun deleteContact(userId: Uuid, contactId: Uuid): Boolean
@@ -159,6 +176,23 @@ class ContactSourceImpl : ContactRepository {
         }.resultedValues?.isNotEmpty() == true
     }
 
+    override suspend fun updateContactStatusIf(
+        userId: Uuid,
+        contactId: Uuid,
+        expected: ContactStatus,
+        newStatus: ContactStatus
+    ): Boolean = dbQuery {
+        Contacts.update(
+            where = {
+                (Contacts.userId eq userId) and (Contacts.contactId eq contactId) and
+                        (Contacts.status eq expected)
+            }
+        ) {
+            it[this.status] = newStatus
+            it[this.updatedAt] = Clock.System.now()
+        } > 0
+    }
+
     override suspend fun deleteContact(userId: Uuid, contactId: Uuid): Boolean = dbQuery {
         Contacts.deleteWhere {
             (Contacts.userId eq userId) and (Contacts.contactId eq contactId)
@@ -206,6 +240,14 @@ class ContactSourceImpl : ContactRepository {
     }
 
     override suspend fun getContactsWithUser(userId: Uuid): List<Pair<Contact, User>>  = dbQuery {
+        // The email decision must follow the same direction as
+        // getUserProfileForViewer: the CONTACT (profile owner) authorizes the
+        // viewer via its own contact row toward the viewer. The viewer's own
+        // row cannot decide this — blocking only rewrites the blocker's row,
+        // so "viewer → contact = FRIEND" would leak the email of someone who
+        // blocked the viewer. The mirrored row is joined in the same query
+        // (LEFT: it may not exist for strangers), so there is no N+1.
+        val mirrored = Contacts.tableAlias("mirrored")
         Contacts
             .innerJoin(
                 otherTable = Users,
@@ -217,15 +259,29 @@ class ContactSourceImpl : ContactRepository {
                 onColumn = { Users.id },
                 otherColumn = { UserSettings.userId }
             )
+            .join(
+                otherTable = mirrored,
+                joinType = JoinType.LEFT,
+                onColumn = Contacts.contactId,
+                otherColumn = mirrored[Contacts.userId],
+                additionalConstraint = { mirrored[Contacts.contactId] eq Contacts.userId }
+            )
             .selectAll()
             .where { Contacts.userId eq userId }
             .map {
+                val contact = it.toContact()
+                val user = it.toUser()
                 when (it[UserSettings.profileVisibility]) {
-                    ProfileVisibility.PRIVATE -> {
-                        it.toContact() to it.toUser().copy(email = null)
-                    }
-                    else -> {
-                        it.toContact() to it.toUser()
+                    ProfileVisibility.PRIVATE -> contact to user.copy(email = null)
+                    ProfileVisibility.PUBLIC -> contact to user
+                    // FRIENDS: only a FRIEND row from the contact toward the
+                    // viewer grants the email — a viewer the contact blocked
+                    // (mirror BLOCKED) or never friended (mirror absent)
+                    // gets none, even if the viewer's own row says FRIEND.
+                    ProfileVisibility.FRIENDS -> {
+                        val mirrorStatus = it.getOrNull(mirrored[Contacts.status])
+                        if (mirrorStatus == ContactStatus.FRIEND) contact to user
+                        else contact to user.copy(email = null)
                     }
                 }
             }
