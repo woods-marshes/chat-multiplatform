@@ -23,6 +23,8 @@ import com.github.woodsmarshes.chat.utils.inTransaction
 import com.github.woodsmarshes.chat.utils.Keys
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.sql.SQLException
+import kotlinx.coroutines.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.uuid.Uuid
@@ -42,24 +44,46 @@ class AuthService(
         if (request.password.length < MIN_PASSWORD_LENGTH) {
             Err(AuthError.WeakPassword).bind()
         }
+        // Fast path for the friendly error; the unique constraint stays the
+        // real guard against concurrent registrations (mapped below).
         if (userRepository.checkExists(request.email, request.username)) {
             Err(AuthError.UserAlreadyExists).bind()
         }
+        // CPU-bound hashing stays outside the transaction so it never holds a
+        // pooled connection for the duration of the KDF.
         val saltedHash = hashingService.generateSaltedHash(request.password)
-        val user = userRepository.insertUser(
-            username = request.username,
-            email = request.email,
-            passwordHash = saltedHash.hash,
-            salt = saltedHash.salt,
-            role = UserRole.MEMBER
-        ) ?: Err(AuthError.InsertionFailed).bind()
-        userSettingRepository.initSettings(user.id)
-            ?: Err(AuthError.InsertionFailed).bind()
+
+        // One unit of work: user, settings row and refresh session commit
+        // together or not at all. Repository dbQuery calls join this
+        // transaction, and failures must THROW (bind does) so Exposed rolls
+        // the partial account back instead of leaving a half-registered user.
+        val registered = try {
+            inTransaction {
+                val user = userRepository.insertUser(
+                    username = request.username,
+                    email = request.email,
+                    passwordHash = saltedHash.hash,
+                    salt = saltedHash.salt,
+                    role = UserRole.MEMBER
+                ) ?: Err(AuthError.InsertionFailed).bind()
+                userSettingRepository.initSettings(user.id)
+                    ?: Err(AuthError.InsertionFailed).bind()
+                val refreshToken = issueRefreshToken(user.id)
+                    ?: Err(AuthError.InsertionFailed).bind()
+                user to refreshToken
+            }
+        } catch (e: Exception) {
+            // A concurrent registration with the same identity lost the race
+            // to the unique index — a client error, not a 500. Everything
+            // else keeps propagating; cancellation is never swallowed.
+            if (e is CancellationException) throw e
+            if (e.hasUniqueConstraintViolation()) Err(AuthError.UserAlreadyExists).bind() else throw e
+        }
 
         AuthResponse(
-            user = user,
-            accessToken = issueAccessToken(user.id),
-            refreshToken = issueRefreshToken(user.id),
+            user = registered.first,
+            accessToken = issueAccessToken(registered.first.id),
+            refreshToken = registered.second,
         )
     }
 
@@ -79,7 +103,8 @@ class AuthService(
         AuthResponse(
             user = authInfo.domainUser,
             accessToken = issueAccessToken(authInfo.userId),
-            refreshToken = issueRefreshToken(authInfo.userId),
+            refreshToken = issueRefreshToken(authInfo.userId)
+                ?: Err(AuthError.InsertionFailed).bind(),
         )
     }
 
@@ -119,16 +144,19 @@ class AuthService(
         authSessionRepository.revokeSession(sha256(refreshToken))
     }
 
-    /** Mints an opaque refresh token and persists only its hash. */
-    private suspend fun issueRefreshToken(userId: Uuid): String {
+    /**
+     * Mints an opaque refresh token and persists only its hash. Null when the
+     * session row could not be stored — callers translate that into the
+     * appropriate error inside their own result context.
+     */
+    private suspend fun issueRefreshToken(userId: Uuid): String? {
         val raw = newOpaqueToken()
         val stored = authSessionRepository.createSession(
             userId = userId,
             tokenHash = sha256(raw),
             expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
         )
-        if (!stored) throw AppException(AuthError.InsertionFailed)
-        return raw
+        return raw.takeIf { stored }
     }
 
     private fun issueAccessToken(userId: Uuid): String = tokenService.generateToken(
@@ -145,9 +173,24 @@ class AuthService(
             .digest(value.toByteArray())
             .joinToString("") { "%02x".format(it) }
 
+    /**
+     * Walks the JDBC cause chain for the standard SQLState of a unique-index
+     * violation — "23505" on both PostgreSQL and H2. The wrapping Exposed
+     * exception itself carries no SQLState, so the chain must be searched.
+     */
+    private fun Throwable.hasUniqueConstraintViolation(): Boolean {
+        var cause: Throwable? = this
+        while (cause != null) {
+            if (cause is SQLException && cause.sqlState == UNIQUE_VIOLATION_SQL_STATE) return true
+            cause = cause.cause
+        }
+        return false
+    }
+
     private companion object {
         const val MIN_PASSWORD_LENGTH = 8
         const val REFRESH_TOKEN_BYTES = 48
         const val REFRESH_TOKEN_TTL_DAYS = 30L
+        const val UNIQUE_VIOLATION_SQL_STATE = "23505"
     }
 }

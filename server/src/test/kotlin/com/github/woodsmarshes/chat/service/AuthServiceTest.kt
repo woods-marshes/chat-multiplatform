@@ -133,6 +133,16 @@ class AuthServiceTest {
     }
 
     @Test
+    fun registerFailsWhenRefreshSessionCannotBeCreated() = runBlocking {
+        coEvery { userRepository.checkExists("alice@test.local", "alice") } returns false
+        coEvery { userRepository.insertUser(any(), any(), any(), any(), any()) } returns user()
+        coEvery { userSettingRepository.initSettings(userId) } returns mockk()
+        coEvery { authSessionRepository.createSession(eq(userId), any(), any()) } returns false
+
+        assertEquals(AuthError.InsertionFailed, service.register(RegisterRequest("alice", "alice@test.local", "longenough1")).getError())
+    }
+
+    @Test
     fun loginRejectsUnknownEmail() = runBlocking {
         coEvery { userRepository.findAuthInfoByEmail("ghost@test.local") } returns null
 
