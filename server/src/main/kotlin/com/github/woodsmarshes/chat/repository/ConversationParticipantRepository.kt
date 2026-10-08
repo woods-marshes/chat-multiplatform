@@ -32,6 +32,9 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
+/** Outcome of an atomic, monotonic read-cursor update. */
+enum class ReadCursorUpdate { ADVANCED, UNCHANGED, INVALID }
+
 interface ConversationParticipantRepository {
     suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant?
 
@@ -41,8 +44,8 @@ interface ConversationParticipantRepository {
      */
     suspend fun updateParticipantSettings(userId: Uuid, conversationId: Uuid, settings: ParticipantSettings): Boolean
 
-    /** Same contract as [updateParticipantSettings]. */
-    suspend fun updateReadLastMessage(userId: Uuid, conversationId: Uuid, messageId: Uuid): Boolean
+    /** Valid repeated or older receipts succeed without advancing or broadcasting. */
+    suspend fun updateReadLastMessage(userId: Uuid, conversationId: Uuid, messageId: Uuid): ReadCursorUpdate
 
     /** Same contract as [updateParticipantSettings]. */
     suspend fun updateConversationParticipantRole(userId: Uuid, conversationId: Uuid, role: ConversationRole): Boolean
@@ -135,26 +138,26 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
         userId: Uuid,
         conversationId: Uuid,
         messageId: Uuid
-    ): Boolean = dbQuery {
+    ): ReadCursorUpdate = dbQuery {
         // The cursor column has no foreign key, so a read receipt could point
         // at a message from another conversation (or at nothing at all).
         Messages.selectAll()
             .where { Messages.id eq messageId }
             .singleOrNull()
             ?.takeIf { it[Messages.conversationId].value == conversationId }
-            ?: return@dbQuery false
+            ?: return@dbQuery ReadCursorUpdate.INVALID
         ConversationParticipants.selectAll()
             .where {
                 (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId)
             }
             .singleOrNull()
-            ?: return@dbQuery false
+            ?: return@dbQuery ReadCursorUpdate.INVALID
 
         // Message ids are UUIDv7, so "greater" is chronological. A receipt for
         // an already-covered message is a no-op rather than a failure: several
         // devices report the same position.
-        ConversationParticipants.update(
+        val updated = ConversationParticipants.update(
             where = {
                 (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId) and
@@ -166,7 +169,7 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
         ) {
             it[this.lastReadMessageId] = messageId
         }
-        true
+        if (updated > 0) ReadCursorUpdate.ADVANCED else ReadCursorUpdate.UNCHANGED
     }
 
     override suspend fun updateConversationParticipantRole(
@@ -297,7 +300,7 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
             .map { it.toConversationParticipant() }
     }
 
-    override suspend fun getConversationParticipantsWithUser(conversationId: Uuid): List<Pair<ConversationParticipant, User>> = dbQuery{
+    override suspend fun getConversationParticipantsWithUser(conversationId: Uuid): List<Pair<ConversationParticipant, User>> = dbQuery {
         (ConversationParticipants innerJoin Users)
             .selectAll()
             .where {

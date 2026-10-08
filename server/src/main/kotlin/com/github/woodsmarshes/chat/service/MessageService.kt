@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.service
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.michaelbull.result.Err
+import com.github.woodsmarshes.chat.repository.ReadCursorUpdate
 import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.core.model.*
@@ -106,13 +107,18 @@ class MessageService(
             return@coroutineBinding persisted.withSenderContext(user, participant)
         }
 
-        val trustedContent = if (content is MediaContent) {
-            attachments.resolveTrustedMedia(content)
-                ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
-        } else {
-            content
-        }
-        try {
+        val privateFileName = (content as? FileContent)
+            ?.url
+            ?.takeIf { it.startsWith( com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX) }
+            ?.substringAfterLast('/')
+
+        val persistBlock: suspend () -> Message = {
+            val trustedContent = if (content is MediaContent) {
+                attachments.resolveTrustedMedia(content, userId)
+                    ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
+            } else {
+                content
+            }
             val inserted = messageRepository.insertMessage(
                 conversationId = conversationId,
                 senderId = userId,
@@ -126,22 +132,30 @@ class MessageService(
             if (!inserted.second) {
                 // A concurrent duplicate won the race: return its row and leave
                 // the single broadcast to the winner.
-                return@coroutineBinding inserted.first.withSenderContext(user, participant)
-            }
-
-            val message = inserted.first.withSenderContext(user, participant)
-
-            eventBus.publishMessageEvent(
-                MessageEvent.SendMessage(
-                    message = message,
-                    conversationId = conversationId,
-                    senderId = userId,
-                    timestamp = Clock.System.now(),
-                    requestId = requestId,
+                inserted.first.withSenderContext(user, participant)
+            } else {
+                val message = inserted.first.withSenderContext(user, participant)
+                eventBus.publishMessageEvent(
+                    MessageEvent.SendMessage(
+                        message = message,
+                        conversationId = conversationId,
+                        senderId = userId,
+                        timestamp = Clock.System.now(),
+                        requestId = requestId,
+                    )
                 )
-            )
+                message
+            }
+        }
 
-            message
+        try {
+            if (privateFileName != null) {
+                attachments.withAttachmentLock(privateFileName) {
+                    persistBlock()
+                }
+            } else {
+                persistBlock()
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: AppException) {
@@ -287,10 +301,10 @@ class MessageService(
 
     // 更新已读的消息
     suspend fun markAsRead(conversationId: Uuid, userId: Uuid, messageId: Uuid): Result<Unit, MessageError> = coroutineBinding {
-        val success = conversationParticipantRepository.updateReadLastMessage(
+        val outcome = conversationParticipantRepository.updateReadLastMessage(
             userId = userId, conversationId = conversationId, messageId = messageId
         )
-        if (success) {
+        if (outcome == ReadCursorUpdate.ADVANCED) {
             eventBus.publishMessageEvent(
                 MessageEvent.ReadMessage(
                     messageId = messageId,
@@ -299,7 +313,7 @@ class MessageService(
                     timestamp = Clock.System.now()
                 )
             )
-        } else {
+        } else if (outcome == ReadCursorUpdate.INVALID) {
             Err(MessageError.MessageNotFound).bind()
         }
     }
