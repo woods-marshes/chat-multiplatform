@@ -5,7 +5,9 @@ import com.github.michaelbull.result.getError
 import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageContent
+import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.events.EventBus
@@ -17,14 +19,17 @@ import com.github.woodsmarshes.chat.repository.MessageDataSourceImpl
 import com.github.woodsmarshes.chat.repository.PrivateFileSourceImpl
 import com.github.woodsmarshes.chat.repository.UserSettingDataSourceImpl
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
+import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.support.TestDb
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStoreImpl
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.upsert
 import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -63,6 +68,7 @@ class MessageFlowDatabaseTest {
         fileService = fileService,
         uploadStore = uploadStore,
         privateFileRepository = privateFileRepository,
+        participantRepository = participantRepository,
     )
 
     private val service = MessageService(
@@ -276,6 +282,7 @@ class MessageFlowDatabaseTest {
         uploadStore.register(
             FileContent(url = url, fileName = "doc.pdf", mimeType = "application/pdf", size = 3),
             listOf(physical.absolutePath),
+            uploaderId = alice,
         )
 
         // Trusted through the pending store; the download mapping is
@@ -298,5 +305,227 @@ class MessageFlowDatabaseTest {
 
         assertFalse(physical.exists(), "unreferenced attachment must be deleted")
         assertEquals(emptyList(), privateFileRepository.getConversationsForFile(fileName))
+    }
+
+    @Test
+    fun forwardedFileWithDifferentDisplayNameSurvivesSingleMessageWithdraw() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        val carol = TestDb.user("carol")
+        TestDb.contacts(alice, bob)
+        TestDb.contacts(alice, carol)
+        val conversationAB = TestDb.privateConversation(alice, bob)
+        val conversationAC = TestDb.privateConversation(alice, carol)
+
+        val uniqueName = "${Uuid.random()}.pdf"
+        val url = "/v1/files/content/$uniqueName"
+        val physical = File("private-uploads/file", uniqueName)
+        physical.writeBytes(byteArrayOf(1, 2, 3))
+        storedFiles.add(physical)
+
+        uploadStore.register(
+            FileContent(url = url, fileName = "quarterly-report.pdf", mimeType = "application/pdf", size = 3),
+            listOf(physical.absolutePath),
+            uploaderId = alice,
+        )
+
+        val firstMsg = sendMessage(
+            alice,
+            conversationAB,
+            FileContent(url = url, fileName = "quarterly-report.pdf", mimeType = "application/pdf", size = 3),
+        )
+        val forwardedMsg = sendMessage(
+            alice,
+            conversationAC,
+            FileContent(url = url, fileName = "renamed-for-carol.pdf", mimeType = "application/pdf", size = 3),
+        )
+
+        // Withdraw only the first message: the forwarded message in conversationAC
+        // still references the same storage URL (even with a different display
+        // fileName), so the file and conversation mappings must survive.
+        service.withdrawMessage(alice, firstMsg.id)
+        assertTrue(physical.exists(), "file must survive while another live message still references its storage URL")
+        assertNotNull(fileService.resolveAuthorizedPrivateFile(uniqueName, carol))
+
+        // Withdraw the last remaining reference: now the file and mappings are collected.
+        service.withdrawMessage(alice, forwardedMsg.id)
+        assertFalse(physical.exists(), "file must be collected once all referencing messages are withdrawn")
+        assertEquals(emptyList(), privateFileRepository.getConversationsForFile(uniqueName))
+    }
+
+    @Test
+    fun outsiderCannotHijackPendingUploadOrForwardUnreachablePrivateAttachment() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        val mallory = TestDb.user("mallory")
+        TestDb.contacts(alice, bob)
+        TestDb.contacts(mallory, bob)
+        val conversationAB = TestDb.privateConversation(alice, bob)
+        val conversationMB = TestDb.privateConversation(mallory, bob)
+
+        val uniqueName = "${Uuid.random()}.pdf"
+        val url = "/v1/files/content/$uniqueName"
+        val physical = File("private-uploads/file", uniqueName)
+        physical.writeBytes(byteArrayOf(7, 8, 9))
+        storedFiles.add(physical)
+
+        uploadStore.register(
+            FileContent(url = url, fileName = "secret.pdf", mimeType = "application/pdf", size = 3),
+            listOf(physical.absolutePath),
+            uploaderId = alice,
+        )
+
+        // Mallory guesses the pending URL before Alice sends it: rejected.
+        val hijackPending = service.sendMessage(
+            userId = mallory,
+            conversationId = conversationMB,
+            content = FileContent(url = url, fileName = "secret.pdf", mimeType = "application/pdf", size = 3),
+            requestId = Uuid.generateV7().toString(),
+        )
+        assertEquals(MessageError.MediaExpired, hijackPending.getError())
+
+        // Alice legitimately sends her upload into conversationAB.
+        sendMessage(
+            alice,
+            conversationAB,
+            FileContent(url = url, fileName = "secret.pdf", mimeType = "application/pdf", size = 3),
+        )
+        // Evict from pending store so forwarding goes through DB authorization.
+        uploadStore.cleanExpiredFiles(0)
+
+        // Mallory is not a participant of conversationAB, so forwarding the URL
+        // into conversationMB is rejected and grants no download access.
+        val hijackForward = service.sendMessage(
+            userId = mallory,
+            conversationId = conversationMB,
+            content = FileContent(url = url, fileName = "secret.pdf", mimeType = "application/pdf", size = 3),
+            requestId = Uuid.generateV7().toString(),
+        )
+        assertEquals(MessageError.MediaExpired, hijackForward.getError())
+        assertNull(fileService.resolveAuthorizedPrivateFile(uniqueName, mallory))
+    }
+
+    @Test
+    fun legacyFileMessageInOriginalSchemaSurvivesForwardedMessageWithdraw() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        val carol = TestDb.user("carol")
+        TestDb.contacts(alice, bob)
+        TestDb.contacts(alice, carol)
+        val conversationAB = TestDb.privateConversation(alice, bob)
+        val conversationAC = TestDb.privateConversation(alice, carol)
+
+        val uniqueName = "legacy-${Uuid.random()}.pdf"
+        val url = "/v1/files/content/$uniqueName"
+        val physical = File("private-uploads/file", uniqueName)
+        physical.writeBytes(byteArrayOf(4, 5, 6))
+        storedFiles.add(physical)
+
+        // Seed a pre-existing message and its conversation-level mapping row
+        // directly in the original schema (seq = null, clientRequestId = null,
+        // searchText = display name != uniqueName).
+        val legacyMessageId = transaction(TestDb.database) {
+            val insertedRow = Messages.insert {
+                it[Messages.conversationId] = conversationAB
+                it[Messages.senderId] = alice
+                it[Messages.content] = FileContent(
+                    url = url,
+                    fileName = "legacy-display-name.pdf",
+                    mimeType = "application/pdf",
+                    size = 3,
+                )
+                it[Messages.searchText] = "legacy-display-name.pdf"
+                it[Messages.category] = MessageCategory.NORMAL
+                it[Messages.renderType] = MessageRenderType.FILE
+                it[Messages.createdAt] = kotlin.time.Clock.System.now()
+            }.resultedValues!!.single()
+            PrivateFiles.upsert {
+                it[this.fileName] = uniqueName
+                it[this.conversationId] = conversationAB
+            }
+            insertedRow[Messages.id].value
+        }
+
+        // Alice forwards the legacy attachment into conversationAC under a new display name,
+        // then withdraws the forwarded copy.
+        val forwarded = sendMessage(
+            alice,
+            conversationAC,
+            FileContent(url = url, fileName = "forwarded-copy.pdf", mimeType = "application/pdf", size = 3),
+        )
+        service.withdrawMessage(alice, forwarded.id)
+
+        // The legacy message in conversationAB is still live, so the file and mappings stay intact.
+        assertTrue(physical.exists(), "legacy file message must prevent premature GC")
+        assertNotNull(fileService.resolveAuthorizedPrivateFile(uniqueName, bob))
+
+        // Once the legacy message itself is withdrawn, zero live references remain and GC cleans up.
+        service.withdrawMessage(alice, legacyMessageId)
+        assertFalse(physical.exists(), "file must be collected after the legacy message is also withdrawn")
+        assertEquals(emptyList(), privateFileRepository.getConversationsForFile(uniqueName))
+    }
+
+    @Test
+    fun withdrawnPrivateAttachmentCannotBeResentViaCachedUploadStore() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        TestDb.contacts(alice, bob)
+        val conversationId = TestDb.privateConversation(alice, bob)
+
+        val uniqueName = "resend-after-withdraw-${Uuid.random()}.pdf"
+        val url = "/v1/files/content/$uniqueName"
+        val physical = File("private-uploads/file", uniqueName)
+        physical.writeBytes(byteArrayOf(1, 2, 3))
+        storedFiles.add(physical)
+
+        uploadStore.register(
+            FileContent(url = url, fileName = "once.pdf", mimeType = "application/pdf", size = 3),
+            listOf(physical.absolutePath),
+            uploaderId = alice,
+        )
+
+        val firstMsg = sendMessage(
+            alice,
+            conversationId,
+            FileContent(url = url, fileName = "once.pdf", mimeType = "application/pdf", size = 3),
+        )
+        service.withdrawMessage(alice, firstMsg.id)
+        assertFalse(physical.exists(), "file must be deleted on withdraw")
+
+        val resend = service.sendMessage(
+            userId = alice,
+            conversationId = conversationId,
+            content = FileContent(url = url, fileName = "once.pdf", mimeType = "application/pdf", size = 3),
+            requestId = Uuid.generateV7().toString(),
+        )
+        assertEquals(MessageError.MediaExpired, resend.getError(), "resending a GC-deleted attachment must be rejected")
+    }
+
+    @Test
+    fun ownerlessPendingPrivateUploadCannotBeSentByAuthenticatedUser() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        TestDb.contacts(alice, bob)
+        val conversationId = TestDb.privateConversation(alice, bob)
+
+        val uniqueName = "ownerless-${Uuid.random()}.pdf"
+        val url = "/v1/files/content/$uniqueName"
+        val physical = File("private-uploads/file", uniqueName)
+        physical.writeBytes(byteArrayOf(1, 2, 3))
+        storedFiles.add(physical)
+
+        uploadStore.register(
+            FileContent(url = url, fileName = "ownerless.pdf", mimeType = "application/pdf", size = 3),
+            listOf(physical.absolutePath),
+            uploaderId = null,
+        )
+
+        val attempt = service.sendMessage(
+            userId = alice,
+            conversationId = conversationId,
+            content = FileContent(url = url, fileName = "ownerless.pdf", mimeType = "application/pdf", size = 3),
+            requestId = Uuid.generateV7().toString(),
+        )
+        assertEquals(MessageError.MediaExpired, attempt.getError())
     }
 }

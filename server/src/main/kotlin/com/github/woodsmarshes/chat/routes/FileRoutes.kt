@@ -74,6 +74,7 @@ fun Route.fileRoutes() {
 
     rateLimit(RateLimitName("uploads")) {
     post<V1.Files.Upload> { params ->
+        val userId = call.extractUserId()
         val type = params.type
         val maxBytes = maxBytesFor(type)
         val multipartData = call.receiveMultipart()
@@ -123,6 +124,7 @@ fun Route.fileRoutes() {
                                     staged = s,
                                     mimeType = part.contentType?.toString() ?: "application/octet-stream",
                                     byteSize = written,
+                                    uploaderId = userId,
                                 )
                                 if (media.isOk) finalizeSucceeded = true
                                 result = media.getOrThrow()

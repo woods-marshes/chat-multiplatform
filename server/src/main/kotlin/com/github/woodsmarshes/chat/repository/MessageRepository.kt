@@ -40,6 +40,7 @@ import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.upsert
@@ -102,9 +103,11 @@ interface MessageRepository {
     suspend fun revokeMessage(messageId: Uuid): Boolean
 
     /**
-     * How many non-revoked file messages still carry [fileName]. For file
-     * messages the search text is the original file name, which makes this
-     * the liveness check before deleting an attachment from disk.
+     * How many live non-revoked file messages still reference the private
+     * attachment stored under [fileName]. Matches the physical storage URL in
+     * `Messages.content` — not the user-supplied display name in `searchText`
+     * — and fails closed (returning a positive count) if any candidate row
+     * cannot be decoded.
      */
     suspend fun countLiveFileReferences(fileName: String): Long
 
@@ -479,14 +482,31 @@ class MessageDataSourceImpl : MessageRepository {
     }
 
     override suspend fun countLiveFileReferences(fileName: String): Long = dbQuery {
+        val expectedUrl = "$PRIVATE_FILE_URL_PREFIX$fileName"
+        var references = 0L
         Messages
-            .selectAll()
+            .select(Messages.content)
             .where {
                 (Messages.renderType eq MessageRenderType.FILE) and
-                    (Messages.searchText eq fileName) and
                     Messages.revokedAt.isNull()
             }
-            .count()
+            .forEach { row ->
+                val matchesOrUnreadable = try {
+                    when (val decoded = row[Messages.content]) {
+                        is FileContent -> decoded.url == expectedUrl
+                        else -> true
+                    }
+                } catch (_: Exception) {
+                    // Fail closed if historical JSON cannot be decoded into the
+                    // current MessageContent schema: never delete a physical
+                    // attachment whose reference state is uncertain.
+                    true
+                }
+                if (matchesOrUnreadable) {
+                    references += 1L
+                }
+            }
+        references
     }
 
     override suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>? = dbQuery<Pair<Message, List<User>>?> {
@@ -502,7 +522,8 @@ class MessageDataSourceImpl : MessageRepository {
             .innerJoin(Users)
             .selectAll()
             .where {
-                (ConversationParticipants.lastReadMessageId eq messageId) and
+                ((ConversationParticipants.lastReadMessageId eq messageId) or
+                        (ConversationParticipants.lastReadMessageId greater messageId)) and
                         (ConversationParticipants.conversationId eq message.conversationId)
             }
             .map { it.toUser() }

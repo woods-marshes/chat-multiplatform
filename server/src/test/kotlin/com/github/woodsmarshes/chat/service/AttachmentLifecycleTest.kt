@@ -7,15 +7,20 @@ import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import io.mockk.Called
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.coJustRun
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -26,43 +31,78 @@ class AttachmentLifecycleTest {
     private val messageRepository = mockk<MessageRepository>()
     private val fileService = mockk<FileService>()
     private val uploadStore = mockk<TemporaryUploadStore>()
-    private val privateFileRepository = mockk<PrivateFileRepository>()
+    private val privateFileRepository = mockk<PrivateFileRepository>(relaxUnitFun = true)
+    private val participantRepository = mockk<ConversationParticipantRepository>()
 
     private val lifecycle = AttachmentLifecycle(
         messageRepository = messageRepository,
         fileService = fileService,
         uploadStore = uploadStore,
         privateFileRepository = privateFileRepository,
+        participantRepository = participantRepository,
     )
 
+    private val senderId = Uuid.random()
     private val privateUrl = "/v1/files/content/report-${Uuid.random()}.pdf"
+    private val privateFileName = privateUrl.substringAfterLast('/')
     private val content = FileContent(
         url = privateUrl, fileName = "report.pdf", mimeType = "application/pdf", size = 3,
     )
 
     @Test
-    fun pendingUploadIsTrustedWithoutFurtherChecks() = runBlocking {
-        coEvery { uploadStore.retrieveAndConfirm(privateUrl) } returns content
+    fun pendingUploadIsTrustedWhenPhysicalFileExists() = runBlocking {
+        every { uploadStore.retrieveAndConfirm(privateUrl, senderId) } returns content
+        every { fileService.resolvePrivateFile(privateFileName) } returns mockk<File>()
 
-        assertEquals(content, lifecycle.resolveTrustedMedia(content))
-        coVerify(exactly = 0) { privateFileRepository.hasMapping(any()) }
-        coVerify(exactly = 0) { fileService.publicFileExists(any()) }
+        assertEquals(content, lifecycle.resolveTrustedMedia(content, senderId))
+        coVerify(exactly = 0) { privateFileRepository.getConversationsForFile(any()) }
+        every { fileService.publicFileExists(any()) }
+        verify(exactly = 0) { fileService.publicFileExists(any()) }
     }
 
     @Test
-    fun alreadySentPrivateFileIsTrustedViaItsMapping() = runBlocking {
-        coEvery { uploadStore.retrieveAndConfirm(privateUrl) } returns null
-        coEvery { privateFileRepository.hasMapping(privateUrl.substringAfterLast('/')) } returns true
+    fun confirmedPendingPrivateUploadIsRejectedAndInvalidatedWhenPhysicalFileIsMissing() = runBlocking {
+        every { uploadStore.retrieveAndConfirm(privateUrl, senderId) } returns content
+        every { fileService.resolvePrivateFile(privateFileName) } returns null
+        justRun { uploadStore.invalidate(privateUrl) }
 
-        assertEquals(content, lifecycle.resolveTrustedMedia(content))
+        assertNull(lifecycle.resolveTrustedMedia(content, senderId))
+        verify(exactly = 1) { uploadStore.invalidate(privateUrl) }
+    }
+
+    @Test
+    fun alreadySentPrivateFileRequiresSenderMembershipInReachedConversation() = runBlocking {
+        val outsiderId = Uuid.random()
+        val conversationId = Uuid.random()
+        every { uploadStore.retrieveAndConfirm(privateUrl, any()) } returns null
+        every { fileService.resolvePrivateFile(privateFileName) } returns mockk<File>()
+        coEvery { privateFileRepository.getConversationsForFile(privateFileName) } returns listOf(conversationId)
+        coEvery { participantRepository.getConversationParticipant(senderId, conversationId) } returns mockk()
+        coEvery { participantRepository.getConversationParticipant(outsiderId, conversationId) } returns null
+
+        assertEquals(content, lifecycle.resolveTrustedMedia(content, senderId))
+        assertNull(lifecycle.resolveTrustedMedia(content, outsiderId))
+    }
+
+    @Test
+    fun alreadySentPrivateFileIsRejectedWhenPhysicalFileIsMissing() = runBlocking {
+        val conversationId = Uuid.random()
+        every { uploadStore.retrieveAndConfirm(privateUrl, senderId) } returns null
+        every { fileService.resolvePrivateFile(privateFileName) } returns null
+        coEvery { privateFileRepository.getConversationsForFile(privateFileName) } returns listOf(conversationId)
+        coEvery { participantRepository.getConversationParticipant(senderId, conversationId) } returns mockk()
+
+        assertNull(lifecycle.resolveTrustedMedia(content, senderId))
+        coVerify(exactly = 0) { privateFileRepository.getConversationsForFile(any()) }
     }
 
     @Test
     fun unsentPrivateFileIsRejected() = runBlocking {
-        coEvery { uploadStore.retrieveAndConfirm(privateUrl) } returns null
-        coEvery { privateFileRepository.hasMapping(privateUrl.substringAfterLast('/')) } returns false
+        every { uploadStore.retrieveAndConfirm(privateUrl, senderId) } returns null
+        every { fileService.resolvePrivateFile(privateFileName) } returns mockk<File>()
+        coEvery { privateFileRepository.getConversationsForFile(privateFileName) } returns emptyList()
 
-        assertNull(lifecycle.resolveTrustedMedia(content))
+        assertNull(lifecycle.resolveTrustedMedia(content, senderId))
     }
 
     @Test
@@ -71,10 +111,10 @@ class AttachmentLifecycleTest {
         val media: MediaContent = ImageContent(
             url = publicUrl, fileName = "pic.png", width = 1, height = 1, size = 1,
         )
-        coEvery { uploadStore.retrieveAndConfirm(publicUrl) } returns null
-        coEvery { fileService.publicFileExists(publicUrl) } returns true
+        every { uploadStore.retrieveAndConfirm(publicUrl, senderId) } returns null
+        every { fileService.publicFileExists(publicUrl) } returns true
 
-        assertEquals(media, lifecycle.resolveTrustedMedia(media))
+        assertEquals(media, lifecycle.resolveTrustedMedia(media, senderId))
     }
 
     @Test
@@ -83,10 +123,10 @@ class AttachmentLifecycleTest {
         val media: MediaContent = ImageContent(
             url = publicUrl, fileName = "gone.png", width = 1, height = 1, size = 1,
         )
-        coEvery { uploadStore.retrieveAndConfirm(publicUrl) } returns null
-        coEvery { fileService.publicFileExists(publicUrl) } returns false
+        every { uploadStore.retrieveAndConfirm(publicUrl, senderId) } returns null
+        every { fileService.publicFileExists(publicUrl) } returns false
 
-        assertNull(lifecycle.resolveTrustedMedia(media))
+        assertNull(lifecycle.resolveTrustedMedia(media, senderId))
     }
 
     @Test
@@ -94,29 +134,32 @@ class AttachmentLifecycleTest {
         val media: MediaContent = FileContent(
             url = "https://cdn.example.com/evil.pdf", fileName = "evil.pdf", mimeType = null, size = 1,
         )
-        coEvery { uploadStore.retrieveAndConfirm(media.url) } returns null
+        every { uploadStore.retrieveAndConfirm(media.url, senderId) } returns null
 
-        assertNull(lifecycle.resolveTrustedMedia(media))
+        assertNull(lifecycle.resolveTrustedMedia(media, senderId))
     }
 
     @Test
-    fun gcDeletesAttachmentWhoseLastLiveReferenceWasWithdrawn() = runBlocking {
+    fun gcInvalidatesUploadStoreAndDeletesAttachmentWhoseLastLiveReferenceWasWithdrawn() = runBlocking {
         val message = message(content)
-        coEvery { messageRepository.countLiveFileReferences(privateUrl.substringAfterLast('/')) } returns 0L
-        coJustRun { fileService.deletePrivateFile(privateUrl.substringAfterLast('/')) }
+        coEvery { messageRepository.countLiveFileReferences(privateFileName) } returns 0L
+        justRun { uploadStore.invalidate(privateUrl) }
+        coJustRun { fileService.deletePrivateFile(privateFileName) }
 
         lifecycle.gcAfterWithdraw(message)
 
-        coVerify(exactly = 1) { fileService.deletePrivateFile(privateUrl.substringAfterLast('/')) }
+        verify(exactly = 1) { uploadStore.invalidate(privateUrl) }
+        coVerify(exactly = 1) { fileService.deletePrivateFile(privateFileName) }
     }
 
     @Test
     fun gcKeepsAttachmentStillReferencedByOtherMessages() = runBlocking {
         val message = message(content)
-        coEvery { messageRepository.countLiveFileReferences(privateUrl.substringAfterLast('/')) } returns 2L
+        coEvery { messageRepository.countLiveFileReferences(privateFileName) } returns 2L
 
         lifecycle.gcAfterWithdraw(message)
 
+        verify(exactly = 0) { uploadStore.invalidate(any()) }
         coVerify(exactly = 0) { fileService.deletePrivateFile(any()) }
     }
 
