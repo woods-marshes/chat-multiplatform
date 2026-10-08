@@ -2,18 +2,26 @@ package com.github.woodsmarshes.chat.service
 
 import com.github.michaelbull.result.get
 import com.github.michaelbull.result.getError
+import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileType
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.error.FileError
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.PrivateFileRepository
+import com.github.woodsmarshes.chat.utils.MediaProbe
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
+import com.github.woodsmarshes.chat.utils.WaveformGenerator
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import javax.imageio.ImageIO
 import kotlin.uuid.Uuid
 import kotlin.test.AfterTest
@@ -92,7 +100,7 @@ class FileServiceUploadTest {
             stored.add(file)
             assertTrue(file.isFile, "the bytes must be on disk")
         }
-        coVerify(exactly = 1) { uploadStore.register(any(), any()) }
+        coVerify(exactly = 1) { uploadStore.register(any(), any(), any()) }
     }
 
     private fun pngBytes(width: Int, height: Int): ByteArray =
@@ -170,7 +178,7 @@ class FileServiceUploadTest {
         stored.add(thumbFile)
         assertTrue(thumbFile.isFile, "the thumbnail must be on disk")
         stored += File(image.url.removePrefix("/"))
-        coVerify(exactly = 1) { uploadStore.register(any(), any()) }
+        coVerify(exactly = 1) { uploadStore.register(any(), any(), any()) }
     }
 
     @Test
@@ -189,5 +197,75 @@ class FileServiceUploadTest {
         service.deletePublicUpload("/uploads/../uploads/avatar/${keep.name}")
         service.deletePublicUpload("https://example.test/${keep.name}")
         assertTrue(keep.exists())
+    }
+
+    private fun pcm16LeWavBytes(sampleRate: Int = 8000, samples: ShortArray): ByteArray {
+        val dataSize = samples.size * 2
+        val buf = ByteBuffer.allocate(44 + dataSize).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put("RIFF".toByteArray(Charsets.US_ASCII))
+        buf.putInt(36 + dataSize)
+        buf.put("WAVE".toByteArray(Charsets.US_ASCII))
+        buf.put("fmt ".toByteArray(Charsets.US_ASCII))
+        buf.putInt(16) // PCM fmt chunk size
+        buf.putShort(1) // PCM format = 1
+        buf.putShort(1) // mono
+        buf.putInt(sampleRate)
+        buf.putInt(sampleRate * 2) // byte rate
+        buf.putShort(2) // block align
+        buf.putShort(16) // bits per sample
+        buf.put("data".toByteArray(Charsets.US_ASCII))
+        buf.putInt(dataSize)
+        samples.forEach { buf.putShort(it) }
+        return buf.array()
+    }
+
+    @Test
+    fun audioUploadDegradesToEmptyWaveformWhenWaveformGenerationFails() = runBlocking {
+        mockkObject(MediaProbe)
+        mockkObject(WaveformGenerator)
+        try {
+            every { MediaProbe.probe(any(), any()) } returns
+                MediaProbe.Outcome.Success(MediaProbe.Result(durationMs = 1_000L, width = null, height = null))
+            every { WaveformGenerator.generate(any(), any(), any(), any()) } throws
+                WaveformGenerator.WaveformGenerationException(
+                    WaveformGenerator.FailureReason.NON_ZERO_EXIT,
+                    "Simulated ffmpeg decode failure",
+                )
+
+            val media = service.uploadFile(
+                fileType = FileType.AUDIO,
+                fileName = "broken-waveform.wav",
+                fileData = byteArrayOf(1, 2, 3, 4),
+                mimeType = "audio/wav",
+            ).get()
+
+            val audio = assertNotNull(media) as AudioContent
+            stored += File(audio.url.removePrefix("/"))
+            assertEquals(1_000L, audio.duration)
+            assertEquals(emptyList(), audio.waveform)
+        } finally {
+            unmockkObject(WaveformGenerator)
+            unmockkObject(MediaProbe)
+        }
+    }
+
+    @Test
+    fun audioUploadSucceedsWithNonEmptyWaveformForValidWav() = runBlocking {
+        // 0.2s at 8000Hz = 1600 samples at ~50% peak amplitude
+        val samples = ShortArray(1600) { 16384 }
+        val wavBytes = pcm16LeWavBytes(sampleRate = 8000, samples = samples)
+
+        val media = service.uploadFile(
+            fileType = FileType.AUDIO,
+            fileName = "tone.wav",
+            fileData = wavBytes,
+            mimeType = "audio/wav",
+        ).get()
+
+        val audio = assertNotNull(media) as AudioContent
+        stored += File(audio.url.removePrefix("/"))
+        assertTrue(audio.duration > 0L)
+        assertEquals(80, audio.waveform.size)
+        assertTrue(audio.waveform.any { it > 0 }, "valid tone must produce non-zero waveform samples")
     }
 }

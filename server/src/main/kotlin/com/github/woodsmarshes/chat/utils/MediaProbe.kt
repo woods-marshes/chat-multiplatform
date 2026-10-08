@@ -1,6 +1,5 @@
 package com.github.woodsmarshes.chat.utils
 
-import ws.schild.jave.process.ffmpeg.DefaultFFMPEGLocator
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -17,7 +16,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 object MediaProbe {
     data class Result(val durationMs: Long, val width: Int?, val height: Int?)
 
-    enum class FailureReason { TIMED_OUT, OUTPUT_EXCEEDED, UNPARSEABLE, INTERRUPTED }
+    enum class FailureReason {
+        TIMED_OUT,
+        OUTPUT_EXCEEDED,
+        UNPARSEABLE,
+        INTERRUPTED,
+        LAUNCH_FAILED,
+    }
 
     sealed interface Outcome {
         data class Success(val result: Result) : Outcome
@@ -26,6 +31,9 @@ object MediaProbe {
 
     /** Hard wall-clock limit before a hung ffmpeg probe is killed. */
     private const val PROBE_TIMEOUT_MS = 10_000L
+
+    /** Bounded wait for a forcibly destroyed process to reap OS resources. */
+    private const val PROCESS_EXIT_CONFIRM_MS = 5_000L
 
     /**
      * Cap on the collected metadata report. ffmpeg reports are a few KB; the
@@ -45,17 +53,48 @@ object MediaProbe {
      */
     fun probe(file: File): Outcome = probe(file, PROBE_TIMEOUT_MS)
 
-    fun probe(file: File, timeoutMs: Long): Outcome {
-        val process = ProcessBuilder(
-            DefaultFFMPEGLocator().executablePath,
-            "-hide_banner",
-            "-i", file.absolutePath,
+    fun probe(file: File, timeoutMs: Long): Outcome =
+        probe(file, timeoutMs, executableResolver = { FfmpegExecutableResolver.resolve() })
+
+    internal fun probe(
+        file: File,
+        timeoutMs: Long,
+        executableResolver: () -> String,
+    ): Outcome {
+        val executablePath = try {
+            executableResolver()
+        } catch (e: Exception) {
+            return Outcome.Failure(FailureReason.LAUNCH_FAILED)
+        }
+        return probeWithCommand(
+            command = listOf(
+                executablePath,
+                "-hide_banner",
+                "-i",
+                file.absolutePath,
+            ),
+            timeoutMs = timeoutMs,
         )
-            // No output file is passed, so ffmpeg exits non-zero — but only
-            // after dumping the container metadata to stderr. stdout is
-            // discarded; stderr carries the (bounded) report.
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .start()
+    }
+
+    internal fun probeWithCommand(
+        command: List<String>,
+        timeoutMs: Long,
+    ): Outcome {
+        if (timeoutMs <= 0L) {
+            return Outcome.Failure(FailureReason.TIMED_OUT)
+        }
+        val process = try {
+            ProcessBuilder(command)
+                // No output file is passed, so ffmpeg exits non-zero — but only
+                // after dumping the container metadata to stderr. stdout is
+                // discarded; stderr carries the (bounded) report.
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start()
+        } catch (e: Exception) {
+            return Outcome.Failure(FailureReason.LAUNCH_FAILED)
+        }
+
         val killedByWatchdog = AtomicBoolean(false)
         return try {
             val watchdog = watchdogExecutor.schedule(
@@ -67,16 +106,27 @@ object MediaProbe {
                 TimeUnit.MILLISECONDS,
             )
             try {
-                val report = readBounded(process.errorStream, MAX_REPORT_BYTES)
+                val report = try {
+                    readBounded(process.errorStream, MAX_REPORT_BYTES)
+                } catch (e: Exception) {
+                    if (killedByWatchdog.get()) {
+                        confirmProcessExit(process)
+                        return Outcome.Failure(FailureReason.TIMED_OUT)
+                    }
+                    confirmProcessExit(process)
+                    return Outcome.Failure(FailureReason.UNPARSEABLE)
+                }
                 when {
                     // The cap tripped mid-read: the process would block on a
                     // full stderr pipe forever, so kill it before unwinding.
                     report == null -> {
-                        process.destroyForcibly()
-                        process.waitFor(5, TimeUnit.SECONDS)
+                        confirmProcessExit(process)
                         Outcome.Failure(FailureReason.OUTPUT_EXCEEDED)
                     }
-                    killedByWatchdog.get() -> Outcome.Failure(FailureReason.TIMED_OUT)
+                    killedByWatchdog.get() -> {
+                        confirmProcessExit(process)
+                        Outcome.Failure(FailureReason.TIMED_OUT)
+                    }
                     else -> {
                         // The report may be complete while the process is not
                         // done (it closes stderr before exiting). Confirm the
@@ -88,7 +138,7 @@ object MediaProbe {
                         val exited = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
                         when {
                             killedByWatchdog.get() || !exited -> {
-                                process.destroyForcibly()
+                                confirmProcessExit(process)
                                 Outcome.Failure(FailureReason.TIMED_OUT)
                             }
                             else -> parseReport(report.decodeToString())
@@ -99,13 +149,26 @@ object MediaProbe {
                 }
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
-                process.destroyForcibly()
+                confirmProcessExit(process)
                 Outcome.Failure(FailureReason.INTERRUPTED)
             } finally {
                 watchdog.cancel(false)
             }
         } finally {
-            process.destroy()
+            if (process.isAlive) {
+                confirmProcessExit(process)
+            } else {
+                process.destroy()
+            }
+        }
+    }
+
+    private fun confirmProcessExit(process: Process) {
+        process.destroyForcibly()
+        try {
+            process.waitFor(PROCESS_EXIT_CONFIRM_MS, TimeUnit.MILLISECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 

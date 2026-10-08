@@ -18,6 +18,7 @@ import com.github.woodsmarshes.chat.core.model.error.FileError
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.utils.BlurHashEncoder
+import com.github.woodsmarshes.chat.utils.FfmpegExecutableResolver
 import com.github.woodsmarshes.chat.utils.FileUploadConfig
 import com.github.woodsmarshes.chat.utils.MediaProbe
 import com.github.woodsmarshes.chat.utils.PUBLIC_UPLOAD_URL_PREFIX
@@ -35,7 +36,6 @@ import kotlinx.io.IOException
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
 import org.slf4j.LoggerFactory
-import ws.schild.jave.process.ffmpeg.DefaultFFMPEGLocator
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
@@ -235,6 +235,7 @@ class FileService(
         staged: StagedUpload,
         mimeType: String,
         byteSize: Long,
+        uploaderId: Uuid? = null,
     ): Result<MediaContent, FileError> = withContext(Dispatchers.IO) {
         try {
             val result = coroutineBinding {
@@ -293,7 +294,7 @@ class FileService(
                     }
 
                     if (staged.fileType != FileType.AVATAR) {
-                        registerToTempStore(media, staged.file)
+                        registerToTempStore(media, staged.file, uploaderId)
                     }
 
                     media
@@ -336,7 +337,8 @@ class FileService(
         fileType: FileType,
         fileName: String,
         fileData: ByteArray,
-        mimeType: String
+        mimeType: String,
+        uploaderId: Uuid? = null,
     ): Result<MediaContent, FileError> {
         val stagedResult = stageUpload(fileType, fileName)
         stagedResult.getError()?.let { return Err(it) }
@@ -348,7 +350,7 @@ class FileService(
             staged.file.delete()
             return Err(FileError.IoError)
         }
-        return finalizeUpload(staged, mimeType, fileData.size.toLong())
+        return finalizeUpload(staged, mimeType, fileData.size.toLong(), uploaderId)
     }
 
     private suspend fun processAvatar(file: File, fileName: String): Result<Unit, FileError> = withContext(Dispatchers.IO) {
@@ -507,20 +509,31 @@ class FileService(
      * produced.
      */
     private fun extractVideoCover(videoFile: File, output: File, timeoutMs: Long): Boolean {
-        val process = ProcessBuilder(
-            DefaultFFMPEGLocator().executablePath,
-            "-y",
-            "-i", videoFile.absolutePath,
-            "-vframes", "1",
-            "-an",
-            "-q:v", "2",
-            output.absolutePath,
-        )
-            .redirectErrorStream(true)
-            // ffmpeg logs to stderr; discarding the merged stream removes the
-            // pipe-full deadlock without a drain thread.
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .start()
+        val ffmpegPath = try {
+            FfmpegExecutableResolver.resolve()
+        } catch (e: Exception) {
+            logger.warn("Failed to resolve ffmpeg executable for video cover extraction of {}", videoFile.name, e)
+            return false
+        }
+        val process = try {
+            ProcessBuilder(
+                ffmpegPath,
+                "-y",
+                "-i", videoFile.absolutePath,
+                "-vframes", "1",
+                "-an",
+                "-q:v", "2",
+                output.absolutePath,
+            )
+                .redirectErrorStream(true)
+                // ffmpeg logs to stderr; discarding the merged stream removes the
+                // pipe-full deadlock without a drain thread.
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .start()
+        } catch (e: Exception) {
+            logger.warn("Failed to start ffmpeg for video cover extraction of {}", videoFile.name, e)
+            return false
+        }
         return try {
             if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly()
@@ -533,6 +546,7 @@ class FileService(
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
             process.destroyForcibly()
+            process.waitFor(5, TimeUnit.SECONDS)
             false
         } finally {
             process.destroy()
@@ -609,18 +623,17 @@ class FileService(
             }
 
             val waveformTimeoutMs = stageTimeoutMs(deadlineNanos, WAVEFORM_STAGE_CAP_MS)
-            val waveformData = if (waveformTimeoutMs == null) {
-                logger.warn("Skipping waveform for {}: media budget exhausted", fileName)
-                emptyList()
-            } else {
-                withContext(Dispatchers.Default) {
-                    try {
-                        WaveformGenerator.generate(file, info.durationMs, 80, waveformTimeoutMs)
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        logger.error("Failed to generate waveform for $fileName", e)
-                        emptyList()
-                    }
+                ?: run {
+                    logger.warn("Failing audio upload for {}: media budget exhausted before waveform generation", fileName)
+                    Err(FileError.ProcessingFailed).bind()
+                }
+            val waveformData = withContext(Dispatchers.IO) {
+                try {
+                    WaveformGenerator.generate(file, info.durationMs, 80, waveformTimeoutMs)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    logger.error("Failed to generate waveform for $fileName", e)
+                    emptyList()
                 }
             }
 
@@ -639,14 +652,14 @@ class FileService(
         }
     }
 
-    private fun registerToTempStore(media: MediaContent, originalFile: File) {
+    private fun registerToTempStore(media: MediaContent, originalFile: File, uploaderId: Uuid?) {
         val paths = mutableListOf(originalFile.absolutePath)
         when (media) {
             is ImageContent -> media.thumbnailUrl?.let { paths.add(toPhysicalPath(it)) }
             is VideoContent -> media.coverUrl?.let { paths.add(toPhysicalPath(it)) }
             else -> {}
         }
-        uploadStore.register(media, paths)
+        uploadStore.register(media, paths, uploaderId)
     }
 
     private fun toPhysicalPath(url: String): String = url.removePrefix("/").replace("/", File.separator)

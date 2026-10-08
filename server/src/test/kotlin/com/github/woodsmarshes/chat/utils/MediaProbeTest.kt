@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.utils
 
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.io.InputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,5 +80,36 @@ class MediaProbeTest {
         // Must return promptly once the cap is exceeded (the caller then
         // kills the producing process), never block collecting to EOF.
         assertNull(MediaProbe.readBounded(endlessSource, maxBytes = 1_000))
+    }
+
+    @Test
+    fun probeReturnsLaunchFailedWhenExecutableResolutionFails() {
+        val outcome = MediaProbe.probe(
+            file = File("dummy.mp4"),
+            timeoutMs = 5_000L,
+            executableResolver = { throw IllegalStateException("Explicit FFMPEG_EXEC_PATH invalid") },
+        )
+
+        assertEquals(MediaProbe.Outcome.Failure(MediaProbe.FailureReason.LAUNCH_FAILED), outcome)
+    }
+
+    @Test
+    fun probeReturnsLaunchFailedWhenProcessCannotStart() {
+        val outcome = MediaProbe.probeWithCommand(
+            command = listOf("/definitely/nonexistent/ffmpeg-binary-xyz-987654"),
+            timeoutMs = 5_000L,
+        )
+
+        assertEquals(MediaProbe.Outcome.Failure(MediaProbe.FailureReason.LAUNCH_FAILED), outcome)
+    }
+
+    @Test
+    fun probeReturnsTimedOutWhenBudgetIsNonPositive() {
+        val outcome = MediaProbe.probeWithCommand(
+            command = listOf("ffmpeg"),
+            timeoutMs = 0L,
+        )
+
+        assertEquals(MediaProbe.Outcome.Failure(MediaProbe.FailureReason.TIMED_OUT), outcome)
     }
 }
