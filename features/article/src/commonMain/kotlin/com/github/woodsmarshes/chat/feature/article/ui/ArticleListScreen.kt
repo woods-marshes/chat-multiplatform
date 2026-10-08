@@ -27,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -196,10 +197,15 @@ private fun ArticleListContent(
         }
         articles.loadState.refresh is LoadState.Error && articles.itemCount == 0 -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = LocalStrings.current.loadFailed,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = LocalStrings.current.loadFailed,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    TextButton(onClick = { articles.retry() }) {
+                        Text(LocalStrings.current.retry)
+                    }
+                }
             }
         }
         articles.itemCount == 0 && articles.loadState.refresh is LoadState.NotLoading -> {
@@ -253,11 +259,17 @@ private fun ArticleListContent(
                         }
                         is LoadState.Error -> {
                             item {
-                                Text(
-                                    text = LocalStrings.current.articleLoadMoreFailed,
-                                    color = MaterialTheme.colorScheme.error,
+                                Box(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                )
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    TextButton(onClick = { articles.retry() }) {
+                                        Text(
+                                            text = "${LocalStrings.current.articleLoadMoreFailed} · ${LocalStrings.current.retry}",
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                }
                             }
                         }
                         else -> {}

@@ -10,9 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -23,25 +23,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.github.woodsmarshes.chat.core.common.webview.DesktopWebViewResources
 import com.github.woodsmarshes.chat.core.common.webview.prepareDesktopWebViewResources
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.features.article.resources.Res
 import dev.nucleusframework.webview.jsbridge.IJsMessageHandler
 import dev.nucleusframework.webview.jsbridge.JsMessage
 import dev.nucleusframework.webview.jsbridge.rememberWebViewJsBridge
-import dev.nucleusframework.webview.web.rememberWebViewNavigator
-import dev.nucleusframework.webview.web.rememberWebViewState
 import dev.nucleusframework.webview.web.WebView
 import dev.nucleusframework.webview.web.WebViewNavigator
+import dev.nucleusframework.webview.web.rememberWebViewNavigator
+import dev.nucleusframework.webview.web.rememberWebViewState
 import dev.nucleusframework.webview.web.windows.WindowsWebView2NativeWebView
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.UUID
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-
 
 private val json = Json { ignoreUnknownKeys = true }
 private val log = KotlinLogging.logger {}
@@ -79,8 +77,13 @@ actual fun TiptapViewerWebView(
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (preparationFailed) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Unable to prepare viewer resources")
-                    TextButton(onClick = { attempt++ }) { Text("Retry") }
+                    Text(
+                        text = LocalStrings.current.articleLoadFailed,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    TextButton(onClick = { attempt++ }) {
+                        Text(LocalStrings.current.retry)
+                    }
                 }
             } else {
                 CircularProgressIndicator()
@@ -224,10 +227,8 @@ private fun TiptapViewerWebViewContent(
 
     LaunchedEffect(requestId, isJsReady) {
         if (isJsReady) {
-            @OptIn(ExperimentalEncodingApi::class)
-            val base64Str = Base64.encode(jsonContentStr.encodeToByteArray())
             navigator.evaluateJavaScript(
-                "window.__viewerShell.renderContent(decodeURIComponent(escape(window.atob(\"$base64Str\"))), \"$requestId\");"
+                buildViewerRenderScript(jsonContentStr, requestId),
             )
         }
     }
@@ -275,18 +276,21 @@ private fun TiptapViewerWebViewContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
-                val error = when {
-                    !isJsReady && readyTimedOut -> "Viewer initialization timed out"
-                    failedRequestId == requestId -> "Unable to process article content"
-                    timedOutRequestId == requestId -> "Article content confirmation timed out"
-                    else -> null
-                }
-                if (error != null) {
+                val strings = LocalStrings.current
+                val hasError = (!isJsReady && readyTimedOut) ||
+                    failedRequestId == requestId ||
+                    timedOutRequestId == requestId
+                if (hasError) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(error)
-                        TextButton(onClick = onRetry) { Text("Retry") }
+                        Text(
+                            text = strings.articleLoadFailed,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(onClick = onRetry) {
+                            Text(strings.retry)
+                        }
                     }
                 } else {
                     CircularProgressIndicator()

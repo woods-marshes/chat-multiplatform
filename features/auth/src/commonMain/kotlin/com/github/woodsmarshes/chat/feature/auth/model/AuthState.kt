@@ -26,6 +26,11 @@ data class AuthUiState(
     val confirmPasswordError: String? = null,
     val screenState: AuthScreenState = AuthScreenState.Idle
 ) {
+    override fun toString(): String =
+        "AuthUiState(mode=$mode, name=$name, email=$email, password=<redacted>, confirmPassword=<redacted>, " +
+            "nameError=$nameError, emailError=$emailError, passwordError=$passwordError, " +
+            "confirmPasswordError=$confirmPasswordError, screenState=$screenState)"
+
     val canSubmit: Boolean get() {
         val hasErrors = nameError != null || emailError != null ||
                 passwordError != null || confirmPasswordError != null

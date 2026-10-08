@@ -104,6 +104,22 @@ class AuthViewModelTest {
         assertEquals(AuthScreenState.Success(repository.user), vm.uiState.value.screenState)
     }
 
+    @Test
+    fun authUiStateToStringRedactsPasswordFields() {
+        val vm = AuthViewModel(FakeAuthRepository())
+        val rawPassword = "MySuperSecretPassword!123"
+        val rawConfirm = "MySuperSecretConfirm!456"
+
+        vm.updateEmail("user@example.com")
+        vm.updatePassword(rawPassword)
+        vm.updateConfirmPassword(rawConfirm)
+
+        val stateText = vm.uiState.value.toString()
+        assertFalse(stateText.contains(rawPassword), "toString() must never leak password")
+        assertFalse(stateText.contains(rawConfirm), "toString() must never leak confirmPassword")
+        assertTrue(stateText.contains("<redacted>"))
+    }
+
     private class FakeAuthRepository : AuthRepository {
 
         val user = User(

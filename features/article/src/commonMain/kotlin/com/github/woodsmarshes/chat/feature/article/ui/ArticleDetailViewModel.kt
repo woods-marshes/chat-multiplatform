@@ -10,7 +10,9 @@ import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
 import com.github.michaelbull.result.Result
+import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.article.model.ArticleDetailUiState
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +27,9 @@ class ArticleDetailViewModel(
     private val articleId: Uuid,
     private val authorId: Uuid,
 ) : ViewModel() {
+    private val log = KotlinLogging.logger {}
+    private val strings = getLocaleStrings()
+
     val user = userRepository.getMeFlow()
 
     /** Whether the current user is the author of this article. */
@@ -53,7 +58,14 @@ class ArticleDetailViewModel(
             var state = ArticleDetailUiState(isLoading = true)
             result
                 .onOk { a -> state = state.copy(isLoading = a == null, article = a) }
-                .onErr { e -> state = state.copy(isLoading = false, error = e.toString()) }
+                .onErr { e ->
+                    log.error { "[article-detail] load article $articleId failed: $e" }
+                    val message = when (e) {
+                        ArticleError.NotFound -> strings.articleNotFound
+                        else -> strings.articleLoadFailed
+                    }
+                    state = state.copy(isLoading = false, error = message)
+                }
             state
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArticleDetailUiState())

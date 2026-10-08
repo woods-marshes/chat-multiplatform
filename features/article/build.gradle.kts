@@ -27,6 +27,12 @@ kotlin {
                 implementation(libs.androidx.paging.compose)
             }
         }
+        commonTest {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+            }
+        }
         jvmMain.dependencies { implementation(libs.composewebview) }
         matching { it.name == "androidMain" }.configureEach { dependencies { implementation(libs.composewebview) } }
         wasmJsMain.dependencies { implementation(libs.composewebview) }

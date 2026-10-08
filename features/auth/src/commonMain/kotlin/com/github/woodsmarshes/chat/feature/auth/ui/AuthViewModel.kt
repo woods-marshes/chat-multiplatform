@@ -67,7 +67,7 @@ class AuthViewModel(
         if (!validateAll()) return
 
         val s = _uiState.value
-        log.info { "[AuthViewModel]: s -> $s" }
+        log.info { "[AuthViewModel]: submitting mode=${s.mode}" }
         _uiState.update { it.copy(screenState = AuthScreenState.Loading) }
 
         viewModelScope.launch {
