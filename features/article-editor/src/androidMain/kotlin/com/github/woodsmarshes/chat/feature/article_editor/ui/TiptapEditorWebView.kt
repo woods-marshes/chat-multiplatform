@@ -204,14 +204,13 @@ actual fun TiptapEditorWebView(
                     }
                 }
             }
-            return@key
+        } else {
+            WebView(
+                state = state,
+                navigator = navigator,
+                webViewJsBridge = jsBridge,
+                modifier = modifier,
+            )
         }
-
-        WebView(
-            state = state,
-            navigator = navigator,
-            webViewJsBridge = jsBridge,
-            modifier = modifier,
-        )
     }
 }
