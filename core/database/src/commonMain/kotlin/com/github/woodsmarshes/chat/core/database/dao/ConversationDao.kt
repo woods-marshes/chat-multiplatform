@@ -10,6 +10,9 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface ConversationDao {
+    /** One-shot query for decisions inside an existing transaction. */
+    suspend fun findConversationById(id: Uuid): ConversationEntity?
+
     // 写入与同步
     suspend fun insertConversation(conversation: ConversationEntity)
     suspend fun insertConversations(conversations: List<ConversationEntity>)

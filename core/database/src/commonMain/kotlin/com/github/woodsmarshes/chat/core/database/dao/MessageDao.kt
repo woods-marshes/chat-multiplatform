@@ -48,6 +48,9 @@ interface MessageDao {
 
     fun getMessageById(id: Uuid): Flow<GetMessageById?>
 
+    /** One-shot query; does not collect an observation flow or change dispatchers. */
+    suspend fun findMessageById(id: Uuid): GetMessageById?
+
     fun getRepliesToMessage(messageId: Uuid): Flow<List<MessageEntity>>
 
     // 更新与状态管理

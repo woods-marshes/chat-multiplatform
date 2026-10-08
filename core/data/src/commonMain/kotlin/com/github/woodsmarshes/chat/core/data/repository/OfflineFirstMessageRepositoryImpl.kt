@@ -416,7 +416,7 @@ class OfflineFirstMessageRepositoryImpl(
             val isOwnMessage = currentUser != null && event.senderId == currentUser.id
             log.info { "[handleReceived] isOwnMessage=$isOwnMessage requestId=${event.requestId} serverMsgId=${message.id}" }
 
-            persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage })
+            persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage }, resolvedOwnUserId = currentUser?.id)
             trackDeliverySeq(session, message)
             log.info { "[handleReceived] db transaction done" }
         } catch (e: CancellationException) {
@@ -485,8 +485,9 @@ class OfflineFirstMessageRepositoryImpl(
             if (page.isEmpty()) return@withLock fetched
             val next = page.maxOf { it.id }
             check(next > afterId) { "Message sync cursor did not advance" }
+            val ownId = ownUser.firstOrNull()?.id
             messageDao.transaction {
-                page.forEach { persistServerMessage(it, ownRequestId = null) }
+                page.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
                 messageDao.setSyncCursor(conversationId, next)
             }
             fetched += page
@@ -509,24 +510,27 @@ class OfflineFirstMessageRepositoryImpl(
     }
 
     /** Merge server data and all local references within one transaction. */
-    private suspend fun persistServerMessage(message: Message, ownRequestId: String?) {
-        val ownId = ownUser.firstOrNull()?.id
+    private suspend fun persistServerMessage(
+        message: Message,
+        ownRequestId: String?,
+        resolvedOwnUserId: Uuid?,
+    ) {
+        val ownId = resolvedOwnUserId
         val candidate = if (message.sender?.id == ownId) {
             ownRequestId?.let(Uuid::parseOrNull) ?: message.clientRequestId
         } else null
         messageDao.transaction {
-            message.replyTo?.let { persistServerMessage(it, ownRequestId = null) }
+            message.replyTo?.let { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
             message.toUserEntity()?.let { userDao.insertUser(it) }
             message.toParticipantEntity()?.let { participantDao.insertParticipant(it) }
-            val local = candidate?.let { messageDao.getMessageById(it).firstOrNull() }
+            val local = candidate?.let { messageDao.findMessageById(it) }
             val matchingId = candidate?.takeIf {
                 local != null && local.user_id == message.sender?.id &&
                     local.conversation_id == message.conversationId &&
                     local.local_send_status in listOf(MessageStatus.SENDING, MessageStatus.FAILED)
             }
             messageDao.mergeServerMessage(message.toMessageEntity(MessageStatus.SENT), matchingId)
-            val currentLast = conversationDao.getConversationById(message.conversationId)
-                .firstOrNull()?.last_message_id
+            val currentLast = conversationDao.findConversationById(message.conversationId)?.last_message_id
             if (currentLast == null || message.id > currentLast) {
                 conversationDao.updateLastMessage(message.conversationId, message.id, message.createdAt)
             }
@@ -641,7 +645,7 @@ class OfflineFirstMessageRepositoryImpl(
 
         log.info { "[outbox] resending ${pending.size} pending message(s)" }
         for (entity in pending) {
-            val current = messageDao.getMessageById(entity.id).firstOrNull() ?: continue
+            val current = messageDao.findMessageById(entity.id) ?: continue
             if (current.local_send_status != MessageStatus.SENDING) continue
             val request = MessageRequest.Send(
                 senderId = current.user_id,
@@ -679,7 +683,7 @@ class OfflineFirstMessageRepositoryImpl(
         return try {
             lifecycle.execute {
                 sendMutex.withLock {
-                    val message = messageDao.getMessageById(messageId).firstOrNull()
+                    val message = messageDao.findMessageById(messageId)
                         ?: return@withLock Err(MessageError.MessageNotFound)
 
                     if (message.user_id != ownUser.firstOrNull()?.id) return@withLock Err(MessageError.PermissionDenied)

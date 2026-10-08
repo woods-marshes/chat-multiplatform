@@ -51,6 +51,9 @@ class MessageDaoImpl(
         writeQueries().transaction(body = body)
     }
 
+    override suspend fun findMessageById(id: Uuid): GetMessageById? =
+        writeQueries().getMessageById(id).executeAsOneOrNull()
+
     override suspend fun insertMessage(message: MessageEntity) {
         writeQueries().upsertMessage(message)
     }

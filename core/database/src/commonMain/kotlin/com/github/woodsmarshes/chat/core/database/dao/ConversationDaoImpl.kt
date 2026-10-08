@@ -28,6 +28,9 @@ class ConversationDaoImpl(
     private val queries
         get() = dbProvider().conversationsQueries
 
+    override suspend fun findConversationById(id: Uuid): ConversationEntity? =
+        writeQueries().getConversationById(id).executeAsOneOrNull()
+
     override suspend fun insertConversation(conversation: ConversationEntity) {
         writeQueries().upsertConversation(conversation)
     }

@@ -111,6 +111,8 @@ class MessageRepositoryDeliveryTest {
                 override fun getMessageById(id: Uuid) = delegate.getMessageById(id).map {
                     it?.copy(user_id = nextId)
                 }
+                override suspend fun findMessageById(id: Uuid) =
+                    delegate.findMessageById(id)?.copy(user_id = nextId)
             }
         }) { repo, dao, api, _, _ ->
             dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED))
