@@ -106,51 +106,51 @@ class ContactService(
                         contactRequestId, RequestStatus.ACCEPTED, remark
                     )
                     if (!updated) {
-                        null
-                    } else {
-                        // A false upsert would leave the request ACCEPTED without
-                        // the contact rows it promises; failing here rolls the
-                        // whole block back.
-                        val bothContactsUpserted = contactRepository.upsertContact(
-                            userId = userId,
-                            contactId = contactRequest.senderId,
-                            status = ContactStatus.FRIEND,
-                        ) && contactRepository.upsertContact(
-                            userId = contactRequest.senderId,
-                            contactId = userId,
-                            status = ContactStatus.FRIEND,
-                        )
-                        if (!bothContactsUpserted) {
-                            Err(ContactError.OperationFailed).bind()
-                        }
-                        conversationRepository.getExistingPrivateConversation(userId, contactRequest.senderId)?.id
-                            ?: conversationRepository.insertConversation(
-                                ConversationType.PRIVATE,
-                                PrivateMetadata()
-                            ).also { conversation ->
-                                val participants = listOf(
-                                    ConversationParticipant(
-                                        conversationId = conversation.id,
-                                        userId = userId,
-                                        role = ConversationRole.PARTICIPANT,
-                                        lastReadMessageId = null,
-                                        joinedAt = Clock.System.now(),
-                                        settings = ParticipantSettings(),
-                                    ), ConversationParticipant(
-                                        conversationId = conversation.id,
-                                        userId = contactRequest.senderId,
-                                        role = ConversationRole.PARTICIPANT,
-                                        lastReadMessageId = null,
-                                        joinedAt = Clock.System.now(),
-                                        settings = ParticipantSettings(),
-                                    )
-                                )
-                                participants.forEach { participant ->
-                                    conversationParticipantRepository.insertConversationParticipant(participant)
-                                }
-                            }.id
+                        Err(ContactError.OperationFailed).bind()
                     }
-                } ?: Err(ContactError.OperationFailed).bind()
+                    // A false upsert would leave the request ACCEPTED without
+                    // the contact rows it promises; failing here rolls the
+                    // whole block back.
+                    val bothContactsUpserted = contactRepository.upsertContact(
+                        userId = userId,
+                        contactId = contactRequest.senderId,
+                        status = ContactStatus.FRIEND,
+                    ) && contactRepository.upsertContact(
+                        userId = contactRequest.senderId,
+                        contactId = userId,
+                        status = ContactStatus.FRIEND,
+                    )
+                    if (!bothContactsUpserted) {
+                        Err(ContactError.OperationFailed).bind()
+                    }
+                    conversationRepository.getExistingPrivateConversation(userId, contactRequest.senderId)?.id
+                        ?: conversationRepository.insertConversation(
+                            ConversationType.PRIVATE,
+                            PrivateMetadata()
+                        ).also { conversation ->
+                            val participants = listOf(
+                                ConversationParticipant(
+                                    conversationId = conversation.id,
+                                    userId = userId,
+                                    role = ConversationRole.PARTICIPANT,
+                                    lastReadMessageId = null,
+                                    joinedAt = Clock.System.now(),
+                                    settings = ParticipantSettings(),
+                                ), ConversationParticipant(
+                                    conversationId = conversation.id,
+                                    userId = contactRequest.senderId,
+                                    role = ConversationRole.PARTICIPANT,
+                                    lastReadMessageId = null,
+                                    joinedAt = Clock.System.now(),
+                                    settings = ParticipantSettings(),
+                                )
+                            )
+                            participants.forEach { participant ->
+                                conversationParticipantRepository.insertConversationParticipant(participant)
+                                    ?: Err(ContactError.OperationFailed).bind()
+                            }
+                        }.id
+                }
 
                 eventBus.publishConversationEvent(
                     ConversationEvent.UserJoinedConversation(
@@ -201,29 +201,27 @@ class ContactService(
 
     suspend fun deleteContact(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {
         // Atomic teardown: both contact rows and the private conversation
-        // (when present) commit together or not at all.
-        val deletedConversationId = inTransaction {
+        // (when present) commit together or not at all. Failures must throw
+        // via bind() so inTransaction rolls back any earlier update instead of
+        // returning null and committing a half-deleted contact pair.
+        inTransaction {
             val result1 = contactRepository.updateContact(userId = userId, contactId = id, status = ContactStatus.DELETED)
             val result2 = contactRepository.updateContact(userId = id, contactId = userId, status = ContactStatus.DELETED)
             if (!result1 || !result2) {
-                null
-            } else {
-                conversationRepository.getExistingPrivateConversation(userId, id)?.let { conversation ->
-                    conversation.id.takeIf { conversationRepository.softDeleteConversation(conversation.id) }
-                }
+                Err(ContactError.OperationFailed).bind()
+            }
+            val existingConversation = conversationRepository.getExistingPrivateConversation(userId, id)
+            if (existingConversation != null && !conversationRepository.softDeleteConversation(existingConversation.id)) {
+                Err(ContactError.OperationFailed).bind()
             }
         }
-        if (deletedConversationId == null) {
-            Err(ContactError.OperationFailed).bind()
-        } else {
-            eventBus.publishContactEvent(
-                ContactEvent.ContactDeleted(
-                    userId = userId,
-                    contactId = id,
-                    timestamp = Clock.System.now()
-                )
+        eventBus.publishContactEvent(
+            ContactEvent.ContactDeleted(
+                userId = userId,
+                contactId = id,
+                timestamp = Clock.System.now()
             )
-        }
+        )
     }
 
     suspend fun blockUser(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {

@@ -49,58 +49,62 @@ class ConversationSettingsService(
         }
 
         // An ownerId different from the caller is an ownership transfer, which
-        // is validated and applied atomically (roles + profile row) before the
-        // plain profile fields; self-ownership just rewrites the same value.
+        // is validated and applied atomically together with the plain profile
+        // fields in a single transaction; self-ownership just rewrites the
+        // same value.
         val transferRequested = req.ownerId != null && req.ownerId != userId
         if (transferRequested) {
-            transferOwnership(conversationId, currentOwnerId = userId, newOwnerId = req.ownerId!!)
+            if (conversationParticipantRepository.getConversationParticipant(req.ownerId!!, conversationId) == null) {
+                throw AppException(ConversationError.NotParticipant)
+            }
         }
 
-        val success = groupProfileRepository.updateGroupProfile(
-            conversationId = conversationId,
-            name = req.name, handle = req.handle,
-            // The new owner is already persisted by the transfer above.
-            ownerId = if (transferRequested) null else req.ownerId,
-            description = req.description, avatarUrl = req.avatarUrl,
-            settings = req.settings
-        )
-        if (success) {
-            eventBus.publishConversationEvent(
-                ConversationEvent.GroupProfileUpdated(
-                    conversationId = conversationId, updaterId = userId,
-                    profile = req, timestamp = Clock.System.now()
-                )
+        inTransaction {
+            if (transferRequested) {
+                transferOwnership(conversationId, currentOwnerId = userId, newOwnerId = req.ownerId!!)
+            }
+
+            val success = groupProfileRepository.updateGroupProfile(
+                conversationId = conversationId,
+                name = req.name, handle = req.handle,
+                // The new owner is already persisted by the transfer above.
+                ownerId = if (transferRequested) null else req.ownerId,
+                description = req.description, avatarUrl = req.avatarUrl,
+                settings = req.settings
             )
-        } else {
-            Err(ConversationError.OperationFailed).bind()
+            if (!success) {
+                Err(ConversationError.OperationFailed).bind()
+            }
         }
+
+        eventBus.publishConversationEvent(
+            ConversationEvent.GroupProfileUpdated(
+                conversationId = conversationId, updaterId = userId,
+                profile = req, timestamp = Clock.System.now()
+            )
+        )
     }
 
     /**
-     * Swaps group ownership inside a single transaction: the outgoing owner is
-     * demoted to ADMIN, the target — who must already be a participant — is
-     * promoted to OWNER, and the profile row is repointed. Any failure throws
-     * so the earlier role writes roll back with the transaction; committing
-     * only half of this used to lock the new owner out of every owner-only
-     * operation while the old owner kept their rights.
+     * Swaps group ownership inside the enclosing transaction: the outgoing
+     * owner is demoted to ADMIN, the target — who must already be a
+     * participant — is promoted to OWNER, and the profile row is repointed.
+     * Any failure throws so the earlier role writes roll back with the
+     * transaction; committing only half of this used to lock the new owner
+     * out of every owner-only operation while the old owner kept their rights.
      */
     private suspend fun transferOwnership(conversationId: Uuid, currentOwnerId: Uuid, newOwnerId: Uuid) {
-        if (conversationParticipantRepository.getConversationParticipant(newOwnerId, conversationId) == null) {
-            throw AppException(ConversationError.NotParticipant)
-        }
-        inTransaction {
-            val demoted = conversationParticipantRepository.updateConversationParticipantRole(
-                userId = currentOwnerId, conversationId = conversationId, role = ConversationRole.ADMIN
-            )
-            val promoted = demoted && conversationParticipantRepository.updateConversationParticipantRole(
-                userId = newOwnerId, conversationId = conversationId, role = ConversationRole.OWNER
-            )
-            val profileUpdated = promoted && groupProfileRepository.updateGroupProfile(
-                conversationId = conversationId, ownerId = newOwnerId
-            )
-            if (!profileUpdated) {
-                throw AppException(ConversationError.OperationFailed)
-            }
+        val demoted = conversationParticipantRepository.updateConversationParticipantRole(
+            userId = currentOwnerId, conversationId = conversationId, role = ConversationRole.ADMIN
+        )
+        val promoted = demoted && conversationParticipantRepository.updateConversationParticipantRole(
+            userId = newOwnerId, conversationId = conversationId, role = ConversationRole.OWNER
+        )
+        val profileUpdated = promoted && groupProfileRepository.updateGroupProfile(
+            conversationId = conversationId, ownerId = newOwnerId
+        )
+        if (!profileUpdated) {
+            throw AppException(ConversationError.OperationFailed)
         }
     }
 

@@ -26,6 +26,7 @@ import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
 import io.mockk.coEvery
+import io.mockk.coInvoke
 import io.mockk.coJustRun
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -178,7 +179,7 @@ class MessageServiceSendTest {
 
         assertTrue(result.isOk)
         assertEquals(persisted.id, result.get()!!.id)
-        coVerify(exactly = 0) { attachments.resolveTrustedMedia(any()) }
+        coVerify(exactly = 0) { attachments.resolveTrustedMedia(any(), any()) }
         coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
     }

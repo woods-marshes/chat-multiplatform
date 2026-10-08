@@ -100,6 +100,7 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
         handledId: Uuid,
         updates: List<Triple<Uuid, String?, RequestStatus>>,
     ): Boolean = dbQuery {
+        if (updates.isEmpty()) return@dbQuery false
         var updatedCount = 0
         val currentTimestamp = Clock.System.now()
 
@@ -115,7 +116,7 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
             }
             updatedCount += count
         }
-        updatedCount > 0
+        updatedCount == updates.size
     }
 
     override suspend fun getJoinRequestById(joinRequestId: Uuid): GroupJoinRequest? = dbQuery {

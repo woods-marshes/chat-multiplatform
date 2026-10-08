@@ -214,4 +214,33 @@ class ContactFlowDatabaseTest {
 
         assertEquals(ContactError.NotBlocked, second.getError())
     }
+
+    @Test
+    fun deleteContactRollsBackFirstContactUpdateWhenMirrorRowIsMissing() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        // Only Alice -> Bob exists; Bob -> Alice is missing.
+        contactRepository.insertContact(alice, bob, status = ContactStatus.FRIEND)
+
+        val result = service.deleteContact(alice, bob)
+
+        assertEquals(ContactError.OperationFailed, result.getError())
+        // Alice -> Bob must not be left in DELETED state when the transaction failed.
+        assertEquals(ContactStatus.FRIEND, contactRepository.getContact(alice, bob)!!.status)
+    }
+
+    @Test
+    fun alreadyHandledContactRequestCannotBeReapprovedOrRerejected() = runBlocking {
+        val alice = TestDb.user("alice")
+        val bob = TestDb.user("bob")
+        service.sendFriendRequest(alice, AddContactRequest(targetId = bob, message = "hi"))
+        val pending = contactRequestRepository.getRequestsByReceiver(bob).single()
+
+        assertEquals(Unit, service.handleFriendRequest(bob, pending.id, ContactRequestAction.REJECT, "no").get())
+        // Attempting to approve an already-rejected request must fail via the PENDING guard.
+        val secondAttempt = service.handleFriendRequest(bob, pending.id, ContactRequestAction.APPROVE, null)
+        assertEquals(ContactError.OperationFailed, secondAttempt.getError())
+        assertEquals(RequestStatus.REJECTED, contactRequestRepository.getRequestById(pending.id)!!.status)
+        assertNull(contactRepository.getContact(alice, bob))
+    }
 }

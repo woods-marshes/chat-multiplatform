@@ -148,4 +148,61 @@ class OwnershipTransferDatabaseTest {
 
         assertEquals(ConversationError.NotParticipant, result.getError())
     }
+
+    @Test
+    fun profileUpdateFailureDuringOwnershipTransferRollsBackRoleChanges(): Unit = runBlocking {
+        val (alice, bob, _) = seed()
+        val conversationId = participantRepository.getUserConversationParticipants(alice).single().conversationId
+
+        val failingProfileRepo = object : com.github.woodsmarshes.chat.repository.GroupProfileRepository {
+            override suspend fun initGroupProfile(
+                conversationId: Uuid,
+                name: String,
+                handle: String?,
+                ownerId: Uuid,
+                settings: GroupSettings?,
+                description: String?,
+                avatarUrl: String?,
+            ) = groupProfileRepository.initGroupProfile(conversationId, name, handle, ownerId, settings, description, avatarUrl)
+
+            override suspend fun updateGroupProfile(
+                conversationId: Uuid,
+                name: String?,
+                handle: String?,
+                ownerId: Uuid?,
+                description: String?,
+                avatarUrl: String?,
+                settings: GroupSettings?,
+            ): Boolean {
+                // Allow the inner transferOwnership repoint (ownerId != null),
+                // then fail the outer profile field update (name != null).
+                if (name != null) return false
+                return groupProfileRepository.updateGroupProfile(conversationId, name, handle, ownerId, description, avatarUrl, settings)
+            }
+
+            override suspend fun getGroupProfile(conversationId: Uuid) = groupProfileRepository.getGroupProfile(conversationId)
+            override suspend fun getGroupProfileWithUser(conversationId: Uuid) = groupProfileRepository.getGroupProfileWithUser(conversationId)
+            override suspend fun getGroupProfilesWithUsers(conversationIds: List<Uuid>) = groupProfileRepository.getGroupProfilesWithUsers(conversationIds)
+            override suspend fun searchGroup(keyword: String) = groupProfileRepository.searchGroup(keyword)
+            override suspend fun checkHandleExists(handle: String) = groupProfileRepository.checkHandleExists(handle)
+        }
+
+        val atomicService = ConversationSettingsService(
+            conversationParticipantRepository = participantRepository,
+            groupProfileRepository = failingProfileRepo,
+            eventBus = eventBus,
+        )
+
+        val result = atomicService.updateGroupSettings(
+            conversationId,
+            alice,
+            UpdateConversationSettingsRequest(ownerId = bob, name = "broken-update"),
+        )
+
+        assertEquals(ConversationError.OperationFailed, result.getError())
+        // Ownership transfer and role changes must have rolled back together.
+        assertEquals(alice, groupProfileRepository.getGroupProfile(conversationId)!!.ownerId)
+        assertEquals(ConversationRole.OWNER, participantRepository.getConversationParticipant(alice, conversationId)!!.role)
+        assertEquals(ConversationRole.MEMBER, participantRepository.getConversationParticipant(bob, conversationId)!!.role)
+    }
 }

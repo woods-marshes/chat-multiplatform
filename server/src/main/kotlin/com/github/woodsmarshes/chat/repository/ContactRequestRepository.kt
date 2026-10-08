@@ -23,7 +23,8 @@ interface ContactRequestRepository {
     suspend fun updateRequestStatus(
         requestId: Uuid,
         status: RequestStatus,
-        remark: String?
+        remark: String?,
+        expectedStatus: RequestStatus = RequestStatus.PENDING,
     ): Boolean
 
     suspend fun getRequestById(requestId: Uuid): ContactRequest?
@@ -60,9 +61,13 @@ class ContactRequestSourceImpl : ContactRequestRepository {
     override suspend fun updateRequestStatus(
         requestId: Uuid,
         status: RequestStatus,
-        remark: String?
+        remark: String?,
+        expectedStatus: RequestStatus,
     ): Boolean = dbQuery {
-        ContactRequests.update({ ContactRequests.id eq requestId }) {
+        ContactRequests.update({
+            (ContactRequests.id eq requestId) and
+                (ContactRequests.status eq expectedStatus)
+        }) {
             it[this.status] = status
             it[this.updatedAt] = Clock.System.now()
             it[this.message] = remark

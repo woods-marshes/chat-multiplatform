@@ -25,7 +25,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
-import com.github.woodsmarshes.chat.utils.dbQuery
+import com.github.woodsmarshes.chat.utils.inTransaction
 import com.github.woodsmarshes.chat.repository.UserRepository
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -43,8 +43,10 @@ class ConversationLifecycleService(
             is CreateGroupRequest -> {
                 var invitedParticipants: List<ConversationParticipant> = emptyList()
                 // Conversation + group profile + owner membership + invites
-                // commit atomically; events fire after the transaction ends.
-                val created = dbQuery {
+                // commit atomically; failures must throw via bind() so
+                // inTransaction rolls the partial rows back instead of
+                // returning null and committing an orphaned conversation.
+                val created = inTransaction {
                     val conv = conversationRepository.insertConversation(ConversationType.GROUP, GroupMetadata())
                     groupProfileRepository.initGroupProfile(
                         conversationId = conv.id,
@@ -54,7 +56,7 @@ class ConversationLifecycleService(
                         settings = req.settings,
                         description = req.description,
                         avatarUrl = req.avatar
-                    ) ?: return@dbQuery null
+                    ) ?: Err(ConversationError.OperationFailed).bind()
                     conversationParticipantRepository.insertConversationParticipant(
                         ConversationParticipant(
                             conversationId = conv.id,
@@ -64,15 +66,20 @@ class ConversationLifecycleService(
                             joinedAt = Clock.System.now(),
                             settings = ParticipantSettings(),
                         )
-                    ) ?: return@dbQuery null
+                    ) ?: Err(ConversationError.OperationFailed).bind()
                     if (req.memberIds.isNotEmpty()) {
                         val friendIds = req.memberIds.intersect(contactRepository.getFriendIds(userId).toSet())
-                        invitedParticipants = conversationParticipantRepository.inviteUsersToConversation(
-                            conv.id, userId, friendIds
-                        )
+                        if (friendIds.isNotEmpty()) {
+                            invitedParticipants = conversationParticipantRepository.inviteUsersToConversation(
+                                conv.id, userId, friendIds
+                            )
+                            if (invitedParticipants.size != friendIds.size) {
+                                Err(ConversationError.OperationFailed).bind()
+                            }
+                        }
                     }
                     conv
-                } ?: Err(ConversationError.OperationFailed).bind()
+                }
                 if (invitedParticipants.isNotEmpty()) {
                     eventBus.publishConversationEvent(
                         ConversationEvent.UserJoinedConversation(
@@ -93,7 +100,7 @@ class ConversationLifecycleService(
                     existingConversation
                 } else {
                     var createdNew = false
-                    val conversation = dbQuery {
+                    val conversation = inTransaction {
                         conversationRepository.getExistingPrivateConversation(userId, req.targetUserId)
                             ?: conversationRepository.insertConversation(ConversationType.PRIVATE, PrivateMetadata())
                                 .also { conv ->
@@ -112,6 +119,7 @@ class ConversationLifecycleService(
                                     )
                                     participants.forEach { participant ->
                                         conversationParticipantRepository.insertConversationParticipant(participant)
+                                            ?: Err(ConversationError.OperationFailed).bind()
                                     }
                                 }
                     }

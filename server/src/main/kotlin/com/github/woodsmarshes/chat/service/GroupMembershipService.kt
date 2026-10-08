@@ -20,7 +20,7 @@ import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
 import com.github.woodsmarshes.chat.repository.GroupJoinRequestRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
-import com.github.woodsmarshes.chat.utils.dbQuery
+import com.github.woodsmarshes.chat.utils.inTransaction
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -174,8 +174,14 @@ class GroupMembershipService(
         if (requests.isEmpty()) {
             Err(ConversationError.InvalidRequest).bind()
         }
-        val requestIds = requests.map { it.groupJoinRequestId }
+        val requestIds = requests.map { it.groupJoinRequestId }.distinct()
+        if (requestIds.size != requests.size) {
+            Err(ConversationError.InvalidRequest).bind()
+        }
         val joinRequests = groupJoinRequestRepository.getJoinRequestByIds(requestIds)
+        if (joinRequests.size != requestIds.size) {
+            Err(ConversationError.NotFound).bind()
+        }
         joinRequests.forEach { joinRequest ->
             if (joinRequest.status != RequestStatus.PENDING) {
                 Err(ConversationError.RequestAlreadyProcessed).bind()
@@ -201,26 +207,33 @@ class GroupMembershipService(
                 }
             )
         }
-        // Status updates and approval invites commit atomically; events fire
-        // after the transaction ends so subscribers never observe half-applied
-        // batches.
-        val approvedJoinRequests = dbQuery {
+        // Status updates and approval invites commit atomically; failures
+        // must throw via bind() so inTransaction rolls back the status updates
+        // instead of returning null and committing half-applied batches.
+        val approvedJoinRequests = inTransaction {
             val success = groupJoinRequestRepository.updateGroupJoinRequests(adminId, updates)
             if (!success) {
-                null
-            } else {
-                requests.mapNotNull { request ->
-                    if (request.action != GroupJoinRequestAction.APPROVE) return@mapNotNull null
-                    val joinRequest = joinRequests.find { it.id == request.groupJoinRequestId }
-                        ?: return@dbQuery null
-                    conversationParticipantRepository.inviteUserToConversation(
-                        conversationId = joinRequest.conversationId, inviterId = adminId,
-                        userId = joinRequest.applicantId
-                    )
-                    joinRequest
-                }
+                Err(ConversationError.OperationFailed).bind()
             }
-        } ?: Err(ConversationError.OperationFailed).bind()
+            requests.mapNotNull { request ->
+                if (request.action != GroupJoinRequestAction.APPROVE) return@mapNotNull null
+                val joinRequest = joinRequests.find { it.id == request.groupJoinRequestId }
+                    ?: Err(ConversationError.OperationFailed).bind()
+                val invited = conversationParticipantRepository.inviteUserToConversation(
+                    conversationId = joinRequest.conversationId, inviterId = adminId,
+                    userId = joinRequest.applicantId
+                )
+                if (invited == null &&
+                    conversationParticipantRepository.getConversationParticipant(
+                        joinRequest.applicantId,
+                        joinRequest.conversationId
+                    ) == null
+                ) {
+                    Err(ConversationError.OperationFailed).bind()
+                }
+                joinRequest
+            }
+        }
         approvedJoinRequests.forEach { joinRequest ->
             eventBus.publishConversationEvent(
                 ConversationEvent.GroupJoinRequestHandled(
