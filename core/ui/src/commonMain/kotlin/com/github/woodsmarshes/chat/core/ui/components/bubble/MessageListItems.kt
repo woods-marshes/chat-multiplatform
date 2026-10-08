@@ -33,6 +33,7 @@ fun LazyListScope.messageItems(
     itemProvider: (Int) -> MessageUiModel?,
     formatter: MessageFormatter,
     ownUserId: Uuid? = null,
+    connectionState: com.github.woodsmarshes.chat.core.model.ConnectionState = com.github.woodsmarshes.chat.core.model.ConnectionState.Idle,
     audioState: KmpMediaPlaybackState = KmpMediaPlaybackState(),
     videoIsPlaying: Boolean = false,
     onImageClick: ((ImageContent) -> Unit)? = null,
@@ -79,6 +80,7 @@ fun LazyListScope.messageItems(
             )
         }
 
+        androidx.compose.runtime.CompositionLocalProvider(LocalMessageConnection provides connectionState) {
         if (isOwn) {
             OwnMessageContainer(
                 message = message,
@@ -106,6 +108,7 @@ fun LazyListScope.messageItems(
                 },
                 content = content,
             )
+        }
         }
     }
 }

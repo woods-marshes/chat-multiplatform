@@ -90,6 +90,8 @@ class OfflineFirstMessageRepositoryImpl(
     private val scope: CoroutineScope,
     private val mediatorFactory: MessageMediatorFactory,
 ) : MessageRepository {
+    override val connectionState get() = messageApi.connectionState
+
     private val log = KotlinLogging.logger {}
 
     private companion object {
@@ -697,8 +699,8 @@ class OfflineFirstMessageRepositoryImpl(
                     if (!messageDao.claimFailedMessage(messageId, Clock.System.now())) return@withLock Ok(Unit)
 
                     if (messageApi.connectionState.value !is ConnectionState.Connected) {
-                        // Left in SENDING on purpose: the outbox resends it on reconnect.
-                        return@withLock Err(MessageError.OperationFailed)
+                        // Accepted into the outbox; the UI shows waiting for a connection.
+                        return@withLock Ok(Unit)
                     }
 
                     val request = MessageRequest.Send(

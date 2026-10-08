@@ -49,6 +49,8 @@ class ChatViewModel(
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
 
+    val connectionState = messageRepository.connectionState
+
     private val log = KotlinLogging.logger {}
 
     // User-facing strings for ViewModel-produced messages (no CompositionLocal here).

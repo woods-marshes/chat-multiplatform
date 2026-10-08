@@ -10,9 +10,9 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-private val strings get() = getLocaleStrings()
 
-fun formatMessageTime(instant: Instant): String {
+
+fun formatMessageTime(instant: Instant, strings: com.github.woodsmarshes.chat.lyricist.Strings = getLocaleStrings()): String {
     val timeZone = TimeZone.currentSystemDefault()
     val msgLocal = instant.toLocalDateTime(timeZone)
     val nowLocal = Clock.System.now().toLocalDateTime(timeZone)

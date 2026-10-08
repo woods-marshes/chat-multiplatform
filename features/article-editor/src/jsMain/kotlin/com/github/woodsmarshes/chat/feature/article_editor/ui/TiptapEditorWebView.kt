@@ -21,6 +21,6 @@ actual fun TiptapEditorWebView(
     modifier: Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Article editor is handled by the web module.")
+        Text(com.github.woodsmarshes.chat.core.ui.resources.LocalStrings.current.webEditorHint)
     }
 }

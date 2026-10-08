@@ -76,7 +76,7 @@ fun VideoBubble(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Playing",
+                        contentDescription = com.github.woodsmarshes.chat.core.ui.resources.LocalStrings.current.playingCd,
                         tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(48.dp),
                     )
@@ -106,7 +106,7 @@ fun VideoBubble(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play",
+                        contentDescription = com.github.woodsmarshes.chat.core.ui.resources.LocalStrings.current.playCd,
                         tint = Color.White,
                         modifier = Modifier.size(28.dp),
                     )

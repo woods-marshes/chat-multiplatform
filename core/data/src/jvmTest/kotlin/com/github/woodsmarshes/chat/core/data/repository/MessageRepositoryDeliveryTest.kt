@@ -157,7 +157,7 @@ class MessageRepositoryDeliveryTest {
             every { api.connectionState } returns MutableStateFlow(ConnectionState.Idle)
             dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED))
             dao.insertMessage(message(nextId).toMessageEntity(MessageStatus.SENT))
-            repo.retryMessage(serverId)
+            assertEquals(com.github.michaelbull.result.Ok(Unit), repo.retryMessage(serverId))
             repo.retryMessage(nextId)
             coVerify(exactly = 0) { api.send(any()) }
             assertEquals(MessageStatus.SENDING, dao.getMessageById(serverId).first()?.local_send_status)

@@ -253,4 +253,17 @@
     <string name="open_source_licenses">第三方开源软件许可</string>
     <string name="open_source_licenses_desc">查看本应用使用的全部开源依赖库及其许可证</string>
     <string name="open_source_licenses_count_fmt">共 %s 个开源依赖项 · 点击查看许可证详情</string>
+    <string name="message_waiting_connection">等待连接，恢复后自动发送</string>
+    <string name="message_sending">发送中，等待服务器确认</string>
+    <string name="message_send_failed">发送失败，可重试</string>
+    <string name="playing_cd">正在播放</string>
+    <string name="web_editor_hint">请在 Web 文章模块中编辑文章</string>
+    <string name="web_viewer_hint">请在 Web 文章模块中查看文章</string>
+    <string name="auth_name_empty">名称不能为空</string>
+    <string name="auth_name_short">名称至少需要 2 个字符</string>
+    <string name="auth_name_long">名称不能超过 15 个字符</string>
+    <string name="auth_email_empty">邮箱不能为空</string>
+    <string name="auth_password_empty">密码不能为空</string>
+    <string name="auth_confirm_empty">请再次输入密码</string>
+    <string name="auth_password_mismatch">两次输入的密码不一致</string>
 </resources>

@@ -2,6 +2,10 @@ package com.github.woodsmarshes.chat.feature.auth.model
 
 import com.github.woodsmarshes.chat.core.model.User
 
+enum class AuthValidationError {
+    NameEmpty, NameShort, NameLong, EmailEmpty, PasswordEmpty, PasswordShort, ConfirmEmpty, PasswordMismatch
+}
+
 sealed interface AuthMode {
     data object Login : AuthMode
     data object Register : AuthMode
@@ -20,10 +24,10 @@ data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
-    val nameError: String? = null,
-    val emailError: String? = null,
-    val passwordError: String? = null,
-    val confirmPasswordError: String? = null,
+    val nameError: AuthValidationError? = null,
+    val emailError: AuthValidationError? = null,
+    val passwordError: AuthValidationError? = null,
+    val confirmPasswordError: AuthValidationError? = null,
     val screenState: AuthScreenState = AuthScreenState.Idle
 ) {
     override fun toString(): String =
@@ -44,23 +48,23 @@ data class AuthUiState(
 
     companion object {
         fun validateName(name: String) = when {
-            name.isEmpty() -> "Name cannot be empty"
-            name.length < 2 -> "Name must be at least 2 characters"
-            name.length > 15 -> "Name must be less than 15 characters"
+            name.isEmpty() -> AuthValidationError.NameEmpty
+            name.length < 2 -> AuthValidationError.NameShort
+            name.length > 15 -> AuthValidationError.NameLong
             else -> null
         }
 
-        fun validateEmail(email: String) = if (email.isEmpty()) "Email cannot be empty" else null
+        fun validateEmail(email: String) = if (email.isEmpty()) AuthValidationError.EmailEmpty else null
 
         fun validatePassword(password: String) = when {
-            password.isEmpty() -> "Password cannot be empty"
-            password.length < 6 -> "Password must be at least 6 characters"
+            password.isEmpty() -> AuthValidationError.PasswordEmpty
+            password.length < 6 -> AuthValidationError.PasswordShort
             else -> null
         }
 
         fun validateConfirmPassword(confirm: String, password: String) = when {
-            confirm.isEmpty() -> "Confirm password cannot be empty"
-            confirm != password -> "Passwords do not match"
+            confirm.isEmpty() -> AuthValidationError.ConfirmEmpty
+            confirm != password -> AuthValidationError.PasswordMismatch
             else -> null
         }
     }

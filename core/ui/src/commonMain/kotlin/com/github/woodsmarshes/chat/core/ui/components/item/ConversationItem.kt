@@ -124,7 +124,7 @@ fun ConversationItem(
         Column(horizontalAlignment = Alignment.End) {
             if (lastMsg != null) {
                 Text(
-                    text = formatRelativeTime(lastMsg.createdAt),
+                    text = formatRelativeTime(lastMsg.createdAt, com.github.woodsmarshes.chat.core.ui.resources.LocalStrings.current),
                     color = bubbleColors.timestampColor,
                     fontSize = 12.sp,
                 )

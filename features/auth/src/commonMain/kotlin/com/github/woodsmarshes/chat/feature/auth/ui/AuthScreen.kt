@@ -347,7 +347,7 @@ private fun AuthFormContent(
                         label = { Text(LocalStrings.current.emailLabel) },
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.emailError != null,
-                        supportingText = uiState.emailError?.let { { Text(it) } },
+                        supportingText = uiState.emailError?.let { { Text(it.localizedMessage()) } },
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
@@ -367,7 +367,7 @@ private fun AuthFormContent(
                         label = { Text(LocalStrings.current.passwordLabel) },
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.passwordError != null,
-                        supportingText = uiState.passwordError?.let { { Text(it) } },
+                        supportingText = uiState.passwordError?.let { { Text(it.localizedMessage()) } },
                         leadingIcon = { Icon(Icons.Default.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -398,7 +398,7 @@ private fun AuthFormContent(
                         label = { Text(LocalStrings.current.nameLabel) },
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.nameError != null,
-                        supportingText = uiState.nameError?.let { { Text(it) } },
+                        supportingText = uiState.nameError?.let { { Text(it.localizedMessage()) } },
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -415,7 +415,7 @@ private fun AuthFormContent(
                         label = { Text(LocalStrings.current.emailLabel) },
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.emailError != null,
-                        supportingText = uiState.emailError?.let { { Text(it) } },
+                        supportingText = uiState.emailError?.let { { Text(it.localizedMessage()) } },
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
@@ -435,7 +435,7 @@ private fun AuthFormContent(
                         label = { Text(LocalStrings.current.passwordLabel) },
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.passwordError != null,
-                        supportingText = uiState.passwordError?.let { { Text(it) } },
+                        supportingText = uiState.passwordError?.let { { Text(it.localizedMessage()) } },
                         leadingIcon = { Icon(Icons.Default.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -459,7 +459,7 @@ private fun AuthFormContent(
                         label = { Text(LocalStrings.current.confirmPasswordLabel) },
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.confirmPasswordError != null,
-                        supportingText = uiState.confirmPasswordError?.let { { Text(it) } },
+                        supportingText = uiState.confirmPasswordError?.let { { Text(it.localizedMessage()) } },
                         leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
@@ -501,5 +501,20 @@ private fun AuthFormContent(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.localizedMessage(): String {
+    val strings = LocalStrings.current
+    return when (this) {
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.NameEmpty -> strings.authNameEmpty
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.NameShort -> strings.authNameShort
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.NameLong -> strings.authNameLong
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.EmailEmpty -> strings.authEmailEmpty
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.PasswordEmpty -> strings.authPasswordEmpty
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.PasswordShort -> strings.authWeakPassword
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.ConfirmEmpty -> strings.authConfirmEmpty
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.PasswordMismatch -> strings.authPasswordMismatch
     }
 }

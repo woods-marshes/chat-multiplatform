@@ -450,12 +450,15 @@ fun MessageTimestamp(
     isOwnMessage: Boolean,
 ) {
     val bubbleColors = LocalBubbleColors.current
-    val timeStr = formatMessageTime(createdAt)
+    val strings = LocalStrings.current
+    val timeStr = formatMessageTime(createdAt, strings)
 
-    val statusStr = when (sendStatus) {
-        is MessageState.Sending -> LocalStrings.current.sending
-        is MessageState.SendFailed -> LocalStrings.current.sendFailed
-        is MessageState.Completed -> if (isOwnMessage) LocalStrings.current.sendCompleted else ""
+    val statusStr = when (deliveryPresentation(sendStatus, LocalMessageConnection.current, isOwnMessage)) {
+        DeliveryPresentation.Waiting -> strings.messageWaitingConnection
+        DeliveryPresentation.Sending -> strings.messageSending
+        DeliveryPresentation.Failed -> strings.messageSendFailed
+        DeliveryPresentation.Sent -> strings.sendCompleted
+        DeliveryPresentation.Hidden -> ""
     }
 
     Row(

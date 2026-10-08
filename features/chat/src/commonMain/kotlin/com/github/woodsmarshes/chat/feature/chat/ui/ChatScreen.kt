@@ -102,6 +102,7 @@ fun ChatScreen(
     val forwardTargets by viewModel.forwardTargets.collectAsState(initial = emptyList<ConversationUiModel>())
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
     val strings = LocalStrings.current
+    val connectionState by viewModel.connectionState.collectAsState()
 
     // Send/forward failures surface once as a snackbar; the ViewModel clears
     // the state after display so a rotation does not replay the toast.
@@ -377,6 +378,7 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
             ) {
                 messageItems(
+                    connectionState = connectionState,
                     itemCount = lazyMessages.itemCount,
                     itemProvider = { lazyMessages[it] },
                     formatter = formatter,

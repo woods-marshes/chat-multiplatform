@@ -7,12 +7,12 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-private val strings get() = getLocaleStrings()
+
 
 /**
  * 格式化相对时间（如 "刚刚"、"5分钟前"、"2小时前"、"3天前"、"月/日"）
  */
-fun formatRelativeTime(instant: Instant?): String {
+fun formatRelativeTime(instant: Instant?, strings: com.github.woodsmarshes.chat.lyricist.Strings = getLocaleStrings()): String {
     if (instant == null) return ""
 
     val now = Clock.System.now()

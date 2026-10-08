@@ -16,6 +16,6 @@ actual fun TiptapViewerWebView(
 ) {
     // JS target uses web module's React-based rendering instead.
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Article viewer is handled by the web module.")
+        Text(com.github.woodsmarshes.chat.core.ui.resources.LocalStrings.current.webViewerHint)
     }
 }

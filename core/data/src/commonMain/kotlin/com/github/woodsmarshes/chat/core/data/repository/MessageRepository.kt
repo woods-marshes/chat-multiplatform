@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 
 interface MessageRepository {
+    val connectionState: kotlinx.coroutines.flow.StateFlow<com.github.woodsmarshes.chat.core.model.ConnectionState>
+
     /**
      * Starts the session-bound message consumers and outbox workers. Idempotent
      * while the current session is already running; waits if a previous session

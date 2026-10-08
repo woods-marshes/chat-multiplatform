@@ -366,6 +366,8 @@ private class FakeMessageRepository(
     private val onTyping: (Uuid, Boolean) -> Unit = { _, _ -> },
     private val onRetry: (Uuid) -> Unit = {},
 ) : MessageRepository {
+    override val connectionState = kotlinx.coroutines.flow.MutableStateFlow<com.github.woodsmarshes.chat.core.model.ConnectionState>(com.github.woodsmarshes.chat.core.model.ConnectionState.Connected)
+
     override suspend fun startSession() = Unit
     override suspend fun stopSession() = Unit
     override suspend fun retryPendingMessages() = Unit
