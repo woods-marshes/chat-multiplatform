@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
+import com.github.woodsmarshes.chat.core.datastore.BoundCredentialIdentity
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.PrivacySetting
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -42,14 +45,20 @@ class SettingsViewModel(
     private var privacyWriter: Job? = null
     private val preferenceMutex = Mutex()
     private var hasInitializedProfileForm = false
-    private var preferenceIdentity: com.github.woodsmarshes.chat.core.datastore.BoundCredentialIdentity? = null
+    // Last preference snapshot actually persisted; the revert path mirrors it
+    // back into the UI when a write is rejected.
+    private var confirmedPreference: UserPreference? = null
+
+    // A Deferred rather than a late-captured var: a toggle racing the VM's
+    // construction used to find a null identity and be silently dropped.
+    private val preferenceIdentity: Deferred<BoundCredentialIdentity> =
+        viewModelScope.async { userSettingDataSource.captureCredentialIdentity() }
 
     init {
         loadSettings()
     }
 
     private fun loadSettings() {
-        viewModelScope.launch { preferenceIdentity = userSettingDataSource.captureCredentialIdentity() }
         viewModelScope.launch {
             if (userRepository.getMeFlow().first() == null) {
                 userRepository.syncMe().onErr { err ->
@@ -81,6 +90,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             userSettingDataSource.preference.collect { pref ->
                 if (pref != null) {
+                    confirmedPreference = pref
                     _uiState.update {
                         it.copy(
                             themeBrand = pref.themeBrand,
@@ -269,19 +279,39 @@ class SettingsViewModel(
 
     private fun saveThemePreference() {
         val state = _uiState.value
-        val identity = preferenceIdentity ?: return
         viewModelScope.launch {
-            preferenceMutex.withLock {
-            userSettingDataSource.updateGlobalSettingsIfCurrent(
-                expected = identity,
-                privacy = null,
-                updatedAt = kotlin.time.Clock.System.now(),
-                preference = UserPreference(
-                    themeBrand = state.themeBrand,
-                    darkThemeConfig = state.darkThemeConfig,
-                    notificationSound = state.notificationSound,
-                )
-            )
+            val success = try {
+                val identity = preferenceIdentity.await()
+                preferenceMutex.withLock {
+                    userSettingDataSource.updateGlobalSettingsIfCurrent(
+                        expected = identity,
+                        privacy = null,
+                        updatedAt = kotlin.time.Clock.System.now(),
+                        preference = UserPreference(
+                            themeBrand = state.themeBrand,
+                            darkThemeConfig = state.darkThemeConfig,
+                            notificationSound = state.notificationSound,
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                log.error(e) { "[SettingsVM] preference write failed" }
+                false
+            }
+            if (!success) {
+                // The write never landed: mirror the last persisted preference
+                // back into the UI so a flipped toggle is not shown as saved.
+                log.warn { "[SettingsVM] preference write rejected; reverting UI" }
+                confirmedPreference?.let { confirmed ->
+                    _uiState.update {
+                        it.copy(
+                            themeBrand = confirmed.themeBrand,
+                            darkThemeConfig = confirmed.darkThemeConfig,
+                            notificationSound = confirmed.notificationSound,
+                        )
+                    }
+                }
             }
         }
     }

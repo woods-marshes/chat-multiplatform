@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.core.ui.components.search
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
@@ -227,30 +228,35 @@ fun AdaptiveSearchBar(
         )
     }
 
-    // Collapsed pill. Ctrl+K expands it from the keyboard on desktop.
+    // Collapsed pill. The container itself is focusable and carries the
+    // Ctrl+K / Enter shortcuts: the collapsed InputField refuses focus (see
+    // canFocus above), so without a focusable ancestor key events would never
+    // reach this subtree and keyboard users could not reach search at all.
+    // Focus landing on this box is harmless — only the InputField auto-expands
+    // on focus in touch mode, and it stays unfocusable while collapsed. While
+    // expanded, the box is an ancestor of the focused input, so its preview
+    // handler still sees (and ignores) unrelated keys.
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                val wantsExpand = event.type == KeyEventType.KeyDown &&
+                    state.targetValue == SearchBarValue.Collapsed &&
+                    ((event.key == Key.K && event.isCtrlPressed) || event.key == Key.Enter)
+                if (wantsExpand) {
+                    scope.launch { state.animateToExpanded() }
+                    true
+                } else {
+                    false
+                }
+            },
     ) {
         SearchBar(
             state = state,
             inputField = inputField,
-            modifier = Modifier
-                .fillMaxWidth()
-                .onPreviewKeyEvent { event ->
-                    if (
-                        event.type == KeyEventType.KeyDown &&
-                        event.key == Key.K &&
-                        event.isCtrlPressed &&
-                        state.targetValue == SearchBarValue.Collapsed
-                    ) {
-                        scope.launch { state.animateToExpanded() }
-                        true
-                    } else {
-                        false
-                    }
-                },
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 
