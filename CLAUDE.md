@@ -78,6 +78,7 @@ tiptap-bridge (React/Vite)
 - **Git Commit**：`<scope>: <summary>`，scope 可选 `client`/`server`/`web`/`core`/`features`/`build`/`deps`/`tiptap`，主题 ≤72 字符，英文
 - **代码风格**：Kotlin official style，4 空格缩进，显式 import（不用通配符），英文标识符和注释
 - **Compose**：参数顺序 → required callbacks, `Modifier`, flags, visual params, content lambda 最后。颜色用 `MiuixTheme.colorScheme.*`。不确定 API 用法时用 `WebFetch` 查官方文档，禁止猜测
+- **失败策略**：server 是数据权威方，跨多表写入 → 单事务 + `Err(...).bind()` 整体回滚，不用 runCatching 吞错；client 往本地缓存应用服务端批量数据 → 逐行隔离（坏行跳过、好行入库，一条坏数据不得中止整批同步），`runCatching` 只允许包住单行插入，不许包转换逻辑或整段流程
 - **JVM 目标**：composeApp/Android → JVM 17，desktopApp → JVM 25，server → JVM 25
 - **JS 目标**：web 模块 → ES2015，browser 平台
 - **API 基址**：`http://127.0.0.1:9051/v1/`。复制 `network-config.properties.template` → `network-config.properties` 自定义（该文件已 gitignore）
