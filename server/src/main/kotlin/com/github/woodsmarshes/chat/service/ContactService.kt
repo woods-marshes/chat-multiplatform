@@ -243,39 +243,52 @@ class ContactService(
         // Unblock only operates on an existing BLOCKED row. This used to be an
         // unconditional upsert of FRIEND, which let any user fabricate a
         // one-way friendship with a stranger they had never contacted.
-        val current = contactRepository.getContact(userId, id)
-        if (current?.status != ContactStatus.BLOCKED) {
-            Err(ContactError.NotBlocked).bind()
-        }
-        // Friendship is written as a mirrored pair and blocking only touches
-        // the blocker's own row, so the other side still holds the pre-block
-        // state: restore FRIEND only if the pair were actually friends.
-        // Unblocking a blocked stranger leaves no friendship behind.
-        val mirrorStatus = contactRepository.getContact(id, userId)?.status
-        val restoredStatus = if (mirrorStatus == ContactStatus.FRIEND) {
-            ContactStatus.FRIEND
-        } else {
-            ContactStatus.DELETED
-        }
-        // Conditional update: between the read above and this write the row
-        // could change; never create or blindly overwrite.
-        val success = contactRepository.updateContactStatusIf(
-            userId = userId,
-            contactId = id,
-            expected = ContactStatus.BLOCKED,
-            newStatus = restoredStatus,
-        )
-        if (success) {
-            eventBus.publishContactEvent(
-                ContactEvent.UserUnblocked(
-                    userId = userId,
-                    unblockedUserId = id,
-                    timestamp = Clock.System.now()
-                )
+        //
+        // The whole read-then-write decision runs in one transaction with row
+        // locks (SELECT ... FOR UPDATE) on BOTH sides: blocking rewrites the
+        // blocker's own row only, so the mirror row records the pre-block
+        // relationship — but without a lock on it, a concurrent blockUser
+        // could commit between our read and write and leave a one-way
+        // FRIEND/BLOCKED pair. Both rows are locked in a canonical (user_id
+        // ascending) order so two simultaneous unblocks of the same pair
+        // serialize instead of deadlocking against each other.
+        // Friendship is restored only if the pair were actually friends;
+        // unblocking a blocked stranger leaves no friendship behind.
+        inTransaction {
+            val (lockFirst, lockSecond) = if (userId < id) userId to id else id to userId
+            val rowOf = mapOf(
+                lockFirst to contactRepository.getContactForUpdate(lockFirst, lockSecond),
+                lockSecond to contactRepository.getContactForUpdate(lockSecond, lockFirst),
             )
-        } else {
-            Err(ContactError.OperationFailed).bind()
+            val current = rowOf.getValue(userId)
+            val mirror = rowOf.getValue(id)
+            if (current?.status != ContactStatus.BLOCKED) {
+                Err(ContactError.NotBlocked).bind()
+            }
+            val restoredStatus = if (mirror?.status == ContactStatus.FRIEND) {
+                ContactStatus.FRIEND
+            } else {
+                ContactStatus.DELETED
+            }
+            // Conditional update: never create or blindly overwrite.
+            val success = contactRepository.updateContactStatusIf(
+                userId = userId,
+                contactId = id,
+                expected = ContactStatus.BLOCKED,
+                newStatus = restoredStatus,
+            )
+            if (!success) {
+                Err(ContactError.OperationFailed).bind()
+            }
+            restoredStatus
         }
+        eventBus.publishContactEvent(
+            ContactEvent.UserUnblocked(
+                userId = userId,
+                unblockedUserId = id,
+                timestamp = Clock.System.now()
+            )
+        )
     }
 
     suspend fun updateContactInfo(userId: Uuid, id: Uuid, nickname: String?, alias: String?): Result<Unit, ContactError> = coroutineBinding {

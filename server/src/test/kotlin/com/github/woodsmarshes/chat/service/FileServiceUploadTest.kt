@@ -268,4 +268,55 @@ class FileServiceUploadTest {
         assertEquals(80, audio.waveform.size)
         assertTrue(audio.waveform.any { it > 0 }, "valid tone must produce non-zero waveform samples")
     }
+
+    @Test
+    fun sweepOrphanFilesRemovesOnlyStaleUnreferencedArtifacts() {
+        val root = java.nio.file.Files.createTempDirectory("sweep-").toFile()
+        // Isolated upload tree: the sweep must never touch the real ./uploads.
+        val service = FileService(
+            uploadStore = uploadStore,
+            privateFileRepository = privateFileRepository,
+            participantRepository = participantRepository,
+            uploadDir = root.absolutePath,
+        )
+        val oldStamp = System.currentTimeMillis() - 2 * 60 * 60 * 1000
+        val dir = { name: String -> File(root, name).apply { mkdirs() } }
+        val imageDir = dir("image")
+        val videoDir = dir("video")
+        val thumbnails = dir("thumbnails")
+        val covers = dir("covers")
+        val avatars = dir("avatar")
+
+        fun stale(file: File) = file.apply { writeBytes(byteArrayOf(1)); setLastModified(oldStamp) }
+        fun fresh(file: File) = file.apply { writeBytes(byteArrayOf(1)) }
+
+        try {
+            File(imageDir, "live.png").writeBytes(byteArrayOf(1))
+            File(videoDir, "liveuuid.mp4").writeBytes(byteArrayOf(1))
+
+            val orphanThumb = stale(File(thumbnails, "thumb_orphan.png"))
+            val liveThumb = stale(File(thumbnails, "thumb_live.png"))
+            val freshThumb = fresh(File(thumbnails, "thumb_fresh.png")) // original missing but young
+            val orphanCover = stale(File(covers, "cover_orphanuuid.jpg"))
+            val liveCover = stale(File(covers, "cover_liveuuid.jpg"))
+            val orphanAvatar = stale(File(avatars, "orphan.jpg"))
+            val referencedAvatar = stale(File(avatars, "referenced.jpg"))
+
+            val swept = service.sweepOrphanFiles(
+                referencedAvatarFileNames = setOf("referenced.jpg"),
+                minAgeMillis = 60L * 60 * 1000,
+            )
+
+            assertEquals(3, swept)
+            assertFalse(orphanThumb.exists(), "thumbnail without its original must be swept")
+            assertTrue(liveThumb.exists(), "thumbnail of a live image must survive")
+            assertTrue(freshThumb.exists(), "age guard must protect artifacts of in-flight uploads")
+            assertFalse(orphanCover.exists(), "cover without its video must be swept")
+            assertTrue(liveCover.exists(), "cover of a live video must survive")
+            assertFalse(orphanAvatar.exists(), "unreferenced avatar must be swept")
+            assertTrue(referencedAvatar.exists(), "DB-referenced avatar must survive")
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }

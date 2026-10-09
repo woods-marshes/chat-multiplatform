@@ -77,10 +77,12 @@ class FileService(
     private val privateFileRepository: PrivateFileRepository,
     private val participantRepository: ConversationParticipantRepository,
     private val maxImagePixels: Long = FileUploadConfig.maxImagePixels,
+    // Injectable so tests can isolate the filesystem instead of touching the
+    // process working directory.
+    private val uploadDir: String = "uploads",
+    private val privateUploadDir: String = "private-uploads",
 ) {
     private val logger = LoggerFactory.getLogger(FileService::class.java)
-    private val uploadDir: String = "uploads"
-    private val privateUploadDir: String = "private-uploads"
 
     // Media decoding and ffmpeg work are memory- and CPU-heavy; cap how many
     // run concurrently so a burst of uploads cannot exhaust the heap or CPUs.
@@ -121,6 +123,57 @@ class FileService(
         }
         val privateDir = File("$privateUploadDir/file")
         if (!privateDir.exists()) privateDir.mkdirs()
+    }
+
+    /**
+     * Deletes public files nothing points at anymore:
+     *  - thumbnails/covers whose original image/video no longer exists —
+     *    leftovers of uploads abandoned mid-processing (e.g. a timeout that
+     *    raced the still-writing thumbnail task, which cleanup then deleted
+     *    before the write finished re-creating the file);
+     *  - avatar files the database never references (uploads deliberately
+     *    kept after an error because the transaction outcome was unknown).
+     *
+     * The age guard keeps artifacts of in-flight uploads out of the blast
+     * radius: an original registers to the temp store only on success, and an
+     * avatar's DB row lands only after the upload route returns.
+     *
+     * @param referencedAvatarFileNames avatar file names the DB references.
+     * @return number of files deleted.
+     */
+    fun sweepOrphanFiles(referencedAvatarFileNames: Set<String>, minAgeMillis: Long): Int {
+        val now = System.currentTimeMillis()
+        fun isStale(file: File): Boolean = file.isFile && now - file.lastModified() > minAgeMillis
+
+        var deleted = 0
+        val imageDir = File("$uploadDir/image")
+        val videoStems = File("$uploadDir/video").listFiles()
+            ?.map { it.nameWithoutExtension }
+            ?.toSet()
+            .orEmpty()
+
+        File("$uploadDir/thumbnails").listFiles()?.forEach { thumb ->
+            val original = File(imageDir, thumb.name.removePrefix("thumb_"))
+            if (isStale(thumb) && !original.exists() && thumb.delete()) {
+                deleted++
+                logger.debug("Swept orphan thumbnail {}", thumb.name)
+            }
+        }
+        File("$uploadDir/covers").listFiles()?.forEach { cover ->
+            // cover_<uuid>.jpg — the video original may carry an extension.
+            val stem = cover.name.removePrefix("cover_").substringBeforeLast('.')
+            if (isStale(cover) && stem !in videoStems && cover.delete()) {
+                deleted++
+                logger.debug("Swept orphan cover {}", cover.name)
+            }
+        }
+        File("$uploadDir/avatar").listFiles()?.forEach { avatar ->
+            if (isStale(avatar) && avatar.name !in referencedAvatarFileNames && avatar.delete()) {
+                deleted++
+                logger.debug("Swept orphan avatar {}", avatar.name)
+            }
+        }
+        return deleted
     }
 
     fun resolvePrivateFile(fileName: String): File? {

@@ -79,6 +79,14 @@ interface ContactRepository {
 
     suspend fun getContact(userId: Uuid, contactId: Uuid): Contact?
 
+    /**
+     * Same as [getContact] but takes a row lock (SELECT ... FOR UPDATE) that
+     * is held until the enclosing transaction ends. Must be called inside an
+     * open transaction; used to serialize read-then-write decisions (such as
+     * unblock) against concurrent writers of the same row.
+     */
+    suspend fun getContactForUpdate(userId: Uuid, contactId: Uuid): Contact?
+
     suspend fun getContactPairByConversation(userId: Uuid, conversationId: Uuid): Pair<Contact, Contact>?
 
     suspend fun getContactsWithUser(userId: Uuid): List<Pair<Contact, User>>
@@ -205,6 +213,17 @@ class ContactSourceImpl : ContactRepository {
             .where {
                 (Contacts.userId eq userId) and (Contacts.contactId eq contactId)
             }
+            .singleOrNull()
+            ?.toContact()
+    }
+
+    override suspend fun getContactForUpdate(userId: Uuid, contactId: Uuid): Contact? = dbQuery {
+        Contacts
+            .selectAll()
+            .where {
+                (Contacts.userId eq userId) and (Contacts.contactId eq contactId)
+            }
+            .forUpdate()
             .singleOrNull()
             ?.toContact()
     }

@@ -7,6 +7,7 @@ import com.github.woodsmarshes.chat.di.MainModule
 import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
+import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
@@ -46,6 +47,10 @@ import kotlin.time.Duration.Companion.minutes
 private const val DEFAULT_JWT_EXPIRY_MS = 1L * 60 * 60 * 1000 // 1 hour access token
 private const val EXPIRED_FILE_CLEANUP_MINUTES = 30L
 private const val SESSION_SWEEP_MINUTES = 60L
+private const val ARTIFACT_SWEEP_MINUTES = 60L
+// A thumbnail/cover/avatar is only swept when this much older than the last
+// change AND unreferenced — keeps artifacts of in-flight uploads safe.
+private const val ORPHAN_FILE_MIN_AGE_MS = 60L * 60 * 1000
 
 @OptIn(KoinExperimentalAPI::class)
 fun Application.configureFrameworks() {
@@ -61,6 +66,7 @@ fun Application.configureFrameworks() {
     configureUploadDirectories()
     configureSessionCleanup()
     configureFileCleanup()
+    configureArtifactSweep()
 }
 
 /**
@@ -255,6 +261,28 @@ private fun Application.configureFileCleanup() {
                 log.error("Upload cleanup sweep failed; retrying next cycle", e)
             }
             delay(10.minutes)
+        }
+    }
+}
+
+private fun Application.configureArtifactSweep() {
+    launch(Dispatchers.IO) {
+        val fileService = getKoin().get<FileService>()
+        val userRepository = getKoin().get<UserRepository>()
+        while (isActive) {
+            try {
+                val referencedAvatars = userRepository.listReferencedAvatarFileNames()
+                val swept = fileService.sweepOrphanFiles(
+                    referencedAvatarFileNames = referencedAvatars,
+                    minAgeMillis = ORPHAN_FILE_MIN_AGE_MS,
+                )
+                if (swept > 0) log.info("Artifact sweep removed {} orphan file(s)", swept)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.error("Artifact sweep failed; retrying next cycle", e)
+            }
+            delay(ARTIFACT_SWEEP_MINUTES.minutes)
         }
     }
 }

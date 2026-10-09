@@ -6,11 +6,13 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
+import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -66,6 +68,14 @@ interface UserRepository{
     ): Boolean
 
     suspend fun searchUsers(keyword: String): List<User>
+
+    /**
+     * File names (not URLs) of every avatar the database references, across
+     * user profiles and group profiles. Feeds the orphan-artifact sweep: a
+     * public avatar file absent from this set and older than the sweep's age
+     * guard is a leftover from an abandoned upload and safe to delete.
+     */
+    suspend fun listReferencedAvatarFileNames(): Set<String>
 }
 
 class UserDataSourceImpl : UserRepository {
@@ -247,6 +257,20 @@ class UserDataSourceImpl : UserRepository {
                     }
                 }
         }
+    }
+
+    override suspend fun listReferencedAvatarFileNames(): Set<String> = dbQuery {
+        val userRefs = Users
+            .select(Users.avatarUrl)
+            .where { Users.avatarUrl.isNotNull() }
+            .map { it[Users.avatarUrl] }
+        val groupRefs = GroupProfiles
+            .select(GroupProfiles.avatarUrl)
+            .where { GroupProfiles.avatarUrl.isNotNull() }
+            .map { it[GroupProfiles.avatarUrl] }
+        (userRefs + groupRefs)
+            .mapNotNull { url -> url?.substringAfterLast('/')?.takeIf { name -> name.isNotEmpty() } }
+            .toSet()
     }
 }
 
