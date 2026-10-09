@@ -91,6 +91,8 @@ import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchType
 import com.github.woodsmarshes.chat.feature.search.navigation.searchEntry
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
+import com.github.woodsmarshes.chat.feature.settings.navigation.ChatEditProfileNavKey
+import com.github.woodsmarshes.chat.feature.settings.navigation.EditProfileNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.OpenSourceLicensesNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsDetailNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
@@ -205,13 +207,14 @@ private fun MainContent(
         navigator.navigate(key)
     }
 
-    // ChatProfileNavKey and ChatGroupInfoNavKey both occupy the rightmost
-    // extraPane alongside an active ChatScreen; switching between them replaces
-    // the top extra entry in place so closing takes one step.
+    // ChatProfileNavKey, ChatGroupInfoNavKey, and ChatEditProfileNavKey all
+    // occupy the rightmost extraPane alongside an active ChatScreen; switching
+    // between them pops any trailing extra-pane sub-chain so closing takes one step.
     val openExtraPane: (NavKey) -> Unit = { key ->
         val stack = navigationState.currentSubStack
-        val top = stack.lastOrNull()
-        if (top is ChatProfileNavKey || top is ChatGroupInfoNavKey) {
+        while (stack.lastOrNull().let {
+                it is ChatProfileNavKey || it is ChatGroupInfoNavKey || it is ChatEditProfileNavKey
+            }) {
             stack.removeAt(stack.lastIndex)
         }
         navigator.navigate(key)
@@ -278,6 +281,7 @@ private fun MainContent(
             },
             metadata = settingsListPaneMeta,
             detailMetadata = detailPaneMeta,
+            extraMetadata = extraPaneMeta,
         )
         chatEntry(
             onBack = { navigator.goBack() },
@@ -301,10 +305,10 @@ private fun MainContent(
                 openChatFromInfo(conversationId, false)
             },
             onEditProfile = {
-                if (navigationState.currentTopLevelKey != SettingsNavKey) {
-                    navigator.navigate(SettingsNavKey)
-                }
-                openDetailFromList(SettingsDetailNavKey(SettingsCategory.PROFILE))
+                navigator.navigate(EditProfileNavKey)
+            },
+            onChatEditProfile = {
+                navigator.navigate(ChatEditProfileNavKey)
             },
             detailMetadata = detailPaneMeta,
             extraMetadata = extraPaneMeta,

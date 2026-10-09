@@ -113,6 +113,7 @@ fun SettingsDetailScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit = {},
     onOpenLicenses: () -> Unit = {},
+    isSubPage: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
@@ -137,8 +138,10 @@ fun SettingsDetailScreen(
         SettingsCategory.LICENSES -> strings.openSourceLicenses
     }
 
-    // Sub-pages like LICENSES always show a back button so the user can return to ABOUT
-    val showBack = !inMultiPane || category == SettingsCategory.LICENSES
+    // Sub-pages (LICENSES under ABOUT, or PROFILE edit pushed from ProfileScreen)
+    // always show a back button even in multi-pane mode so the user can pop back
+    // to the parent detail/extra pane.
+    val showBack = !inMultiPane || category == SettingsCategory.LICENSES || isSubPage
 
     Scaffold(
         modifier = modifier,

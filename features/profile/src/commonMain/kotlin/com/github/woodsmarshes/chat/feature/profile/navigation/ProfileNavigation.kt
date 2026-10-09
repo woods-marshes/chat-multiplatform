@@ -21,6 +21,7 @@ fun EntryProviderScope<NavKey>.profileEntry(
     onBack: () -> Unit,
     onOpenChat: (conversationId: String) -> Unit,
     onEditProfile: (() -> Unit)? = null,
+    onChatEditProfile: (() -> Unit)? = onEditProfile,
     detailMetadata: Map<String, Any> = emptyMap(),
     extraMetadata: Map<String, Any> = detailMetadata,
 ) {
@@ -38,7 +39,7 @@ fun EntryProviderScope<NavKey>.profileEntry(
             userId = key.userId,
             onBack = onBack,
             onOpenChat = onOpenChat,
-            onEditProfile = onEditProfile,
+            onEditProfile = onChatEditProfile,
             isExtraPane = true,
         )
     }
