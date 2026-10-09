@@ -115,20 +115,25 @@ fun List<GetMessagesWithAllRelationsByPage>.toUiModels(): List<MessageUiModel> {
 }
 
 /**
- * 将 Message 转换为 MessageEntity
+ * Maps a Message to its DB entity, or returns null when the message has no
+ * sender: MessageEntity.user_id is NOT NULL, so the row cannot be persisted.
+ * Callers must skip such rows instead of failing the enclosing sync page.
  */
-fun Message.toMessageEntity(localStatus: MessageStatus? = null): MessageEntity = MessageEntity(
-    id = this.id,
-    conversation_id = this.conversationId,
-    user_id = this.sender?.id ?: error("Sender is required for MessageEntity"),
-    category = this.category,
-    render_type = this.getRenderType(),
-    content = this.content,
-    reply_to_message_id = this.replyTo?.id,
-    created_at = this.createdAt,
-    revoked_at = this.revokedAt,
-    local_send_status = localStatus
-)
+fun Message.toMessageEntity(localStatus: MessageStatus? = null): MessageEntity? {
+    val senderId = this.sender?.id ?: return null
+    return MessageEntity(
+        id = this.id,
+        conversation_id = this.conversationId,
+        user_id = senderId,
+        category = this.category,
+        render_type = this.getRenderType(),
+        content = this.content,
+        reply_to_message_id = this.replyTo?.id,
+        created_at = this.createdAt,
+        revoked_at = this.revokedAt,
+        local_send_status = localStatus
+    )
+}
 
 /**
  * 将引用的回复消息转换为 MessageEntity

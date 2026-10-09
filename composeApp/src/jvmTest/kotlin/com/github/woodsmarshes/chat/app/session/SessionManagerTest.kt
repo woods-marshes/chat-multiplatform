@@ -233,7 +233,7 @@ class SessionManagerTest {
         val realtimeApi = mockk<RealtimeApi>()
         every { realtimeApi.events } returns events
         every { realtimeApi.connectionState } returns connectionStates
-        coEvery { realtimeApi.send(any()) } returns Unit
+        coEvery { realtimeApi.send(any()) } returns true
         coEvery { realtimeApi.connect() } coAnswers {
             steps += "ws.connect"
             connectionStates.value = ConnectionState.Connected
@@ -343,7 +343,7 @@ class SessionManagerTest {
         val realtimeApi = mockk<RealtimeApi>()
         every { realtimeApi.events } returns events
         every { realtimeApi.connectionState } returns connectionStates
-        coEvery { realtimeApi.send(any()) } returns Unit
+        coEvery { realtimeApi.send(any()) } returns true
         coEvery { realtimeApi.connect() } coAnswers {
             steps += "ws.connect"
             connectionStates.value = ConnectionState.Connected
@@ -870,7 +870,7 @@ class SessionManagerTest {
 
             dao.insertMessage(
                 Message(firstMessageId, conversationId, sender, MessageCategory.NORMAL, now, content = TextContent("failed"))
-                    .toMessageEntity(MessageStatus.FAILED)
+                    .toMessageEntity(MessageStatus.FAILED)!!
             )
 
             var sendCancelled: CancellationException? = null
@@ -941,7 +941,7 @@ class SessionManagerTest {
         every { realtimeApi.connectionState } returns connectionStates
         coEvery { realtimeApi.connect() } coAnswers { connectionStates.value = ConnectionState.Connected }
         coEvery { realtimeApi.disconnect() } coAnswers { connectionStates.value = ConnectionState.Idle }
-        coEvery { realtimeApi.send(any()) } returns Unit
+        coEvery { realtimeApi.send(any()) } returns true
 
         val conversationApi = mockk<ConversationApi>()
         coEvery { conversationApi.syncMessages(any(), any(), any()) } returns emptyList()

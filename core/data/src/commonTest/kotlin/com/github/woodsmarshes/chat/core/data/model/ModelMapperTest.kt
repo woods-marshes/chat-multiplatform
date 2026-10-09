@@ -20,7 +20,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.fail
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -85,7 +84,7 @@ class ModelMapperTest {
 
     @Test
     fun `message maps to a DB entity with all identifiers preserved`() {
-        val entity = message().toMessageEntity(localStatus = MessageStatus.SENDING)
+        val entity = message().toMessageEntity(localStatus = MessageStatus.SENDING)!!
 
         assertEquals(
             Uuid.parse("018f0000-0000-7000-8000-000000000100"),
@@ -105,7 +104,7 @@ class ModelMapperTest {
     fun `render type is derived from the content type`() {
         assertEquals(
             com.github.woodsmarshes.chat.core.model.MessageRenderType.TEXT,
-            message(content = TextContent("t")).toMessageEntity().render_type,
+            message(content = TextContent("t")).toMessageEntity()!!.render_type,
         )
         assertEquals(
             com.github.woodsmarshes.chat.core.model.MessageRenderType.IMAGE,
@@ -113,26 +112,19 @@ class ModelMapperTest {
                 content = ImageContent(
                     url = "u", fileName = "f", width = 1, height = 1, size = 1L, mimeType = "image/png",
                 )
-            ).toMessageEntity().render_type,
+            ).toMessageEntity()!!.render_type,
         )
         assertEquals(
             com.github.woodsmarshes.chat.core.model.MessageRenderType.AUDIO,
             message(
                 content = AudioContent(url = "u", fileName = "f", duration = 1L, size = 1L)
-            ).toMessageEntity().render_type,
+            ).toMessageEntity()!!.render_type,
         )
     }
 
     @Test
-    fun `message without a sender is rejected`() {
-        val senderless = message(sender = null)
-
-        try {
-            senderless.toMessageEntity()
-            fail("expected IllegalStateException for missing sender")
-        } catch (expected: IllegalStateException) {
-            assertTrue(expected.message!!.contains("Sender is required"))
-        }
+    fun `message without a sender maps to null`() {
+        assertNull(message(sender = null).toMessageEntity())
     }
 
     @Test
@@ -140,7 +132,7 @@ class ModelMapperTest {
         val original = message()
         val reply = message(replyTo = original)
 
-        assertEquals(original.id, reply.toMessageEntity().reply_to_message_id)
+        assertEquals(original.id, reply.toMessageEntity()!!.reply_to_message_id)
     }
 
     @Test
@@ -238,15 +230,10 @@ class ModelMapperTest {
     }
 
     @Test
-    fun `conversation response last message without a sender is rejected`() {
+    fun `conversation response last message without a sender maps to null`() {
         val response = conversationResponse(sender = null)
 
-        try {
-            response.toMessageEntity()
-            fail("expected IllegalStateException for missing sender")
-        } catch (expected: IllegalStateException) {
-            assertTrue(expected.message!!.contains("Sender is required"))
-        }
+        assertNull(response.toMessageEntity())
     }
 
     // ── helpers ─────────────────────────────────────────────────────────

@@ -108,10 +108,15 @@ SET role = :role
 WHERE conversation_id = :conversationId AND user_id = :userId;
 
 -- 更新已读位置
+-- Monotonic guard: read events can arrive out of order (device B confirms an
+-- older message while the cursor already sits on a newer one); ids are
+-- server-issued UUIDv7 stored as 16-byte BLOBs, so bytewise < is time order.
+-- A null receipt must never clear the cursor.
 updateLastReadMessage:
 UPDATE ParticipantEntity
 SET last_read_message_id = :lastMessageId
-WHERE conversation_id = :conversationId AND user_id = :userId;
+WHERE conversation_id = :conversationId AND user_id = :userId
+  AND (last_read_message_id IS NULL OR last_read_message_id < :lastMessageId);
 
 -- 设置禁言状态
 updateMuteStatus:

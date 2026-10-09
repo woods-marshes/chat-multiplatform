@@ -58,7 +58,12 @@ interface MessageRepository {
         replyToMessageId: Uuid? = null,
     ): Result<Unit, MessageError>
 
-    suspend fun revokeMessage(messageId: Uuid)
+    /**
+     * Asks the server to withdraw [messageId]. Failures are surfaced to the
+     * caller (the UI decides how to report them) and are never retried
+     * automatically — the user can revoke again once back online.
+     */
+    suspend fun revokeMessage(messageId: Uuid): Result<Unit, MessageError>
 
     suspend fun markAsRead(conversationId: Uuid, messageId: Uuid)
 

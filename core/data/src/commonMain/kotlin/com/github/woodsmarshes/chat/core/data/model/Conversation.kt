@@ -77,7 +77,9 @@ fun ConversationResponse.toMessageEntity(): MessageEntity? {
         MessageEntity(
             id = message.id,
             conversation_id = this.conversationId,
-            user_id = message.sender?.id ?: error("Sender is required for MessageEntity"),
+            // user_id is NOT NULL; a senderless last message maps to null and
+            // is skipped by the caller instead of aborting the whole sync.
+            user_id = message.sender?.id ?: return null,
             category = message.category,
             render_type = message.getRenderType(),
             content = message.content,

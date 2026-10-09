@@ -138,7 +138,9 @@ class OfflineFirstMessageRepositoryImpl(
     /**
      * In-memory delivery high-water mark used to trigger repair. A jump in the
      * stream means events were lost in flight (socket hiccup or a server-side
-     * drop); the missing span is then repaired from REST history.
+     * drop); the missing span is then repaired from REST history. The first
+     * message observed per conversation in a session only establishes the
+     * baseline — it is not a gap.
      */
     private val seqMutex = Mutex()
     private val deliveredSeqs = mutableMapOf<Uuid, Long>()
@@ -274,24 +276,29 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
-    override suspend fun revokeMessage(messageId: Uuid) {
-        try {
+    override suspend fun revokeMessage(messageId: Uuid): Result<Unit, MessageError> {
+        return try {
             lifecycle.execute {
-                val currentUser = ownUser.firstOrNull() ?: return@execute
+                val currentUser = ownUser.firstOrNull()
+                    ?: return@execute Err(MessageError.RevokeFailed)
 
                 val request = MessageRequest.Withdraw(
                     senderId = currentUser.id,
                     messageId = messageId
                 )
 
-                messageApi.send(request)
+                // Not retried automatically: the caller reports the failure
+                // and the user can revoke again once the connection is back.
+                if (messageApi.send(request)) Ok(Unit) else Err(MessageError.RevokeFailed)
             }
         } catch (_: SessionStoppedException) {
             log.warn { "[revokeMessage] refused: session is not active" }
+            Err(MessageError.PermissionDenied)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.error(e) { "Failed to send realtime request" }
+            Err(MessageError.RevokeFailed)
         }
     }
 
@@ -306,7 +313,12 @@ class OfflineFirstMessageRepositoryImpl(
                     messageId = messageId
                 )
 
-                messageApi.send(request)
+                // Receipts are not retried: re-entering the chat re-reports
+                // the current last message, so a dropped one only costs a
+                // stale unread state until then. Logged, not surfaced.
+                if (!messageApi.send(request)) {
+                    log.warn { "[markAsRead] receipt for $messageId was not delivered" }
+                }
             }
         } catch (_: SessionStoppedException) {
             log.warn { "[markAsRead] refused: session is not active" }
@@ -436,8 +448,15 @@ class OfflineFirstMessageRepositoryImpl(
         seqMutex.withLock {
             if (!session.job.isActive || !isActiveSession(session)) return
             val last = deliveredSeqs[conversationId]
-            if (last == null || seq > last) {
-                if (last == null || seq > last + 1) {
+            if (last == null) {
+                // First message observed for this conversation within this
+                // session: it only establishes the baseline. Anything older
+                // is backfilled by the reconnect sync from the durable
+                // cursor — treating "no baseline" as a gap used to fire a
+                // pointless full repair per conversation on every launch.
+                deliveredSeqs[conversationId] = seq
+            } else if (seq > last) {
+                if (seq > last + 1) {
                     gapDetected = true
                 }
                 if (!gapDetected) deliveredSeqs[conversationId] = seq
@@ -525,13 +544,18 @@ class OfflineFirstMessageRepositoryImpl(
             message.replyTo?.let { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
             message.toUserEntity()?.let { userDao.insertUser(it) }
             message.toParticipantEntity()?.let { participantDao.insertParticipant(it) }
+            val entity = message.toMessageEntity(MessageStatus.SENT)
+            if (entity == null) {
+                log.warn { "[message-sync] skipping server message ${message.id}: no sender" }
+                return@transaction
+            }
             val local = candidate?.let { messageDao.findMessageById(it) }
             val matchingId = candidate?.takeIf {
-                local != null && local.user_id == message.sender?.id &&
+                local != null && local.user_id == entity.user_id &&
                     local.conversation_id == message.conversationId &&
                     local.local_send_status in listOf(MessageStatus.SENDING, MessageStatus.FAILED)
             }
-            messageDao.mergeServerMessage(message.toMessageEntity(MessageStatus.SENT), matchingId)
+            messageDao.mergeServerMessage(entity, matchingId)
             val currentLast = conversationDao.findConversationById(message.conversationId)?.last_message_id
             if (currentLast == null || message.id > currentLast) {
                 conversationDao.updateLastMessage(message.conversationId, message.id, message.createdAt)

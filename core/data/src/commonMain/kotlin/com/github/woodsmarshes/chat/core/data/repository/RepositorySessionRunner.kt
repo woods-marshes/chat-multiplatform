@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Result
+import com.github.woodsmarshes.chat.core.common.session.ResourceSession
 import com.github.woodsmarshes.chat.core.common.session.SessionStoppedException
 import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
 import io.github.woodsmarshes.chat.db.ChatDatabase
@@ -20,7 +21,7 @@ internal class RepositorySessionRunner<S : Any>(
     private val isSameState: (existing: S, candidate: S) -> Boolean,
     private val databaseOf: (S) -> ChatDatabase?,
 ) {
-    private val lifecycle = com.github.woodsmarshes.chat.core.common.session.ResourceSession(
+    private val lifecycle = ResourceSession(
         dispatcher = dispatcher,
         create = { ActiveSession(captureState()) },
         validateExisting = { active ->

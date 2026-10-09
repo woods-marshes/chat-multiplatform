@@ -185,7 +185,16 @@ class RealtimeApi(
         completion?.await()
     }
 
-    suspend fun send(realtimeEvent: RealtimeEvent) {
+    /**
+     * Sends [realtimeEvent] over the current session.
+     *
+     * @return true when the frame was handed to the connected socket; false
+     * when the session is not connected or the write failed. Never throws for
+     * those conditions (cancellation still propagates) — callers decide
+     * whether a lost frame matters (a read receipt may be re-reported, a
+     * withdrawal must be surfaced to the user).
+     */
+    suspend fun send(realtimeEvent: RealtimeEvent): Boolean {
         val target = lifecycleMutex.withLock {
             val state = _connectionState.value
             if (state !is ConnectionState.Connected) {
@@ -194,15 +203,17 @@ class RealtimeApi(
             } else {
                 session
             }
-        } ?: return
+        } ?: return false
 
-        try {
+        return try {
             sendFrame(target, realtimeEvent)
             log.info { "[RealtimeApi] send() serialized OK" }
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             log.error(e) { "[RealtimeApi] send() error: ${e.message}" }
+            false
         }
     }
 

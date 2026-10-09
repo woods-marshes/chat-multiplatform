@@ -18,6 +18,7 @@ import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
 import com.github.woodsmarshes.chat.core.network.dto.user.UpdateProfileRequest
 import com.github.woodsmarshes.chat.core.network.dto.user.UpdateUserSettingsRequest
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
+import io.github.woodsmarshes.chat.db.ChatDatabase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +40,7 @@ class UserRepositoryImpl(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : UserRepository {
     private data class BoundUserResources(
-        val database: io.github.woodsmarshes.chat.db.ChatDatabase,
+        val database: ChatDatabase,
         val boundDao: UserDao,
         val credentialIdentity: BoundCredentialIdentity,
     )

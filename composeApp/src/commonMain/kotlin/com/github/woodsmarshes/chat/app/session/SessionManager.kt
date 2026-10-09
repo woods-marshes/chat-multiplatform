@@ -47,7 +47,9 @@ import org.koin.dsl.module
 import kotlin.uuid.Uuid
 
 val sessionModule = module {
-    single(createdAtStart = true) { SessionManager(get(), get(), get(), get(), get(), get(), get()) }
+    single(createdAtStart = true) {
+        SessionManager(get(), get(), get(), get(), get(), get(), get())
+    }
 }
 
 /**

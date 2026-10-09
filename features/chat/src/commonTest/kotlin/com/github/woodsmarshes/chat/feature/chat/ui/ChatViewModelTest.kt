@@ -391,7 +391,7 @@ private class FakeMessageRepository(
         onSend(conversationId, content, replyToMessageId)
         return Ok(Unit)
     }
-    override suspend fun revokeMessage(messageId: Uuid) = Unit
+    override suspend fun revokeMessage(messageId: Uuid) = Ok(Unit)
     override suspend fun markAsRead(conversationId: Uuid, messageId: Uuid) = Unit
     override fun getTypingUsersFlow(conversationId: Uuid) = MutableStateFlow(emptyMap<Uuid, Long>())
     override suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean) {

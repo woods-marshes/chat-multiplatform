@@ -84,7 +84,7 @@ class MessageRepositoryDeliveryTest {
         val api = mockk<RealtimeApi>()
         every { api.events } returns events
         every { api.connectionState } returns MutableStateFlow(ConnectionState.Connected)
-        coEvery { api.send(any()) } returns Unit
+        coEvery { api.send(any()) } returns true
         val rest = mockk<ConversationApi>()
         coEvery { rest.syncMessages(any(), any(), any()) } returns emptyList()
         val settings = mockk<UserSettingDataSource>()
@@ -115,7 +115,7 @@ class MessageRepositoryDeliveryTest {
                     delegate.findMessageById(id)?.copy(user_id = nextId)
             }
         }) { repo, dao, api, _, _ ->
-            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED))
+            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED)!!)
             assertEquals(com.github.michaelbull.result.Err(com.github.woodsmarshes.chat.core.model.error.MessageError.PermissionDenied), repo.retryMessage(serverId))
             coVerify(exactly = 0) { api.send(any()) }
             assertEquals(MessageStatus.FAILED, dao.getMessageById(serverId).first()?.local_send_status)
@@ -124,8 +124,8 @@ class MessageRepositoryDeliveryTest {
     @Test
     fun concurrentManualAndAutomaticRetriesKeepIdentityAndReply() = runTest {
         fixture { repo, dao, api, _, _ ->
-            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.SENT))
-            dao.insertMessage(message(nextId).copy(replyTo = message(serverId)).toMessageEntity(MessageStatus.FAILED))
+            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.SENT)!!)
+            dao.insertMessage(message(nextId).copy(replyTo = message(serverId)).toMessageEntity(MessageStatus.FAILED)!!)
             val entered = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
             coEvery { api.send(any()) } coAnswers {
@@ -134,6 +134,7 @@ class MessageRepositoryDeliveryTest {
                 assertEquals(serverId, request.replyToMessageId)
                 entered.complete(Unit)
                 release.await()
+                true
             }
             val first = launch { repo.retryMessage(nextId) }
             entered.await()
@@ -155,8 +156,8 @@ class MessageRepositoryDeliveryTest {
     fun offlineRetryQueuesWithoutSendingAndSentRowCannotBeRetried() = runTest {
         fixture { repo, dao, api, _, _ ->
             every { api.connectionState } returns MutableStateFlow(ConnectionState.Idle)
-            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED))
-            dao.insertMessage(message(nextId).toMessageEntity(MessageStatus.SENT))
+            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED)!!)
+            dao.insertMessage(message(nextId).toMessageEntity(MessageStatus.SENT)!!)
             assertEquals(com.github.michaelbull.result.Ok(Unit), repo.retryMessage(serverId))
             repo.retryMessage(nextId)
             coVerify(exactly = 0) { api.send(any()) }
@@ -176,6 +177,7 @@ class MessageRepositoryDeliveryTest {
                 val ack = message(serverId, id)
                 events.emit(MessageEventResponse.Received(ack, conversationId, userId, request.requestId))
                 yield()
+                true
             }
             repo.sendMessage(conversationId, TextContent("hello"), null)
             runCurrent()
@@ -228,6 +230,27 @@ class MessageRepositoryDeliveryTest {
             assertNotNull(dao.getMessageById(serverId).first())
             assertNotNull(dao.getMessageById(nextId).first())
             assertEquals(nextId, dao.getSyncCursor(conversationId))
+        }
+    }
+
+    @Test
+    fun firstMessageOfSessionEstablishesBaselineWithoutGapRepair() = runTest {
+        fixture { _, dao, _, events, rest ->
+            // The reconnect sync at startSession() has already run; forget its
+            // recorded calls so only repair-triggered fetches count below.
+            clearMocks(rest, answers = false, recordedCalls = true)
+
+            // First live message of the session: establishes the baseline only.
+            events.emit(MessageEventResponse.Received(message(serverId, seq = 10), conversationId, userId, ""))
+            runCurrent()
+            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
+            assertNotNull(dao.getMessageById(serverId).first())
+
+            // A genuine jump (10 -> 12) still repairs exactly once.
+            events.emit(MessageEventResponse.Received(message(nextId, seq = 12), conversationId, userId, ""))
+            runCurrent()
+            coVerify(exactly = 1) { rest.syncMessages(conversationId, any(), any()) }
+            assertNotNull(dao.getMessageById(nextId).first())
         }
     }
 
@@ -388,7 +411,7 @@ class MessageRepositoryDeliveryTest {
         var sendCleanupFinished = false
 
         fixture(autoStart = false) { repo, dao, api, _, _ ->
-            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED))
+            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.FAILED)!!)
 
             // Before startSession(), public write operations are refused without touching DB or WS.
             assertEquals(
