@@ -72,12 +72,6 @@ class UserSettingDataSource(
         preferences[Keys.UPDATED_AT]?.let { Instant.fromEpochSeconds(it) }
     }
 
-    suspend fun setUser(user: User) {
-        dataStore.edit {
-            it[Keys.USER] = json.encodeToString(user)
-        }
-    }
-
     suspend fun setPreference(preference: UserPreference) {
         dataStore.edit {
             it[Keys.PREFERENCE] = json.encodeToString(preference)
@@ -93,12 +87,6 @@ class UserSettingDataSource(
     suspend fun setUpdatedAt(updatedAt: Instant) {
         dataStore.edit {
             it[Keys.UPDATED_AT] = updatedAt.epochSeconds
-        }
-    }
-
-    suspend fun clearUserSetting() {
-        dataStore.edit { preferences ->
-            clearPreferencesInPlace(preferences)
         }
     }
 

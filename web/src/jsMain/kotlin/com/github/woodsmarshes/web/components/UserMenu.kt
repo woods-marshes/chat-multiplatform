@@ -1,7 +1,6 @@
 package com.github.woodsmarshes.web.components
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
-import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.koinInject
 import com.github.woodsmarshes.web.state.useCurrentContext
@@ -60,8 +59,10 @@ val UserMenu = FC<Props> {
             setOpen(false)
             koinInject<CoroutineScope>().promise {
                 try {
-                    koinInject<AuthTokenDataSource>().clearAuthToken()
-                    koinInject<UserSettingDataSource>().clearUserSetting()
+                    // One atomic write: token, profile and generation clear
+                    // together (the old two-step clear could leave the
+                    // previous user's profile behind).
+                    koinInject<AuthTokenDataSource>().clearLoginSession()
                 } catch (e: Exception) {
                     console.log("Logout failed: ${e.message}")
                 }

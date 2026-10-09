@@ -262,36 +262,37 @@ class AuthTokenDataSource(
         }
     }
 
-    suspend fun setJwtToken(jwtToken: String) {
+    /**
+     * Persists a fresh login in ONE DataStore transaction: the credential
+     * generation advances (so every in-flight writer of the previous session
+     * sees a changed world) and token + profile land together — never a
+     * token without its user. This is the supported way to store a login
+     * result; per-field token setters were removed on purpose because their
+     * partial writes silently defeat the generation guards.
+     */
+    suspend fun commitLoginSession(token: AuthToken, user: User) {
         credentialMutex.withLock {
             dataStore.edit { preferences ->
-                preferences[Keys.JWT_TOKEN] = jwtToken
+                preferences[Keys.GENERATION] = (preferences[Keys.GENERATION] ?: 0L) + 1L
+                writeTokenInPlace(preferences, token)
+                userSettingDataSource.writeUserInPlace(preferences, user)
             }
         }
     }
 
-    suspend fun setRefreshToken(refreshToken: String) {
-        credentialMutex.withLock {
-            dataStore.edit {
-                it[Keys.REFRESH_TOKEN] = refreshToken
-            }
-        }
-    }
-
-    suspend fun setExpiryTimestamp(expiryTimestamp: Long) {
-        credentialMutex.withLock {
-            dataStore.edit {
-                it[Keys.EXPIRY_TIMESTAMP] = expiryTimestamp
-            }
-        }
-    }
-
-    suspend fun clearAuthToken() {
+    /**
+     * Atomic counterpart of [commitLoginSession]: token and profile clear
+     * together with a generation bump. Replaces the clearAuthToken() +
+     * clearUserSetting() pair, which could leave the previous user's profile
+     * behind if the process died between the two writes.
+     */
+    suspend fun clearLoginSession() {
         credentialMutex.withLock {
             dataStore.edit { preferences ->
                 preferences[Keys.AUTH_REQUEST_EPOCH] = (preferences[Keys.AUTH_REQUEST_EPOCH] ?: 0L) + 1L
                 preferences[Keys.GENERATION] = (preferences[Keys.GENERATION] ?: 0L) + 1L
                 clearTokenInPlace(preferences)
+                userSettingDataSource.clearPreferencesInPlace(preferences)
             }
         }
     }
