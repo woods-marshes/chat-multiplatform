@@ -11,17 +11,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.VerticalSplit
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun EmptyContent(
@@ -30,26 +33,42 @@ fun EmptyContent(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    val bubbleColors = LocalBubbleColors.current
+    val isMiuix = isMiuixTheme()
 
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            imageVector = MiuixIcons.VerticalSplit,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = bubbleColors.timestampColor.copy(alpha = 0.4f),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = message,
-            color = bubbleColors.timestampColor,
-            fontSize = 15.sp,
-            textAlign = TextAlign.Center,
-        )
+        if (isMiuix) {
+            MiuixIcon(
+                imageVector = MiuixIcons.VerticalSplit,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.45f),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            MiuixText(
+                text = message,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                style = MiuixTheme.textStyles.body1,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Icon(
+                imageVector = MiuixIcons.VerticalSplit,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+            )
+        }
         if (actionLabel != null && onAction != null) {
             Spacer(modifier = Modifier.height(20.dp))
             ChatAppButton(

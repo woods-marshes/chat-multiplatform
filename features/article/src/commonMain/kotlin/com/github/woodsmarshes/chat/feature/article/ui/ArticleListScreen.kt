@@ -11,44 +11,40 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberBottomSheetState
-import androidx.compose.material3.rememberModalBottomSheetState
-import io.github.oshai.kotlinlogging.KotlinLogging
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.PagingData
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.ui.components.AppFloatingActionButton
+import com.github.woodsmarshes.chat.core.ui.components.AppModalBottomSheet
+import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
+import com.github.woodsmarshes.chat.core.ui.components.AppPullToRefreshBox
+import com.github.woodsmarshes.chat.core.ui.components.AppTabRow
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.articleItems
+import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
+import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
+import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 import org.koin.compose.viewmodel.koinViewModel
@@ -60,12 +56,14 @@ private val log = KotlinLogging.logger {}
 fun ArticleListScreen(
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
     onCreateClick: () -> Unit,
+    modifier: Modifier = Modifier,
     selectedArticleId: Uuid? = null,
     viewModel: ArticleListViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { 2 })
     val inMultiPane = isInListDetailScene()
+    val strings = LocalStrings.current
 
     // Sync tab → pager
     LaunchedEffect(uiState.selectedTabIndex) {
@@ -73,28 +71,30 @@ fun ArticleListScreen(
     }
     // Sync pager → tab (only after scroll settles)
     LaunchedEffect(pagerState.currentPage) {
-        // 仅当当前页与选中的 tab 不同时才更新，避免不必要的重复调用
         if (pagerState.currentPage != uiState.selectedTabIndex) {
             viewModel.selectTab(pagerState.currentPage)
         }
     }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             ChatTopAppBar(
-                title = LocalStrings.current.articleTitle,
+                title = strings.articleTitle,
                 showAccountAffordance = true,
                 actions = {
                     IconButton(onClick = viewModel::showSortSheet) {
-                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = LocalStrings.current.articleSortCd)
+                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = strings.articleSortCd)
                     }
                 },
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onCreateClick) {
-                Icon(Icons.Default.Add, contentDescription = LocalStrings.current.articleCreateCd)
-            }
+            AppFloatingActionButton(
+                onClick = onCreateClick,
+                icon = Icons.Default.Add,
+                contentDescription = strings.articleCreateCd,
+            )
         },
     ) { innerPadding ->
         Column(
@@ -103,21 +103,13 @@ fun ArticleListScreen(
                 .padding(innerPadding),
         ) {
             // Tabs: 全部 | 我的
-            PrimaryTabRow(
+            AppTabRow(
+                tabs = listOf(strings.articleAllTab, strings.articleMyTab),
                 selectedTabIndex = uiState.selectedTabIndex,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Tab(
-                    selected = uiState.selectedTabIndex == 0,
-                    onClick = { viewModel.selectTab(0) },
-                    text = { Text(LocalStrings.current.articleAllTab) },
-                )
-                Tab(
-                    selected = uiState.selectedTabIndex == 1,
-                    onClick = { viewModel.selectTab(1) },
-                    text = { Text(LocalStrings.current.articleMyTab) },
-                )
-            }
+                onTabSelected = viewModel::selectTab,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                withContour = false,
+            )
 
             HorizontalPager(
                 state = pagerState,
@@ -140,35 +132,17 @@ fun ArticleListScreen(
     }
 
     // ---- Sort bottom sheet ----
-    if (uiState.showSortSheet) {
-        ModalBottomSheet(
-            onDismissRequest = viewModel::dismissSortSheet,
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = if (false) setOf(SheetValue.Hidden, SheetValue.Expanded)
-                        else setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded),
-            ),
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-            ) {
-                Text(
-                    text = LocalStrings.current.articleSortTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                // TODO: sort options
-                Text(
-                    text = LocalStrings.current.articleSortComingSoon,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-        }
+    AppModalBottomSheet(
+        show = uiState.showSortSheet,
+        onDismissRequest = viewModel::dismissSortSheet,
+        title = strings.articleSortTitle,
+    ) {
+        Text(
+            text = strings.articleSortComingSoon,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -181,6 +155,7 @@ private fun ArticleListContent(
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
 ) {
     val articles = articlesFlow.collectAsLazyPagingItems()
+    val strings = LocalStrings.current
 
     val refreshState = articles.loadState.refresh
     if (refreshState is LoadState.Error) {
@@ -191,50 +166,28 @@ private fun ArticleListContent(
 
     when {
         articles.loadState.refresh is LoadState.Loading && articles.itemCount == 0 -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            LoadingContent(modifier = Modifier.fillMaxSize())
         }
         articles.loadState.refresh is LoadState.Error && articles.itemCount == 0 -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = LocalStrings.current.loadFailed,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    TextButton(onClick = { articles.retry() }) {
-                        Text(LocalStrings.current.retry)
-                    }
-                }
-            }
+            ErrorContent(
+                message = strings.loadFailed,
+                modifier = Modifier.fillMaxSize(),
+                onRetry = { articles.retry() },
+            )
         }
         articles.itemCount == 0 && articles.loadState.refresh is LoadState.NotLoading -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = LocalStrings.current.articleNoArticles,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EmptyContent(
+                message = strings.articleNoArticles,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         else -> {
             val isRefreshing = articles.loadState.refresh is LoadState.Loading
-            val pullState = rememberPullToRefreshState()
 
-            PullToRefreshBox(
+            AppPullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = { articles.refresh() },
                 modifier = Modifier.fillMaxSize(),
-                state = pullState,
-                indicator = {
-                    Indicator(
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        isRefreshing = isRefreshing,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        state = pullState,
-                    )
-                },
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -253,7 +206,7 @@ private fun ArticleListContent(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    AppProgressIndicator(size = 24.dp)
                                 }
                             }
                         }
@@ -265,7 +218,7 @@ private fun ArticleListContent(
                                 ) {
                                     TextButton(onClick = { articles.retry() }) {
                                         Text(
-                                            text = "${LocalStrings.current.articleLoadMoreFailed} · ${LocalStrings.current.retry}",
+                                            text = "${strings.articleLoadMoreFailed} · ${strings.retry}",
                                             color = MaterialTheme.colorScheme.error,
                                         )
                                     }

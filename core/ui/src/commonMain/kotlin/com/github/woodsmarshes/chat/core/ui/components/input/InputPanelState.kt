@@ -26,10 +26,20 @@ internal class InputPanelState {
         awaitingKeyboard = false
     }
 
-    fun requestKeyboard() {
-        if (selector != InputSelector.NONE) {
+    /**
+     * Hands the reserved area over from the open panel to the soft keyboard.
+     *
+     * @param reportsImeInsets whether the platform reports keyboard geometry. When false
+     * (desktop, browser) no IME frames will ever arrive, so the panel collapses immediately
+     * instead of reserving space for a keyboard that will never appear.
+     */
+    fun requestKeyboard(reportsImeInsets: Boolean = true) {
+        if (selector == InputSelector.NONE) return
+        if (reportsImeInsets) {
             selector = InputSelector.NONE
             awaitingKeyboard = true
+        } else {
+            close()
         }
     }
 
@@ -41,6 +51,15 @@ internal class InputPanelState {
         }
     }
 
+    /**
+     * Drops the cached keyboard height after the window width or density changes, because
+     * the soft keyboard height differs between orientations and window sizes. An open panel
+     * keeps its current height; the next completed IME frame refreshes the cache.
+     */
+    fun invalidateImeCache() {
+        stableImeHeightPx = 0
+    }
+
     fun close() {
         selector = InputSelector.NONE
         awaitingKeyboard = false
@@ -48,6 +67,7 @@ internal class InputPanelState {
     }
 
     fun abandonKeyboardRequest() {
+        if (!awaitingKeyboard) return
         awaitingKeyboard = false
         panelHeightPx = 0
     }

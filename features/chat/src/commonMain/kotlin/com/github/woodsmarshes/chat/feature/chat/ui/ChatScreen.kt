@@ -36,27 +36,24 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButtonDefaults.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,24 +62,30 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
+import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
 import com.github.woodsmarshes.chat.core.ui.components.ChatConversationTopBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
+import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.bubble.messageItems
 import com.github.woodsmarshes.chat.core.ui.components.bubble.rememberFormatter
 import com.github.woodsmarshes.chat.core.ui.components.input.ChatInputBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
+import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
+import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
+import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.launch
-import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 import kotlin.uuid.Uuid
 
 @Composable
@@ -91,18 +94,19 @@ fun ChatScreen(
     onProfileClick: (String) -> Unit,
     onGroupInfoClick: (String) -> Unit,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lazyMessages = viewModel.messages.collectAsLazyPagingItems()
     val listState = rememberLazyListState()
     val formatter = rememberFormatter()
     val coroutineScope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val forwardTargets by viewModel.forwardTargets.collectAsState(initial = emptyList<ConversationUiModel>())
+    val forwardTargets by viewModel.forwardTargets.collectAsStateWithLifecycle(initialValue = emptyList<ConversationUiModel>())
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
     val strings = LocalStrings.current
-    val connectionState by viewModel.connectionState.collectAsState()
+    val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
 
     // Send/forward failures surface once as a snackbar; the ViewModel clears
     // the state after display so a rotation does not replay the toast.
@@ -118,24 +122,21 @@ fun ChatScreen(
     val latestMessageId = latestMessage?.id?.toString()
 
     // 新消息未读计数
-    val unreadCount = remember { mutableStateOf(0) }
+    val unreadCount = rememberSaveable { mutableStateOf(0) }
     // 是否为初次进入页面
-    val isFirstLoad = remember { mutableStateOf(true) }
+    val isFirstLoad = rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(latestMessageId, uiState.ownUserId) {
         if (latestMessageId != null) {
             val isOwn = latestMessage.sender?.id == uiState.ownUserId
             if (isFirstLoad.value) {
-                // 初次加载，直接定位到最底部，不播放动画
                 listState.scrollToItem(0)
                 isFirstLoad.value = false
             } else {
-                // 如果用户当前就在底部附近（小于5条消息），或者是自己发的消息，则自动滚动
                 if (listState.firstVisibleItemIndex < 5 || isOwn) {
                     listState.animateScrollToItem(0)
                     unreadCount.value = 0
                 } else {
-                    // 用户正在往上浏览，只增加未读计数，不滚动
                     unreadCount.value += 1
                 }
             }
@@ -159,25 +160,6 @@ fun ChatScreen(
             unreadCount.value = 0
         }
     }
-
-//    // 跟踪之前的消息数量，用于检测新消息
-//    val previousMessageCount = remember { mutableStateOf(0) }
-//
-//    // 当消息数量变化时，自动滚动到最新消息（底部）
-//    LaunchedEffect(lazyMessages.itemCount) {
-//        if (lazyMessages.itemCount > 0) {
-//            // reverseLayout = true 时，index 0 是最下面的最新消息
-//            listState.animateScrollToItem(0)
-//            previousMessageCount.value = lazyMessages.itemCount
-//        }
-//    }
-//
-//    // 发送消息后也滚动到底部
-//    LaunchedEffect(uiState.isSending) {
-//        if (!uiState.isSending && lazyMessages.itemCount > 0) {
-//            listState.animateScrollToItem(0)
-//        }
-//    }
 
     var headerMenuExpanded by remember { mutableStateOf(false) }
 
@@ -219,6 +201,11 @@ fun ChatScreen(
                 )
             }
         }
+    val showComingSoonToast: () -> Unit = {
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar(strings.featureComingSoon)
+        }
+    }
 
     // Back gesture/button exits multi-select before leaving the chat.
     NavigationBackHandler(
@@ -228,7 +215,8 @@ fun ChatScreen(
     )
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        modifier = modifier,
+        snackbarHost = { AppSnackbarHost(snackbarHostState) },
         topBar = {
             if (uiState.selectionMode) {
                 ChatTopAppBar(
@@ -281,28 +269,30 @@ fun ChatScreen(
                 onHeaderClick = openDetails,
                 actions = {
                     if (openDetails != null && header != null) {
-                        IconButton(onClick = { headerMenuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = strings.menuCd,
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = headerMenuExpanded,
-                            onDismissRequest = { headerMenuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        if (header.isGroup) strings.groupInfoTitle
-                                        else strings.profileTitle
-                                    )
-                                },
-                                onClick = {
-                                    headerMenuExpanded = false
-                                    openDetails?.invoke()
-                                },
-                            )
+                        Box {
+                            IconButton(onClick = { headerMenuExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = strings.menuCd,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = headerMenuExpanded,
+                                onDismissRequest = { headerMenuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (header.isGroup) strings.groupInfoTitle
+                                            else strings.profileTitle
+                                        )
+                                    },
+                                    onClick = {
+                                        headerMenuExpanded = false
+                                        openDetails.invoke()
+                                    },
+                                )
+                            }
                         }
                     }
                 },
@@ -333,11 +323,7 @@ fun ChatScreen(
                     onForward = { viewModel.startForward(uiState.selectedMessages) },
                 )
             } else {
-                // 使用 Box 包裹 ChatInputBar，设置背景色避免透明问题。
-                // The draft input is collected HERE, in the bottom-bar scope:
-                // keystrokes only recompose the input bar, never the message
-                // list (ChatViewModel.input is a separate stream on purpose).
-                val draftInput by viewModel.input.collectAsState()
+                val draftInput by viewModel.input.collectAsStateWithLifecycle()
                 Box(
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surface)
@@ -348,9 +334,9 @@ fun ChatScreen(
                         onSend = viewModel::sendMessage,
                         replyTo = uiState.replyToMessage,
                         onClearReply = viewModel::clearReplyTo,
-                        onImageClick = { /* TODO: 打开系统图片选择器 */ },
-                        onFileClick = { /* TODO: 打开系统文件选择器 */ },
-                        onVoiceClick = { /* TODO: 开始录音 */ },
+                        onImageClick = showComingSoonToast,
+                        onFileClick = showComingSoonToast,
+                        onVoiceClick = showComingSoonToast,
                         enabled = !uiState.isSending,
                     )
                 }
@@ -362,37 +348,87 @@ fun ChatScreen(
                 .fillMaxSize()
                 .consumeWindowInsets(padding)
         ) {
+            val refreshState = lazyMessages.loadState.refresh
+            when {
+                refreshState is LoadState.Loading && lazyMessages.itemCount == 0 -> {
+                    LoadingContent(
+                        modifier = Modifier.fillMaxSize().padding(padding),
+                    )
+                }
+                refreshState is LoadState.Error && lazyMessages.itemCount == 0 -> {
+                    ErrorContent(
+                        message = strings.loadFailed,
+                        modifier = Modifier.fillMaxSize().padding(padding),
+                        onRetry = { lazyMessages.retry() },
+                    )
+                }
+                lazyMessages.itemCount == 0 && refreshState is LoadState.NotLoading -> {
+                    EmptyContent(
+                        message = strings.noMessages,
+                        modifier = Modifier.fillMaxSize().padding(padding),
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = padding.calculateStartPadding(LocalLayoutDirection.current),
+                            end = padding.calculateEndPadding(LocalLayoutDirection.current),
+                            top = padding.calculateTopPadding(),
+                            bottom = padding.calculateBottomPadding() + 8.dp
+                        ),
+                        state = listState,
+                        reverseLayout = true,
+                        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
+                    ) {
+                        messageItems(
+                            connectionState = connectionState,
+                            itemCount = lazyMessages.itemCount,
+                            itemProvider = { lazyMessages[it] },
+                            formatter = formatter,
+                            ownUserId = uiState.ownUserId,
+                            onRetry = onRetryCallback,
+                            onReply = onReplyCallback,
+                            onAvatarClick = onAvatarClickCallback,
+                            onAudioPlayPauseClick = { showComingSoonToast() },
+                            selectionActive = uiState.selectionMode,
+                            selectedIds = selectedIds,
+                            onToggleSelection = viewModel::toggleSelection,
+                            menuContent = menuContentCallback,
+                        )
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = padding.calculateStartPadding(LocalLayoutDirection.current),
-                    end = padding.calculateEndPadding(LocalLayoutDirection.current),
-                    top = padding.calculateTopPadding(),
-                    // 添加底部 padding，避免消息被输入框遮挡
-                    bottom = padding.calculateBottomPadding() + 8.dp
-                ),
-                state = listState,
-                reverseLayout = true,
-                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
-            ) {
-                messageItems(
-                    connectionState = connectionState,
-                    itemCount = lazyMessages.itemCount,
-                    itemProvider = { lazyMessages[it] },
-                    formatter = formatter,
-                    ownUserId = uiState.ownUserId,
-                    onRetry = onRetryCallback,
-                    onReply = onReplyCallback,
-                    onAvatarClick = onAvatarClickCallback,
-                    selectionActive = uiState.selectionMode,
-                    selectedIds = selectedIds,
-                    onToggleSelection = viewModel::toggleSelection,
-                    menuContent = menuContentCallback,
-                )
+                        when (lazyMessages.loadState.append) {
+                            is LoadState.Loading -> {
+                                item(key = "append_loading") {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        AppProgressIndicator(size = 20.dp)
+                                    }
+                                }
+                            }
+                            is LoadState.Error -> {
+                                item(key = "append_error") {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        androidx.compose.material3.TextButton(onClick = { lazyMessages.retry() }) {
+                                            Text(
+                                                text = "${strings.loadFailed} · ${strings.retry}",
+                                                color = MaterialTheme.colorScheme.error,
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
             }
-
 
             AnimatedVisibility(
                 visible = showScrollToBottomFab,
@@ -400,7 +436,6 @@ fun ChatScreen(
                 exit = fadeOut() + scaleOut(),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    // 动态计算底部的 Padding 避免遮挡输入框
                     .padding(
                         end = 16.dp,
                         bottom = padding.calculateBottomPadding() + 16.dp
@@ -417,7 +452,7 @@ fun ChatScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     tonalElevation = 4.dp,
                     shadowElevation = 4.dp,
-                    modifier = Modifier.height(40.dp) // 比普通 FAB 略小
+                    modifier = Modifier.height(40.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -443,14 +478,13 @@ fun ChatScreen(
         }
     }
 
-    if (uiState.forwardingMessages.isNotEmpty()) {
-        ForwardDialog(
-            targets = forwardTargets,
-            isSending = uiState.isForwarding,
-            onDismiss = viewModel::dismissForward,
-            onTargetSelected = viewModel::forwardMessages,
-        )
-    }
+    ForwardDialog(
+        show = uiState.forwardingMessages.isNotEmpty(),
+        targets = forwardTargets,
+        isSending = uiState.isForwarding,
+        onDismiss = viewModel::dismissForward,
+        onTargetSelected = viewModel::forwardMessages,
+    )
 }
 
 /** Bottom action bar shown in multi-select mode. */
@@ -531,7 +565,7 @@ private fun SelectionAction(
     }
 }
 
-/** Long-press/tap message menu (reply / copy / forward / multi-select). */
+/** Long-press/right-click message menu items (reply / copy / forward / multi-select). */
 @Composable
 private fun MessageContextMenu(
     isText: Boolean,
@@ -542,76 +576,74 @@ private fun MessageContextMenu(
     onMultiSelect: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    DropdownMenu(expanded = true, onDismissRequest = dismiss) {
-        DropdownMenuItem(
-            text = { Text(strings.reply) },
-            leadingIcon = {
-                Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null)
-            },
-            onClick = {
-                dismiss()
-                onReply()
-            },
-        )
-        DropdownMenuItem(
-            text = { Text(strings.copy) },
-            leadingIcon = {
-                Icon(Icons.Default.ContentCopy, contentDescription = null)
-            },
-            enabled = isText,
-            onClick = {
-                dismiss()
-                onCopy()
-            },
-        )
-        DropdownMenuItem(
-            text = { Text(strings.forward) },
-            leadingIcon = {
-                Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null)
-            },
-            onClick = {
-                dismiss()
-                onForward()
-            },
-        )
-        DropdownMenuItem(
-            text = { Text(strings.multiSelect) },
-            leadingIcon = {
-                Icon(Icons.Default.CheckCircle, contentDescription = null)
-            },
-            onClick = {
-                dismiss()
-                onMultiSelect()
-            },
-        )
-    }
+    DropdownMenuItem(
+        text = { Text(strings.reply) },
+        leadingIcon = {
+            Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null)
+        },
+        onClick = {
+            dismiss()
+            onReply()
+        },
+    )
+    DropdownMenuItem(
+        text = { Text(strings.copy) },
+        leadingIcon = {
+            Icon(Icons.Default.ContentCopy, contentDescription = null)
+        },
+        enabled = isText,
+        onClick = {
+            dismiss()
+            onCopy()
+        },
+    )
+    DropdownMenuItem(
+        text = { Text(strings.forward) },
+        leadingIcon = {
+            Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null)
+        },
+        onClick = {
+            dismiss()
+            onForward()
+        },
+    )
+    DropdownMenuItem(
+        text = { Text(strings.multiSelect) },
+        leadingIcon = {
+            Icon(Icons.Default.CheckCircle, contentDescription = null)
+        },
+        onClick = {
+            dismiss()
+            onMultiSelect()
+        },
+    )
 }
 
 /** Conversation picker shown when forwarding messages. */
 @Composable
 private fun ForwardDialog(
+    show: Boolean,
     targets: List<ConversationUiModel>,
     isSending: Boolean,
     onDismiss: () -> Unit,
     onTargetSelected: (Uuid) -> Unit,
 ) {
     val strings = LocalStrings.current
-    AlertDialog(
+    AppAlertDialog(
+        show = show,
         onDismissRequest = onDismiss,
-        title = { Text(strings.forwardTitle) },
-        text = {
-            LazyColumn(modifier = Modifier.height(320.dp)) {
-                items(targets, key = { it.id }) { conversation ->
-                    ConversationItem(
-                        conversation = conversation,
-                        onClick = { onTargetSelected(conversation.id) },
-                    )
-                }
+        title = strings.forwardTitle,
+        dismissLabel = strings.cancel,
+        onDismiss = onDismiss,
+        dismissEnabled = !isSending,
+    ) {
+        LazyColumn(modifier = Modifier.height(320.dp)) {
+            items(targets, key = { it.id }) { conversation ->
+                ConversationItem(
+                    conversation = conversation,
+                    onClick = { onTargetSelected(conversation.id) },
+                )
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSending) { Text(strings.cancel) }
-        },
-    )
+        }
+    }
 }

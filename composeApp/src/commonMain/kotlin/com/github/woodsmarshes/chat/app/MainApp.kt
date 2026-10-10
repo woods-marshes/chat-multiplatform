@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -22,10 +23,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -41,6 +42,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -59,16 +61,25 @@ import androidx.window.core.layout.WindowSizeClass
 import com.github.woodsmarshes.chat.app.navigation.navConfiguration
 import com.github.woodsmarshes.chat.app.navigation.topLevelNavigationItems
 import com.github.woodsmarshes.chat.app.session.SessionManager
+import com.github.woodsmarshes.chat.app.session.SessionState
 import com.github.woodsmarshes.chat.core.navigation.Navigator
 import com.github.woodsmarshes.chat.core.navigation.rememberNavigationState
 import com.github.woodsmarshes.chat.core.navigation.toEntries
+import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarState
+import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.feature.auth.ui.AuthScreen
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
+import top.yukonga.miuix.kmp.basic.NavigationRail as MiuixNavigationRail
+import top.yukonga.miuix.kmp.basic.NavigationRailItem as MiuixNavigationRailItem
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.articleDetailEntry
@@ -108,23 +119,21 @@ fun MainApp(
     windowAdaptiveInfo: WindowAdaptiveInfo = currentWindowAdaptiveInfoV2()
 ) {
     val isLoggedIn by sessionManager.isLoggedIn.collectAsStateWithLifecycle()
+    val sessionState by sessionManager.sessionState.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = isLoggedIn,
         transitionSpec = {
             when (initialState) {
                 null -> fadeIn() togetherWith fadeOut()
-                // 从登录 -> 主界面：主界面从右滑入，登录页向左滑出
                 false if targetState == true -> {
                     (slideInHorizontally { width -> width } + fadeIn()) togetherWith
                             (slideOutHorizontally { width -> -width } + fadeOut())
                 }
-                // 从主界面 -> 登录（登出）：登录页从左滑入，主界面向右滑出
                 true if targetState == false -> {
                     (slideInHorizontally { width -> -width } + fadeIn()) togetherWith
                             (slideOutHorizontally { width -> width } + fadeOut())
                 }
-                // 其他情况（比如 null 到 true/false）使用默认淡入淡出
                 else -> fadeIn() togetherWith fadeOut()
             }
         },
@@ -133,20 +142,31 @@ fun MainApp(
     ) { currentState ->
         when (currentState) {
             null -> {
-                Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    AppProgressIndicator()
                 }
             }
 
             false -> {
-                AuthScreen()
+                if (sessionState is SessionState.StartFailed) {
+                    val strings = LocalStrings.current
+                    ErrorContent(
+                        message = strings.sessionStartFailed,
+                        modifier = Modifier.fillMaxSize(),
+                        onRetry = sessionManager::retrySessionStart,
+                        secondaryActionLabel = strings.logout,
+                        onSecondaryAction = sessionManager::logout,
+                    )
+                } else {
+                    AuthScreen(modifier = Modifier.fillMaxSize())
+                }
             }
 
             true -> {
                 MainContent(
                     sessionManager = sessionManager,
                     snackbarState = snackbarState,
-                    modifier = modifier,
+                    modifier = Modifier.fillMaxSize(),
                     windowAdaptiveInfo = windowAdaptiveInfo
                 )
             }
@@ -264,7 +284,6 @@ private fun MainContent(
         settingsEntry(
             onBack = { navigator.goBack() },
             onLogout = { sessionManager.logout() },
-            onSearchClick = { navigator.navigate(SearchNavKey(SearchType.CONVERSATION)) },
             onCategoryClick = { category ->
                 openDetailFromList(SettingsDetailNavKey(category))
             },
@@ -392,6 +411,15 @@ private fun MainContent(
     val openProfile: () -> Unit = {
         currentUser?.let { user -> openDetailFromList(ProfileNavKey(user.id.toString())) }
     }
+    val selectTopLevelItem: (NavKey) -> Unit = { navKey ->
+        navigator.navigate(navKey)
+        if (isMediumOrLarger && navKey == SettingsNavKey) {
+            val settingsStack = navigationState.subStacks[SettingsNavKey]
+            if (settingsStack != null && settingsStack.size == 1) {
+                settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
+            }
+        }
+    }
 
     // Compact layouts keep the account affordance in top bars; medium+ pins
     // it to the rail bottom (overlay below), matching the reference design.
@@ -400,54 +428,28 @@ private fun MainContent(
             null
         } else {
             {
-                UserAvatar(
-                    name = currentUser?.displayName?.ifEmpty { null } ?: currentUser?.username,
-                    avatarUrl = currentUser?.avatarUrl,
-                    size = 28.dp,
-                    onClick = openProfile,
-                )
+                Box(
+                    modifier = Modifier.minimumInteractiveComponentSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    UserAvatar(
+                        name = currentUser?.displayName?.ifEmpty { null } ?: currentUser?.username,
+                        avatarUrl = currentUser?.avatarUrl,
+                        size = 28.dp,
+                        onClick = openProfile,
+                    )
+                }
             }
         }
 
-    Box(modifier = modifier) {
-        CompositionLocalProvider(LocalAccountAffordance provides accountAffordance) {
-            NavigationSuiteScaffold(
-                navigationSuiteItems = {
-                    topLevelNavigationItems.forEach { item ->
-                        val selected = item.navKey == navigationState.currentTopLevelKey
-                        item(
-                            selected = selected,
-                            onClick = {
-                                navigator.navigate(item.navKey)
-                                if (isMediumOrLarger && item.navKey == SettingsNavKey) {
-                                    val settingsStack = navigationState.subStacks[SettingsNavKey]
-                                    if (settingsStack != null && settingsStack.size == 1) {
-                                        settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
-                                    }
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selected) item.selectedIcon
-                                    else item.unselectedIcon,
-                                    contentDescription = item.label(strings),
-                                )
-                            },
-                            label = { Text(item.label(strings)) },
-                        )
-                    }
-                },
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-                layoutType = navigationSuiteLayout,
-                state = scaffoldState,
-            ) {
+    val isMiuix = isMiuixTheme()
+    val sceneContent: @Composable (Modifier) -> Unit = { sceneModifier ->
         Scaffold(
+            modifier = sceneModifier,
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0), // 归零，不让外层全局 Padding 堆叠
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = {
-                // 确保 Snackbar 弹出时能排除软键盘，避免被键盘遮挡
                 AppSnackbarHost(
                     snackbarState = snackbarState,
                     modifier = Modifier.windowInsetsPadding(
@@ -455,47 +457,51 @@ private fun MainContent(
                     )
                 )
             },
+            bottomBar = {
+                if (isMiuix && navigationSuiteLayout == NavigationSuiteType.NavigationBar && showNavigationSuite) {
+                    MiuixNavigationBar(
+                        color = MiuixTheme.colorScheme.surface,
+                    ) {
+                        topLevelNavigationItems.forEach { item ->
+                            val selected = item.navKey == navigationState.currentTopLevelKey
+                            MiuixNavigationBarItem(
+                                selected = selected,
+                                onClick = { selectTopLevelItem(item.navKey) },
+                                icon = if (selected) item.selectedIcon else item.unselectedIcon,
+                                label = item.label(strings),
+                            )
+                        }
+                    }
+                }
+            }
         ) { padding ->
-            // 7. 【对齐 Nia】精确消费 WindowInsets 的容器
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding) // 消费由底部导航条占用的高度
-                    .consumeWindowInsets(padding) // 防范内部重复消费
+                    .padding(padding)
+                    .consumeWindowInsets(padding)
                     .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal) // 水平方向安全填充
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
                     )
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        // Tao composites the scene over a black surface; areas
-                        // no composable paints (e.g. empty list-detail panes)
-                        // must get an explicit background or they render black.
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(
+                            if (isMiuix) MiuixTheme.colorScheme.surface
+                            else MaterialTheme.colorScheme.background
+                        )
                 ) {
                     val baseDirective = calculatePaneScaffoldDirective(windowAdaptiveInfo)
                     val isExpandedOrWider = windowAdaptiveInfo.windowSizeClass
                         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
                     val directive = remember(baseDirective, isExpandedOrWider) {
                         baseDirective.copy(
-                            // Allow List + Detail + Extra (e.g. Conversations +
-                            // Chat + Profile/GroupInfo) side-by-side on desktop
-                            // expanded windows, with a 1.dp hairline divider gap
-                            // instead of the default 24.dp empty gutter.
                             maxHorizontalPartitions = if (isExpandedOrWider) 3 else baseDirective.maxHorizontalPartitions,
                             horizontalPartitionSpacerSize = 1.dp,
                             defaultPanePreferredWidth = 320.dp,
                         )
                     }
-                    // shouldHandleSinglePaneLayout = true keeps all list/detail/extra
-                    // routes inside ThreePaneScaffoldScene even on compact/medium
-                    // single-pane windows. Falling back to SinglePaneSceneStrategy
-                    // on 1-pane windows triggers a NavDisplay sceneToExcludedEntryMap
-                    // bug where transitioning between ThreePaneScaffoldScene and
-                    // SinglePaneScene (or popping back within SinglePaneScene) leaves
-                    // the target entry in LocalEntriesToExcludeFromCurrentScene,
-                    // resulting in a blank white screen.
                     val strategy = rememberListDetailSceneStrategy<NavKey>(
                         shouldHandleSinglePaneLayout = true,
                         directive = directive,
@@ -506,11 +512,60 @@ private fun MainContent(
                         entries = currentEntries,
                         sceneStrategies = listOf(strategy),
                         onBack = { navigator.goBack() },
-                        modifier = Modifier.fillMaxSize() // 将安全边界交给外层 Column 处理，这里保持 fillMaxSize
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
-                }
             }
+        }
+    }
+
+    Box(modifier = modifier) {
+        CompositionLocalProvider(LocalAccountAffordance provides accountAffordance) {
+            if (isMiuix) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    if (navigationSuiteLayout == NavigationSuiteType.NavigationRail && showNavigationSuite) {
+                        MiuixNavigationRail(
+                            color = MiuixTheme.colorScheme.surface,
+                        ) {
+                            topLevelNavigationItems.forEach { item ->
+                                val selected = item.navKey == navigationState.currentTopLevelKey
+                                MiuixNavigationRailItem(
+                                    selected = selected,
+                                    onClick = { selectTopLevelItem(item.navKey) },
+                                    icon = if (selected) item.selectedIcon else item.unselectedIcon,
+                                    label = item.label(strings),
+                                )
+                            }
+                        }
+                    }
+                    sceneContent(Modifier.weight(1f).fillMaxSize())
+                }
+            } else {
+                NavigationSuiteScaffold(
+                    navigationSuiteItems = {
+                        topLevelNavigationItems.forEach { item ->
+                            val selected = item.navKey == navigationState.currentTopLevelKey
+                            item(
+                                selected = selected,
+                                onClick = { selectTopLevelItem(item.navKey) },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) item.selectedIcon
+                                        else item.unselectedIcon,
+                                        contentDescription = item.label(strings),
+                                    )
+                                },
+                                label = { Text(item.label(strings)) },
+                            )
+                        }
+                    },
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    layoutType = navigationSuiteLayout,
+                    state = scaffoldState,
+                ) {
+                    sceneContent(Modifier.fillMaxSize())
+                }
             }
         }
 

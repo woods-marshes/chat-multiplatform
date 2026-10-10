@@ -12,5 +12,7 @@ import androidx.compose.runtime.remember
 internal actual fun rememberImeAnimationInsets(): ImeAnimationInsets {
     val source = WindowInsets.imeAnimationSource
     val target = WindowInsets.imeAnimationTarget
-    return remember(source, target) { ImeAnimationInsets(source, target) }
+    return remember(source, target) {
+        ImeAnimationInsets(source = source, target = target, reportsImeInsets = true)
+    }
 }

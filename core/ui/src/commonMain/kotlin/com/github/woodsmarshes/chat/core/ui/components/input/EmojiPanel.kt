@@ -39,17 +39,20 @@ fun EmojiPanel(
     val bubbleColors = LocalBubbleColors.current
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(8),
+        columns = GridCells.Adaptive(minSize = 48.dp),
         modifier = modifier
             .fillMaxWidth()
             .background(bubbleColors.panelBackground)
             .padding(4.dp),
         contentPadding = PaddingValues(4.dp),
     ) {
-        items(commonEmojis) { emoji ->
+        items(
+            items = commonEmojis,
+            key = { it },
+        ) { emoji ->
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { onEmojiSelected(emoji) },
                 contentAlignment = Alignment.Center,

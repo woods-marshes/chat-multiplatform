@@ -12,44 +12,37 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberModalBottomSheetState
-import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
-import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
+import com.github.woodsmarshes.chat.core.ui.components.AppFloatingActionButton
+import com.github.woodsmarshes.chat.core.ui.components.AppModalBottomSheet
+import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
+import com.github.woodsmarshes.chat.core.ui.components.AppPullToRefreshBox
+import com.github.woodsmarshes.chat.core.ui.components.AppTextField
 import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.components.search.AdaptiveSearchBar
+import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ConversationSkeleton
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
@@ -65,16 +58,16 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ConversationsScreen(
     onConversationClick: (conversationId: String, isGroup: Boolean) -> Unit,
     onGroupInfoClick: (conversationId: String) -> Unit,
+    modifier: Modifier = Modifier,
     selectedConversationId: String? = null,
     onMenuClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
     viewModel: ConversationsViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val searchBarState = rememberFreshSearchBarState()
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val inMultiPane = isInListDetailScene()
 
     Scaffold(
@@ -95,8 +88,8 @@ fun ConversationsScreen(
                         )
                         uiState.searchError != null && uiState.searchResults.isEmpty() -> ErrorContent(
                             message = uiState.searchError ?: strings.searchFailed,
-                            onRetry = viewModel::retrySearch,
                             modifier = Modifier.fillMaxSize(),
+                            onRetry = viewModel::retrySearch,
                         )
                         uiState.searchResults.isEmpty() -> EmptyContent(
                             message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
@@ -121,16 +114,18 @@ fun ConversationsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = viewModel::showActions) {
-                Icon(Icons.Default.Add, contentDescription = LocalStrings.current.newCd)
-            }
+            AppFloatingActionButton(
+                onClick = viewModel::showActions,
+                icon = Icons.Default.Add,
+                contentDescription = strings.newCd,
+            )
         },
     ) { innerPadding ->
         ListScreenScaffold(
             isLoading = uiState.isLoading,
             error = uiState.error,
             isEmpty = uiState.conversations.isEmpty(),
-            emptyMessage = LocalStrings.current.noConversations,
+            emptyMessage = strings.noConversations,
             onRetry = viewModel::refresh,
             loadingContent = {
                 ListSkeleton(count = 8, skeleton = { ConversationSkeleton() })
@@ -139,22 +134,10 @@ fun ConversationsScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            val state = rememberPullToRefreshState()
-
-            PullToRefreshBox(
+            AppPullToRefreshBox(
                 isRefreshing = uiState.isRefreshing,
                 onRefresh = viewModel::refresh,
                 modifier = Modifier.fillMaxSize(),
-                state = state,
-                indicator = {
-                    Indicator(
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        isRefreshing = uiState.isRefreshing,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        state = state
-                    )
-                },
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -180,113 +163,106 @@ fun ConversationsScreen(
     }
 
     // ---- FAB bottom sheet ----
-    if (uiState.showActions) {
-        ModalBottomSheet(
-            onDismissRequest = viewModel::dismissActions,
-            sheetState = rememberModalBottomSheetState(),
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-            ) {
-                BottomSheetOption(
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    label = LocalStrings.current.createGroupTitle,
-                    description = LocalStrings.current.createGroupDescription,
-                    onClick = viewModel::showCreateGroup,
-                )
-                Spacer(Modifier.height(16.dp))
-                BottomSheetOption(
-                    icon = { Icon(Icons.Default.GroupAdd, contentDescription = null) },
-                    label = LocalStrings.current.joinGroupTitle,
-                    description = LocalStrings.current.joinGroupDescription,
-                    onClick = viewModel::showJoinGroup,
-                )
-                Spacer(Modifier.height(16.dp))
-            }
-        }
+    AppModalBottomSheet(
+        show = uiState.showActions,
+        onDismissRequest = viewModel::dismissActions,
+    ) {
+        BottomSheetOption(
+            icon = { Icon(Icons.Default.Add, contentDescription = null) },
+            label = strings.createGroupTitle,
+            description = strings.createGroupDescription,
+            onClick = viewModel::showCreateGroup,
+        )
+        Spacer(Modifier.height(16.dp))
+        BottomSheetOption(
+            icon = { Icon(Icons.Default.GroupAdd, contentDescription = null) },
+            label = strings.joinGroupTitle,
+            description = strings.joinGroupDescription,
+            onClick = viewModel::showJoinGroup,
+        )
+        Spacer(Modifier.height(16.dp))
     }
 
     // ---- Create group dialog ----
-    if (uiState.showCreateGroup) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissCreateGroup,
-            title = { Text(LocalStrings.current.createGroupTitle) },
-            text = {
-                Column {
-                    val errorMsg = uiState.createError
-                    if (errorMsg != null) {
-                        Text(text = errorMsg, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
-                    }
-                    OutlinedTextField(
-                        value = uiState.groupName,
-                        onValueChange = viewModel::onGroupNameChanged,
-                        label = { Text(LocalStrings.current.groupNameLabel) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = uiState.groupDescription,
-                        onValueChange = viewModel::onGroupDescriptionChanged,
-                        label = { Text(LocalStrings.current.groupDescriptionHint) },
-                        maxLines = 3,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (uiState.isCreating) {
-                        Spacer(Modifier.height(12.dp))
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            strokeWidth = 2.dp,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::createGroup, enabled = !uiState.isCreating) { Text(LocalStrings.current.create) }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissCreateGroup) { Text(LocalStrings.current.cancel) }
-            },
+    AppAlertDialog(
+        show = uiState.showCreateGroup,
+        onDismissRequest = viewModel::dismissCreateGroup,
+        title = strings.createGroupTitle,
+        confirmLabel = strings.create,
+        onConfirm = viewModel::createGroup,
+        confirmEnabled = !uiState.isCreating,
+        dismissLabel = strings.cancel,
+        onDismiss = viewModel::dismissCreateGroup,
+    ) {
+        val errorMsg = uiState.createError
+        if (errorMsg != null) {
+            Text(
+                text = errorMsg,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        AppTextField(
+            value = uiState.groupName,
+            onValueChange = viewModel::onGroupNameChanged,
+            label = strings.groupNameLabel,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(Modifier.height(8.dp))
+        AppTextField(
+            value = uiState.groupDescription,
+            onValueChange = viewModel::onGroupDescriptionChanged,
+            label = strings.groupDescriptionHint,
+            maxLines = 3,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (uiState.isCreating) {
+            Spacer(Modifier.height(12.dp))
+            AppProgressIndicator(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                size = 24.dp,
+                strokeWidth = 2.dp,
+            )
+        }
     }
 
     // ---- Join group dialog ----
-    if (uiState.showJoinGroup) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissJoinGroup,
-            title = { Text(LocalStrings.current.joinGroupTitle) },
-            text = {
-                Column {
-                    val errorMsg = uiState.joinError
-                    if (errorMsg != null) {
-                        Text(text = errorMsg, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
-                    }
-                    OutlinedTextField(
-                        value = uiState.joinGroupId,
-                        onValueChange = viewModel::onJoinGroupIdChanged,
-                        label = { Text(LocalStrings.current.groupIdLabel) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (uiState.isJoining) {
-                        Spacer(Modifier.height(12.dp))
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            strokeWidth = 2.dp,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::joinGroup, enabled = !uiState.isJoining) { Text(LocalStrings.current.join) }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissJoinGroup) { Text(LocalStrings.current.cancel) }
-            },
+    AppAlertDialog(
+        show = uiState.showJoinGroup,
+        onDismissRequest = viewModel::dismissJoinGroup,
+        title = strings.joinGroupTitle,
+        confirmLabel = strings.join,
+        onConfirm = viewModel::joinGroup,
+        confirmEnabled = !uiState.isJoining,
+        dismissLabel = strings.cancel,
+        onDismiss = viewModel::dismissJoinGroup,
+    ) {
+        val errorMsg = uiState.joinError
+        if (errorMsg != null) {
+            Text(
+                text = errorMsg,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        AppTextField(
+            value = uiState.joinGroupId,
+            onValueChange = viewModel::onJoinGroupIdChanged,
+            label = strings.groupIdLabel,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
         )
+        if (uiState.isJoining) {
+            Spacer(Modifier.height(12.dp))
+            AppProgressIndicator(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                size = 24.dp,
+                strokeWidth = 2.dp,
+            )
+        }
     }
 }
 

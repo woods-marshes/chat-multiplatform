@@ -30,6 +30,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = "Chat",
             state = rememberWindowState(size = DpSize(1200.dp, 860.dp)),
+            minimumSize = DpSize(480.dp, 600.dp),
             icon = painterResource(resource = Res.drawable.app_icon),
         ) {
             // Provides the drag region and window control buttons on Tao

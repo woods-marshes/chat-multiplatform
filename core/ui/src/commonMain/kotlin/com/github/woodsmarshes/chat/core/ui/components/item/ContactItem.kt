@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun ContactItem(
@@ -33,14 +35,25 @@ fun ContactItem(
     selected: Boolean = false,
 ) {
     val bubbleColors = LocalBubbleColors.current
+    val isMiuix = isMiuixTheme()
+    val selectedBg = if (isMiuix) {
+        MiuixTheme.colorScheme.tertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer
+    }
+    val selectedTextColor = if (isMiuix) {
+        MiuixTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
             .background(
-                if (selected) MaterialTheme.colorScheme.secondaryContainer
+                if (selected) selectedBg
                 else Color.Transparent
             )
             .clickable(onClick = onClick)
@@ -56,8 +69,8 @@ fun ContactItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = contact.displayName ?: contact.username,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else bubbleColors.onSurfaceColor,
-                fontSize = 16.sp,
+                color = if (selected) selectedTextColor else bubbleColors.onSurfaceColor,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -68,7 +81,7 @@ fun ContactItem(
                 Text(
                     text = bio,
                     color = bubbleColors.timestampColor,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

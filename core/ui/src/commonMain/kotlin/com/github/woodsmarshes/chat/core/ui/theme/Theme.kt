@@ -1,8 +1,10 @@
 package com.github.woodsmarshes.chat.core.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -10,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
 import com.github.woodsmarshes.chat.resources.MiSans_Bold
@@ -19,31 +22,31 @@ import com.github.woodsmarshes.chat.resources.MiSans_Normal
 import com.github.woodsmarshes.chat.resources.MiSans_Regular
 import com.github.woodsmarshes.chat.resources.Res
 import org.jetbrains.compose.resources.Font
-//import top.yukonga.miuix.kmp.theme.ColorSchemeMode
-//import top.yukonga.miuix.kmp.theme.MiuixTheme
-//import top.yukonga.miuix.kmp.theme.TextStyles
-//import top.yukonga.miuix.kmp.theme.ThemeController
-//import top.yukonga.miuix.kmp.theme.defaultTextStyles
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.TextStyles
+import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.theme.defaultTextStyles
 
-//fun getMiuixTextStyles(fontFamily: FontFamily): TextStyles {
-//    val default = defaultTextStyles()
-//    return default.copy(
-//        main = default.main.copy(fontFamily = fontFamily),
-//        paragraph = default.paragraph.copy(fontFamily = fontFamily),
-//        body1 = default.body1.copy(fontFamily = fontFamily),
-//        body2 = default.body2.copy(fontFamily = fontFamily),
-//        button = default.button.copy(fontFamily = fontFamily),
-//        footnote1 = default.footnote1.copy(fontFamily = fontFamily),
-//        footnote2 = default.footnote2.copy(fontFamily = fontFamily),
-//        headline1 = default.headline1.copy(fontFamily = fontFamily),
-//        headline2 = default.headline2.copy(fontFamily = fontFamily),
-//        subtitle = default.subtitle.copy(fontFamily = fontFamily),
-//        title1 = default.title1.copy(fontFamily = fontFamily),
-//        title2 = default.title2.copy(fontFamily = fontFamily),
-//        title3 = default.title3.copy(fontFamily = fontFamily),
-//        title4 = default.title4.copy(fontFamily = fontFamily),
-//    )
-//}
+fun getMiuixTextStyles(fontFamily: FontFamily): TextStyles {
+    val default = defaultTextStyles()
+    return default.copy(
+        main = default.main.copy(fontFamily = fontFamily),
+        paragraph = default.paragraph.copy(fontFamily = fontFamily),
+        body1 = default.body1.copy(fontFamily = fontFamily),
+        body2 = default.body2.copy(fontFamily = fontFamily),
+        button = default.button.copy(fontFamily = fontFamily),
+        footnote1 = default.footnote1.copy(fontFamily = fontFamily),
+        footnote2 = default.footnote2.copy(fontFamily = fontFamily),
+        headline1 = default.headline1.copy(fontFamily = fontFamily),
+        headline2 = default.headline2.copy(fontFamily = fontFamily),
+        subtitle = default.subtitle.copy(fontFamily = fontFamily),
+        title1 = default.title1.copy(fontFamily = fontFamily),
+        title2 = default.title2.copy(fontFamily = fontFamily),
+        title3 = default.title3.copy(fontFamily = fontFamily),
+        title4 = default.title4.copy(fontFamily = fontFamily),
+    )
+}
 
 private val defaultM3Typography = Typography()
 fun getM3Typography(fontFamily: FontFamily) = Typography(
@@ -64,30 +67,45 @@ fun getM3Typography(fontFamily: FontFamily) = Typography(
     labelSmall = defaultM3Typography.labelSmall.copy(fontFamily = fontFamily)
 )
 
+private val miuixM3Shapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
+
+private val defaultM3Shapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(24.dp),
+)
+
 @Composable
 fun AppTheme(
     themeConfig: ThemeConfig = ThemeConfig(),
     content: @Composable () -> Unit,
 ) {
+    val systemDark = isSystemInDarkTheme()
     val isDark = when (themeConfig.darkThemeConfig) {
         DarkThemeConfig.LIGHT -> false
         DarkThemeConfig.DARK -> true
-        DarkThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
+        DarkThemeConfig.FOLLOW_SYSTEM -> systemDark
     }
 
-    val appFontFamily = FontFamily(
-        Font(Res.font.MiSans_Light, FontWeight.Light),
-        Font(Res.font.MiSans_Regular, FontWeight.Normal),
-        Font(Res.font.MiSans_Normal, FontWeight.Normal, FontStyle.Italic),
-        Font(Res.font.MiSans_Medium, FontWeight.Medium),
-        Font(Res.font.MiSans_Bold, FontWeight.Bold)
-    )
+    val lightFont = Font(Res.font.MiSans_Light, FontWeight.Light)
+    val regularFont = Font(Res.font.MiSans_Regular, FontWeight.Normal)
+    val italicFont = Font(Res.font.MiSans_Normal, FontWeight.Normal, FontStyle.Italic)
+    val mediumFont = Font(Res.font.MiSans_Medium, FontWeight.Medium)
+    val boldFont = Font(Res.font.MiSans_Bold, FontWeight.Bold)
+    val appFontFamily = remember(lightFont, regularFont, italicFont, mediumFont, boldFont) {
+        FontFamily(lightFont, regularFont, italicFont, mediumFont, boldFont)
+    }
 
-    // val miuixTextStyles = remember(appFontFamily) { getMiuixTextStyles(appFontFamily) }
-    // The family is constant (static resource fonts), so a keyless remember is
-    // both correct and actually effective — remember(appFontFamily) never hit
-    // because the family was rebuilt each recomposition.
-    val m3Typography = remember { getM3Typography(appFontFamily) }
+    val miuixTextStyles = remember(appFontFamily) { getMiuixTextStyles(appFontFamily) }
+    val m3Typography = remember(appFontFamily) { getM3Typography(appFontFamily) }
 
     val contentWithFontFallback = @Composable {
         CompositionLocalProvider(
@@ -96,53 +114,67 @@ fun AppTheme(
         )
     }
 
-
     when (themeConfig.themeBrand) {
-//        ThemeBrand.MIUIX, ThemeBrand.DEFAULT,
-//        ThemeBrand.ANDROID, ThemeBrand.IOS, ThemeBrand.DESKTOP -> {
-//            val mode = when (themeConfig.darkThemeConfig) {
-//                DarkThemeConfig.LIGHT -> ColorSchemeMode.Light
-//                DarkThemeConfig.DARK -> ColorSchemeMode.Dark
-//                DarkThemeConfig.FOLLOW_SYSTEM -> ColorSchemeMode.System
-//            }
-//            val controller = remember(themeConfig.darkThemeConfig) {
-//                ThemeController(mode)
-//            }
-//            MiuixTheme(
-//                controller = controller,
-//                textStyles = miuixTextStyles
-//            ) {
-//                val bubbleColors = BubbleDefaults.miuixColors()
-//                val bubbleShapes = BubbleDefaults.miuixShapes()
-//                val colorTokens = if (isDark) ColorTokens.dark() else ColorTokens.light()
-//                CompositionLocalProvider(
-//                    LocalThemeConfig provides themeConfig,
-//                    LocalBubbleColors provides bubbleColors,
-//                    LocalBubbleShapes provides bubbleShapes,
-//                    LocalColorTokens provides colorTokens,
-//                    LocalShapeTokens provides ShapeDefaults.Default,
-//                    content = contentWithFontFallback,
-//                )
-//            }
-//        }
-        else -> {
+        ThemeBrand.MATERIAL3 -> {
             val colorScheme = if (isDark) m3DarkColorScheme else m3LightColorScheme
-            MaterialTheme(
-                colorScheme = colorScheme,
-                typography = m3Typography
+            val bridgedMiuixColors = remember(colorScheme, isDark) {
+                m3BridgedMiuixColors(colorScheme, isDark)
+            }
+            val bubbleColors = BubbleDefaults.material3Colors(isDark)
+            val bubbleShapes = BubbleDefaults.material3Shapes()
+            MiuixTheme(
+                colors = bridgedMiuixColors,
+                textStyles = miuixTextStyles,
             ) {
-                val bubbleColors = BubbleDefaults.material3Colors(isDark)
-                val bubbleShapes = BubbleDefaults.material3Shapes()
-                val colorTokens = if (isDark) ColorTokens.dark() else ColorTokens.light()
-                CompositionLocalProvider(
-                    LocalThemeConfig provides themeConfig,
-                    LocalBubbleColors provides bubbleColors,
-                    LocalBubbleShapes provides bubbleShapes,
-                    LocalColorTokens provides colorTokens,
-                    LocalShapeTokens provides ShapeDefaults.Default,
-                    content = contentWithFontFallback,
-                )
+                MaterialTheme(
+                    colorScheme = colorScheme,
+                    typography = m3Typography,
+                    shapes = defaultM3Shapes,
+                ) {
+                    CompositionLocalProvider(
+                        androidx.compose.foundation.LocalIndication provides androidx.compose.material3.ripple(),
+                        androidx.compose.foundation.LocalOverscrollFactory provides null,
+                        LocalThemeConfig provides themeConfig,
+                        LocalBubbleColors provides bubbleColors,
+                        LocalBubbleShapes provides bubbleShapes,
+                        content = contentWithFontFallback,
+                    )
+                }
+            }
+        }
+        else -> {
+            val mode = when (themeConfig.darkThemeConfig) {
+                DarkThemeConfig.LIGHT -> ColorSchemeMode.Light
+                DarkThemeConfig.DARK -> ColorSchemeMode.Dark
+                DarkThemeConfig.FOLLOW_SYSTEM -> ColorSchemeMode.System
+            }
+            val controller = remember(mode, isDark) {
+                ThemeController(colorSchemeMode = mode, isDark = isDark)
+            }
+            val bridgedM3ColorScheme = remember(controller, isDark) {
+                val miuixColors = if (isDark) controller.darkColors else controller.lightColors
+                miuixBridgedM3ColorScheme(miuixColors, isDark)
+            }
+            MaterialTheme(
+                colorScheme = bridgedM3ColorScheme,
+                typography = m3Typography,
+                shapes = miuixM3Shapes,
+            ) {
+                MiuixTheme(
+                    controller = controller,
+                    textStyles = miuixTextStyles,
+                ) {
+                    val bubbleColors = BubbleDefaults.miuixColors()
+                    val bubbleShapes = BubbleDefaults.miuixShapes()
+                    CompositionLocalProvider(
+                        LocalThemeConfig provides themeConfig,
+                        LocalBubbleColors provides bubbleColors,
+                        LocalBubbleShapes provides bubbleShapes,
+                        content = contentWithFontFallback,
+                    )
+                }
             }
         }
     }
 }
+

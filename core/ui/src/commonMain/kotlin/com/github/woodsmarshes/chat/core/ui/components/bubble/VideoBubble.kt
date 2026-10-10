@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import com.github.woodsmarshes.chat.core.model.VideoContent
+import com.github.woodsmarshes.chat.core.ui.components.avatar.LocalServerBaseUrl
+import com.github.woodsmarshes.chat.core.ui.components.avatar.resolveMediaUrl
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleShapes
 import com.github.woodsmarshes.chat.core.ui.utils.formatDuration
@@ -38,21 +40,23 @@ import com.github.woodsmarshes.chat.core.ui.utils.formatFileSize
 fun VideoBubble(
     content: VideoContent?,
     isOwnMessage: Boolean,
+    modifier: Modifier = Modifier,
     isPlaying: Boolean = false,
     onPlayClick: ((VideoContent) -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     if (content == null) return
 
     val bubbleColors = LocalBubbleColors.current
     val bubbleShapes = LocalBubbleShapes.current
     val shape = bubbleShapes.mediaBubble
+    val resolvedCoverUrl = resolveMediaUrl(content.coverUrl, LocalServerBaseUrl.current)
+    val bgColor = if (isOwnMessage) bubbleColors.ownBackground.copy(alpha = 0.85f) else bubbleColors.otherBackground
 
     Column(
         modifier = modifier
             .widthIn(max = 260.dp)
             .clip(shape)
-            .background(bubbleColors.otherBackground)
+            .background(bgColor)
             .then(
                 // Consume touch events to prevent pass-through
                 if (onPlayClick != null) {
@@ -82,9 +86,9 @@ fun VideoBubble(
                     )
                 }
             } else {
-                if (content.coverUrl != null) {
+                if (resolvedCoverUrl != null) {
                     SubcomposeAsyncImage(
-                        model = content.coverUrl,
+                        model = resolvedCoverUrl,
                         contentDescription = content.fileName,
                         modifier = Modifier.fillMaxWidth().height(180.dp),
                         contentScale = ContentScale.Crop,
@@ -115,7 +119,7 @@ fun VideoBubble(
         }
 
         // Info row
-        VideoInfoRow(content)
+        VideoInfoRow(content, isOwnMessage)
     }
 }
 
@@ -137,10 +141,12 @@ private fun VideoPlaceholder(iconTint: Color, size: androidx.compose.ui.unit.Dp)
 }
 
 @Composable
-private fun VideoInfoRow(content: VideoContent) {
+private fun VideoInfoRow(content: VideoContent, isOwnMessage: Boolean) {
     val bubbleColors = LocalBubbleColors.current
     val durationStr = formatDuration(content.duration)
     val sizeStr = formatFileSize(content.size)
+    val titleColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.otherContent
+    val secondaryColor = if (isOwnMessage) bubbleColors.ownContent.copy(alpha = 0.75f) else bubbleColors.timestampColor
 
     Row(
         modifier = Modifier
@@ -150,7 +156,7 @@ private fun VideoInfoRow(content: VideoContent) {
     ) {
         Text(
             text = content.fileName,
-            color = bubbleColors.otherContent,
+            color = titleColor,
             fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -159,13 +165,13 @@ private fun VideoInfoRow(content: VideoContent) {
         Spacer(Modifier.width(8.dp))
         Text(
             text = durationStr,
-            color = bubbleColors.timestampColor,
+            color = secondaryColor,
             fontSize = 11.sp,
         )
         Spacer(Modifier.width(6.dp))
         Text(
             text = sizeStr,
-            color = bubbleColors.timestampColor,
+            color = secondaryColor,
             fontSize = 11.sp,
         )
     }

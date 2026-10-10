@@ -21,21 +21,16 @@ import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.CardColors as MiuixCardColors
+import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlin.uuid.Uuid
 
 /**
  * Renders article cards into a [LazyListScope] with per-item keys.
- *
- * Usage in a LazyColumn:
- * ```
- * LazyColumn {
- *     articleItems(
- *         itemCount = lazyArticles.itemCount,
- *         itemProvider = { lazyArticles[it] },
- *         onArticleClick = { id -> ... },
- *     )
- * }
- * ```
  */
 fun LazyListScope.articleItems(
     itemCount: Int,
@@ -64,20 +59,7 @@ fun ArticleCardItem(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
-            .clickable(onClick = onClick),
-        colors = if (selected) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            )
-        } else {
-            CardDefaults.cardColors()
-        },
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
+    val cardContent: @Composable () -> Unit = {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -122,6 +104,45 @@ fun ArticleCardItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+
+    if (isMiuixTheme()) {
+        val colors = if (selected) {
+            MiuixCardColors(
+                color = MiuixTheme.colorScheme.tertiaryContainer,
+                contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
+            )
+        } else {
+            MiuixCardDefaults.defaultColors()
+        }
+        MiuixCard(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            colors = colors,
+            pressFeedbackType = PressFeedbackType.Sink,
+            showIndication = true,
+            onClick = onClick,
+        ) {
+            cardContent()
+        }
+    } else {
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+                .clickable(onClick = onClick),
+            colors = if (selected) {
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+            } else {
+                CardDefaults.cardColors()
+            },
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        ) {
+            cardContent()
         }
     }
 }

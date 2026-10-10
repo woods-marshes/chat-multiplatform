@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,7 +16,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.model.FormattingEntity
@@ -29,22 +29,23 @@ fun TextBubble(
     content: TextContent,
     isOwnMessage: Boolean,
     sendStatus: MessageState,
+    modifier: Modifier = Modifier,
     formatter: MessageFormatter = rememberFormatter(),
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     val bubbleColors = LocalBubbleColors.current
     val bubbleShapes = LocalBubbleShapes.current
 
     val bgColor = if (isOwnMessage) bubbleColors.ownBackground else bubbleColors.otherBackground
     val textColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.otherContent
+    val linkColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.inputSendIconTint
     val shape = if (isOwnMessage) bubbleShapes.ownBubble else bubbleShapes.otherBubble
 
-    val annotatedText = remember(content.text, content.entities, textColor) {
-        formatter.buildRichText(content.text, content.entities, textColor)
+    val annotatedText = remember(content.text, content.entities, textColor, linkColor) {
+        formatter.buildRichText(content.text, content.entities, textColor, linkColor)
     }
 
-    val textStyle = TextStyle(fontSize = 15.sp, lineHeight = 22.sp)
+    val textStyle = LocalTextStyle.current.copy(fontSize = 15.sp, lineHeight = 22.sp, color = textColor)
 
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
@@ -77,7 +78,7 @@ fun TextBubble(
 
     BasicText(
         text = annotatedText,
-        style = textStyle.copy(color = textColor),
+        style = textStyle,
         modifier = combinedModifier,
         onTextLayout = { textLayoutResult = it },
     )

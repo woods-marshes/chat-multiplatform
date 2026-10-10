@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -26,8 +27,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
+import com.github.woodsmarshes.chat.core.ui.components.AppTabRow
+import com.github.woodsmarshes.chat.core.ui.components.AppTextField
+import com.github.woodsmarshes.chat.core.ui.components.ButtonSize
+import com.github.woodsmarshes.chat.core.ui.components.ButtonStyle
+import com.github.woodsmarshes.chat.core.ui.components.ChatAppButton
+import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ScreenEdgeGlow
+import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.utils.rememberScreenCornerRadius
 import com.github.woodsmarshes.chat.feature.auth.model.AuthMode
@@ -37,10 +46,11 @@ import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun AuthScreen(
+    modifier: Modifier = Modifier,
     viewModel: AuthViewModel = koinViewModel(),
     windowSizeClass: WindowSizeClass = currentWindowAdaptiveInfoV2().windowSizeClass,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.screenState) {
@@ -56,7 +66,7 @@ fun AuthScreen(
         }
     }
 
-    SharedTransitionLayout {
+    SharedTransitionLayout(modifier = modifier) {
         AuthScreenContent(
             uiState = uiState,
             windowSizeClass = windowSizeClass,
@@ -155,7 +165,7 @@ private fun AuthScreenContent(
                                 )
                             }
                         }
-                        Card(
+                        ChatAppCard(
                             modifier = Modifier
                                 .weight(1.2f)
                                 .then(
@@ -169,7 +179,7 @@ private fun AuthScreenContent(
                                             )
                                     }
                                 ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            cornerRadius = 16.dp,
                         ) {
                             with(sharedTransitionScope) {
                                 Box(modifier = Modifier.skipToLookaheadSize()) {
@@ -240,6 +250,10 @@ private fun AuthScreenContent(
                 }
             }
         }
+        AppSnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
@@ -290,27 +304,20 @@ private fun AuthFormContent(
         modifier = Modifier.padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        val strings = LocalStrings.current
         Text(
-            text = if (uiState.mode == AuthMode.Login) LocalStrings.current.authWelcomeBack else LocalStrings.current.createAccount,
+            text = if (uiState.mode == AuthMode.Login) strings.authWelcomeBack else strings.createAccount,
             style = MaterialTheme.typography.headlineSmall
         )
 
-        SecondaryTabRow(
+        AppTabRow(
+            tabs = listOf(strings.login, strings.register),
             selectedTabIndex = if (uiState.mode == AuthMode.Login) 0 else 1,
-            containerColor = Color.Transparent,
-            divider = {}
-        ) {
-            Tab(
-                selected = uiState.mode == AuthMode.Login,
-                onClick = { onModeChange(AuthMode.Login) },
-                text = { Text(LocalStrings.current.login) }
-            )
-            Tab(
-                selected = uiState.mode == AuthMode.Register,
-                onClick = { onModeChange(AuthMode.Register) },
-                text = { Text(LocalStrings.current.register) }
-            )
-        }
+            onTabSelected = { index ->
+                onModeChange(if (index == 0) AuthMode.Login else AuthMode.Register)
+            },
+            withContour = true,
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -318,13 +325,11 @@ private fun AuthFormContent(
             targetState = uiState.mode,
             transitionSpec = {
                 if (targetState == AuthMode.Register) {
-                    // 登录 -> 注册：向左滑动（新页面从右侧滑入，旧页面向左侧滑出）
                     (slideInHorizontally { width -> width / 2 }
                             + fadeIn(animationSpec = tween(300))) togetherWith
                             (slideOutHorizontally { width -> -width / 2 }
                                     + fadeOut(animationSpec = tween(300)))
                 } else {
-                    // 注册 -> 登录：向右滑动（新页面从左侧滑入，旧页面向右侧滑出）
                     (slideInHorizontally { width -> -width / 2 }
                             + fadeIn(animationSpec = tween(300))) togetherWith
                             (slideOutHorizontally { width -> width / 2 }
@@ -335,19 +340,21 @@ private fun AuthFormContent(
             },
             label = "FormFieldsTransition"
         ) { mode ->
+            val strings = LocalStrings.current
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                var passwordVisible by remember { mutableStateOf(false) }
+                var passwordVisible by rememberSaveable { mutableStateOf(false) }
+                var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
                 if (mode == AuthMode.Login) {
-                    OutlinedTextField(
+                    AppTextField(
                         value = uiState.email,
                         onValueChange = onEmailChange,
-                        label = { Text(LocalStrings.current.emailLabel) },
+                        label = strings.emailLabel,
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.emailError != null,
-                        supportingText = uiState.emailError?.let { { Text(it.localizedMessage()) } },
+                        errorText = uiState.emailError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
@@ -361,13 +368,13 @@ private fun AuthFormContent(
                         )
                     )
 
-                    OutlinedTextField(
+                    AppTextField(
                         value = uiState.password,
                         onValueChange = onPasswordChange,
-                        label = { Text(LocalStrings.current.passwordLabel) },
+                        label = strings.passwordLabel,
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.passwordError != null,
-                        supportingText = uiState.passwordError?.let { { Text(it.localizedMessage()) } },
+                        errorText = uiState.passwordError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -377,7 +384,7 @@ private fun AuthFormContent(
                                     } else {
                                         Icons.Default.VisibilityOff
                                     },
-                                    contentDescription = null
+                                    contentDescription = if (passwordVisible) strings.hidePasswordCd else strings.showPasswordCd
                                 )
                             }
                         },
@@ -392,13 +399,13 @@ private fun AuthFormContent(
                         )
                     )
                 } else {
-                    OutlinedTextField(
+                    AppTextField(
                         value = uiState.name,
                         onValueChange = onNameChange,
-                        label = { Text(LocalStrings.current.nameLabel) },
+                        label = strings.nameLabel,
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.nameError != null,
-                        supportingText = uiState.nameError?.let { { Text(it.localizedMessage()) } },
+                        errorText = uiState.nameError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -409,13 +416,13 @@ private fun AuthFormContent(
                         )
                     )
 
-                    OutlinedTextField(
+                    AppTextField(
                         value = uiState.email,
                         onValueChange = onEmailChange,
-                        label = { Text(LocalStrings.current.emailLabel) },
+                        label = strings.emailLabel,
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.emailError != null,
-                        supportingText = uiState.emailError?.let { { Text(it.localizedMessage()) } },
+                        errorText = uiState.emailError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
@@ -429,17 +436,20 @@ private fun AuthFormContent(
                         )
                     )
 
-                    OutlinedTextField(
+                    AppTextField(
                         value = uiState.password,
                         onValueChange = onPasswordChange,
-                        label = { Text(LocalStrings.current.passwordLabel) },
+                        label = strings.passwordLabel,
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.passwordError != null,
-                        supportingText = uiState.passwordError?.let { { Text(it.localizedMessage()) } },
+                        errorText = uiState.passwordError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (passwordVisible) strings.hidePasswordCd else strings.showPasswordCd,
+                                )
                             }
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -453,15 +463,23 @@ private fun AuthFormContent(
                         )
                     )
 
-                    OutlinedTextField(
+                    AppTextField(
                         value = uiState.confirmPassword,
                         onValueChange = onConfirmPasswordChange,
-                        label = { Text(LocalStrings.current.confirmPasswordLabel) },
+                        label = strings.confirmPasswordLabel,
                         modifier = Modifier.fillMaxWidth(),
                         isError = uiState.confirmPasswordError != null,
-                        supportingText = uiState.confirmPasswordError?.let { { Text(it.localizedMessage()) } },
+                        errorText = uiState.confirmPasswordError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
-                        visualTransformation = PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (confirmPasswordVisible) strings.hidePasswordCd else strings.showPasswordCd,
+                                )
+                            }
+                        },
+                        visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
@@ -475,32 +493,19 @@ private fun AuthFormContent(
             }
         }
 
-        Button(
+        ChatAppButton(
             onClick = {
                 if (uiState.screenState !is AuthScreenState.Loading) {
                     onSubmitWithClearFocus()
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
+            label = if (uiState.mode == AuthMode.Login) strings.login else strings.createAccount,
+            style = ButtonStyle.PRIMARY,
+            size = ButtonSize.LG,
             enabled = uiState.canSubmit,
-            shape = MaterialTheme.shapes.medium
-        ) {
-            if (uiState.screenState is AuthScreenState.Loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Text(
-                    if (uiState.mode == AuthMode.Login) {
-                        LocalStrings.current.login
-                    } else {
-                        LocalStrings.current.createAccount
-                    }
-                )
-            }
-        }
+            isLoading = uiState.screenState is AuthScreenState.Loading,
+            fullWidth = true,
+        )
     }
 }
 

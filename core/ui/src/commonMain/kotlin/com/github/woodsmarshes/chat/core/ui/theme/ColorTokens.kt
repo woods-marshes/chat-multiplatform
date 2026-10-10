@@ -111,18 +111,6 @@ data class BubbleColorTokens(
     val onSurfaceColor: Color,
 )
 
-/**
- * 全局颜色令牌 CompositionLocal。
- *
- * 使用 staticCompositionLocalOf 而非 compositionLocalOf：
- * - 设计令牌在运行时极少变化（仅主题切换时）
- * - static 版本确保非直接读取者不重组
- * - 参考 Jetcaster 和 NiA 的最佳实践
- */
-val LocalColorTokens = staticCompositionLocalOf<ColorTokens> {
-    error("LocalColorTokens not provided — make sure ChatTheme wraps this content")
-}
-
 @Immutable
 data class ColorTokens(
     // M3 标准角色

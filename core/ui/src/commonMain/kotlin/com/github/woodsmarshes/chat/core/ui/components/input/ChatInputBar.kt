@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.SentimentSatisfiedAlt
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,6 +69,12 @@ import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import kotlin.time.Duration.Companion.milliseconds
 
+/** Time allowed for the soft keyboard inset animation to begin after a request. */
+private val KeyboardStartTimeout = 400.milliseconds
+
+/** Additional time allowed for a started keyboard animation to settle. */
+private val KeyboardFinishTimeout = 1100.milliseconds
+
 @Composable
 fun ChatInputBar(
     value: TextFieldValue,
@@ -91,8 +98,15 @@ fun ChatInputBar(
     val navigationBars = WindowInsets.navigationBars
     val animation = rememberImeAnimationInsets()
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
-    val panelState = remember(localDensity, windowSize) { InputPanelState() }
+    // Must survive window resizes: re-creating it would drop an open panel mid-interaction.
+    val panelState = remember { InputPanelState() }
     val currentSelector = panelState.selector
+
+    // Keyboard height depends on orientation/width and density, so only the cache is reset.
+    // Height is excluded on purpose: it may change while the keyboard itself animates.
+    LaunchedEffect(panelState, windowSize.width, localDensity) {
+        panelState.invalidateImeCache()
+    }
 
     LaunchedEffect(panelState, ime, animation, localDensity) {
         snapshotFlow {
@@ -110,8 +124,17 @@ fun ChatInputBar(
         if (panelState.awaitingKeyboard) {
             textFieldFocusRequester.requestFocus()
             keyboardController?.show()
+            // A hardware keyboard or floating IME never starts an inset animation. If nothing
+            // has started shortly after the request, release the reservation right away.
+            delay(KeyboardStartTimeout)
+            val started = ime.getBottom(localDensity) > 0 ||
+                animation.target.getBottom(localDensity) > 0
+            if (!started) {
+                panelState.abandonKeyboardRequest()
+                return@LaunchedEffect
+            }
             // Failure guard only: successful handoff is driven by actual IME geometry.
-            delay(1500.milliseconds)
+            delay(KeyboardFinishTimeout)
             panelState.abandonKeyboardRequest()
         }
     }
@@ -127,6 +150,12 @@ fun ChatInputBar(
         )
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
+    }
+
+    fun switchToKeyboard() {
+        panelState.requestKeyboard(animation.reportsImeInsets)
+        // Without IME insets the awaitingKeyboard effect never runs, so focus the field here.
+        if (!animation.reportsImeInsets) textFieldFocusRequester.requestFocus()
     }
 
     NavigationBackHandler(
@@ -164,7 +193,7 @@ fun ChatInputBar(
             IconButton(
                 onClick = {
                     if (currentSelector == InputSelector.IMAGE) {
-                        panelState.requestKeyboard()
+                        switchToKeyboard()
                     } else {
                         openPanel(InputSelector.IMAGE)
                     }
@@ -179,11 +208,10 @@ fun ChatInputBar(
                 )
             }
 
-            // 表情面板切换按钮（新增，原版漏掉了 Emoji 触发入口）
             IconButton(
                 onClick = {
                     if (currentSelector == InputSelector.EMOJI) {
-                        panelState.requestKeyboard()
+                        switchToKeyboard()
                     } else {
                         openPanel(InputSelector.EMOJI)
                     }
@@ -206,11 +234,14 @@ fun ChatInputBar(
                 modifier = Modifier
                     .weight(1f)
                     .focusRequester(textFieldFocusRequester)
-                    .onFocusChanged { if (it.isFocused) panelState.requestKeyboard() }
+                    .onFocusChanged {
+                        // Focus is already being gained here; calling switchToKeyboard would loop.
+                        if (it.isFocused) panelState.requestKeyboard(animation.reportsImeInsets)
+                    }
                     .clip(RoundedCornerShape(20.dp))
                     .background(bubbleColors.inputFieldBackground)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                textStyle = TextStyle(
+                textStyle = LocalTextStyle.current.copy(
                     color = bubbleColors.inputFieldContent,
                     fontSize = 15.sp,
                 ),
@@ -219,9 +250,9 @@ fun ChatInputBar(
                 maxLines = 5,
                 decorationBox = { innerTextField ->
                     if (value.text.isEmpty()) {
-                        androidx.compose.material3.Text(
+                        Text(
                             text = strings.inputPlaceholder,
-                            style = TextStyle(
+                            style = LocalTextStyle.current.copy(
                                 color = bubbleColors.inputFieldPlaceholder,
                                 fontSize = 15.sp,
                             ),
@@ -354,7 +385,7 @@ private fun ReplyPreview(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "${strings.reply} $senderName",
-                style = TextStyle(
+                style = LocalTextStyle.current.copy(
                     color = bubbleColors.inputFieldContent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -364,7 +395,7 @@ private fun ReplyPreview(
             )
             Text(
                 text = excerpt,
-                style = TextStyle(
+                style = LocalTextStyle.current.copy(
                     color = bubbleColors.inputFieldPlaceholder,
                     fontSize = 12.sp,
                 ),

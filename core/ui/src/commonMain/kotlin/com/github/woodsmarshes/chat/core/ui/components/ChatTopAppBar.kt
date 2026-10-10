@@ -20,17 +20,21 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation3.LocalListDetailSceneScope
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.basic.HorizontalDivider as MiuixHorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Whether the current composable is rendered inside a multi-pane
@@ -55,13 +59,13 @@ fun isInListDetailScene(): Boolean {
 }
 
 /**
- * 共享 TopAppBar（参考 NiA 的 NiaTopAppBar，所有 Screen 统一使用）。
+ * 共享 TopAppBar（支持 Material 3 与 Miuix 双主题自动切换）。
  *
  * @param showBackButton 显示返回箭头
  * @param showCloseButton 显示关闭按钮（用于大屏最右侧的 extraPane 面板）
  * @param showMenuButton 显示汉堡菜单按钮（抽屉触发）。优先于 showBackButton
  * @param onMenuClick 汉堡按钮点击回调
- * @param onSearchClick 非空时在操作区渲染胶囊搜索入口（替代独立搜索图标）
+ * @param onSearchClick 非空时在操作区渲染搜索入口
  * @param showAccountAffordance 顶栏末尾渲染当前用户头像（仅顶层页面使用；
  *   头像内容来自 [LocalAccountAffordance]，紧凑布局由 shell 提供，宽屏为 null）
  */
@@ -69,6 +73,7 @@ fun isInListDetailScene(): Boolean {
 @Composable
 fun ChatTopAppBar(
     title: String,
+    modifier: Modifier = Modifier,
     showBackButton: Boolean = false,
     showCloseButton: Boolean = false,
     onBackClick: () -> Unit = {},
@@ -78,60 +83,121 @@ fun ChatTopAppBar(
     showAccountAffordance: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        CenterAlignedTopAppBar(
-            title = { Text(title) },
-            navigationIcon = {
-                when {
-                    showMenuButton && onMenuClick != null -> {
-                        IconButton(onClick = onMenuClick) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = LocalStrings.current.menuCd,
+    if (isMiuixTheme()) {
+        Column(modifier = modifier.fillMaxWidth()) {
+            SmallTopAppBar(
+                title = title,
+                color = MiuixTheme.colorScheme.surface,
+                titleColor = MiuixTheme.colorScheme.onSurface,
+                navigationIcon = {
+                    when {
+                        showMenuButton && onMenuClick != null -> {
+                            MiuixIconButton(onClick = onMenuClick) {
+                                MiuixIcon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = LocalStrings.current.menuCd,
+                                    tint = MiuixTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                        showCloseButton -> {
+                            MiuixIconButton(onClick = onBackClick) {
+                                MiuixIcon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = LocalStrings.current.backCd,
+                                    tint = MiuixTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                        showBackButton -> {
+                            MiuixIconButton(onClick = onBackClick) {
+                                MiuixIcon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = LocalStrings.current.backCd,
+                                    tint = MiuixTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
+                },
+                actions = {
+                    if (onSearchClick != null) {
+                        MiuixIconButton(onClick = onSearchClick) {
+                            MiuixIcon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = LocalStrings.current.searchTitle,
+                                tint = MiuixTheme.colorScheme.onSurface,
                             )
                         }
                     }
-                    showCloseButton -> {
-                        IconButton(onClick = onBackClick) {
+                    actions()
+                    if (showAccountAffordance) {
+                        Spacer(Modifier.width(4.dp))
+                        LocalAccountAffordance.current?.invoke()
+                    }
+                },
+            )
+            MiuixHorizontalDivider(
+                thickness = 0.5.dp,
+                color = MiuixTheme.colorScheme.dividerLine,
+            )
+        }
+    } else {
+        Column(modifier = modifier.fillMaxWidth()) {
+            CenterAlignedTopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    when {
+                        showMenuButton && onMenuClick != null -> {
+                            IconButton(onClick = onMenuClick) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = LocalStrings.current.menuCd,
+                                )
+                            }
+                        }
+                        showCloseButton -> {
+                            IconButton(onClick = onBackClick) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = LocalStrings.current.backCd,
+                                )
+                            }
+                        }
+                        showBackButton -> {
+                            IconButton(onClick = onBackClick) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = LocalStrings.current.backCd,
+                                )
+                            }
+                        }
+                    }
+                },
+                actions = {
+                    if (onSearchClick != null) {
+                        IconButton(onClick = onSearchClick) {
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = LocalStrings.current.backCd,
+                                imageVector = Icons.Default.Search,
+                                contentDescription = LocalStrings.current.searchTitle,
                             )
                         }
                     }
-                    showBackButton -> {
-                        IconButton(onClick = onBackClick) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = LocalStrings.current.backCd,
-                            )
-                        }
+                    actions()
+                    if (showAccountAffordance) {
+                        Spacer(Modifier.width(4.dp))
+                        LocalAccountAffordance.current?.invoke()
                     }
-                }
-            },
-            actions = {
-                if (onSearchClick != null) {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = LocalStrings.current.searchTitle,
-                        )
-                    }
-                }
-                actions()
-                if (showAccountAffordance) {
-                    Spacer(Modifier.width(4.dp))
-                    LocalAccountAffordance.current?.invoke()
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                scrolledContainerColor = MaterialTheme.colorScheme.surface,
-            ),
-        )
-        HorizontalDivider(
-            thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+        }
     }
 }

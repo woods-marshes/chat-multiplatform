@@ -39,6 +39,7 @@ class MessageFormatter(
         text: String,
         entities: List<FormattingEntity>,
         defaultColor: Color,
+        linkColor: Color = defaultColor,
     ): AnnotatedString {
         if (entities.isEmpty()) {
             return AnnotatedString(text, SpanStyle(color = defaultColor))
@@ -78,8 +79,9 @@ class MessageFormatter(
                         pushStringAnnotation(tag = ANNOTATION_URL, annotation = entity.url)
                         addStyle(
                             SpanStyle(
-                                color = Color(0xFF64B5F6),
+                                color = linkColor,
                                 textDecoration = TextDecoration.Underline,
+                                fontWeight = FontWeight.Medium,
                             ),
                             start,
                             end,

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,19 +30,21 @@ fun SkeletonLine(
             .fillMaxWidth()
             .height(height)
             .clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
             .shimmer(cornerRadius = 4.dp),
     )
 }
 
 @Composable
 fun SkeletonCircle(
-    size: Dp = 48.dp,
     modifier: Modifier = Modifier,
+    size: Dp = 48.dp,
 ) {
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
             .shimmer(cornerRadius = size / 2),
     )
 }
@@ -56,6 +59,7 @@ fun SkeletonRect(
         modifier = modifier
             .size(width, height)
             .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
             .shimmer(cornerRadius = 8.dp),
     )
 }
@@ -109,9 +113,9 @@ fun ContactSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 fun ListSkeleton(
+    modifier: Modifier = Modifier,
     count: Int = 8,
     skeleton: @Composable () -> Unit = { ConversationSkeleton() },
-    modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
         repeat(count) {

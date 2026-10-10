@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.ui.resources
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import cafe.adriel.lyricist.LanguageTag
 import cafe.adriel.lyricist.Lyricist
@@ -10,6 +11,7 @@ import cafe.adriel.lyricist.rememberStrings
 import com.github.woodsmarshes.chat.lyricist.Locales
 import com.github.woodsmarshes.chat.lyricist.Strings
 import com.github.woodsmarshes.chat.lyricist.ZhStrings
+import kotlin.concurrent.Volatile
 
 public val LyricistStrings: Map<LanguageTag, Strings> = mapOf(
     Locales.Zh to ZhStrings
@@ -17,6 +19,9 @@ public val LyricistStrings: Map<LanguageTag, Strings> = mapOf(
 
 public val LocalStrings: ProvidableCompositionLocal<Strings> =
     staticCompositionLocalOf { ZhStrings }
+
+@Volatile
+private var currentLocaleStrings: Strings = ZhStrings
 
 @Composable
 public fun rememberLyricistStrings(
@@ -30,7 +35,11 @@ public fun ProvideLyricistStrings(
     lyricist: Lyricist<Strings> = rememberLyricistStrings(),
     content: @Composable () -> Unit
 ) {
+    val active = lyricist.strings
+    SideEffect {
+        currentLocaleStrings = active
+    }
     ProvideStrings(lyricist, LocalStrings, content)
 }
 
-public fun getLocaleStrings(): Strings = ZhStrings
+public fun getLocaleStrings(): Strings = currentLocaleStrings

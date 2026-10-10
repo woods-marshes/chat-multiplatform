@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -44,26 +45,18 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,20 +68,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
+import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
+import com.github.woodsmarshes.chat.core.ui.components.AppHorizontalDivider
+import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
+import com.github.woodsmarshes.chat.core.ui.components.AppTextField
+import com.github.woodsmarshes.chat.core.ui.components.ButtonSize
+import com.github.woodsmarshes.chat.core.ui.components.ButtonStyle
+import com.github.woodsmarshes.chat.core.ui.components.ChatAppButton
 import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
+import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.SectionHeader
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItemWithSwitch
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.feature.settings.AppBuildInfo
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsUiState
@@ -106,18 +109,22 @@ import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.RadioButton as MiuixRadioButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun SettingsDetailScreen(
     category: SettingsCategory,
     onBack: () -> Unit,
+    modifier: Modifier = Modifier,
     onLogout: () -> Unit = {},
     onOpenLicenses: () -> Unit = {},
     isSubPage: Boolean = false,
-    modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val inMultiPane = isInListDetailScene()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -152,7 +159,7 @@ fun SettingsDetailScreen(
                 onBackClick = onBack,
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { AppSnackbarHost(snackbarHostState) },
     ) { padding ->
         Box(
             modifier = Modifier
@@ -210,12 +217,15 @@ private fun ProfileEditContent(
     val imagePickerLauncher = rememberFilePickerLauncher(
         type = FileKitType.Image,
         mode = FileKitMode.Single,
-        onError = { _ -> },
+        onError = { _ ->
+            scope.launch { snackbarHostState.showSnackbar(strings.avatarUploadFailed) }
+        },
         onResult = { file ->
             if (file != null) {
                 scope.launch {
                     runCatching { file.readBytes() }
                         .onSuccess { bytes -> onUploadAvatar(bytes) }
+                        .onFailure { snackbarHostState.showSnackbar(strings.avatarUploadFailed) }
                 }
             }
         },
@@ -262,8 +272,8 @@ private fun ProfileEditContent(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             if (uiState.isUploadingAvatar) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
+                                AppProgressIndicator(
+                                    size = 14.dp,
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onPrimary,
                                 )
@@ -329,11 +339,11 @@ private fun ProfileEditContent(
                     .fillMaxWidth()
                     .padding(16.dp),
             ) {
-                OutlinedTextField(
+                AppTextField(
                     value = uiState.editDisplayName,
                     onValueChange = onDisplayNameChange,
-                    label = { Text(strings.displayNameLabel) },
-                    placeholder = { Text(strings.displayNamePlaceholder) },
+                    label = strings.displayNameLabel,
+                    placeholder = strings.displayNamePlaceholder,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Person,
@@ -346,11 +356,11 @@ private fun ProfileEditContent(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
+                AppTextField(
                     value = uiState.editBio,
                     onValueChange = onBioChange,
-                    label = { Text(strings.bioLabel) },
-                    placeholder = { Text(strings.bioPlaceholder) },
+                    label = strings.bioLabel,
+                    placeholder = strings.bioPlaceholder,
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -364,30 +374,15 @@ private fun ProfileEditContent(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
+                ChatAppButton(
                     onClick = onSaveProfile,
+                    label = if (uiState.isSavingProfile) strings.saving else strings.saveChanges,
+                    style = ButtonStyle.PRIMARY,
+                    size = ButtonSize.MD,
                     enabled = uiState.hasProfileChanges && !uiState.isSavingProfile,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                ) {
-                    if (uiState.isSavingProfile) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(strings.saving)
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(strings.saveChanges)
-                    }
-                }
+                    isLoading = uiState.isSavingProfile,
+                    fullWidth = true,
+                )
             }
         }
 
@@ -430,9 +425,8 @@ private fun ProfileEditContent(
                     }
                 }
                 if (uiState.email.isNotEmpty()) {
-                    HorizontalDivider(
+                    AppHorizontalDivider(
                         modifier = Modifier.padding(horizontal = 20.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
                     Row(
                         modifier = Modifier
@@ -462,9 +456,8 @@ private fun ProfileEditContent(
                     }
                 }
                 if (uiState.userId.isNotEmpty()) {
-                    HorizontalDivider(
+                    AppHorizontalDivider(
                         modifier = Modifier.padding(horizontal = 20.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
                     Row(
                         modifier = Modifier
@@ -492,9 +485,8 @@ private fun ProfileEditContent(
                     }
                 }
 
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
 
                 Row(
@@ -506,7 +498,7 @@ private fun ProfileEditContent(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = strings.logout,
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(22.dp),
                     )
@@ -530,31 +522,20 @@ private fun ProfileEditContent(
         }
     }
 
-    if (showLogoutDialog) {
-        AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
-            title = { Text(strings.logoutConfirmTitle) },
-            text = { Text(strings.logoutConfirmMessage) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showLogoutDialog = false
-                        onLogout()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Text(strings.logout)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
-                    Text(strings.cancel)
-                }
-            },
-        )
-    }
+    AppAlertDialog(
+        show = showLogoutDialog,
+        onDismissRequest = { showLogoutDialog = false },
+        title = strings.logoutConfirmTitle,
+        summary = strings.logoutConfirmMessage,
+        confirmLabel = strings.logout,
+        onConfirm = {
+            showLogoutDialog = false
+            onLogout()
+        },
+        confirmDanger = true,
+        dismissLabel = strings.cancel,
+        onDismiss = { showLogoutDialog = false },
+    )
 }
 
 @Composable
@@ -585,9 +566,8 @@ private fun AppearanceSettingsContent(
                     selected = uiState.themeBrand == ThemeBrand.MIUIX || uiState.themeBrand == ThemeBrand.DEFAULT,
                     onClick = { onThemeBrandChange(ThemeBrand.MIUIX) },
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 RadioSettingRow(
                     icon = Icons.Default.Palette,
@@ -614,9 +594,8 @@ private fun AppearanceSettingsContent(
                     selected = uiState.darkThemeConfig == DarkThemeConfig.FOLLOW_SYSTEM,
                     onClick = { onDarkThemeConfigChange(DarkThemeConfig.FOLLOW_SYSTEM) },
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 RadioSettingRow(
                     icon = Icons.Default.LightMode,
@@ -625,9 +604,8 @@ private fun AppearanceSettingsContent(
                     selected = uiState.darkThemeConfig == DarkThemeConfig.LIGHT,
                     onClick = { onDarkThemeConfigChange(DarkThemeConfig.LIGHT) },
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 RadioSettingRow(
                     icon = Icons.Default.DarkMode,
@@ -649,38 +627,66 @@ private fun RadioSettingRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
+    if (isMiuixTheme()) {
+        BasicComponent(
+            title = title,
+            summary = subtitle,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onClick,
+            role = Role.RadioButton,
+            startAction = {
+                MiuixIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    modifier = Modifier.padding(end = 14.dp).size(22.dp),
+                )
+            },
+            endActions = {
+                MiuixRadioButton(
+                    selected = selected,
+                    onClick = onClick,
+                )
+            },
         )
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface,
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .selectable(
+                    selected = selected,
+                    onClick = onClick,
+                    role = Role.RadioButton,
+                )
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
             )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            RadioButton(
+                selected = selected,
+                onClick = null,
             )
         }
-        RadioButton(
-            selected = selected,
-            onClick = onClick,
-        )
     }
 }
 
@@ -729,9 +735,8 @@ private fun NotificationsPrivacySettingsContent(
                     checked = uiState.showOnlineStatus,
                     onCheckedChange = onShowOnlineStatusChange,
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 SettingsItemWithSwitch(
                     icon = Icons.Default.Search,
@@ -851,32 +856,29 @@ private fun AboutSettingsContent(
                     },
                     trailingIcon = Icons.Default.ContentCopy,
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 AboutInfoRow(
                     icon = Icons.Default.Tag,
                     title = strings.aboutBuildVersionLabel,
-                    value = "Build ${AppBuildInfo.versionCode} (${AppBuildInfo.gitRevision})",
+                    value = strings.buildVersionFmt(AppBuildInfo.versionCode.toString(), AppBuildInfo.gitRevision),
                     onClick = {
                         clipboard.setText(AnnotatedString("${AppBuildInfo.versionCode} (${AppBuildInfo.gitRevision})"))
                         scope.launch { snackbarHostState.showSnackbar(strings.copied) }
                     },
                     trailingIcon = Icons.Default.ContentCopy,
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 AboutInfoRow(
                     icon = Icons.Default.Memory,
                     title = strings.aboutRuntimeLabel,
                     value = "Kotlin ${AppBuildInfo.kotlinVersion} · Compose Multiplatform ${AppBuildInfo.composeVersion}",
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 AboutInfoRow(
                     icon = Icons.Default.Gavel,
@@ -904,9 +906,8 @@ private fun AboutSettingsContent(
                     },
                     trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 AboutInfoRow(
                     icon = Icons.Default.Code,
@@ -917,9 +918,8 @@ private fun AboutSettingsContent(
                     },
                     trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 AboutInfoRow(
                     icon = Icons.Default.BugReport,
@@ -930,9 +930,8 @@ private fun AboutSettingsContent(
                     },
                     trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
                 )
-                HorizontalDivider(
+                AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                 )
                 AboutInfoRow(
                     icon = Icons.Default.Description,
@@ -960,43 +959,72 @@ private fun AboutInfoRow(
     onClick: (() -> Unit)? = null,
     trailingIcon: ImageVector? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 20.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp),
+    if (isMiuixTheme()) {
+        BasicComponent(
+            title = title,
+            summary = value,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onClick,
+            startAction = {
+                MiuixIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.padding(end = 14.dp).size(22.dp),
+                )
+            },
+            endActions = if (trailingIcon != null) {
+                {
+                    MiuixIcon(
+                        imageVector = trailingIcon,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            } else {
+                null
+            },
         )
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (trailingIcon != null) {
-            Spacer(modifier = Modifier.width(8.dp))
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                .padding(horizontal = 20.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Icon(
-                imageVector = trailingIcon,
+                imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
             )
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (trailingIcon != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = trailingIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }

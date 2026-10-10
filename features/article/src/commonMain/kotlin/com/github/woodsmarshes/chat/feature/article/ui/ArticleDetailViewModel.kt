@@ -14,11 +14,14 @@ import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.article.model.ArticleDetailUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlin.uuid.Uuid
 
 class ArticleDetailViewModel(
@@ -37,6 +40,12 @@ class ArticleDetailViewModel(
         .map { it?.id == authorId }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    private val retryTrigger = MutableStateFlow(0)
+
+    fun retry() {
+        retryTrigger.update { it + 1 }
+    }
+
     /**
      * Reactive article data — switches between own-article API (drafts visible)
      * and public API depending on [isOwnArticle].
@@ -45,7 +54,7 @@ class ArticleDetailViewModel(
      * runs in background and re-emits if data changed.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val article: StateFlow<Result<Article?, ArticleError>> = isOwnArticle
+    private val article: StateFlow<Result<Article?, ArticleError>> = combine(isOwnArticle, retryTrigger) { isOwn: Boolean, _: Int -> isOwn }
         .flatMapLatest { isOwn ->
             articleRepository.getArticle(getMyArticle = isOwn, articleId = articleId)
         }

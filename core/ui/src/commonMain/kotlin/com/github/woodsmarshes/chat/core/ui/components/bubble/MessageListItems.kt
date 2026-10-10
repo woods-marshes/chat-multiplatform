@@ -39,6 +39,7 @@ fun LazyListScope.messageItems(
     onImageClick: ((ImageContent) -> Unit)? = null,
     onVideoPlayClick: ((VideoContent) -> Unit)? = null,
     onAudioPlayPauseClick: ((AudioContent) -> Unit)? = null,
+    onAudioSeek: ((MessageUiModel, Float) -> Unit)? = null,
     onFileClick: ((FileContent) -> Unit)? = null,
     onRetry: ((MessageUiModel) -> Unit)? = null,
     onReply: ((MessageUiModel) -> Unit)? = null,
@@ -76,6 +77,7 @@ fun LazyListScope.messageItems(
                 onImageClick = onImageClick,
                 onVideoPlayClick = onVideoPlayClick,
                 onAudioPlayPauseClick = onAudioPlayPauseClick,
+                onAudioSeek = onAudioSeek?.let { seek -> { _, frac -> seek(message, frac) } },
                 onFileClick = onFileClick,
             )
         }

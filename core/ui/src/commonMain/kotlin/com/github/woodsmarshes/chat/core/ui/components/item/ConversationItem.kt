@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Badge as M3Badge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +35,11 @@ import com.github.woodsmarshes.chat.core.ui.components.avatar.ConversationAvatar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.core.ui.utils.formatRelativeTime
+import top.yukonga.miuix.kmp.basic.Badge as MiuixBadge
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun ConversationItem(
@@ -44,16 +49,28 @@ fun ConversationItem(
     selected: Boolean = false,
 ) {
     val bubbleColors = LocalBubbleColors.current
+    val isMiuix = isMiuixTheme()
     val convName = conversation.name ?: LocalStrings.current.unnamed
     val lastMsg = conversation.lastMessage
+
+    val selectedBg = if (isMiuix) {
+        MiuixTheme.colorScheme.tertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer
+    }
+    val selectedTextColor = if (isMiuix) {
+        MiuixTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
             .background(
-                if (selected) MaterialTheme.colorScheme.secondaryContainer
+                if (selected) selectedBg
                 else Color.Transparent
             )
             .clickable(onClick = onClick)
@@ -78,22 +95,30 @@ fun ConversationItem(
             }
             if (conversation.unreadCount > 0) {
                 val badgeText = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString()
-                val badgeWidth = if (conversation.unreadCount > 99) 36.dp else if (conversation.unreadCount > 9) 24.dp else 20.dp
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(x = 4.dp, y = 4.dp)
-                        .size(badgeWidth, 18.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(bubbleColors.errorColor),
-                    contentAlignment = Alignment.Center,
+                        .offset(x = 4.dp, y = 4.dp),
                 ) {
-                    Text(
-                        text = badgeText,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    if (isMiuix) {
+                        MiuixBadge(
+                            containerColor = MiuixTheme.colorScheme.error,
+                            contentColor = MiuixTheme.colorScheme.onError,
+                        ) {
+                            MiuixText(text = badgeText)
+                        }
+                    } else {
+                        M3Badge(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError,
+                        ) {
+                            Text(
+                                text = badgeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -104,8 +129,8 @@ fun ConversationItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = convName,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else bubbleColors.onSurfaceColor,
-                fontSize = 16.sp,
+                color = if (selected) selectedTextColor else bubbleColors.onSurfaceColor,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -124,9 +149,9 @@ fun ConversationItem(
         Column(horizontalAlignment = Alignment.End) {
             if (lastMsg != null) {
                 Text(
-                    text = formatRelativeTime(lastMsg.createdAt, com.github.woodsmarshes.chat.core.ui.resources.LocalStrings.current),
+                    text = formatRelativeTime(lastMsg.createdAt, LocalStrings.current),
                     color = bubbleColors.timestampColor,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
             if (conversation.isPinned) {
@@ -134,7 +159,7 @@ fun ConversationItem(
                 Text(
                     text = LocalStrings.current.pinned,
                     color = bubbleColors.inputSendIconTint,
-                    fontSize = 10.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -153,7 +178,7 @@ private fun LastMessagePreview(
         Text(
             text = fallbackSubtitle ?: LocalStrings.current.noMessages,
             color = bubbleColors.timestampColor,
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.bodyMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -174,7 +199,7 @@ private fun LastMessagePreview(
     Text(
         text = fullPreview,
         color = if (unreadCount > 0) bubbleColors.onSurfaceColor else bubbleColors.timestampColor,
-        fontSize = 13.sp,
+        style = MaterialTheme.typography.bodyMedium,
         fontWeight = if (unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

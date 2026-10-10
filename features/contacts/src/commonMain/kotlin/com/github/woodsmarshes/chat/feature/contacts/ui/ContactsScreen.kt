@@ -11,24 +11,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
-import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.ui.components.AlphabetIndexBar
+import com.github.woodsmarshes.chat.core.ui.components.AppFloatingActionButton
 import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
+import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
+import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.ContactItem
 import com.github.woodsmarshes.chat.core.ui.components.search.AdaptiveSearchBar
+import com.github.woodsmarshes.chat.core.ui.components.search.rememberFreshSearchBarState
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ContactSkeleton
 import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
@@ -45,19 +48,23 @@ private val indexLetters = ('A'..'Z').map { it.toString() } + "#"
 @Composable
 fun ContactsScreen(
     onContactClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
     selectedUserId: String? = null,
     onMenuClick: (() -> Unit)? = null,
     viewModel: ContactsViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val searchBarState = rememberFreshSearchBarState()
+    val snackbarHostState = remember { SnackbarHostState() }
     val strings = LocalStrings.current
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val inMultiPane = isInListDetailScene()
 
     Scaffold(
+        modifier = modifier,
+        snackbarHost = { AppSnackbarHost(snackbarHostState) },
         topBar = {
             AdaptiveSearchBar(
                 onQueryChange = { searchQuery = it },
@@ -75,8 +82,8 @@ fun ContactsScreen(
                         )
                         uiState.searchError != null && uiState.searchResults.isEmpty() -> ErrorContent(
                             message = uiState.searchError ?: strings.searchFailed,
-                            onRetry = viewModel::retrySearch,
                             modifier = Modifier.fillMaxSize(),
+                            onRetry = viewModel::retrySearch,
                         )
                         uiState.searchResults.isEmpty() -> EmptyContent(
                             message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
@@ -101,9 +108,15 @@ fun ContactsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { /* TODO: 添加联系人 */ }) {
-                Icon(Icons.Default.Add, contentDescription = strings.addContactCd)
-            }
+            AppFloatingActionButton(
+                onClick = {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(strings.featureComingSoon)
+                    }
+                },
+                icon = Icons.Default.Add,
+                contentDescription = strings.addContactCd,
+            )
         },
     ) { innerPadding ->
         ListScreenScaffold(
@@ -111,6 +124,7 @@ fun ContactsScreen(
             error = uiState.error,
             isEmpty = uiState.contacts.isEmpty(),
             emptyMessage = strings.noContacts,
+            onRetry = viewModel::refresh,
             loadingContent = {
                 ListSkeleton(count = 8, skeleton = { ContactSkeleton() })
             },

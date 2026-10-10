@@ -33,8 +33,8 @@ import com.github.woodsmarshes.chat.core.ui.utils.formatFileSize
 fun FileBubble(
     content: FileContent?,
     isOwnMessage: Boolean,
-    onFileClick: ((FileContent) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onFileClick: ((FileContent) -> Unit)? = null,
 ) {
     if (content == null) return
 
@@ -45,6 +45,7 @@ fun FileBubble(
     else bubbleColors.otherBackground
 
     val contentColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.otherContent
+    val secondaryColor = if (isOwnMessage) contentColor.copy(alpha = 0.75f) else bubbleColors.timestampColor
     val shape = if (isOwnMessage) bubbleShapes.ownBubble else bubbleShapes.otherBubble
     val sizeStr = formatFileSize(content.size)
 
@@ -89,7 +90,7 @@ fun FileBubble(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = sizeStr,
-                    color = bubbleColors.timestampColor,
+                    color = secondaryColor,
                     fontSize = 11.sp,
                 )
                 val mimeStr = content.mimeType
@@ -101,7 +102,7 @@ fun FileBubble(
                             .replace("audio/", "")
                             .replace("video/", "")
                             .replace("image/", ""),
-                        color = bubbleColors.timestampColor,
+                        color = secondaryColor,
                         fontSize = 11.sp,
                     )
                 }

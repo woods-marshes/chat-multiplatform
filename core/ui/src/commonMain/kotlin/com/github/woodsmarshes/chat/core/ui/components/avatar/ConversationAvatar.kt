@@ -59,6 +59,7 @@ fun ConversationAvatar(
             UserAvatar(
                 name = p.displayName ?: p.username,
                 avatarUrl = p.avatarUrl,
+                modifier = modifier,
                 size = size,
                 onClick = onClick,
             )

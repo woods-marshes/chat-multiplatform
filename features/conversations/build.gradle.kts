@@ -22,6 +22,9 @@ kotlin {
                 implementation(projects.core.navigation)
 
                 implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.filekit.core)
+                implementation(libs.filekit.dialogs)
+                implementation(libs.filekit.dialogs.compose)
             }
         }
     }

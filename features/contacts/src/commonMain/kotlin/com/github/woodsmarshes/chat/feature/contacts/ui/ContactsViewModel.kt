@@ -33,12 +33,19 @@ class ContactsViewModel(
     val uiState: StateFlow<ContactsUiState> = _uiState.asStateFlow()
 
     private var searchJob: Job? = null
+    private var observeFriendsJob: Job? = null
     private var lastSearchQuery: String = ""
 
     init {
-        viewModelScope.launch {
+        observeFriends()
+        refresh()
+    }
+
+    private fun observeFriends() {
+        observeFriendsJob?.cancel()
+        observeFriendsJob = viewModelScope.launch {
             contactRepository.getFriendsFlow()
-                .onStart { _uiState.value = _uiState.value.copy(isLoading = true, error = null) }
+                .onStart { _uiState.update { it.copy(isLoading = it.contacts.isEmpty(), error = null) } }
                 .catch { e ->
                     // The raw exception text (Ktor request/URL dumps) must not reach the
                     // user; the details stay in the log.
@@ -55,14 +62,23 @@ class ContactsViewModel(
                             bio = user.bio,
                         )
                     }
-                    _uiState.value = _uiState.value.copy(contacts = contacts, isLoading = false, error = null)
+                    _uiState.update { it.copy(contacts = contacts, isLoading = false, error = null) }
                 }
         }
     }
 
     fun refresh() {
+        observeFriends()
         viewModelScope.launch {
-            try { contactRepository.syncFriends() } catch (_: Exception) {}
+            try {
+                contactRepository.syncFriends()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                log.warn(e) { "[Contacts] syncFriends failed" }
+                if (_uiState.value.contacts.isEmpty()) {
+                    _uiState.update { it.copy(isLoading = false, error = strings.loadFailed) }
+                }
+            }
         }
     }
 

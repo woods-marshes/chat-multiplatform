@@ -83,7 +83,7 @@ class ArticleEditorViewModel(
                                     collabUrl = resolvedCollabUrl,
                                     roomId = id.toString(),
                                     token = token,
-                                    userInfoName = user?.displayName ?: user?.username ?: "Anonymous",
+                                    userInfoName = user?.displayName ?: user?.username ?: strings.anonymousUser,
                                     userInfoColor = getHashColor(user?.id?.toString() ?: "anonymous"),
                                     isCollaborativeEditing = article.author.id != user?.id
                                 )
@@ -125,7 +125,7 @@ class ArticleEditorViewModel(
                             collabUrl = resolvedCollabUrl,
                             roomId = blankArticle.id.toString(),
                             token = token,
-                            userInfoName = user?.displayName ?: user?.username ?: "Anonymous",
+                            userInfoName = user?.displayName ?: user?.username ?: strings.anonymousUser,
                             userInfoColor = getHashColor(user?.id?.toString() ?: "anonymous")
                         )
                     }

@@ -20,19 +20,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Text
 import coil3.compose.SubcomposeAsyncImage
-import coil3.request.crossfade
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
-import top.yukonga.miuix.kmp.basic.Text
 
 val LocalServerBaseUrl = staticCompositionLocalOf { "http://127.0.0.1:9051" }
 
 fun resolveMediaUrl(url: String?, baseUrl: String): String? {
     val trimmed = url?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return if (trimmed.startsWith("/")) {
-        "${baseUrl.trimEnd('/')}$trimmed"
-    } else {
-        trimmed
+    return when {
+        trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("file://") -> trimmed
+        trimmed.startsWith("//") -> "https:$trimmed"
+        trimmed.startsWith("/") -> "${baseUrl.trimEnd('/')}$trimmed"
+        else -> "${baseUrl.trimEnd('/')}/$trimmed"
     }
 }
 
@@ -47,10 +48,11 @@ fun UserAvatar(
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
-    val initials = (name?.take(1)?.uppercase() ?: "?").take(2)
+    val initials = name?.trim()?.take(2)?.uppercase()?.ifEmpty { null } ?: "?"
     val bgColor = avatarColor(name)
     val bubbleColors = LocalBubbleColors.current
     val resolvedAvatarUrl = resolveMediaUrl(avatarUrl, LocalServerBaseUrl.current)
+    val strings = LocalStrings.current
 
     val interactionModifier = when {
         onClick != null && onLongPress != null -> Modifier.combinedClickable(
@@ -64,14 +66,13 @@ fun UserAvatar(
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
             .then(interactionModifier),
         contentAlignment = Alignment.Center,
     ) {
         if (resolvedAvatarUrl != null) {
             SubcomposeAsyncImage(
                 model = resolvedAvatarUrl,
-                contentDescription = name ?: "Avatar",
+                contentDescription = name ?: strings.avatarCd,
                 modifier = Modifier
                     .size(size)
                     .clip(CircleShape)
@@ -123,6 +124,18 @@ fun UserAvatar(
                 )
             }
         }
+
+        if (showOnlineDot) {
+            val dotSize = (size * 0.25f).coerceIn(8.dp, 14.dp)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2E7D32))
+                    .border(1.5.dp, bubbleColors.surfaceColor, CircleShape),
+            )
+        }
     }
 }
 
@@ -138,9 +151,9 @@ private fun placeholderImage(size: Dp) {
 
 private fun avatarColor(key: String?): Color {
     val colors = listOf(
-        Color(0xFFE57373), Color(0xFF81C784), Color(0xFF64B5F6),
-        Color(0xFFFFD54F), Color(0xFFBA68C8), Color(0xFF4DB6AC),
-        Color(0xFFFF8A65), Color(0xFF7986CB),
+        Color(0xFFD32F2F), Color(0xFF388E3C), Color(0xFF1976D2),
+        Color(0xFFF57C00), Color(0xFF8E24AA), Color(0xFF00796B),
+        Color(0xFFE64A19), Color(0xFF3949AB),
     )
     val hash = key?.hashCode() ?: 0
     val index = hash.mod(colors.size).let { if (it < 0) it + colors.size else it }

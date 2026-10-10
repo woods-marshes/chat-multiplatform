@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.ui.components.avatar.LocalServerBaseUrl
+import com.github.woodsmarshes.chat.core.ui.components.avatar.resolveMediaUrl
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleShapes
@@ -30,13 +32,14 @@ private val MAX_IMAGE_DP = 260.dp
 fun ImageBubble(
     content: ImageContent?,
     isOwnMessage: Boolean,
-    onImageClick: ((ImageContent) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onImageClick: ((ImageContent) -> Unit)? = null,
 ) {
     if (content == null) return
 
     val bubbleColors = LocalBubbleColors.current
     val bubbleShapes = LocalBubbleShapes.current
+    val resolvedUrl = resolveMediaUrl(content.url, LocalServerBaseUrl.current)
 
     val shape = bubbleShapes.mediaBubble
 
@@ -56,13 +59,14 @@ fun ImageBubble(
         aspectRatio < 0.8f -> 160.dp
         else -> 200.dp
     }
+    val bgColor = if (isOwnMessage) bubbleColors.ownBackground.copy(alpha = 0.85f) else bubbleColors.otherBackground
 
     Box(
         modifier = modifier
             .fillMaxWidth(MAX_IMAGE_WIDTH_FRACTION)
             .widthIn(max = MAX_IMAGE_DP)
             .clip(shape)
-            .background(bubbleColors.otherBackground)
+            .background(bgColor)
             .then(
                 if (onImageClick != null) Modifier.clickable { onImageClick(content) }
                 else Modifier
@@ -70,7 +74,7 @@ fun ImageBubble(
         contentAlignment = Alignment.Center,
     ) {
         SubcomposeAsyncImage(
-            model = content.url,
+            model = resolvedUrl,
             contentDescription = content.fileName,
             modifier = Modifier
                 .widthIn(max = imageWidth)

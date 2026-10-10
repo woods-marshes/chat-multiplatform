@@ -7,10 +7,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import com.github.woodsmarshes.chat.core.ui.components.AppExtendedFloatingActionButton
 
 /**
  * Overlaid edit action, rendered as a regular Compose overlay on every
@@ -23,16 +22,18 @@ fun ArticleEditFloatingActionButton(
     visible: Boolean,
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
         visible = visible,
+        modifier = modifier,
         enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
         exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
     ) {
-        ExtendedFloatingActionButton(
+        AppExtendedFloatingActionButton(
             onClick = onClick,
-            icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-            text = { Text(label) },
+            icon = Icons.Default.Edit,
+            label = label,
         )
     }
 }

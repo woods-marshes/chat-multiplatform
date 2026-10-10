@@ -12,11 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.ui.components.item.ContactItem
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.components.search.AdaptiveSearchBar
@@ -36,12 +35,14 @@ fun SearchScreen(
     type: SearchType,
     onOpenProfile: (userId: String) -> Unit,
     onOpenGroupInfo: (conversationId: String) -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: SearchViewModel = koinViewModel(parameters = { parametersOf(type) }),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             AdaptiveSearchBar(
                 onQueryChange = viewModel::onQueryChanged,
@@ -63,8 +64,8 @@ fun SearchScreen(
                             )
                             uiState.error != null && uiState.results.isEmpty() -> ErrorContent(
                                 message = uiState.error ?: strings.searchFailed,
-                                onRetry = viewModel::retry,
                                 modifier = Modifier.fillMaxSize(),
+                                onRetry = viewModel::retry,
                             )
                             uiState.results.isEmpty() -> EmptyContent(
                                 message = if (hasQuery) strings.searchNoResults else strings.searchPrompt,
@@ -73,6 +74,12 @@ fun SearchScreen(
                             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 items(
                                     items = uiState.results,
+                                    key = { item ->
+                                        when (item) {
+                                            is SearchResultUiModel.Contact -> "contact_${item.contact.id}"
+                                            is SearchResultUiModel.Conversation -> "conv_${item.conversation.id}"
+                                        }
+                                    },
                                     contentType = { it::class },
                                 ) { result ->
                                     when (result) {

@@ -23,6 +23,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.KmpMediaPlaybackState
+import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleShapes
 import com.github.woodsmarshes.chat.core.ui.utils.formatDuration
@@ -41,18 +46,20 @@ import com.github.woodsmarshes.chat.core.ui.utils.formatDuration
 fun AudioBubble(
     content: AudioContent?,
     isOwnMessage: Boolean,
+    modifier: Modifier = Modifier,
     state: KmpMediaPlaybackState = KmpMediaPlaybackState(),
     onPlayPauseToggle: (() -> Unit)? = null,
     onSeek: ((Float) -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     if (content == null) return
 
     val bubbleColors = LocalBubbleColors.current
     val bubbleShapes = LocalBubbleShapes.current
+    val strings = LocalStrings.current
 
     val bgColor = if (isOwnMessage) bubbleColors.ownBackground else bubbleColors.otherBackground
     val contentColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.otherContent
+    val secondaryColor = if (isOwnMessage) contentColor.copy(alpha = 0.75f) else bubbleColors.timestampColor
     val shape = if (isOwnMessage) bubbleShapes.ownBubble else bubbleShapes.otherBubble
     val durationStr = formatDuration(content.duration)
 
@@ -86,7 +93,7 @@ fun AudioBubble(
                 } else {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (state.isPlaying) "Pause" else "Play",
+                        contentDescription = if (state.isPlaying) strings.pauseCd else strings.playCd,
                         tint = contentColor,
                         modifier = Modifier.size(20.dp),
                     )
@@ -128,7 +135,7 @@ fun AudioBubble(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = durationStr,
-                    color = bubbleColors.timestampColor,
+                    color = secondaryColor,
                     fontSize = 11.sp,
                 )
             }
@@ -136,11 +143,17 @@ fun AudioBubble(
 
         // Seek slider
         if (onSeek != null && state.durationMillis > 0) {
+            var dragProgress by remember { mutableStateOf<Float?>(null) }
+            val displayedProgress = (dragProgress ?: state.progressFraction).coerceIn(0f, 1f)
             Spacer(Modifier.height(4.dp))
             Slider(
-                value = state.progressFraction,
-                onValueChange = { /* only commit on finished */ },
-                onValueChangeFinished = { onSeek(state.progressFraction) },
+                value = displayedProgress,
+                onValueChange = { dragProgress = it.coerceIn(0f, 1f) },
+                onValueChangeFinished = {
+                    val committed = (dragProgress ?: state.progressFraction).coerceIn(0f, 1f)
+                    dragProgress = null
+                    onSeek(committed)
+                },
                 modifier = Modifier.fillMaxWidth().height(20.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = contentColor,
@@ -164,7 +177,7 @@ private fun WaveformBar(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val maxValue = waveform.maxOrNull()?.toFloat() ?: 1f
+        val maxValue = waveform.maxOrNull()?.toFloat()?.takeIf { it > 0f } ?: 1f
         val playedIndex = (progress * waveform.size).toInt().coerceIn(0, waveform.size)
 
         waveform.forEachIndexed { index, value ->

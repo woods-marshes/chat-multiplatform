@@ -2,12 +2,13 @@ package com.github.woodsmarshes.chat.core.ui.components
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -19,12 +20,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator as MiuixInfiniteProgressIndicator
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 enum class ButtonStyle { PRIMARY, SECONDARY, TEXT, DANGER }
 
 enum class ButtonSize(val height: Dp, val fontSize: Int, val padding: PaddingValues) {
-    SM(36.dp, 13, PaddingValues(horizontal = 16.dp, vertical = 6.dp)),
-    MD(44.dp, 15, PaddingValues(horizontal = 20.dp, vertical = 10.dp)),
+    SM(40.dp, 13, PaddingValues(horizontal = 16.dp, vertical = 6.dp)),
+    MD(48.dp, 15, PaddingValues(horizontal = 20.dp, vertical = 10.dp)),
     LG(52.dp, 17, PaddingValues(horizontal = 24.dp, vertical = 14.dp)),
 }
 
@@ -39,9 +46,55 @@ fun ChatAppButton(
     isLoading: Boolean = false,
     fullWidth: Boolean = false,
 ) {
+    val effectiveModifier = if (fullWidth) {
+        modifier.fillMaxWidth().heightIn(min = size.height)
+    } else {
+        modifier.heightIn(min = size.height)
+    }
+
+    if (isMiuixTheme()) {
+        val miuixColors = when (style) {
+            ButtonStyle.PRIMARY -> MiuixButtonDefaults.buttonColorsPrimary()
+            ButtonStyle.SECONDARY -> MiuixButtonDefaults.buttonColors()
+            ButtonStyle.TEXT -> MiuixButtonDefaults.buttonColors(color = Color.Transparent)
+            ButtonStyle.DANGER -> MiuixButtonDefaults.buttonColors(
+                color = MiuixTheme.colorScheme.error,
+            )
+        }
+        val textColor = when (style) {
+            ButtonStyle.PRIMARY -> MiuixTheme.colorScheme.onPrimary
+            ButtonStyle.SECONDARY -> MiuixTheme.colorScheme.onSecondaryVariant
+            ButtonStyle.TEXT -> MiuixTheme.colorScheme.primary
+            ButtonStyle.DANGER -> MiuixTheme.colorScheme.onError
+        }
+        MiuixButton(
+            onClick = onClick,
+            modifier = effectiveModifier,
+            enabled = enabled && !isLoading,
+            minHeight = size.height,
+            insideMargin = size.padding,
+            colors = miuixColors,
+        ) {
+            if (isLoading) {
+                MiuixInfiniteProgressIndicator(
+                    size = 18.dp,
+                    strokeWidth = 2.dp,
+                    color = textColor,
+                )
+            } else {
+                MiuixText(
+                    text = label,
+                    color = textColor,
+                    fontSize = size.fontSize.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        return
+    }
+
     val bubbleColors = LocalBubbleColors.current
     val shape = RoundedCornerShape(12.dp)
-    val effectiveModifier = if (fullWidth) modifier.fillMaxWidth().height(size.height) else modifier.height(size.height)
 
     when (style) {
         ButtonStyle.PRIMARY -> Button(
@@ -89,10 +142,14 @@ fun ChatAppButton(
             modifier = effectiveModifier,
             enabled = enabled && !isLoading,
             shape = shape,
-            colors = ButtonDefaults.buttonColors(containerColor = bubbleColors.errorColor, contentColor = Color.White),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+            ),
             contentPadding = size.padding,
         ) {
             Text(label, fontSize = size.fontSize.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
+

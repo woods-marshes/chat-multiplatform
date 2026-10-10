@@ -38,7 +38,6 @@ data object ChatEditProfileNavKey : NavKey
 fun EntryProviderScope<NavKey>.settingsEntry(
     onBack: () -> Unit,
     onLogout: () -> Unit,
-    onSearchClick: () -> Unit,
     onCategoryClick: (SettingsCategory) -> Unit = {},
     onOpenLicenses: () -> Unit = { onCategoryClick(SettingsCategory.LICENSES) },
     selectedCategory: () -> SettingsCategory? = { null },
@@ -48,9 +47,6 @@ fun EntryProviderScope<NavKey>.settingsEntry(
 ) {
     entry<SettingsNavKey>(metadata = metadata) {
         SettingsScreen(
-            onBack = onBack,
-            onLogout = onLogout,
-            onSearchClick = onSearchClick,
             onCategoryClick = onCategoryClick,
             selectedCategory = selectedCategory(),
         )

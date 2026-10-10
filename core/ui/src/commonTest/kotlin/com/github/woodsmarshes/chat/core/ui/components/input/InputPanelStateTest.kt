@@ -83,6 +83,41 @@ class InputPanelStateTest {
     }
 
     @Test
+    fun keyboardRequestWithoutImeInsetsCollapsesImmediately() {
+        val state = InputPanelState()
+        state.openPanel(InputSelector.EMOJI, 0, 300)
+        state.requestKeyboard(reportsImeInsets = false)
+        assertEquals(InputSelector.NONE, state.selector)
+        assertFalse(state.awaitingKeyboard)
+        assertEquals(0, state.panelHeightPx)
+        assertEquals(24, state.occupiedHeight(0, 0, 0, 24))
+        assertEquals(0, state.occupiedHeight(0, 0, 0, 0))
+    }
+
+    @Test
+    fun keyboardRequestWithoutOpenPanelIsNoOp() {
+        val state = InputPanelState()
+        state.requestKeyboard()
+        assertFalse(state.awaitingKeyboard)
+        state.requestKeyboard(reportsImeInsets = false)
+        assertFalse(state.awaitingKeyboard)
+        assertEquals(InputSelector.NONE, state.selector)
+    }
+
+    @Test
+    fun invalidatingCacheKeepsOpenPanelHeight() {
+        val state = InputPanelState()
+        state.observeIme(300, 300, 300)
+        state.openPanel(InputSelector.EMOJI, 300, 270)
+        state.invalidateImeCache()
+        assertEquals(0, state.stableImeHeightPx)
+        assertEquals(300, state.panelHeightPx)
+        state.close()
+        state.openPanel(InputSelector.EMOJI, 0, 270)
+        assertEquals(270, state.panelHeightPx)
+    }
+
+    @Test
     fun closeRetainsCacheButRemovesPanel() {
         val state = InputPanelState()
         state.observeIme(300, 300, 300)

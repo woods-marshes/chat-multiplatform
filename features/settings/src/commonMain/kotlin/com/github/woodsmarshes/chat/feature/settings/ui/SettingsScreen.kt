@@ -30,7 +30,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,27 +39,29 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
+import com.github.woodsmarshes.chat.core.ui.components.AppHorizontalDivider
+import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsUiState
 import org.koin.compose.viewmodel.koinViewModel
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun SettingsScreen(
-    onBack: () -> Unit,
-    onLogout: () -> Unit,
-    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier,
     onCategoryClick: (SettingsCategory) -> Unit = {},
     selectedCategory: SettingsCategory? = null,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val inMultiPane = isInListDetailScene()
     val normalizedSelected = when (selectedCategory) {
@@ -87,6 +88,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             ChatTopAppBar(
                 title = strings.settingsTitle,
@@ -109,37 +111,50 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             )
 
-            HorizontalDivider(
+            AppHorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            SettingsCategoryItem(
-                icon = Icons.Default.Palette,
-                title = strings.settingsCategoryAppearance,
-                subtitle = themeSubtitle,
-                selected = activeCategory == SettingsCategory.APPEARANCE,
-                showChevron = !inMultiPane,
-                onClick = { onCategoryClick(SettingsCategory.APPEARANCE) },
-            )
-            SettingsCategoryItem(
-                icon = Icons.Default.Notifications,
-                title = strings.settingsCategoryNotifications,
-                subtitle = strings.settingsCategoryNotificationsDesc,
-                selected = activeCategory == SettingsCategory.NOTIFICATIONS_PRIVACY,
-                showChevron = !inMultiPane,
-                onClick = { onCategoryClick(SettingsCategory.NOTIFICATIONS_PRIVACY) },
-            )
-            SettingsCategoryItem(
-                icon = Icons.Default.Info,
-                title = strings.settingsCategoryAbout,
-                subtitle = strings.settingsCategoryAboutDesc,
-                selected = activeCategory == SettingsCategory.ABOUT,
-                showChevron = !inMultiPane,
-                onClick = { onCategoryClick(SettingsCategory.ABOUT) },
-            )
+            val categoryItems = @Composable {
+                SettingsCategoryItem(
+                    icon = Icons.Default.Palette,
+                    title = strings.settingsCategoryAppearance,
+                    subtitle = themeSubtitle,
+                    selected = activeCategory == SettingsCategory.APPEARANCE,
+                    showChevron = !inMultiPane,
+                    onClick = { onCategoryClick(SettingsCategory.APPEARANCE) },
+                )
+                SettingsCategoryItem(
+                    icon = Icons.Default.Notifications,
+                    title = strings.settingsCategoryNotifications,
+                    subtitle = strings.settingsCategoryNotificationsDesc,
+                    selected = activeCategory == SettingsCategory.NOTIFICATIONS_PRIVACY,
+                    showChevron = !inMultiPane,
+                    onClick = { onCategoryClick(SettingsCategory.NOTIFICATIONS_PRIVACY) },
+                )
+                SettingsCategoryItem(
+                    icon = Icons.Default.Info,
+                    title = strings.settingsCategoryAbout,
+                    subtitle = strings.settingsCategoryAboutDesc,
+                    selected = activeCategory == SettingsCategory.ABOUT,
+                    showChevron = !inMultiPane,
+                    onClick = { onCategoryClick(SettingsCategory.ABOUT) },
+                )
+            }
+
+            if (isMiuixTheme() && !inMultiPane) {
+                ChatAppCard(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Column {
+                        categoryItems()
+                    }
+                }
+            } else {
+                categoryItems()
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -250,24 +265,28 @@ private fun SettingsCategoryItem(
     danger: Boolean = false,
     showChevron: Boolean = true,
 ) {
-    val backgroundColor = if (selected) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        Color.Transparent
+    val isMiuix = isMiuixTheme()
+    val backgroundColor = when {
+        selected && isMiuix -> MiuixTheme.colorScheme.tertiaryContainer
+        selected -> MaterialTheme.colorScheme.secondaryContainer
+        else -> Color.Transparent
     }
     val titleColor = when {
         danger -> MaterialTheme.colorScheme.error
+        selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer
         selected -> MaterialTheme.colorScheme.onSecondaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val subtitleColor = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+    val subtitleColor = when {
+        selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.78f)
+        selected -> MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val iconTint = when {
         danger -> MaterialTheme.colorScheme.error
+        selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer
         selected -> MaterialTheme.colorScheme.onSecondaryContainer
+        isMiuix -> MiuixTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -275,7 +294,7 @@ private fun SettingsCategoryItem(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
             .background(backgroundColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
@@ -283,7 +302,7 @@ private fun SettingsCategoryItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = title,
+            contentDescription = null,
             modifier = Modifier.size(22.dp),
             tint = iconTint,
         )
@@ -292,7 +311,7 @@ private fun SettingsCategoryItem(
             Text(
                 text = title,
                 color = titleColor,
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -302,7 +321,7 @@ private fun SettingsCategoryItem(
                 Text(
                     text = subtitle,
                     color = subtitleColor,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
