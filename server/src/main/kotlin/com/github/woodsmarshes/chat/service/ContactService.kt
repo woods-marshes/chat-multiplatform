@@ -9,6 +9,7 @@ import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.FriendRequestPolicy
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.PrivateMetadata
 import com.github.woodsmarshes.chat.core.model.RequestStatus
@@ -23,6 +24,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
+import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.utils.inTransaction
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -33,6 +35,7 @@ class ContactService(
     private val conversationRepository: ConversationRepository,
     private val conversationParticipantRepository: ConversationParticipantRepository,
     private val eventBus: EventBus,
+    private val userSettingRepository: UserSettingRepository? = null,
 ) {
 
     suspend fun getContacts(userId: Uuid): Result<List<Pair<Contact, User>>, ContactError> = coroutineBinding {
@@ -51,10 +54,35 @@ class ContactService(
         if (existingContact1?.status == ContactStatus.FRIEND || existingContact2?.status == ContactStatus.FRIEND) {
             Err(ContactError.AlreadyFriends).bind()
         }
+        val targetPolicy = userSettingRepository?.getSettings(req.targetId)?.privacy?.friendRequestPolicy
+            ?: FriendRequestPolicy.NEED_APPROVAL
+        if (targetPolicy == FriendRequestPolicy.DENY_ANY) {
+            Err(ContactError.PermissionDenied).bind()
+        }
         val existingRequests = contactRequestRepository.getRequestsBySenderAndReceiver(userId, req.targetId)
         val pendingRequest = existingRequests.find { it.status == RequestStatus.PENDING }
         if (pendingRequest != null) {
             Err(ContactError.RequestAlreadySent).bind()
+        }
+        if (targetPolicy == FriendRequestPolicy.AUTO_ACCEPT) {
+            // Insert and auto-approve must commit together: a crash in between
+            // would leave a dangling PENDING request that nobody will ever
+            // handle. handleFriendRequest's own inTransaction joins this one
+            // (see dbQuery's join-the-outer-transaction contract).
+            inTransaction {
+                val autoRequest = contactRequestRepository.insertContactRequest(
+                    senderId = userId,
+                    receiverId = req.targetId,
+                    message = req.message
+                ) ?: Err(ContactError.OperationFailed).bind()
+                handleFriendRequest(
+                    userId = req.targetId,
+                    contactRequestId = autoRequest.id,
+                    action = ContactRequestAction.APPROVE,
+                    remark = null,
+                ).bind()
+            }
+            return@coroutineBinding
         }
         val contactRequest = contactRequestRepository.insertContactRequest(
             senderId = userId,
@@ -123,6 +151,15 @@ class ContactService(
                     if (!bothContactsUpserted) {
                         Err(ContactError.OperationFailed).bind()
                     }
+                    // A pending request in the opposite direction is moot once
+                    // the friendship exists: cancel it in the same transaction
+                    // so it cannot be approved later into a duplicate pair.
+                    contactRequestRepository
+                        .getRequestsBySenderAndReceiver(contactRequest.senderId, userId)
+                        .find { it.status == RequestStatus.PENDING }
+                        ?.let { reverse ->
+                            contactRequestRepository.updateRequestStatus(reverse.id, RequestStatus.CANCELED, null)
+                        }
                     conversationRepository.getExistingPrivateConversation(userId, contactRequest.senderId)?.id
                         ?: conversationRepository.insertConversation(
                             ConversationType.PRIVATE,

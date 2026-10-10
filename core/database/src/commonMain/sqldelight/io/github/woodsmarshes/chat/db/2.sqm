@@ -1,0 +1,24 @@
+CREATE TABLE IF NOT EXISTS ContactRequestEntity (
+    id BLOB NOT NULL PRIMARY KEY,
+    sender_id BLOB NOT NULL,
+    receiver_id BLOB NOT NULL,
+    message TEXT,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contact_request_receiver ON ContactRequestEntity(receiver_id, status);
+CREATE INDEX IF NOT EXISTS idx_contact_request_sender ON ContactRequestEntity(sender_id, status);
+
+CREATE TABLE IF NOT EXISTS GroupJoinRequestEntity (
+    id BLOB NOT NULL PRIMARY KEY,
+    conversation_id BLOB NOT NULL,
+    applicant_id BLOB NOT NULL,
+    message TEXT,
+    status TEXT NOT NULL,
+    handled_by BLOB,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_group_join_request_conversation ON GroupJoinRequestEntity(conversation_id, status);
+CREATE INDEX IF NOT EXISTS idx_group_join_request_applicant ON GroupJoinRequestEntity(applicant_id, status);

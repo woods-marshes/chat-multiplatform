@@ -101,6 +101,7 @@ ksp {
 
 afterEvaluate {
     tasks.matching { it.name == "kspCommonMainKotlinMetadata" }.configureEach {
+        inputs.dir(project.projectDir.resolve("src/commonMain/composeResources"))
         val stringsFile = layout.buildDirectory
             .file("generated/ksp/metadata/commonMain/kotlin/com/github/woodsmarshes/chat/lyricist/Strings.kt")
             .get().asFile

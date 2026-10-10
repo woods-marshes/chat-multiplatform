@@ -74,31 +74,30 @@ class MessageDaoImpl(
     }
 
     override fun pagingSource(conversationId: Uuid, pageSize: Long): PagingSource<Uuid, KeyedMessagesWithRelations> {
-        return SessionBoundPagingSource(sessionGate, sessionGate.boundDatabase, sessionGate.currentGeneration) { db ->
-        val queries = db.messagesQueries
-        QueryPagingSource(
-            transacter = queries,
-            context = ioContext,
-            pageBoundariesProvider = { anchorId, limit ->
-                 queries.messageBoundaries(
-                     limit = limit,
-                     referenceId = anchorId ?: Uuid.NIL,
-                     conversationId = conversationId
-                 )
-            },
-            queryProvider = { beginInclusive, endExclusive ->
-                queries.keyedMessagesWithRelations(
-                    conversationId = conversationId,
-                    beginInclusive = beginInclusive,
-                    endExclusive = endExclusive
-                )
-            }
-        )
-//        return MessagePagingSource(
-//            queries = queries,
-//            conversationId = conversationId,
-//            ioContext = ioContext
-//        )
+        return SessionBoundPagingSource(
+            gate = sessionGate,
+            boundDatabase = sessionGate.boundDatabase,
+            boundGeneration = sessionGate.currentGeneration
+        ) { db ->
+            val queries = db.messagesQueries
+            QueryPagingSource(
+                transacter = queries,
+                context = ioContext,
+                pageBoundariesProvider = { anchorId, limit ->
+                     queries.messageBoundaries(
+                         limit = limit,
+                         referenceId = anchorId ?: Uuid.NIL,
+                         conversationId = conversationId
+                     )
+                },
+                queryProvider = { beginInclusive, endExclusive ->
+                    queries.keyedMessagesWithRelations(
+                        conversationId = conversationId,
+                        beginInclusive = beginInclusive,
+                        endExclusive = endExclusive
+                    )
+                }
+            )
         }
     }
 

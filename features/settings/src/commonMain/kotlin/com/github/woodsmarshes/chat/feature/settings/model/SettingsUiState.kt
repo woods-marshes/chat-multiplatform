@@ -1,6 +1,8 @@
 package com.github.woodsmarshes.chat.feature.settings.model
 
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
+import com.github.woodsmarshes.chat.core.model.FriendRequestPolicy
+import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
 import kotlinx.serialization.Serializable
 
@@ -32,6 +34,9 @@ data class SettingsUiState(
     val notificationSound: Boolean = true,
     val showOnlineStatus: Boolean = true,
     val allowSearch: Boolean = true,
+    val allowStrangerChat: Boolean = true,
+    val friendRequestPolicy: FriendRequestPolicy = FriendRequestPolicy.NEED_APPROVAL,
+    val profileVisibility: ProfileVisibility = ProfileVisibility.PUBLIC,
 ) {
     val hasProfileChanges: Boolean
         get() = editDisplayName.trim() != displayName.trim() || editBio.trim() != bio.trim()

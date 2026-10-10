@@ -16,17 +16,24 @@ import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.ConnectionState
+import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
+import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.data.model.toConversation
+import com.github.woodsmarshes.chat.core.data.model.toEntity
+import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
 import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
 import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
@@ -64,6 +71,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collect
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -86,9 +94,11 @@ class OfflineFirstMessageRepositoryImpl(
     private val messageApi: RealtimeApi,
     private val conversationApi: ConversationApi,
     private val conversationDao: ConversationDao,
+    private val groupJoinRequestDao: GroupJoinRequestDao,
     private val userSettingDataSource: UserSettingDataSource,
     private val scope: CoroutineScope,
     private val mediatorFactory: MessageMediatorFactory,
+    private val groupProfileDao: GroupProfileDao? = null,
 ) : MessageRepository {
     override val connectionState get() = messageApi.connectionState
 
@@ -401,6 +411,66 @@ class OfflineFirstMessageRepositoryImpl(
                             is MessageEventResponse.UserTyping -> {
                                 handleUserTyping(session, event)
                             }
+                            is ConversationEventResponse.ConversationDeleted -> {
+                                runCatching {
+                                    conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
+                                    groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                                }
+                            }
+                            is ConversationEventResponse.UserLeftConversation -> {
+                                runCatching {
+                                    val meId = ownUser.firstOrNull()?.id
+                                    participantDao.removeParticipant(event.conversationId, event.userId)
+                                    if (meId != null && event.userId == meId) {
+                                        conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
+                                        groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                                    }
+                                }
+                            }
+                            is ConversationEventResponse.ConversationCreated -> {
+                                handleConversationSyncEvent(session, event.conversationId)
+                            }
+                            is ConversationEventResponse.UserJoinedConversation -> {
+                                handleConversationSyncEvent(session, event.conversationId)
+                            }
+                            is ConversationEventResponse.GroupProfileUpdated -> {
+                                handleConversationSyncEvent(session, event.conversationId)
+                            }
+                            is ConversationEventResponse.PersonalSettingsUpdated -> {
+                                handleConversationSyncEvent(session, event.conversationId)
+                            }
+                            is ConversationEventResponse.GroupJoinRequest -> {
+                                // The event payload is complete (id, applicant, message):
+                                // record it directly so admin badges update without polling.
+                                // Seed semantics: a replayed event must not downgrade an
+                                // already-handled row or clobber its message.
+                                runCatching {
+                                    groupJoinRequestDao.seedGroupJoinRequest(
+                                        GroupJoinRequestEntity(
+                                            id = event.requestId,
+                                            conversation_id = event.conversationId,
+                                            applicant_id = event.applicantId,
+                                            message = event.message,
+                                            status = RequestStatus.PENDING,
+                                            handled_by = null,
+                                            created_at = event.timestamp,
+                                            updated_at = event.timestamp,
+                                        )
+                                    )
+                                }.onFailure { log.warn(it) { "[ws-consume] failed to record GroupJoinRequest ${event.requestId}" } }
+                            }
+                            is ConversationEventResponse.GroupJoinRequestHandled -> {
+                                // Sent only to the applicant: refresh their pending
+                                // state in place.
+                                runCatching {
+                                    groupJoinRequestDao.updateGroupJoinRequestStatus(
+                                        id = event.requestId,
+                                        status = if (event.approved) RequestStatus.ACCEPTED else RequestStatus.REJECTED,
+                                        handledBy = event.handlerId,
+                                        updatedAt = event.timestamp,
+                                    )
+                                }.onFailure { log.warn(it) { "[ws-consume] failed to record GroupJoinRequestHandled ${event.requestId}" } }
+                            }
                             else -> {
                                 log.debug { "[ws-consume] unknown event: ${event::class.simpleName}" }
                             }
@@ -420,6 +490,26 @@ class OfflineFirstMessageRepositoryImpl(
             }
         }
         subscriptionReady.await()
+    }
+
+    private fun handleConversationSyncEvent(session: RunningSession, conversationId: Uuid) {
+        if (!session.job.isActive || !isActiveSession(session)) return
+        session.scope.launch {
+            runCatching {
+                val detail = conversationApi.getDetail(conversationId)
+                conversationDao.insertConversation(detail.toConversation().toEntity())
+                detail.toGroupProfileEntity()?.let { groupProfileDao?.insertGroupProfile(it) }
+                participantDao.insertParticipant(detail.toParticipantEntity())
+                if (detail.type == com.github.woodsmarshes.chat.core.model.ConversationType.GROUP) {
+                    val participants = conversationApi.getParticipants(conversationId)
+                    userDao.insertUsers(participants.map { (_, u) -> u.toUserEntity() })
+                    participantDao.insertParticipants(participants.map { (p, _) -> p.toEntity() })
+                }
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                log.debug(e) { "[ws-consume] failed to sync conversation $conversationId" }
+            }
+        }
     }
 
     private suspend fun handleReceivedMessage(session: RunningSession, event: MessageEventResponse.Received) {

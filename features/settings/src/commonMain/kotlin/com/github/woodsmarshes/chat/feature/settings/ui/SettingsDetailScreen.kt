@@ -24,8 +24,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Code
@@ -35,13 +37,18 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.HowToReg
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
@@ -75,6 +82,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
+import com.github.woodsmarshes.chat.core.model.FriendRequestPolicy
+import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
 import com.github.woodsmarshes.chat.core.ui.components.AppHorizontalDivider
@@ -188,6 +197,9 @@ fun SettingsDetailScreen(
                     onNotificationSoundChange = viewModel::setNotificationSound,
                     onShowOnlineStatusChange = viewModel::setShowOnlineStatus,
                     onAllowSearchChange = viewModel::setAllowSearch,
+                    onAllowStrangerChatChange = viewModel::setAllowStrangerChat,
+                    onFriendRequestPolicyChange = viewModel::setFriendRequestPolicy,
+                    onProfileVisibilityChange = viewModel::setProfileVisibility,
                 )
                 SettingsCategory.ABOUT -> AboutSettingsContent(
                     onOpenLicenses = onOpenLicenses,
@@ -696,6 +708,9 @@ private fun NotificationsPrivacySettingsContent(
     onNotificationSoundChange: (Boolean) -> Unit,
     onShowOnlineStatusChange: (Boolean) -> Unit,
     onAllowSearchChange: (Boolean) -> Unit,
+    onAllowStrangerChatChange: (Boolean) -> Unit,
+    onFriendRequestPolicyChange: (FriendRequestPolicy) -> Unit,
+    onProfileVisibilityChange: (ProfileVisibility) -> Unit,
 ) {
     val strings = LocalStrings.current
 
@@ -744,6 +759,92 @@ private fun NotificationsPrivacySettingsContent(
                     subtitle = strings.allowSearchDesc,
                     checked = uiState.allowSearch,
                     onCheckedChange = onAllowSearchChange,
+                )
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                SettingsItemWithSwitch(
+                    icon = Icons.Default.ChatBubbleOutline,
+                    title = strings.allowStrangerChat,
+                    subtitle = strings.allowStrangerChatDesc,
+                    checked = uiState.allowStrangerChat,
+                    onCheckedChange = onAllowStrangerChatChange,
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        SectionHeader(
+            title = strings.friendRequestPolicyTitle,
+            modifier = Modifier.padding(horizontal = 0.dp),
+        )
+        ChatAppCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                RadioSettingRow(
+                    icon = Icons.Default.HowToReg,
+                    title = strings.friendPolicyNeedApproval,
+                    subtitle = strings.friendPolicyNeedApprovalDesc,
+                    selected = uiState.friendRequestPolicy == FriendRequestPolicy.NEED_APPROVAL,
+                    onClick = { onFriendRequestPolicyChange(FriendRequestPolicy.NEED_APPROVAL) },
+                )
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                RadioSettingRow(
+                    icon = Icons.Default.PersonAdd,
+                    title = strings.friendPolicyAutoAccept,
+                    subtitle = strings.friendPolicyAutoAcceptDesc,
+                    selected = uiState.friendRequestPolicy == FriendRequestPolicy.AUTO_ACCEPT,
+                    onClick = { onFriendRequestPolicyChange(FriendRequestPolicy.AUTO_ACCEPT) },
+                )
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                RadioSettingRow(
+                    icon = Icons.Default.Block,
+                    title = strings.friendPolicyDenyAny,
+                    subtitle = strings.friendPolicyDenyAnyDesc,
+                    selected = uiState.friendRequestPolicy == FriendRequestPolicy.DENY_ANY,
+                    onClick = { onFriendRequestPolicyChange(FriendRequestPolicy.DENY_ANY) },
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        SectionHeader(
+            title = strings.profileVisibilityTitle,
+            modifier = Modifier.padding(horizontal = 0.dp),
+        )
+        ChatAppCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                RadioSettingRow(
+                    icon = Icons.Default.Public,
+                    title = strings.visibilityPublic,
+                    subtitle = strings.visibilityPublicDesc,
+                    selected = uiState.profileVisibility == ProfileVisibility.PUBLIC,
+                    onClick = { onProfileVisibilityChange(ProfileVisibility.PUBLIC) },
+                )
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                RadioSettingRow(
+                    icon = Icons.Default.Group,
+                    title = strings.visibilityFriends,
+                    subtitle = strings.visibilityFriendsDesc,
+                    selected = uiState.profileVisibility == ProfileVisibility.FRIENDS,
+                    onClick = { onProfileVisibilityChange(ProfileVisibility.FRIENDS) },
+                )
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                RadioSettingRow(
+                    icon = Icons.Default.Lock,
+                    title = strings.visibilityPrivate,
+                    subtitle = strings.visibilityPrivateDesc,
+                    selected = uiState.profileVisibility == ProfileVisibility.PRIVATE,
+                    onClick = { onProfileVisibilityChange(ProfileVisibility.PRIVATE) },
                 )
             }
         }

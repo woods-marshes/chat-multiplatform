@@ -5,6 +5,7 @@ import com.github.woodsmarshes.chat.core.model.ContactStatus
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ContactEntity
 import io.github.woodsmarshes.chat.db.GetAllContactsWithUserInfo
+import io.github.woodsmarshes.chat.db.GetBlockedContactsWithUserInfo
 import io.github.woodsmarshes.chat.db.SearchContacts
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
@@ -30,6 +31,7 @@ interface ContactDao {
 
     // 查询 - 好友列表（带用户信息）
     fun getAllContactsWithUserInfo(): Flow<List<GetAllContactsWithUserInfo>>
+    fun getBlockedContactsWithUserInfo(): Flow<List<GetBlockedContactsWithUserInfo>>
 
     // 查询 - 基础
     fun getContactById(contactId: Uuid): Flow<ContactEntity?>

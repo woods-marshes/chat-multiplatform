@@ -1,0 +1,65 @@
+import com.github.woodsmarshes.chat.core.model.ConversationRole;
+import com.github.woodsmarshes.chat.core.model.RequestStatus;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+-- 入群申请台账（本地缓存）。不设外键：群与申请人可能尚未入库。
+CREATE TABLE GroupJoinRequestEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    conversation_id BLOB AS Uuid NOT NULL,
+    applicant_id BLOB AS Uuid NOT NULL,
+    message TEXT,
+    status TEXT AS RequestStatus NOT NULL,
+    handled_by BLOB AS Uuid,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL
+);
+
+CREATE INDEX idx_group_join_request_conversation ON GroupJoinRequestEntity(conversation_id, status);
+CREATE INDEX idx_group_join_request_applicant ON GroupJoinRequestEntity(applicant_id, status);
+
+-- 【增/同步】插入或覆盖申请（服务端全量行，权威覆盖）
+upsertGroupJoinRequest:
+INSERT OR REPLACE INTO GroupJoinRequestEntity(
+    id, conversation_id, applicant_id, message, status, handled_by, created_at, updated_at
+) VALUES ?;
+
+-- 【增/事件】事件播种：不覆盖 status/handled_by（重放事件不得降级已处理行），
+-- message 缺失时保留已有值。
+seedGroupJoinRequest:
+INSERT INTO GroupJoinRequestEntity(
+    id, conversation_id, applicant_id, message, status, handled_by, created_at, updated_at
+)
+VALUES ?
+ON CONFLICT(id) DO UPDATE SET
+    message    = COALESCE(excluded.message, message),
+    updated_at = excluded.updated_at;
+
+-- 【改】更新申请状态（审批通过/拒绝/撤回）
+updateGroupJoinRequestStatus:
+UPDATE GroupJoinRequestEntity
+SET status = :status,
+    handled_by = :handledBy,
+    updated_at = :updatedAt
+WHERE id = :id;
+
+-- 【查】某个会话的申请（status 传 NULL 查全部）
+selectGroupJoinRequestsByConversation:
+SELECT * FROM GroupJoinRequestEntity
+WHERE conversation_id = :conversationId AND (:status IS NULL OR status = :status)
+ORDER BY updated_at DESC;
+
+-- 【查】我管理的群（OWNER/ADMIN）收到的申请（全部状态；待处理过滤在内存完成）
+selectIncomingGroupRequests:
+SELECT G.* FROM GroupJoinRequestEntity AS G
+JOIN ParticipantEntity AS P ON P.conversation_id = G.conversation_id AND P.user_id = :meId
+WHERE P.role IN ('OWNER', 'ADMIN')
+ORDER BY G.updated_at DESC;
+
+-- 【查】我发出的申请（全部状态；待处理过滤在内存完成）
+selectSentGroupRequests:
+SELECT * FROM GroupJoinRequestEntity WHERE applicant_id = :meId ORDER BY updated_at DESC;
+
+-- 【删】会话删除时清理其申请
+deleteGroupJoinRequestsForConversation:
+DELETE FROM GroupJoinRequestEntity WHERE conversation_id = :conversationId;

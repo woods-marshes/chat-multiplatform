@@ -236,41 +236,41 @@ internal fun <Row : Any, Result> sessionBoundQueryFlow(
     val pinnedDb = gate.boundDatabase
     val pinnedGen = gate.currentGeneration
     return channelFlow {
-    try {
-        gate.runInSession(
-            expectedGeneration = pinnedGen,
-            expectedDatabase = pinnedDb,
-        ) { db ->
-            val query = queryFactory(db)
-            val trigger = Channel<Unit>(Channel.CONFLATED)
-            val listener = Query.Listener {
-                trigger.trySend(Unit)
-            }
-            query.addListener(listener)
-            try {
-                trigger.trySend(Unit)
-                for (unit in trigger) {
-                    currentCoroutineContext().ensureActive()
-                    val value = withContext(ioContext.minusKey(Job)) {
-                        currentCoroutineContext().ensureActive()
-                        extractor(query)
-                    }
-                    currentCoroutineContext().ensureActive()
-                    send(value)
+        try {
+            gate.runInSession(
+                expectedGeneration = pinnedGen,
+                expectedDatabase = pinnedDb,
+            ) { db ->
+                val query = queryFactory(db)
+                val trigger = Channel<Unit>(Channel.CONFLATED)
+                val listener = Query.Listener {
+                    trigger.trySend(Unit)
                 }
-            } finally {
-                query.removeListener(listener)
-                trigger.close()
+                query.addListener(listener)
+                try {
+                    trigger.trySend(Unit)
+                    for (unit in trigger) {
+                        currentCoroutineContext().ensureActive()
+                        val value = withContext(ioContext.minusKey(Job)) {
+                            currentCoroutineContext().ensureActive()
+                            extractor(query)
+                        }
+                        currentCoroutineContext().ensureActive()
+                        send(value)
+                    }
+                } finally {
+                    query.removeListener(listener)
+                    trigger.close()
+                }
             }
+        } catch (_: SessionStoppedException) {
+            // Session is not active or was stopped before collection started:
+            // complete the observation stream cleanly without touching the driver.
+        } catch (e: CancellationException) {
+            // Distinguish session teardown (channelFlow's own scope is still active)
+            // from caller cancellation (channelFlow's scope was cancelled by downstream).
+            currentCoroutineContext().ensureActive()
         }
-    } catch (_: SessionStoppedException) {
-        // Session is not active or was stopped before collection started:
-        // complete the observation stream cleanly without touching the driver.
-    } catch (e: CancellationException) {
-        // Distinguish session teardown (channelFlow's own scope is still active)
-        // from caller cancellation (channelFlow's scope was cancelled by downstream).
-        currentCoroutineContext().ensureActive()
     }
-}
 
 }

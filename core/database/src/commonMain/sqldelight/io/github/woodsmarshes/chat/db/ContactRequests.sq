@@ -1,0 +1,49 @@
+import com.github.woodsmarshes.chat.core.model.RequestStatus;
+import kotlin.time.Instant;
+import kotlin.uuid.Uuid;
+
+-- 好友申请台账（本地缓存）。不设外键：申请人可能尚未入库。
+CREATE TABLE ContactRequestEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    sender_id BLOB AS Uuid NOT NULL,
+    receiver_id BLOB AS Uuid NOT NULL,
+    message TEXT,
+    status TEXT AS RequestStatus NOT NULL,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL
+);
+
+CREATE INDEX idx_contact_request_receiver ON ContactRequestEntity(receiver_id, status);
+CREATE INDEX idx_contact_request_sender ON ContactRequestEntity(sender_id, status);
+
+-- 【增/同步】插入或覆盖申请（服务端全量行，权威覆盖）
+upsertContactRequest:
+INSERT OR REPLACE INTO ContactRequestEntity(
+    id, sender_id, receiver_id, message, status, created_at, updated_at
+) VALUES ?;
+
+-- 【增/事件】事件播种：不覆盖 status/handled_by（重放事件不得降级已处理行），
+-- message 缺失时保留已有值（事件载荷不含留言）。
+seedContactRequest:
+INSERT INTO ContactRequestEntity(
+    id, sender_id, receiver_id, message, status, created_at, updated_at
+)
+VALUES ?
+ON CONFLICT(id) DO UPDATE SET
+    message    = COALESCE(excluded.message, message),
+    updated_at = excluded.updated_at;
+
+-- 【改】更新申请状态（同意/拒绝/撤回）
+updateContactRequestStatus:
+UPDATE ContactRequestEntity
+SET status = :status,
+    updated_at = :updatedAt
+WHERE id = :id;
+
+-- 【查】全部申请（按更新时间倒序；收/发与状态过滤在内存完成）
+selectAllContactRequests:
+SELECT * FROM ContactRequestEntity ORDER BY updated_at DESC;
+
+-- 【删】删除申请
+deleteContactRequest:
+DELETE FROM ContactRequestEntity WHERE id = :id;

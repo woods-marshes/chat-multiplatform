@@ -12,6 +12,7 @@ import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ContactEntity
 import io.github.woodsmarshes.chat.db.ContactsQueries
 import io.github.woodsmarshes.chat.db.GetAllContactsWithUserInfo
+import io.github.woodsmarshes.chat.db.GetBlockedContactsWithUserInfo
 import io.github.woodsmarshes.chat.db.SearchContacts
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -84,6 +85,14 @@ class ContactDaoImpl(
             gate = sessionGate,
             ioContext = ioContext,
             queryFactory = { db -> db.contactsQueries.getAllContactsWithUserInfo() },
+            extractor = { it.executeAsList() },
+        )
+
+    override fun getBlockedContactsWithUserInfo(): Flow<List<GetBlockedContactsWithUserInfo>> =
+        sessionBoundQueryFlow(
+            gate = sessionGate,
+            ioContext = ioContext,
+            queryFactory = { db -> db.contactsQueries.getBlockedContactsWithUserInfo() },
             extractor = { it.executeAsList() },
         )
 
@@ -178,6 +187,14 @@ private class PinnedContactDao(
             gate = sessionGate,
             ioContext = ioContext,
             queryFactory = { db -> db.contactsQueries.getAllContactsWithUserInfo() },
+            extractor = { it.executeAsList() },
+        )
+
+    override fun getBlockedContactsWithUserInfo(): Flow<List<GetBlockedContactsWithUserInfo>> =
+        sessionBoundQueryFlow(
+            gate = sessionGate,
+            ioContext = ioContext,
+            queryFactory = { db -> db.contactsQueries.getBlockedContactsWithUserInfo() },
             extractor = { it.executeAsList() },
         )
 

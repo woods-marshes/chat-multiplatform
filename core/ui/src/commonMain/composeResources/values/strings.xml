@@ -12,18 +12,13 @@
     <!-- Conversations -->
     <string name="conversations_title">消息</string>
     <string name="no_conversations">暂无会话</string>
-    <string name="new_cd">新建</string>
     <string name="create_group_title">创建群聊</string>
-    <string name="create_group_description">创建一个新的群组会话</string>
     <string name="join_group_title">加入群聊</string>
-    <string name="join_group_description">通过群组 ID 加入已有群组</string>
-    <string name="group_id_label">群组 ID</string>
     <string name="join">加入</string>
     <string name="group_name_label">群聊名称</string>
     <string name="group_description_hint">群聊简介（可选）</string>
     <string name="group_name_required">群聊名称不能为空</string>
     <string name="create_group_failed">创建失败</string>
-    <string name="invalid_group_id">无效的群组 ID</string>
     <string name="join_group_failed">加入失败，请检查 ID 是否正确</string>
     <string name="create">创建</string>
     <string name="cancel">取消</string>
@@ -339,10 +334,12 @@
     <string name="add_friend">添加好友</string>
     <string name="add_friend_message_label">验证申请留言</string>
     <string name="add_friend_sent">好友申请已发送</string>
+    <string name="friend_request_pending">已发送申请，等待处理</string>
     <string name="edit_remark">设置备注名</string>
     <string name="remark_label">备注名</string>
     <string name="remark_placeholder">输入好友备注名</string>
     <string name="block_user">加入黑名单</string>
+    <string name="block_confirm_msg">拉黑后将不再接收对方的消息，可随时在黑名单中解除。</string>
     <string name="unblock_user">解除拉黑</string>
     <string name="blocked_banner">该用户已被你加入黑名单，无法互相发送消息</string>
     <string name="delete_friend">删除好友</string>

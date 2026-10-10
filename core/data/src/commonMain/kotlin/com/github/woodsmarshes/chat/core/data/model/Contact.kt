@@ -1,10 +1,13 @@
 package com.github.woodsmarshes.chat.core.data.model
 
 import com.github.woodsmarshes.chat.core.model.Contact
+import com.github.woodsmarshes.chat.core.model.ContactRequest
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import io.github.woodsmarshes.chat.db.ContactEntity
+import io.github.woodsmarshes.chat.db.ContactRequestEntity
 import io.github.woodsmarshes.chat.db.GetAllContactsWithUserInfo
+import io.github.woodsmarshes.chat.db.GetBlockedContactsWithUserInfo
 import io.github.woodsmarshes.chat.db.SearchContacts
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -88,4 +91,48 @@ fun SearchContacts.toFriend(): Pair<Contact, User> = Pair(
         deletedAt = this.u_deleted_at,
         role = this.u_role,
     ),
+)
+
+fun GetBlockedContactsWithUserInfo.toFriend(): Pair<Contact, User> = Pair(
+    Contact(
+        userId = Uuid.NIL,
+        contactId = this.contact_id,
+        status = this.status,
+        nickname = this.nickname,
+        alias = this.alias,
+        createdAt = this.created_at,
+        updatedAt = this.updated_at,
+    ),
+    User(
+        id = this.u_id,
+        username = this.u_username,
+        email = this.u_email,
+        displayName = this.u_display_name,
+        avatarUrl = this.u_avatar,
+        bio = this.u_bio,
+        createdAt = this.u_created_at,
+        updatedAt = this.u_updated_at,
+        deletedAt = this.u_deleted_at,
+        role = this.u_role,
+    ),
+)
+
+fun ContactRequest.toEntity() = ContactRequestEntity(
+    id = this.id,
+    sender_id = this.senderId,
+    receiver_id = this.receiverId,
+    message = this.message,
+    status = this.status,
+    created_at = this.createdAt,
+    updated_at = this.updatedAt,
+)
+
+fun ContactRequestEntity.toContactRequest() = ContactRequest(
+    id = this.id,
+    senderId = this.sender_id,
+    receiverId = this.receiver_id,
+    message = this.message,
+    status = this.status,
+    createdAt = this.created_at,
+    updatedAt = this.updated_at,
 )

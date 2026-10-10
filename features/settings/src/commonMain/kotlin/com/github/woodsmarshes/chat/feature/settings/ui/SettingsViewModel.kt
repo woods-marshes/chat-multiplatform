@@ -8,7 +8,9 @@ import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.datastore.BoundCredentialIdentity
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
+import com.github.woodsmarshes.chat.core.model.FriendRequestPolicy
 import com.github.woodsmarshes.chat.core.model.PrivacySetting
+import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
 import com.github.woodsmarshes.chat.core.model.UserPreference
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
@@ -114,12 +116,7 @@ class SettingsViewModel(
                     if (privacyWriter?.isActive == true) return@collect
                     privacy = it.privacy
                     confirmedPrivacy = it.privacy
-                    _uiState.update { state ->
-                        state.copy(
-                            showOnlineStatus = it.privacy.showOnlineStatus,
-                            allowSearch = it.privacy.allowSearch,
-                        )
-                    }
+                    renderPrivacy(it.privacy)
                 }
             }
         }
@@ -243,8 +240,24 @@ class SettingsViewModel(
 
     fun setAllowSearch(allow: Boolean) = persistPrivacy(privacy.copy(allowSearch = allow))
 
+    fun setAllowStrangerChat(allow: Boolean) = persistPrivacy(privacy.copy(allowStrangerChat = allow))
+
+    fun setFriendRequestPolicy(policy: FriendRequestPolicy) =
+        persistPrivacy(privacy.copy(friendRequestPolicy = policy))
+
+    fun setProfileVisibility(visibility: ProfileVisibility) =
+        persistPrivacy(privacy.copy(profileVisibility = visibility))
+
     private fun renderPrivacy(value: PrivacySetting) {
-        _uiState.update { it.copy(showOnlineStatus = value.showOnlineStatus, allowSearch = value.allowSearch) }
+        _uiState.update {
+            it.copy(
+                showOnlineStatus = value.showOnlineStatus,
+                allowSearch = value.allowSearch,
+                allowStrangerChat = value.allowStrangerChat,
+                friendRequestPolicy = value.friendRequestPolicy,
+                profileVisibility = value.profileVisibility,
+            )
+        }
     }
 
     /** A single writer coalesces newer intent without allowing older failures to undo it. */

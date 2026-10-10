@@ -62,18 +62,18 @@ class UserApi(
     }
 
     // 获取所有入群申请
-    suspend fun getGroupRequests(status: RequestStatus = RequestStatus.PENDING): List<GroupJoinRequest> {
+    suspend fun getGroupRequests(status: RequestStatus? = null): List<GroupJoinRequest> {
         return client.get(V1.Users.Me.GroupRequests(status = status)).body()
     }
 
     // 获取收到的入群申请
-    suspend fun getIncomingGroupRequests(status: RequestStatus = RequestStatus.PENDING): List<GroupJoinRequest> {
+    suspend fun getIncomingGroupRequests(status: RequestStatus? = null): List<GroupJoinRequest> {
         val parent = V1.Users.Me.GroupRequests(status = status)
         return client.get(V1.Users.Me.GroupRequests.IncomingGroupRequests(parent = parent)).body()
     }
 
     // 获取发出的入群申请
-    suspend fun getSentGroupRequests(status: RequestStatus = RequestStatus.PENDING): List<GroupJoinRequest> {
+    suspend fun getSentGroupRequests(status: RequestStatus? = null): List<GroupJoinRequest> {
         val parent = V1.Users.Me.GroupRequests(status = status)
         return client.get(V1.Users.Me.GroupRequests.SentGroupRequests(parent = parent)).body()
     }

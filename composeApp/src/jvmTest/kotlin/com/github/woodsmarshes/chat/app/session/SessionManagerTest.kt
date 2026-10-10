@@ -12,6 +12,7 @@ import com.github.woodsmarshes.chat.core.data.repository.OfflineFirstMessageRepo
 import com.github.woodsmarshes.chat.core.data.repository.UserRepositoryImpl
 import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.MessageDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.UserDaoImpl
@@ -255,6 +256,7 @@ class SessionManagerTest {
             messageApi = realtimeApi,
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
+            groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
         )
@@ -366,6 +368,7 @@ class SessionManagerTest {
             messageApi = realtimeApi,
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
+            groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
         )
@@ -852,6 +855,7 @@ class SessionManagerTest {
             messageApi = realtimeApi,
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
+            groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
         )
@@ -954,6 +958,7 @@ class SessionManagerTest {
             messageApi = realtimeApi,
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
+            groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
         )

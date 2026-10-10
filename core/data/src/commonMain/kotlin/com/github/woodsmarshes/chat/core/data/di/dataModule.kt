@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.data.di
 
 import androidx.paging.ExperimentalPagingApi
+import com.github.woodsmarshes.chat.core.common.AppDispatchers
 import com.github.woodsmarshes.chat.core.data.paging.ArticleRemoteMediator
 import com.github.woodsmarshes.chat.core.data.paging.MessageRemoteMediator
 import com.github.woodsmarshes.chat.core.data.repository.ArticleRepository
@@ -20,34 +21,84 @@ import org.koin.dsl.bind
 import org.koin.dsl.binds
 import com.github.woodsmarshes.chat.core.data.paging.ArticleMediatorFactory
 import com.github.woodsmarshes.chat.core.data.paging.MessageMediatorFactory
+import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
+import com.github.woodsmarshes.chat.core.database.dao.MessageDao
+import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
+import com.github.woodsmarshes.chat.core.database.dao.UserDao
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
+import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
+import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import org.koin.dsl.module
 
 @OptIn(ExperimentalPagingApi::class)
 val dataModule = module {
     singleOf(::AuthRepositoryImpl) bind AuthRepository::class
-    singleOf(::OfflineFirstMessageRepositoryImpl) bind MessageRepository::class
+    single<MessageRepository> {
+        OfflineFirstMessageRepositoryImpl(
+            messageDao = get(),
+            userDao = get(),
+            participantDao = get(),
+            messageApi = get(),
+            conversationApi = get(),
+            conversationDao = get(),
+            groupJoinRequestDao = get(),
+            userSettingDataSource = get(),
+            scope = get(),
+            mediatorFactory = get(),
+            groupProfileDao = get(),
+        )
+    }
     singleOf(::ConversationRepositoryImpl) bind ConversationRepository::class
     singleOf(::UserRepositoryImpl) bind UserRepository::class
-    singleOf(::ContactRepositoryImpl) bind ContactRepository::class
+    single<ContactRepository> {
+        ContactRepositoryImpl(
+            contactApi = get(),
+            contactDao = get(),
+            contactRequestDao = get(),
+            userDao = get(),
+            userSettingDataSource = get(),
+            realtimeApi = get(),
+        )
+    }
     singleOf(::OfflineFirstArticleRepositoryImpl) bind ArticleRepository::class
 
     single<ArticleMediatorFactory> {
-        val api = get<com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi>()
-        val articles = get<com.github.woodsmarshes.chat.core.database.dao.ArticleDao>()
-        val users = get<com.github.woodsmarshes.chat.core.database.dao.UserDao>()
-        val holder = get<com.github.woodsmarshes.chat.core.database.di.DatabaseHolder>()
-        val dispatchers = get<com.github.woodsmarshes.chat.core.common.AppDispatchers>()
-        ArticleMediatorFactory { own, author -> ArticleRemoteMediator(own, author, api, articles, users, dispatchers, holder) }
+        val api = get<ArticleApi>()
+        val articles = get<ArticleDao>()
+        val users = get<UserDao>()
+        val holder = get<DatabaseHolder>()
+        val dispatchers = get<AppDispatchers>()
+        ArticleMediatorFactory { own, author ->
+            ArticleRemoteMediator(
+                getMyArticle = own,
+                authorId = author,
+                articleApi = api,
+                articleDao = articles,
+                userDao = users,
+                appDispatchers = dispatchers,
+                databaseHolder = holder
+            )
+        }
     }
     single<MessageMediatorFactory> {
-        val api = get<com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi>()
-        val messages = get<com.github.woodsmarshes.chat.core.database.dao.MessageDao>()
-        val users = get<com.github.woodsmarshes.chat.core.database.dao.UserDao>()
-        val participants = get<com.github.woodsmarshes.chat.core.database.dao.ParticipantDao>()
-        val holder = get<com.github.woodsmarshes.chat.core.database.di.DatabaseHolder>()
-        val dispatchers = get<com.github.woodsmarshes.chat.core.common.AppDispatchers>()
+        val api = get<ConversationApi>()
+        val messages = get<MessageDao>()
+        val users = get<UserDao>()
+        val participants = get<ParticipantDao>()
+        val holder = get<DatabaseHolder>()
+        val dispatchers = get<AppDispatchers>()
         MessageMediatorFactory { own, conversation, group ->
-            MessageRemoteMediator(own, conversation, group, dispatchers, holder, api, messages, users, participants)
+            MessageRemoteMediator(
+                ownUserId = own,
+                conversationId = conversation,
+                isGroup = group,
+                appDispatchers = dispatchers,
+                databaseHolder = holder,
+                conversationApi = api,
+                messageDao = messages,
+                userDao = users,
+                participantDao = participants
+            )
         }
     }
 

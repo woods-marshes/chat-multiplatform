@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.core.data.model
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
@@ -17,6 +18,7 @@ import com.github.woodsmarshes.chat.core.network.dto.conversation.SimpleMessage
 import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.GetConversationListView
+import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
 import io.github.woodsmarshes.chat.db.GroupProfileEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.ParticipantEntity
@@ -194,3 +196,24 @@ private fun SimpleMessage.getRenderType(): MessageRenderType {
         else -> MessageRenderType.OTHER
     }
 }
+fun GroupJoinRequest.toEntity() = GroupJoinRequestEntity(
+    id = this.id,
+    conversation_id = this.conversationId,
+    applicant_id = this.applicantId,
+    message = this.message,
+    status = this.status,
+    handled_by = this.handledById,
+    created_at = this.createdAt,
+    updated_at = this.updatedAt,
+)
+
+fun GroupJoinRequestEntity.toGroupJoinRequest() = GroupJoinRequest(
+    id = this.id,
+    conversationId = this.conversation_id,
+    applicantId = this.applicant_id,
+    message = this.message,
+    status = this.status,
+    handledById = this.handled_by,
+    createdAt = this.created_at,
+    updatedAt = this.updated_at,
+)

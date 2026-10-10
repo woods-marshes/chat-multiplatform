@@ -18,7 +18,9 @@ import com.github.woodsmarshes.chat.core.database.utils.uuidAdapter
 import io.github.woodsmarshes.chat.db.Article
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ContactEntity
+import io.github.woodsmarshes.chat.db.ContactRequestEntity
 import io.github.woodsmarshes.chat.db.ConversationEntity
+import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
 import io.github.woodsmarshes.chat.db.GroupProfileEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.ParticipantEntity
@@ -68,6 +70,23 @@ suspend fun createDatabase(driverFactory: suspend (SqlSchema<QueryResult.AsyncVa
         ContactEntityAdapter = ContactEntity.Adapter(
             contact_idAdapter = uuidAdapter,
             statusAdapter = EnumColumnAdapter(),
+            created_atAdapter = instantAdapter,
+            updated_atAdapter = instantAdapter,
+        ),
+        ContactRequestEntityAdapter = ContactRequestEntity.Adapter(
+            idAdapter = uuidAdapter,
+            sender_idAdapter = uuidAdapter,
+            receiver_idAdapter = uuidAdapter,
+            statusAdapter = EnumColumnAdapter(),
+            created_atAdapter = instantAdapter,
+            updated_atAdapter = instantAdapter,
+        ),
+        GroupJoinRequestEntityAdapter = GroupJoinRequestEntity.Adapter(
+            idAdapter = uuidAdapter,
+            conversation_idAdapter = uuidAdapter,
+            applicant_idAdapter = uuidAdapter,
+            statusAdapter = EnumColumnAdapter(),
+            handled_byAdapter = uuidAdapter,
             created_atAdapter = instantAdapter,
             updated_atAdapter = instantAdapter,
         ),

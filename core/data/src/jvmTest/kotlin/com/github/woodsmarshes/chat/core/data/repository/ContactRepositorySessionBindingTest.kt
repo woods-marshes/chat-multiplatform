@@ -4,6 +4,7 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.UserDaoImpl
 import com.github.woodsmarshes.chat.core.database.di.createDatabase
 import com.github.woodsmarshes.chat.core.model.Contact
@@ -149,6 +150,7 @@ class ContactRepositorySessionBindingTest {
         val repo = ContactRepositoryImpl(
             contactApi = contactApi,
             contactDao = dynamicContactDao,
+            contactRequestDao = ContactRequestDaoImpl(dbProvider = dbProvider, ioContext = dispatcher),
             userDao = dynamicUserDao,
             scope = repoScope,
         )
@@ -243,6 +245,7 @@ class ContactRepositorySessionBindingTest {
         val repo = ContactRepositoryImpl(
             contactApi = contactApi,
             contactDao = dynamicContactDao,
+            contactRequestDao = ContactRequestDaoImpl(dbProvider = { activeDb }, ioContext = dispatcher),
             userDao = dynamicUserDao,
             scope = repoScope,
         )
@@ -338,6 +341,7 @@ class ContactRepositorySessionBindingTest {
         val repo = ContactRepositoryImpl(
             contactApi = contactApi,
             contactDao = dynamicContactDao,
+            contactRequestDao = ContactRequestDaoImpl(dbProvider = { contactActiveDb }, ioContext = dispatcher),
             userDao = dynamicUserDao,
             scope = repoScope,
         )

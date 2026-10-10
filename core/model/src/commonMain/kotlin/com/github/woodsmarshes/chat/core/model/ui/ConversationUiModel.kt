@@ -16,6 +16,8 @@ data class ConversationUiModel(
     val lastMessage: LastMessageInfo? = null,
     val unreadCount: Int = 0,
     val isPinned: Boolean = false,
+    /** Conversation creation time; list-ordering fallback for message-less conversations. */
+    val createdAt: Instant? = null,
     /** Up to 4 non-own members with avatars, for the group avatar grid. */
     val memberAvatars: List<SenderUser> = emptyList(),
 )

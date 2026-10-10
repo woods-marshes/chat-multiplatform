@@ -339,7 +339,14 @@ private class FakeConversationRepository(
     override suspend fun getConversationListFlow() = emptyFlow<List<ConversationUiModel>>()
     override suspend fun syncConversations() = Ok(Unit)
     override suspend fun createDirectChat(targetUserId: Uuid) = error("not used")
-    override suspend fun createGroup(name: String, handle: String?, description: String?, avatar: String?, memberIds: List<Uuid>) = error("not used")
+    override suspend fun createGroup(
+        name: String,
+        handle: String?,
+        description: String?,
+        avatar: String?,
+        settings: com.github.woodsmarshes.chat.core.model.GroupSettings?,
+        memberIds: List<Uuid>,
+    ) = error("not used")
     override suspend fun joinGroup(id: Uuid, message: String?) = Ok(Unit)
     override suspend fun updateGroupProfile(
         conversationId: Uuid,

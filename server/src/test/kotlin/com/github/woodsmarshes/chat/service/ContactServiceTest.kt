@@ -86,6 +86,7 @@ class ContactServiceTest {
     fun approveCreatesBothContactsAndANewConversation() = runBlocking {
         coEvery { contactRequestRepository.getRequestById(requestId) } returns request()
         coEvery { contactRequestRepository.updateRequestStatus(requestId, RequestStatus.ACCEPTED, null) } returns true
+        coEvery { contactRequestRepository.getRequestsBySenderAndReceiver(senderId, userId) } returns emptyList()
         coEvery {
             contactRepository.upsertContact(eq(userId), eq(senderId), any(), any(), eq(ContactStatus.FRIEND))
         } returns true
@@ -110,6 +111,7 @@ class ContactServiceTest {
     fun approveReusesTheExistingPrivateConversation() = runBlocking {
         coEvery { contactRequestRepository.getRequestById(requestId) } returns request()
         coEvery { contactRequestRepository.updateRequestStatus(requestId, RequestStatus.ACCEPTED, null) } returns true
+        coEvery { contactRequestRepository.getRequestsBySenderAndReceiver(senderId, userId) } returns emptyList()
         coEvery { contactRepository.upsertContact(any(), any(), any(), any(), any()) } returns true
         coEvery { conversationRepository.getExistingPrivateConversation(userId, senderId) } returns conversation()
 

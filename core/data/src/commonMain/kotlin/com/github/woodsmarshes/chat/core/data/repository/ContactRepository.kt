@@ -6,6 +6,7 @@ import com.github.woodsmarshes.chat.core.model.ContactRequest
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ContactError
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlin.uuid.Uuid
 
 interface ContactRepository {
@@ -26,6 +27,10 @@ interface ContactRepository {
 
     fun getFriendsFlow(): Flow<List<Pair<Contact, User>>>
 
+    fun getBlockedContactsFlow(): Flow<List<Pair<Contact, User>>> = emptyFlow()
+
+    fun getContactFlow(userId: Uuid): Flow<Contact?> = emptyFlow()
+
     suspend fun syncFriends(): Result<Unit, ContactError>
 
     suspend fun searchContacts(query: String): Result<List<Pair<Contact, User>>, ContactError>
@@ -34,6 +39,8 @@ interface ContactRepository {
 
     fun observeIncomingRequests(): Flow<List<ContactRequest>>
 
+    fun observeAllRequests(): Flow<List<ContactRequest>> = observeIncomingRequests()
+
     suspend fun syncContactRequests(): Result<List<ContactRequest>, ContactError>
 
     suspend fun handleFriendRequest(
@@ -41,6 +48,15 @@ interface ContactRepository {
         accept: Boolean,
         remark: String? = null
     ): Result<Boolean, ContactError>
+
+    suspend fun cancelFriendRequest(requestId: Uuid): Result<Boolean, ContactError> =
+        handleFriendRequest(requestId = requestId, accept = false)
+
+    suspend fun updateContactInfo(
+        userId: Uuid,
+        nickname: String? = null,
+        alias: String? = null,
+    ): Result<Boolean, ContactError> = com.github.michaelbull.result.Err(ContactError.PermissionDenied)
 
     suspend fun blockUser(userId: Uuid): Result<Boolean, ContactError>
 

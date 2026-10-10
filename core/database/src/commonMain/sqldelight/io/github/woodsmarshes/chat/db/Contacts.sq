@@ -33,8 +33,10 @@ INSERT INTO ContactEntity(
 VALUES ?
 ON CONFLICT(contact_id) DO UPDATE SET
     status     = excluded.status,
-    nickname   = COALESCE(excluded.nickname, nickname),
-    alias      = COALESCE(excluded.alias, alias),
+    -- Full server rows are authoritative: direct assignment (not COALESCE)
+    -- so that a server-side cleared remark actually clears locally.
+    nickname   = excluded.nickname,
+    alias      = excluded.alias,
     updated_at = excluded.updated_at;
 
 
@@ -66,6 +68,25 @@ SELECT * FROM ContactEntity WHERE contact_id = :contactId;
 -- 【查】获取黑名单列表
 getBlockedContacts:
 SELECT * FROM ContactEntity WHERE status = 'BLOCKED';
+
+-- 【查】获取所有黑名单联系人及其基础资料 (JOIN UserEntity)
+getBlockedContactsWithUserInfo:
+SELECT
+    C.*,
+    U.id AS u_id,
+    U.username AS u_username,
+    U.email AS u_email,
+    U.display_name AS u_display_name,
+    U.avatar AS u_avatar,
+    U.bio AS u_bio,
+    U.created_at AS u_created_at,
+    U.updated_at AS u_updated_at,
+    U.deleted_at AS u_deleted_at,
+    U.role AS u_role
+FROM ContactEntity AS C
+JOIN UserEntity AS U ON C.contact_id = U.id
+WHERE C.status = 'BLOCKED'
+ORDER BY C.updated_at DESC;
 
 -- 【查】搜索联系人 (模糊查询备注、昵称或用户名)
 searchContacts:

@@ -5,8 +5,12 @@ import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
 import com.github.woodsmarshes.chat.core.database.dao.ArticleDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ContactDao
 import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDao
+import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
 import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
@@ -62,6 +66,20 @@ val daosModule = module {
     }
     single<ContactDao> {
         ContactDaoImpl(
+            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
+        )
+    }
+    single<ContactRequestDao> {
+        ContactRequestDaoImpl(
+            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+            ioContext = get<AppDispatchers>().io,
+            sessionGate = get<DatabaseHolder>().sessionGate,
+        )
+    }
+    single<GroupJoinRequestDao> {
+        GroupJoinRequestDaoImpl(
             dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
             ioContext = get<AppDispatchers>().io,
             sessionGate = get<DatabaseHolder>().sessionGate,

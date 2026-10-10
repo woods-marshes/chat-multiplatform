@@ -16,7 +16,16 @@ import org.koin.dsl.module
 
 val serviceModule = module {
     singleOf(::AuthService)
-    singleOf(::ContactService)
+    single {
+        ContactService(
+            contactRepository = get(),
+            contactRequestRepository = get(),
+            conversationRepository = get(),
+            conversationParticipantRepository = get(),
+            eventBus = get(),
+            userSettingRepository = get(),
+        )
+    }
     singleOf(::ConversationLifecycleService)
     singleOf(::GroupMembershipService)
     singleOf(::ConversationSettingsService)

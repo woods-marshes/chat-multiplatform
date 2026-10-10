@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.data.repository
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.MessageDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDaoImpl
@@ -91,7 +92,7 @@ class MessageRepositoryDeliveryTest {
         every { settings.user } returns MutableStateFlow(User(userId, "user", null, null, null, null, now, now, null))
         val repo = OfflineFirstMessageRepositoryImpl(
             decorate(dao), UserDaoImpl({ db }, coroutineContext), ParticipantDaoImpl({ db }, coroutineContext),
-            api, rest, ConversationDaoImpl({ db }, coroutineContext), settings, backgroundScope,
+            api, rest, ConversationDaoImpl({ db }, coroutineContext), GroupJoinRequestDaoImpl({ db }, coroutineContext), settings, backgroundScope,
             mediatorFactory = io.mockk.mockk(),
         )
         try {

@@ -183,7 +183,14 @@ private class FakeConversationRepository(
     override suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError> {
         return created.firstOrNull()?.let { Ok(it) } ?: Err(ConversationError.OperationFailed)
     }
-    override suspend fun createGroup(name: String, handle: String?, description: String?, avatar: String?, memberIds: List<Uuid>) = error("not used")
+    override suspend fun createGroup(
+        name: String,
+        handle: String?,
+        description: String?,
+        avatar: String?,
+        settings: GroupSettings?,
+        memberIds: List<Uuid>,
+    ) = error("not used")
     override suspend fun joinGroup(id: Uuid, message: String?) = Ok(Unit)
     override suspend fun updateGroupProfile(
         conversationId: Uuid,
