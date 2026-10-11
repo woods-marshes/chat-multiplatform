@@ -1,8 +1,113 @@
+-- verifyMigrations replays the whole migration chain on an EMPTY database,
+-- so this first migration must create the full v1 base schema (matching the
+-- shipped schema before any .sqm existed) plus the auxiliary tables that
+-- later versions rely on. CREATE TABLE IF NOT EXISTS keeps this migration
+-- safe when replayed on real databases that already have these tables.
+
+CREATE TABLE IF NOT EXISTS UserEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT UNIQUE,
+    display_name TEXT,
+    avatar TEXT,
+    bio TEXT,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    deleted_at INTEGER AS Instant,
+    role TEXT AS UserRole NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ConversationEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    type TEXT AS ConversationType NOT NULL,
+    last_message_id BLOB AS Uuid,
+    metadata TEXT AS ConversationMetadata,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    deleted_at INTEGER AS Instant
+);
+
+CREATE TABLE IF NOT EXISTS MessageEntity (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    conversation_id BLOB AS Uuid NOT NULL,
+    user_id BLOB AS Uuid NOT NULL,
+    category TEXT AS MessageCategory NOT NULL,
+    render_type TEXT AS MessageRenderType NOT NULL,
+    content TEXT AS MessageContent NOT NULL,
+    reply_to_message_id BLOB AS Uuid,
+    created_at INTEGER AS Instant NOT NULL,
+    revoked_at INTEGER AS Instant,
+    local_send_status TEXT AS MessageStatus,
+    FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES UserEntity(id) ON DELETE RESTRICT,
+    FOREIGN KEY (reply_to_message_id) REFERENCES MessageEntity(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_conversation_time ON MessageEntity(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_message_pagination ON MessageEntity(conversation_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS ParticipantEntity (
+    conversation_id BLOB AS Uuid NOT NULL,
+    user_id BLOB AS Uuid NOT NULL,
+    role TEXT AS ConversationRole NOT NULL,
+    last_read_message_id BLOB AS Uuid,
+    joined_at INTEGER AS Instant NOT NULL,
+    muted_until INTEGER AS Instant,
+    settings TEXT AS ParticipantSettings NOT NULL,
+    PRIMARY KEY (conversation_id, user_id),
+    FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES UserEntity(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS GroupProfileEntity (
+    conversation_id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    handle TEXT UNIQUE,
+    description TEXT,
+    avatar_url TEXT,
+    owner_id BLOB AS Uuid NOT NULL,
+    settings TEXT AS GroupSettings NOT NULL,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_id) REFERENCES UserEntity(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS ContactEntity (
+    contact_id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    status TEXT AS ContactStatus NOT NULL,
+    nickname TEXT,
+    alias TEXT,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    FOREIGN KEY (contact_id) REFERENCES UserEntity(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_status ON ContactEntity(status);
+
+CREATE TABLE IF NOT EXISTS Article (
+    id BLOB AS Uuid NOT NULL PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT AS JsonElement,
+    author_id BLOB AS Uuid NOT NULL,
+    status TEXT AS ArticleStatus NOT NULL,
+    excerpt TEXT,
+    created_at INTEGER AS Instant NOT NULL,
+    updated_at INTEGER AS Instant NOT NULL,
+    published_at INTEGER AS Instant,
+    cover_image TEXT,
+    deleted_at INTEGER AS Instant,
+    slug TEXT,
+    stats TEXT AS ArticleStats,
+    FOREIGN KEY (author_id) REFERENCES UserEntity(id) ON DELETE RESTRICT
+);
+
 CREATE TABLE IF NOT EXISTS MessageAttempt (
     message_id TEXT NOT NULL PRIMARY KEY,
     started_at_ms INTEGER NOT NULL,
     last_attempt_ms INTEGER NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS MessageSyncCursor (
     conversation_id TEXT NOT NULL PRIMARY KEY,
     after_id TEXT NOT NULL
