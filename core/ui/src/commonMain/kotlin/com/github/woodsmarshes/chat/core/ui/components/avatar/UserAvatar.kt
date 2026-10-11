@@ -55,11 +55,15 @@ fun UserAvatar(
     val strings = LocalStrings.current
 
     val interactionModifier = when {
-        onClick != null && onLongPress != null -> Modifier.combinedClickable(
-            onClick = onClick,
-            onLongClick = onLongPress,
-        )
-        onClick != null -> Modifier.clickable { onClick() }
+        onClick != null && onLongPress != null -> Modifier
+            .clip(CircleShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress,
+            )
+        onClick != null -> Modifier
+            .clip(CircleShape)
+            .clickable { onClick() }
         else -> Modifier
     }
 

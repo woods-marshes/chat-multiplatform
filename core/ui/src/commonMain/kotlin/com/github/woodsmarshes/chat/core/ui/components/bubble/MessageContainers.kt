@@ -26,8 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
+import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenu
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -366,7 +366,7 @@ fun OwnMessageContainer(
                         )
                     },
             ) {
-                DropdownMenu(
+                AppDropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
@@ -631,7 +631,7 @@ fun OtherMessageContainer(
                         )
                     },
             ) {
-                DropdownMenu(
+                AppDropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {

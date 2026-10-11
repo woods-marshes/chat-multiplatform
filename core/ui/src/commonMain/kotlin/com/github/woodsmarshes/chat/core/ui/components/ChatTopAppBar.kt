@@ -1,39 +1,42 @@
 package com.github.woodsmarshes.chat.core.ui.components
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation3.LocalListDetailSceneScope
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import top.yukonga.miuix.kmp.basic.HorizontalDivider as MiuixHorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -61,13 +64,8 @@ fun isInListDetailScene(): Boolean {
 /**
  * 共享 TopAppBar（支持 Material 3 与 Miuix 双主题自动切换）。
  *
- * @param showBackButton 显示返回箭头
- * @param showCloseButton 显示关闭按钮（用于大屏最右侧的 extraPane 面板）
- * @param showMenuButton 显示汉堡菜单按钮（抽屉触发）。优先于 showBackButton
- * @param onMenuClick 汉堡按钮点击回调
- * @param onSearchClick 非空时在操作区渲染搜索入口
- * @param showAccountAffordance 顶栏末尾渲染当前用户头像（仅顶层页面使用；
- *   头像内容来自 [LocalAccountAffordance]，紧凑布局由 shell 提供，宽屏为 null）
+ * 固定为 64.dp 内容高度（与 [ChatConversationTopBar] 完全一致），确保在多栏并排
+ * 布局（如左栏聊天页 + 右栏群聊信息/个人资料页）下底部分割线严格对齐。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,51 +81,130 @@ fun ChatTopAppBar(
     showAccountAffordance: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    if (isMiuixTheme()) {
-        Column(modifier = modifier.fillMaxWidth()) {
-            SmallTopAppBar(
-                title = title,
-                color = MiuixTheme.colorScheme.surface,
-                titleColor = MiuixTheme.colorScheme.onSurface,
-                navigationIcon = {
+    val isMiuix = isMiuixTheme()
+    val containerColor = if (isMiuix) MiuixTheme.colorScheme.surface else MaterialTheme.colorScheme.surface
+    val titleColor = if (isMiuix) MiuixTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface
+
+    Surface(
+        color = containerColor,
+        tonalElevation = 0.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .height(64.dp)
+                    .padding(horizontal = 4.dp),
+            ) {
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     when {
                         showMenuButton && onMenuClick != null -> {
-                            MiuixIconButton(onClick = onMenuClick) {
-                                MiuixIcon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = LocalStrings.current.menuCd,
-                                    tint = MiuixTheme.colorScheme.onSurface,
-                                )
+                            if (isMiuix) {
+                                MiuixIconButton(onClick = onMenuClick) {
+                                    MiuixIcon(
+                                        imageVector = Icons.Default.Menu,
+                                        contentDescription = LocalStrings.current.menuCd,
+                                        tint = titleColor,
+                                    )
+                                }
+                            } else {
+                                IconButton(onClick = onMenuClick) {
+                                    Icon(
+                                        imageVector = Icons.Default.Menu,
+                                        contentDescription = LocalStrings.current.menuCd,
+                                    )
+                                }
                             }
                         }
                         showCloseButton -> {
-                            MiuixIconButton(onClick = onBackClick) {
-                                MiuixIcon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = LocalStrings.current.backCd,
-                                    tint = MiuixTheme.colorScheme.onSurface,
-                                )
+                            if (isMiuix) {
+                                MiuixIconButton(onClick = onBackClick) {
+                                    MiuixIcon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = LocalStrings.current.backCd,
+                                        tint = titleColor,
+                                    )
+                                }
+                            } else {
+                                IconButton(onClick = onBackClick) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = LocalStrings.current.backCd,
+                                    )
+                                }
                             }
                         }
                         showBackButton -> {
-                            MiuixIconButton(onClick = onBackClick) {
-                                MiuixIcon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = LocalStrings.current.backCd,
-                                    tint = MiuixTheme.colorScheme.onSurface,
-                                )
+                            if (isMiuix) {
+                                MiuixIconButton(onClick = onBackClick) {
+                                    MiuixIcon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = LocalStrings.current.backCd,
+                                        tint = titleColor,
+                                    )
+                                }
+                            } else {
+                                IconButton(onClick = onBackClick) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = LocalStrings.current.backCd,
+                                    )
+                                }
                             }
                         }
                     }
-                },
-                actions = {
+                }
+
+                if (isMiuix) {
+                    MiuixText(
+                        text = title,
+                        style = MiuixTheme.textStyles.headline2,
+                        fontWeight = FontWeight.SemiBold,
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 56.dp),
+                    )
+                } else {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 56.dp),
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     if (onSearchClick != null) {
-                        MiuixIconButton(onClick = onSearchClick) {
-                            MiuixIcon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = LocalStrings.current.searchTitle,
-                                tint = MiuixTheme.colorScheme.onSurface,
-                            )
+                        if (isMiuix) {
+                            MiuixIconButton(onClick = onSearchClick) {
+                                MiuixIcon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = LocalStrings.current.searchTitle,
+                                    tint = titleColor,
+                                )
+                            }
+                        } else {
+                            IconButton(onClick = onSearchClick) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = LocalStrings.current.searchTitle,
+                                )
+                            }
                         }
                     }
                     actions()
@@ -135,69 +212,10 @@ fun ChatTopAppBar(
                         Spacer(Modifier.width(4.dp))
                         LocalAccountAffordance.current?.invoke()
                     }
-                },
-            )
-            MiuixHorizontalDivider(
-                thickness = 0.5.dp,
-                color = MiuixTheme.colorScheme.dividerLine,
-            )
-        }
-    } else {
-        Column(modifier = modifier.fillMaxWidth()) {
-            CenterAlignedTopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    when {
-                        showMenuButton && onMenuClick != null -> {
-                            IconButton(onClick = onMenuClick) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = LocalStrings.current.menuCd,
-                                )
-                            }
-                        }
-                        showCloseButton -> {
-                            IconButton(onClick = onBackClick) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = LocalStrings.current.backCd,
-                                )
-                            }
-                        }
-                        showBackButton -> {
-                            IconButton(onClick = onBackClick) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = LocalStrings.current.backCd,
-                                )
-                            }
-                        }
-                    }
-                },
-                actions = {
-                    if (onSearchClick != null) {
-                        IconButton(onClick = onSearchClick) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = LocalStrings.current.searchTitle,
-                            )
-                        }
-                    }
-                    actions()
-                    if (showAccountAffordance) {
-                        Spacer(Modifier.width(4.dp))
-                        LocalAccountAffordance.current?.invoke()
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
+                }
+            }
+            AppHorizontalDivider(thickness = 0.5.dp)
         }
     }
 }
+

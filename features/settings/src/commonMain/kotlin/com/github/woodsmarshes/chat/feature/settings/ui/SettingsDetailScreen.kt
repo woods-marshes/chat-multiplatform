@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -98,6 +99,7 @@ import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.SectionHeader
+import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItem
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItemWithSwitch
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
@@ -248,95 +250,47 @@ private fun ProfileEditContent(
             .widthIn(max = 640.dp)
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        ChatAppCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
+        // Centered avatar header (matches ProfileScreen & GroupInfoScreen)
+        Box(contentAlignment = Alignment.BottomEnd) {
+            UserAvatar(
+                name = uiState.editDisplayName.ifEmpty {
+                    uiState.displayName.ifEmpty { uiState.username }
+                },
+                avatarUrl = uiState.avatarUrl,
+                size = 96.dp,
+                onClick = {
+                    if (!uiState.isUploadingAvatar) {
+                        imagePickerLauncher.launch()
+                    }
+                },
+            )
+            Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp, horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(enabled = !uiState.isUploadingAvatar) {
+                        imagePickerLauncher.launch()
+                    },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowElevation = 2.dp,
             ) {
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    UserAvatar(
-                        name = uiState.editDisplayName.ifEmpty {
-                            uiState.displayName.ifEmpty { uiState.username }
-                        },
-                        avatarUrl = uiState.avatarUrl,
-                        size = 76.dp,
-                        onClick = {
-                            if (!uiState.isUploadingAvatar) {
-                                imagePickerLauncher.launch()
-                            }
-                        },
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .clickable(enabled = !uiState.isUploadingAvatar) {
-                                imagePickerLauncher.launch()
-                            },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (uiState.isUploadingAvatar) {
-                                AppProgressIndicator(
-                                    size = 14.dp,
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoCamera,
-                                    contentDescription = strings.changeAvatar,
-                                    modifier = Modifier.size(15.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(18.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = uiState.displayName.ifEmpty {
-                            uiState.username.ifEmpty { strings.settingsCategoryProfile }
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (uiState.username.isNotEmpty()) {
-                        Text(
-                            text = "@${uiState.username}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Box(contentAlignment = Alignment.Center) {
+                    if (uiState.isUploadingAvatar) {
+                        AppProgressIndicator(
+                            size = 15.dp,
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FilledTonalButton(
-                        onClick = { imagePickerLauncher.launch() },
-                        enabled = !uiState.isUploadingAvatar,
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                    ) {
+                    } else {
                         Icon(
                             imageVector = Icons.Default.PhotoCamera,
-                            contentDescription = null,
+                            contentDescription = strings.changeAvatar,
                             modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (uiState.isUploadingAvatar) {
-                                strings.uploadingAvatar
-                            } else {
-                                strings.changeAvatar
-                            },
-                            style = MaterialTheme.typography.labelLarge,
                         )
                     }
                 }
@@ -345,192 +299,142 @@ private fun ProfileEditContent(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        Text(
+            text = uiState.displayName.ifEmpty {
+                uiState.username.ifEmpty { strings.settingsCategoryProfile }
+            },
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (uiState.username.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "@${uiState.username}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Editable Profile Form Card
         ChatAppCard(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
             ) {
+                Text(
+                    text = strings.displayNameLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                )
                 AppTextField(
                     value = uiState.editDisplayName,
                     onValueChange = onDisplayNameChange,
-                    label = strings.displayNameLabel,
-                    placeholder = strings.displayNamePlaceholder,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                        )
-                    },
+                    label = strings.displayNamePlaceholder,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
+                Text(
+                    text = strings.bioLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                )
                 AppTextField(
                     value = uiState.editBio,
                     onValueChange = onBioChange,
-                    label = strings.bioLabel,
-                    placeholder = strings.bioPlaceholder,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null,
-                        )
-                    },
+                    label = strings.bioPlaceholder,
                     minLines = 2,
                     maxLines = 4,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                ChatAppButton(
-                    onClick = onSaveProfile,
-                    label = if (uiState.isSavingProfile) strings.saving else strings.saveChanges,
-                    style = ButtonStyle.PRIMARY,
-                    size = ButtonSize.MD,
-                    enabled = uiState.hasProfileChanges && !uiState.isSavingProfile,
-                    isLoading = uiState.isSavingProfile,
-                    fullWidth = true,
-                )
+                if (uiState.hasProfileChanges || uiState.isSavingProfile) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                    ChatAppButton(
+                        onClick = onSaveProfile,
+                        label = if (uiState.isSavingProfile) strings.saving else strings.saveChanges,
+                        style = ButtonStyle.PRIMARY,
+                        size = ButtonSize.MD,
+                        enabled = uiState.hasProfileChanges && !uiState.isSavingProfile,
+                        isLoading = uiState.isSavingProfile,
+                        fullWidth = true,
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // Account Info Section
         SectionHeader(
             title = strings.sectionAccount,
             modifier = Modifier.padding(horizontal = 0.dp),
         )
         ChatAppCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 if (uiState.username.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                text = strings.usernameLabel,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = "@${uiState.username}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
+                    SettingsItem(
+                        icon = Icons.Default.Person,
+                        title = strings.usernameLabel,
+                        subtitle = "@${uiState.username}",
+                    )
                 }
                 if (uiState.email.isNotEmpty()) {
-                    AppHorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                text = strings.emailLabel,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = uiState.email,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
+                    if (uiState.username.isNotEmpty()) {
+                        AppHorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
                     }
+                    SettingsItem(
+                        icon = Icons.Default.Email,
+                        title = strings.emailLabel,
+                        subtitle = uiState.email,
+                    )
                 }
                 if (uiState.userId.isNotEmpty()) {
-                    AppHorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = strings.userIdLabel(uiState.userId),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(
-                            onClick = {
-                                clipboard.setText(AnnotatedString(uiState.userId))
-                                scope.launch { snackbarHostState.showSnackbar(strings.copied) }
-                            }
-                        ) {
+                    if (uiState.username.isNotEmpty() || uiState.email.isNotEmpty()) {
+                        AppHorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+                    }
+                    SettingsItem(
+                        icon = Icons.Default.Tag,
+                        title = "UID",
+                        subtitle = uiState.userId,
+                        onClick = {
+                            clipboard.setText(AnnotatedString(uiState.userId))
+                            scope.launch { snackbarHostState.showSnackbar(strings.copied) }
+                        },
+                        trailing = {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
                                 contentDescription = strings.copyIdCd,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
-                    }
-                }
-
-                AppHorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showLogoutDialog = true }
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(22.dp),
+                        },
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = strings.logout,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = strings.logoutDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Standalone Logout Card
+        ChatAppCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsItem(
+                icon = Icons.AutoMirrored.Filled.ExitToApp,
+                title = strings.logout,
+                subtitle = strings.logoutDesc,
+                danger = true,
+                onClick = { showLogoutDialog = true },
+            )
         }
     }
 
@@ -871,74 +775,70 @@ private fun AboutSettingsContent(
             .widthIn(max = 640.dp)
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 14.dp),
+            .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // App Hero Banner Card
-        ChatAppCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
+        // Centered App Hero Header (HyperOS / macOS / Telegram style)
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            shadowElevation = 6.dp,
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.size(104.dp),
+        ) {
+            Image(
+                painter = painterResource(CoreUiRes.drawable.app_icon),
+                contentDescription = strings.appName,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    shadowElevation = 4.dp,
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.size(72.dp),
-                ) {
-                    Image(
-                        painter = painterResource(CoreUiRes.drawable.app_icon),
-                        contentDescription = strings.appName,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(18.dp)),
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(18.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = strings.appName,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .clickable {
-                                    clipboard.setText(AnnotatedString(fullVersionText))
-                                    scope.launch { snackbarHostState.showSnackbar(strings.copied) }
-                                },
-                        ) {
-                            Text(
-                                text = fullVersionText,
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = strings.aboutAppDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(26.dp)),
+            )
         }
 
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Text(
+            text = strings.appName,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
+
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable {
+                    clipboard.setText(AnnotatedString(fullVersionText))
+                    scope.launch { snackbarHostState.showSnackbar(strings.copied) }
+                },
+        ) {
+            Text(
+                text = fullVersionText,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = strings.aboutAppDescription,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .widthIn(max = 460.dp)
+                .padding(horizontal = 16.dp),
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Version & Build Environment Card
         SectionHeader(

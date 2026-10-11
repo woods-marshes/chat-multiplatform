@@ -34,10 +34,10 @@ import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +72,8 @@ import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
+import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenu
+import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenuItem
 import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
 import com.github.woodsmarshes.chat.core.ui.components.ChatConversationTopBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
@@ -276,17 +278,13 @@ fun ChatScreen(
                                     contentDescription = strings.menuCd,
                                 )
                             }
-                            DropdownMenu(
+                            AppDropdownMenu(
                                 expanded = headerMenuExpanded,
                                 onDismissRequest = { headerMenuExpanded = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            if (header.isGroup) strings.groupInfoTitle
-                                            else strings.profileTitle
-                                        )
-                                    },
+                                AppDropdownMenuItem(
+                                    text = if (header.isGroup) strings.groupInfoTitle else strings.profileTitle,
+                                    leadingIcon = if (header.isGroup) Icons.Default.Info else Icons.Default.Person,
                                     onClick = {
                                         headerMenuExpanded = false
                                         openDetails.invoke()
@@ -576,42 +574,34 @@ private fun MessageContextMenu(
     onMultiSelect: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    DropdownMenuItem(
-        text = { Text(strings.reply) },
-        leadingIcon = {
-            Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null)
-        },
+    AppDropdownMenuItem(
+        text = strings.reply,
+        leadingIcon = Icons.AutoMirrored.Filled.Reply,
         onClick = {
             dismiss()
             onReply()
         },
     )
-    DropdownMenuItem(
-        text = { Text(strings.copy) },
-        leadingIcon = {
-            Icon(Icons.Default.ContentCopy, contentDescription = null)
-        },
+    AppDropdownMenuItem(
+        text = strings.copy,
+        leadingIcon = Icons.Default.ContentCopy,
         enabled = isText,
         onClick = {
             dismiss()
             onCopy()
         },
     )
-    DropdownMenuItem(
-        text = { Text(strings.forward) },
-        leadingIcon = {
-            Icon(Icons.AutoMirrored.Filled.Forward, contentDescription = null)
-        },
+    AppDropdownMenuItem(
+        text = strings.forward,
+        leadingIcon = Icons.AutoMirrored.Filled.Forward,
         onClick = {
             dismiss()
             onForward()
         },
     )
-    DropdownMenuItem(
-        text = { Text(strings.multiSelect) },
-        leadingIcon = {
-            Icon(Icons.Default.CheckCircle, contentDescription = null)
-        },
+    AppDropdownMenuItem(
+        text = strings.multiSelect,
+        leadingIcon = Icons.Default.CheckCircle,
         onClick = {
             dismiss()
             onMultiSelect()

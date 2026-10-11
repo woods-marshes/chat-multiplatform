@@ -1,6 +1,9 @@
 package com.github.woodsmarshes.chat.core.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -11,12 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults as M3ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator as M3CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton as M3ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton as M3FloatingActionButton
@@ -46,6 +51,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -527,8 +534,20 @@ fun AppTextField(
                 singleLine = singleLine,
                 minLines = minLines,
                 maxLines = maxLines,
-                leadingIcon = leadingIcon,
-                trailingIcon = trailingIcon,
+                leadingIcon = leadingIcon?.let { icon ->
+                    {
+                        Box(modifier = Modifier.padding(start = 14.dp)) {
+                            icon()
+                        }
+                    }
+                },
+                trailingIcon = trailingIcon?.let { icon ->
+                    {
+                        Box(modifier = Modifier.padding(end = 14.dp)) {
+                            icon()
+                        }
+                    }
+                },
                 visualTransformation = visualTransformation,
                 keyboardOptions = keyboardOptions,
                 keyboardActions = keyboardActions,
@@ -591,3 +610,105 @@ fun AppHorizontalDivider(
         )
     }
 }
+
+/**
+ * Refined popup menu container with clean surface color, subtle border, and
+ * rounded corners (avoiding M3's muddy tonal overlay and edge-to-edge item
+ * highlight bars).
+ */
+@Composable
+fun AppDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val isMiuix = isMiuixTheme()
+    val containerColor = if (isMiuix) {
+        MiuixTheme.colorScheme.surface
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    val borderColor = if (isMiuix) {
+        MiuixTheme.colorScheme.dividerLine
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    }
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = modifier.widthIn(min = 156.dp),
+        shape = RoundedCornerShape(14.dp),
+        containerColor = containerColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp,
+        border = BorderStroke(0.5.dp, borderColor),
+        content = content,
+    )
+}
+
+/**
+ * Inset rounded-pill menu item for [AppDropdownMenu]. Disables initial focus
+ * capture so opening a menu on Desktop does not paint a dark rectangular focus
+ * block across the first item.
+ */
+@Composable
+fun AppDropdownMenuItem(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
+    enabled: Boolean = true,
+    danger: Boolean = false,
+) {
+    val isMiuix = isMiuixTheme()
+    val contentColor = when {
+        !enabled -> if (isMiuix) {
+            MiuixTheme.colorScheme.disabledOnSecondaryVariant
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        }
+        danger -> if (isMiuix) MiuixTheme.colorScheme.error else MaterialTheme.colorScheme.error
+        else -> if (isMiuix) MiuixTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface
+    }
+    val iconColor = when {
+        !enabled -> contentColor
+        danger -> contentColor
+        isMiuix -> MiuixTheme.colorScheme.onSurfaceVariantActions
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .focusProperties { canFocus = false }
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (leadingIcon != null) {
+                M3Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            M3Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = contentColor,
+            )
+        }
+    }
+}
+
