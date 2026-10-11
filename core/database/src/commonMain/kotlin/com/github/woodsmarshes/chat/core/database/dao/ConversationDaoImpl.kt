@@ -78,6 +78,14 @@ class ConversationDaoImpl(
         )
     }
 
+    override suspend fun setUnreadCount(id: Uuid, count: Long) {
+        writeQueries().setUnreadCount(count, id)
+    }
+
+    override suspend fun incrementUnread(id: Uuid) {
+        writeQueries().incrementUnread(id)
+    }
+
     override suspend fun softDeleteConversation(id: Uuid, deletedAt: Instant) {
         writeQueries().softDeleteConversation(
             deletedAt = deletedAt,

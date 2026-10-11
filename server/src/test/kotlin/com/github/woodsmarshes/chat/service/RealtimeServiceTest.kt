@@ -49,6 +49,7 @@ class RealtimeServiceTest {
         delivery = delivery,
         sessionManager = sessionManager,
         scope = CoroutineScope(Dispatchers.Unconfined),
+        messageRepository = mockk(relaxed = true),
         typingDebounceMs = typingDebounceMs,
     )
 

@@ -112,23 +112,14 @@ class ConversationRepositoryImpl(
                                 }
                             }
                         }
-                        // One COUNT flow per conversation, keyed by the participant's
-                        // last_read_message_id; message/participant writes re-emit these.
-                        val unreadFlows: List<Flow<Long>> = entities.map { entity ->
-                            messageDao.countUnreadAfter(
-                                conversationId = entity.conversation_id,
-                                myUserId = currentUser.id,
-                                lastReadMessageId = entity.participant_last_read_message_id,
-                            )
-                        }
-                        val unreadCountsFlow: Flow<List<Long>> =
-                            combine(unreadFlows) { counts -> counts.toList() }
+                        // Unread counts are server-authoritative values stored on
+                        // the conversation row (anchor pushes / live events);
+                        // no per-conversation counting flows are needed.
                         combine(
                             groupProfileDao.getGroupProfiles(groupIds),
                             participantDao.getParticipantsExcludingUser(c2CIds, currentUser.id),
                             participantDao.getConversationMemberAvatars(currentUser.id),
-                            unreadCountsFlow,
-                        ) { groupRows, c2cRows, memberAvatarRows, unreadCounts ->
+                        ) { groupRows, c2cRows, memberAvatarRows ->
                             val groups = groupRows.associateBy { it.conversation_id }
                             val c2cs = c2cRows.associateBy { it.conversation_id }
                             val memberAvatars = memberAvatarRows
@@ -168,7 +159,7 @@ class ConversationRepositoryImpl(
                                             description = groups[entity.conversation_id]?.description,
                                             handle = groups[entity.conversation_id]?.handle,
                                             lastMessage = lastMessage,
-                                            unreadCount = unreadCounts[index].toInt(),
+                                            unreadCount = entity.conversation_unread_count.toInt(),
                                             isPinned = entity.participant_settings?.pinnedAt != null,
                                             createdAt = entity.conversation_created_at,
                                             memberAvatars = memberAvatars[entity.conversation_id] ?: emptyList()
@@ -183,7 +174,7 @@ class ConversationRepositoryImpl(
                                             description = c2cs[entity.conversation_id]?.bio,
                                             handle = null,
                                             lastMessage = lastMessage,
-                                            unreadCount = unreadCounts[index].toInt(),
+                                            unreadCount = entity.conversation_unread_count.toInt(),
                                             isPinned = entity.participant_settings?.pinnedAt != null,
                                             createdAt = entity.conversation_created_at
                                         )
@@ -219,11 +210,19 @@ class ConversationRepositoryImpl(
             // A single malformed lastMessage must not abort the whole sync:
             // each insert runs in its own transaction, so one row violating a
             // foreign key (sender, conversation, anything) skips only itself.
+            // Preview-only seed (in_timeline=false): the row feeds the list
+            // preview without becoming a Paging anchor ahead of the window.
             responses.mapNotNull { response -> response.toMessageEntity() }
                 .forEach { message ->
-                    runCatching { messageDao.insertMessage(message) }
+                    runCatching { messageDao.seedMessage(message) }
                         .onFailure { if (it is CancellationException) throw it; log.warn(it) { "Skipping unpersistable last message ${message.id}" } }
                 }
+            // Server-computed unread is authoritative: apply it after the
+            // (unread-preserving) upserts so a list refresh refreshes badges
+            // even without a websocket anchor.
+            responses.forEach { response ->
+                conversationDao.setUnreadCount(response.conversationId, response.unreadCount.toLong())
+            }
         }
     } }
 

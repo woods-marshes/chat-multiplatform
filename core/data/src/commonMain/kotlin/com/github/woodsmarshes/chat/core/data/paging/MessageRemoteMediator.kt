@@ -71,6 +71,9 @@ class MessageRemoteMediator(
                 // Reply targets must be persisted with THEIR OWN content, so map
                 // the referenced message directly (toReplyMessageEntity would
                 // walk to reply.replyTo and store the grandparent instead).
+                // They are seeded (INSERT OR IGNORE, in_timeline=false): they sit
+                // outside the local timeline window and must never become Paging
+                // anchors ahead of the window (see MessageSyncCursor).
                 val replyEntities = response
                     .mapNotNull { it.replyTo }
                     // A reply target without a sender cannot be persisted; skip
@@ -78,7 +81,7 @@ class MessageRemoteMediator(
                     .filter { it.sender != null }
                     .map { reply ->
                         Triple(
-                            reply.toMessageEntity(),
+                            reply.toMessageEntity(inTimeline = false),
                             reply.toUserEntity(),
                             reply.toParticipantEntity()
                         )
@@ -99,15 +102,15 @@ class MessageRemoteMediator(
                 val participantEntities = (replyEntities + mainEntities)
                     .mapNotNull { it.third }
                     .distinct()
-                val messageEntities = (replyEntities + mainEntities)
-                    .mapNotNull { it.first }
-                    .distinct()
+                val replyMessageEntities = replyEntities.mapNotNull { it.first }
+                val mainMessageEntities = mainEntities.mapNotNull { it.first }
 
                 withContext(appDispatchers.io) {
                     messageDao.transaction{
                         userDao.insertUsers(userEntities)
                         participantDao.insertParticipants(participantEntities)
-                        messageDao.insertMessages(messageEntities)
+                        messageDao.seedMessages(replyMessageEntities)
+                        messageDao.insertMessages(mainMessageEntities)
                     }
                 }
             } else {
@@ -116,19 +119,17 @@ class MessageRemoteMediator(
                 val replyEntities = response
                     .mapNotNull { it.replyTo }
                     .filter { it.sender != null }
-                    .map { reply -> reply.toMessageEntity() }
+                    .map { reply -> reply.toMessageEntity(inTimeline = false) }
                 val userEntities = (response.mapNotNull { it.replyTo } + response)
                     .mapNotNull { it.toUserEntity() }
                     .filter { it.id != ownUserId }
                     .distinct()
                 val mainEntities = response.map { it.toMessageEntity() }
-                val messageEntities = (replyEntities + mainEntities)
-                    .filterNotNull()
-                    .distinct()
                 withContext(appDispatchers.io) {
                     messageDao.transaction {
                         userDao.insertUsers(userEntities)
-                        messageDao.insertMessages(messageEntities)
+                        messageDao.seedMessages(replyEntities.filterNotNull())
+                        messageDao.insertMessages(mainEntities.filterNotNull())
                     }
                 }
             }

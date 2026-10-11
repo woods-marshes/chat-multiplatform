@@ -42,6 +42,7 @@ val dataModule = module {
             conversationApi = get(),
             conversationDao = get(),
             groupJoinRequestDao = get(),
+            conversationRepository = get(),
             userSettingDataSource = get(),
             scope = get(),
             mediatorFactory = get(),

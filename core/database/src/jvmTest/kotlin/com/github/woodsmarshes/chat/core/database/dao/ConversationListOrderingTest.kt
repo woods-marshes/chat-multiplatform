@@ -51,15 +51,15 @@ class ConversationListOrderingTest {
             // 老会话：创建最早、消息最旧；updated_at 被刷成最新的垃圾值
             // （模拟冷启动 sync 写入的"对方资料更新时间"）。
             db.conversationsQueries.upsertConversation(
-                ConversationEntity(convOld, ConversationType.GROUP, msgOld, null, t0, at(10_000), null)
+                ConversationEntity(convOld, ConversationType.GROUP, msgOld, null, t0, at(10_000), null, unread_count = 0)
             )
             // 新会话：创建晚于老会话，但持有最新的消息。
             db.conversationsQueries.upsertConversation(
-                ConversationEntity(convNew, ConversationType.PRIVATE, msgNew, null, at(1_000), at(3_000), null)
+                ConversationEntity(convNew, ConversationType.PRIVATE, msgNew, null, at(1_000), at(3_000), null, unread_count = 0)
             )
             // 无消息会话：创建时间晚于老会话，从未收到过消息。
             db.conversationsQueries.upsertConversation(
-                ConversationEntity(convEmpty, ConversationType.GROUP, null, null, at(500), at(500), null)
+                ConversationEntity(convEmpty, ConversationType.GROUP, null, null, at(500), at(500), null, unread_count = 0)
             )
 
             listOf(convOld, convNew, convEmpty).forEach { conversationId ->
@@ -73,7 +73,7 @@ class ConversationListOrderingTest {
                     id = msgOld, conversation_id = convOld, user_id = sender,
                     category = MessageCategory.NORMAL, render_type = MessageRenderType.TEXT,
                     content = TextContent("old"), reply_to_message_id = null,
-                    created_at = at(2_000), revoked_at = null, local_send_status = null,
+                    created_at = at(2_000), revoked_at = null, local_send_status = null, in_timeline = true,
                 )
             )
             db.messagesQueries.insertMessage(
@@ -81,7 +81,7 @@ class ConversationListOrderingTest {
                     id = msgNew, conversation_id = convNew, user_id = sender,
                     category = MessageCategory.NORMAL, render_type = MessageRenderType.TEXT,
                     content = TextContent("new"), reply_to_message_id = null,
-                    created_at = at(3_000), revoked_at = null, local_send_status = null,
+                    created_at = at(3_000), revoked_at = null, local_send_status = null, in_timeline = true,
                 )
             )
 

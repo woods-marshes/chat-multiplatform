@@ -32,6 +32,9 @@ fun Conversation.toEntity() = ConversationEntity(
     created_at = this.createdAt,
     updated_at = this.updatedAt,
     deleted_at = this.deletedAt,
+    // The server model carries no unread state: the column is preserved on
+    // conflict by insertConversation and driven by anchors/live events.
+    unread_count = 0,
 )
 
 fun ConversationEntity.toConversation() = Conversation(
@@ -88,7 +91,10 @@ fun ConversationResponse.toMessageEntity(): MessageEntity? {
             reply_to_message_id = null,
             created_at = message.createdAt,
             revoked_at = message.revokedAt,
-            local_send_status = null
+            local_send_status = null,
+            // Preview-only seed: the local cursor has not reached this message
+            // yet, so it must not become a Paging anchor ahead of the window.
+            in_timeline = false
         )
     } else null
 }

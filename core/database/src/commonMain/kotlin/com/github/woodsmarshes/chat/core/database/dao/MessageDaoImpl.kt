@@ -16,6 +16,7 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByIds
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
+import io.github.woodsmarshes.chat.db.MessageSyncCursor
 import kotlinx.coroutines.flow.Flow
 import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
 import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
@@ -193,12 +194,24 @@ class MessageDaoImpl(
         }
     }
 
-    override suspend fun getSyncCursor(conversationId: Uuid): Uuid? =
+    override suspend fun getSyncCursor(conversationId: Uuid): MessageSyncCursor? =
         writeQueries().getSyncCursor(conversationId.toString()).asFlow().mapToOneOrNull(ioContext)
-            .first()?.let(Uuid::parse)
+            .first()
 
-    override suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid) {
-        writeQueries().setSyncCursor(conversationId.toString(), afterId.toString())
+    override suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid, afterSeq: Long) {
+        writeQueries().setSyncCursor(conversationId.toString(), afterId.toString(), afterSeq)
+    }
+
+    override suspend fun seedMessage(message: MessageEntity) {
+        writeQueries().seedMessage(message)
+    }
+
+    override suspend fun seedMessages(messages: List<MessageEntity>) {
+        if (messages.isEmpty()) return
+        val q = writeQueries()
+        q.transaction {
+            messages.forEach { q.seedMessage(it) }
+        }
     }
 
     override suspend fun deleteMessage(id: Uuid) {
@@ -209,12 +222,7 @@ class MessageDaoImpl(
         writeQueries().clearConversationHistory(conversationId)
     }
 
-    override fun countUnreadAfter(
-        conversationId: Uuid,
-        myUserId: Uuid,
-        lastReadMessageId: Uuid?
-    ): Flow<Long> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.countUnreadAfter(conversationId, myUserId, lastReadMessageId) }, { it.executeAsOneOrNull() })
-            .map { it ?: 0L }
+    override suspend fun deleteConfirmedForConversation(conversationId: Uuid) {
+        writeQueries().deleteConfirmedForConversation(conversationId)
     }
 }

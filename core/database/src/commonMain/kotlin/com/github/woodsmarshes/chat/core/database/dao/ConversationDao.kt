@@ -28,6 +28,10 @@ interface ConversationDao {
     suspend fun updateLastMessage(id: Uuid, lastMessageId: Uuid?, updatedAt: Instant)
     suspend fun updateMetadata(id: Uuid, metadata: ConversationMetadata?, updatedAt: Instant)
 
+    // 未读数（服务端权威值落地 / 实时事件增减）
+    suspend fun setUnreadCount(id: Uuid, count: Long)
+    suspend fun incrementUnread(id: Uuid)
+
     // 删除逻辑
     suspend fun softDeleteConversation(id: Uuid, deletedAt: Instant)
     suspend fun hardDeleteConversation(id: Uuid)

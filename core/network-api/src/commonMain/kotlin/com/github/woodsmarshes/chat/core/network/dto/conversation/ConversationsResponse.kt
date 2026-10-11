@@ -25,6 +25,8 @@ data class ConversationResponse(
     @ProtoNumber(4) val metadata: ConversationMetadata?,
     @ProtoNumber(5) val participant: ConversationParticipant,
     @ProtoNumber(6) val conversationInfo: ConversationInfo,
+    /** Server-computed unread: others' non-revoked messages after the reader's cursor. */
+    @ProtoNumber(7) val unreadCount: Int = 0,
 )
 
 @Serializable

@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.core.network.dto.conversation.CreateConversa
 import com.github.woodsmarshes.chat.core.network.dto.conversation.CreatePrivateRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
 import io.ktor.client.*
@@ -93,8 +94,12 @@ class RealtimeSocketTest {
                         // withTimeoutOrNull instead of withTimeout: a plain
                         // timeout exception would cancel this coroutine
                         // silently and leave the awaiting test body hanging.
+                        // Decode as the RealtimeEvent base: the handshake now
+                        // also delivers a SyncStateResponse.Anchor frame,
+                        // which must be skipped here rather than failing the
+                        // MessageEventResponse-only decode.
                         val event = withTimeoutOrNull(15.seconds) {
-                            receiveDeserialized<MessageEventResponse>()
+                            receiveDeserialized<RealtimeEvent>()
                         }
                         if (event == null) {
                             received.completeExceptionally(

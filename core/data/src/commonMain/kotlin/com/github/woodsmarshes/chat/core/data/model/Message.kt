@@ -118,8 +118,15 @@ fun List<GetMessagesWithAllRelationsByPage>.toUiModels(): List<MessageUiModel> {
  * Maps a Message to its DB entity, or returns null when the message has no
  * sender: MessageEntity.user_id is NOT NULL, so the row cannot be persisted.
  * Callers must skip such rows instead of failing the enclosing sync page.
+ *
+ * [inTimeline] is false only for rows persisted purely as reply targets —
+ * they sit outside the local timeline window and must never become Paging
+ * anchors (see MessageSyncCursor's window-jump contract).
  */
-fun Message.toMessageEntity(localStatus: MessageStatus? = null): MessageEntity? {
+fun Message.toMessageEntity(
+    localStatus: MessageStatus? = null,
+    inTimeline: Boolean = true,
+): MessageEntity? {
     val senderId = this.sender?.id ?: return null
     return MessageEntity(
         id = this.id,
@@ -131,7 +138,8 @@ fun Message.toMessageEntity(localStatus: MessageStatus? = null): MessageEntity? 
         reply_to_message_id = this.replyTo?.id,
         created_at = this.createdAt,
         revoked_at = this.revokedAt,
-        local_send_status = localStatus
+        local_send_status = localStatus,
+        in_timeline = inTimeline
     )
 }
 
@@ -139,7 +147,7 @@ fun Message.toMessageEntity(localStatus: MessageStatus? = null): MessageEntity? 
  * 将引用的回复消息转换为 MessageEntity
  */
 fun Message.toReplyMessageEntity(): MessageEntity? {
-    return this.replyTo?.toMessageEntity()
+    return this.replyTo?.toMessageEntity(inTimeline = false)
 }
 
 /**

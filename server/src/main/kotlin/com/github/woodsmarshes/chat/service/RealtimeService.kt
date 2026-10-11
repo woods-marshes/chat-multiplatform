@@ -3,10 +3,14 @@ package com.github.woodsmarshes.chat.service
 import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncAnchorEntry
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.network.dto.conversation.SimpleMessage
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
+import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
 import io.ktor.server.websocket.WebSocketServerSession
@@ -17,6 +21,7 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
@@ -26,6 +31,7 @@ class RealtimeService(
     private val delivery: RealtimeDelivery,
     private val sessionManager: WebSocketSessionManager,
     private val scope: CoroutineScope,
+    private val messageRepository: MessageRepository,
     private val typingDebounceMs: Long = 1_000L,
 ) {
     private val typingDebounceMap = ConcurrentHashMap<Uuid, Job>()
@@ -73,9 +79,28 @@ class RealtimeService(
         userId: Uuid,
         session: WebSocketServerSession,
     ) {
-        // Nothing to preload: delivery routes by the participant table, so a
-        // connection only registers itself.
         sessionManager.addUserSession(userId, session)
+        // Push the server-held sync state immediately: the client sizes its
+        // reconnect gaps against these anchors instead of polling blindly.
+        // Previews for never-opened conversations are seeded by the REST list
+        // sync the client runs right after receiving this frame.
+        val anchors = messageRepository.getSyncAnchors(userId)
+        if (anchors.isNotEmpty()) {
+            delivery.sendToUser(
+                userId = userId,
+                data = SyncStateResponse.Anchor(
+                    entries = anchors.map { anchor ->
+                        SyncAnchorEntry(
+                            conversationId = anchor.conversationId,
+                            lastSeq = anchor.lastSeq,
+                            unreadCount = anchor.unreadCount,
+                            lastMessageId = anchor.lastMessageId,
+                        )
+                    },
+                    timestamp = Clock.System.now(),
+                ),
+            )
+        }
     }
 
     /**

@@ -25,6 +25,7 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
+import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.utils.inTransaction
 import com.github.woodsmarshes.chat.repository.UserRepository
 import kotlin.time.Clock
@@ -36,6 +37,7 @@ class ConversationLifecycleService(
     private val groupProfileRepository: GroupProfileRepository,
     private val userRepository: UserRepository,
     private val contactRepository: ContactRepository,
+    private val messageRepository: MessageRepository,
     private val eventBus: EventBus,
 ) {
     suspend fun createConversation(userId: Uuid, req: CreateConversationRequest): Result<Conversation, ConversationError> = coroutineBinding {
@@ -172,7 +174,8 @@ class ConversationLifecycleService(
             lastMessage = null,
             metadata = conversation.metadata,
             participant = participant,
-            conversationInfo = conversationInfo
+            conversationInfo = conversationInfo,
+            unreadCount = messageRepository.getUnreadCount(conversation.id, userId).toInt(),
         )
     }
 
@@ -203,6 +206,8 @@ class ConversationLifecycleService(
                 group.conversationId
             }
 
+        val unreadCounts = messageRepository.getUnreadCounts(userId)
+
         conversationParticipant.mapNotNull { participant ->
             val (conversation, lastMessage) = conversations.find {
                 it.first.id == participant.conversationId
@@ -232,7 +237,8 @@ class ConversationLifecycleService(
                 },
                 metadata = conversation.metadata,
                 participant = participant,
-                conversationInfo = conversationInfo
+                conversationInfo = conversationInfo,
+                unreadCount = (unreadCounts[conversation.id] ?: 0L).toInt(),
             )
         }.sortedByDescending { it.lastMessage?.createdAt }
     }

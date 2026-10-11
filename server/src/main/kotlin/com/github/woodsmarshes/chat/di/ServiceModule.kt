@@ -54,6 +54,7 @@ val serviceModule = module {
             delivery = get(),
             sessionManager = get(),
             scope = get(),
+            messageRepository = get(),
         )
     }
 }

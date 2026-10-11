@@ -37,7 +37,7 @@ class ParticipantReadCursorTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         try {
             db.usersQueries.upsertUser(UserEntity(user, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
-            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null))
+            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
             block(ParticipantDaoImpl({ db }, Dispatchers.Unconfined))
         } finally {
             driver.close()

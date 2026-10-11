@@ -44,7 +44,7 @@ class MessagePersistenceTest {
             }, 0).value
             assertEquals(1L, foreignKeys, "The merge tests must enforce foreign keys")
             db.usersQueries.upsertUser(UserEntity(user, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
-            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null))
+            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
             block(MessageDaoImpl({ db }, Dispatchers.Unconfined), db)
         } finally {
             driver.close()
@@ -52,7 +52,7 @@ class MessagePersistenceTest {
     }
 
     private fun row(id: Uuid, status: MessageStatus = MessageStatus.SENDING, replyTo: Uuid? = null) =
-        MessageEntity(id, conversation, user, MessageCategory.NORMAL, MessageRenderType.TEXT, TextContent("hello"), replyTo, now, null, status)
+        MessageEntity(id, conversation, user, MessageCategory.NORMAL, MessageRenderType.TEXT, TextContent("hello"), replyTo, now, null, status, in_timeline = true)
 
     @Test
     fun fourAckStatesConvergeAndPreserveReplies() = runBlocking {
@@ -106,19 +106,25 @@ class MessagePersistenceTest {
         try {
             val db = createDatabase { schema -> schema.create(driver).await(); driver }
             db.usersQueries.upsertUser(UserEntity(user, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
-            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null))
+            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
             val dao = MessageDaoImpl({ db }, Dispatchers.Unconfined)
             dao.insertMessage(row(local, MessageStatus.FAILED))
             driver.execute(null, "DROP TABLE MessageAttempt", 0).await()
             driver.execute(null, "DROP TABLE MessageSyncCursor", 0).await()
+            // Strip the newer columns too so the file really has the legacy
+            // v0 shape; 3.sqm's plain ALTERs would otherwise collide.
+            driver.execute(null, "ALTER TABLE MessageEntity DROP COLUMN in_timeline", 0).await()
+            driver.execute(null, "ALTER TABLE ConversationEntity DROP COLUMN unread_count", 0).await()
             val schema = io.github.woodsmarshes.chat.db.ChatDatabase.Schema
-            schema.migrate(driver, 0, schema.version).await()
+            // Single migration pass: the range contains column-adding ALTERs,
+            // which are not idempotent. Real-world replay protection is the
+            // PRAGMA user_version guard verified in DatabaseVersionGuardTest.
             schema.migrate(driver, 0, schema.version).await()
             assertEquals(MessageStatus.FAILED, dao.getMessageById(local).first()?.local_send_status)
             assertTrue(dao.claimFailedMessage(local, now))
             assertEquals(false, dao.claimFailedMessage(local, now))
-            dao.setSyncCursor(conversation, server)
-            assertEquals(server, dao.getSyncCursor(conversation))
+            dao.setSyncCursor(conversation, server, 0L)
+            assertEquals(server, dao.getSyncCursor(conversation)?.after_id?.let(Uuid::parse))
         } finally {
             driver.close()
         }
@@ -129,7 +135,7 @@ class MessagePersistenceTest {
             try {
                 dao.transaction {
                     dao.insertMessage(row(server))
-                    dao.setSyncCursor(conversation, server)
+                    dao.setSyncCursor(conversation, server, 0L)
                     error("Injected page failure")
                 }
             } catch (_: IllegalStateException) {

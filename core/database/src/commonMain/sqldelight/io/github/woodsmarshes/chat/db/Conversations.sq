@@ -10,17 +10,14 @@ CREATE TABLE ConversationEntity (
     metadata TEXT AS ConversationMetadata,
     created_at INTEGER AS Instant NOT NULL,
     updated_at INTEGER AS Instant NOT NULL,
-    deleted_at INTEGER AS Instant
+    deleted_at INTEGER AS Instant,
+    -- Server-authoritative unread (pushed via SyncStateAnchor / live events);
+    -- replaces the retired local countUnreadAfter computation.
+    unread_count INTEGER NOT NULL DEFAULT 0
 );
 
 -- 索引：用于会话列表按时间倒序排列
 CREATE INDEX idx_conversation_update_time ON ConversationEntity(updated_at DESC);
-
--- 插入或覆盖会话信息
-insertConversation:
-INSERT OR REPLACE INTO ConversationEntity(
-    id, type, last_message_id, metadata, created_at, updated_at, deleted_at
-) VALUES ?;
 
 upsertConversation:
 INSERT INTO ConversationEntity(
@@ -89,6 +86,7 @@ SELECT
     C.last_message_id AS conversation_last_message_id,
     C.created_at AS conversation_created_at,
     C.updated_at AS conversation_updated_at,
+    C.unread_count AS conversation_unread_count,
 
     P.last_read_message_id AS participant_last_read_message_id,
     P.settings AS participant_settings,
@@ -113,3 +111,10 @@ LEFT JOIN UserEntity AS U ON M.user_id = U.id
 LEFT JOIN ParticipantEntity AS P2 ON C.id = P2.conversation_id AND P2.user_id = M.user_id
 WHERE C.deleted_at IS NULL
 ORDER BY COALESCE(M.created_at, C.created_at) DESC;
+
+-- 【改】未读数：服务端权威值落地 / 实时事件增减
+setUnreadCount:
+UPDATE ConversationEntity SET unread_count = :count WHERE id = :id;
+
+incrementUnread:
+UPDATE ConversationEntity SET unread_count = unread_count + 1 WHERE id = :id;

@@ -16,6 +16,9 @@ CREATE TABLE MessageEntity (
     created_at INTEGER AS Instant NOT NULL,
     revoked_at INTEGER AS Instant,
     local_send_status TEXT AS MessageStatus,
+    -- False only for rows persisted purely as reply targets (outside the
+    -- local timeline window); keeps Paging anchors free of stray old rows.
+    in_timeline INTEGER AS kotlin.Boolean NOT NULL DEFAULT 1,
     FOREIGN KEY (conversation_id) REFERENCES ConversationEntity(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES UserEntity(id) ON DELETE RESTRICT,
     FOREIGN KEY (reply_to_message_id) REFERENCES MessageEntity(id) ON DELETE SET NULL
@@ -42,7 +45,8 @@ INSERT INTO MessageEntity(
     reply_to_message_id,
     created_at,
     revoked_at,
-    local_send_status
+    local_send_status,
+    in_timeline
 )
 VALUES ?
 ON CONFLICT(id) DO UPDATE SET
@@ -53,7 +57,26 @@ ON CONFLICT(id) DO UPDATE SET
     -- The server timestamp is authoritative once the message is acked.
     created_at          = excluded.created_at,
     revoked_at          = COALESCE(excluded.revoked_at, revoked_at),
-    local_send_status   = COALESCE(excluded.local_send_status, local_send_status);
+    local_send_status   = COALESCE(excluded.local_send_status, local_send_status),
+    in_timeline         = excluded.in_timeline;
+
+-- 【增/播种】reply 目标等时间轴外行的写入：已存在的行一律不动
+-- （不降级 in_timeline、不触发 reply 外键的 ON DELETE SET NULL 副作用）。
+seedMessage:
+INSERT OR IGNORE INTO MessageEntity(
+    id,
+    conversation_id,
+    user_id,
+    category,
+    render_type,
+    content,
+    reply_to_message_id,
+    created_at,
+    revoked_at,
+    local_send_status,
+    in_timeline
+)
+VALUES ?;
 
 -- 分页查询：获取某个会话中早于某个时间点的消息（用于下拉加载更多）
 getMessagesPaged:
@@ -77,6 +100,7 @@ FROM (
     END AS page_boundary
   FROM MessageEntity
   WHERE conversation_id = :conversationId
+    AND in_timeline = 1
   ORDER BY id DESC
 ) AS t
 WHERE page_boundary = 1;
@@ -117,6 +141,7 @@ LEFT JOIN ParticipantEntity AS reply_par
     ON reply_user.id = reply_par.user_id
     AND reply_par.conversation_id = m.conversation_id
 WHERE m.conversation_id = :conversationId
+  AND m.in_timeline = 1
   AND m.id <= :beginInclusive
   AND (m.id > :endExclusive OR :endExclusive IS NULL)
 ORDER BY m.id DESC;
@@ -158,7 +183,9 @@ LEFT JOIN UserEntity AS reply_user ON reply_target.user_id = reply_user.id
 LEFT JOIN ParticipantEntity AS reply_par
     ON reply_user.id = reply_par.user_id
     AND reply_par.conversation_id = m.conversation_id
-WHERE m.conversation_id = :conversationId AND (:beforeId IS NULL OR m.id < :beforeId)
+WHERE m.conversation_id = :conversationId
+  AND m.in_timeline = 1
+  AND (:beforeId IS NULL OR m.id < :beforeId)
 ORDER BY m.id DESC
 LIMIT :limit;
 
@@ -276,7 +303,10 @@ CREATE TABLE MessageAttempt (
 
 CREATE TABLE MessageSyncCursor (
     conversation_id TEXT NOT NULL PRIMARY KEY,
-    after_id TEXT NOT NULL
+    after_id TEXT NOT NULL,
+    -- Seq of after_id at the time the cursor advanced; lets the client size
+    -- the reconnect gap against the server's SyncStateAnchor.lastSeq.
+    after_seq INTEGER NOT NULL DEFAULT 0
 );
 
 startAttempt:
@@ -302,8 +332,15 @@ replaceReadReferences:
 UPDATE ParticipantEntity SET last_read_message_id = :newId WHERE last_read_message_id = :oldId;
 
 getSyncCursor:
-SELECT after_id FROM MessageSyncCursor WHERE conversation_id = :conversationId;
+SELECT * FROM MessageSyncCursor WHERE conversation_id = :conversationId;
 
 setSyncCursor:
-INSERT INTO MessageSyncCursor(conversation_id, after_id) VALUES (:conversationId, :afterId)
-ON CONFLICT(conversation_id) DO UPDATE SET after_id = excluded.after_id;
+INSERT INTO MessageSyncCursor(conversation_id, after_id, after_seq) VALUES (:conversationId, :afterId, :afterSeq)
+ON CONFLICT(conversation_id) DO UPDATE SET after_id = excluded.after_id, after_seq = excluded.after_seq;
+
+-- 窗口跳变：清除已确认的历史缓存（保留发件箱行），
+-- 使本地时间轴收缩为一段连续窗口，APPEND 才能在窗口底端触发回填。
+deleteConfirmedForConversation:
+DELETE FROM MessageEntity
+WHERE conversation_id = :conversationId
+  AND (local_send_status IS NULL OR local_send_status = 'SENT');

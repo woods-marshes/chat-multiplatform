@@ -11,6 +11,7 @@ import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.repository.ContactRepository
+import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
@@ -31,10 +32,12 @@ class ConversationLifecycleServiceTest {
     private val groupProfileRepository = mockk<GroupProfileRepository>()
     private val userRepository = mockk<UserRepository>()
     private val contactRepository = mockk<ContactRepository>()
+    private val messageRepository = mockk<MessageRepository>(relaxed = true)
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
 
     private val service = ConversationLifecycleService(
         conversationRepository = conversationRepository,
+        messageRepository = messageRepository,
         conversationParticipantRepository = participantRepository,
         groupProfileRepository = groupProfileRepository,
         userRepository = userRepository,

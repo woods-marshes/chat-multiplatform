@@ -27,7 +27,9 @@ import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.ResultRow
 import java.sql.SQLException
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
@@ -36,6 +38,7 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.leftJoin
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.like
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.andWhere
@@ -112,7 +115,26 @@ interface MessageRepository {
     suspend fun countLiveFileReferences(fileName: String): Long
 
     suspend fun getReadMessageUsers(messageId: Uuid): Pair<Message, List<User>>?
+
+    suspend fun getUnreadCounts(userId: Uuid): Map<Uuid, Long>
+
+    suspend fun getUnreadCount(conversationId: Uuid, userId: Uuid): Long
+
+    suspend fun getSyncAnchors(userId: Uuid): List<SyncAnchor>
 }
+
+/**
+ * Server-held sync state for one conversation, pushed to the client right
+ * after the websocket handshake so it can choose between a small forward
+ * delta and a window jump instead of polling. Preview content is NOT carried
+ * here — the client's list sync seeds it right after receiving the anchor.
+ */
+data class SyncAnchor(
+    val conversationId: Uuid,
+    val lastMessageId: Uuid?,
+    val lastSeq: Long,
+    val unreadCount: Int,
+)
 
 class MessageDataSourceImpl : MessageRepository {
 
@@ -564,5 +586,69 @@ class MessageDataSourceImpl : MessageRepository {
             }
             row.toFilteredUser(replyTo)
         }
+    }
+
+    override suspend fun getUnreadCounts(userId: Uuid): Map<Uuid, Long> = dbQuery {
+        Messages
+            .join(
+                ConversationParticipants,
+                JoinType.INNER,
+                additionalConstraint = {
+                    (ConversationParticipants.conversationId eq Messages.conversationId) and
+                        (ConversationParticipants.userId eq userId)
+                },
+            )
+            .select(Messages.conversationId, Messages.id.count())
+            .where {
+                (Messages.senderId neq userId) and
+                    Messages.revokedAt.isNull() and
+                    (ConversationParticipants.lastReadMessageId.isNull() or
+                        (Messages.id greater ConversationParticipants.lastReadMessageId))
+            }
+            .groupBy(Messages.conversationId)
+            .associate { it[Messages.conversationId].value to it[Messages.id.count()] }
+    }
+
+    override suspend fun getUnreadCount(conversationId: Uuid, userId: Uuid): Long = dbQuery {
+        Messages
+            .join(
+                ConversationParticipants,
+                JoinType.INNER,
+                additionalConstraint = {
+                    (ConversationParticipants.conversationId eq Messages.conversationId) and
+                        (ConversationParticipants.userId eq userId)
+                },
+            )
+            .select(Messages.id.count())
+            .where {
+                (Messages.conversationId eq conversationId) and
+                    (Messages.senderId neq userId) and
+                    Messages.revokedAt.isNull() and
+                    (ConversationParticipants.lastReadMessageId.isNull() or
+                        (Messages.id greater ConversationParticipants.lastReadMessageId))
+            }
+            .firstOrNull()
+            ?.get(Messages.id.count()) ?: 0L
+    }
+
+    override suspend fun getSyncAnchors(userId: Uuid): List<SyncAnchor> = dbQuery {
+        val unread = getUnreadCounts(userId)
+        (ConversationParticipants innerJoin Conversations)
+            .select(Conversations.columns)
+            .where {
+                (ConversationParticipants.userId eq userId) and Conversations.deletedAt.isNull()
+            }
+            .map { row ->
+                val conversationId = row[Conversations.id].value
+                // Plain uuid() column: get() already yields Uuid? (no EntityID wrapper).
+                val lastMessageId = row[Conversations.lastMessageId]
+                SyncAnchor(
+                    conversationId = conversationId,
+                    lastMessageId = lastMessageId,
+                    // nextSeq stores the last ASSIGNED seq (bumped before insert).
+                    lastSeq = row[Conversations.nextSeq],
+                    unreadCount = (unread[conversationId] ?: 0L).toInt(),
+                )
+            }
     }
 }

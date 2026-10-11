@@ -23,6 +23,8 @@ import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncAnchorEntry
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.UserEntity
@@ -64,6 +66,12 @@ class MessageRepositoryDeliveryTest {
     private val conversationId = Uuid.parse("00000000-0000-0000-0000-000000000002")
     private val serverId = Uuid.parse("00000000-0000-0000-0000-000000000020")
     private val nextId = Uuid.parse("00000000-0000-0000-0000-000000000021")
+    private val old1 = Uuid.parse("00000000-0000-0000-0000-000000000031")
+    private val coldNewest = Uuid.parse("00000000-0000-0000-0000-000000000039")
+    private val old2 = Uuid.parse("00000000-0000-0000-0000-000000000032")
+    private val new1 = Uuid.parse("00000000-0000-0000-0000-000000000041")
+    private val new2 = Uuid.parse("00000000-0000-0000-0000-000000000042")
+    private val ancient = Uuid.parse("00000000-0000-0000-0000-000000000030")
     private val now = Instant.fromEpochMilliseconds(1_700_000_000_000)
     private val sender = SimpleUser(userId, "user", null, null, now, now, null, UserRole.MEMBER)
     private fun message(id: Uuid, requestId: Uuid? = null, seq: Long? = null) = Message(
@@ -80,7 +88,7 @@ class MessageRepositoryDeliveryTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         val dao = MessageDaoImpl({ db }, coroutineContext)
         db.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
-        db.conversationsQueries.upsertConversation(ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null))
+        db.conversationsQueries.upsertConversation(ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
         val events = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 64)
         val api = mockk<RealtimeApi>()
         every { api.events } returns events
@@ -92,7 +100,7 @@ class MessageRepositoryDeliveryTest {
         every { settings.user } returns MutableStateFlow(User(userId, "user", null, null, null, null, now, now, null))
         val repo = OfflineFirstMessageRepositoryImpl(
             decorate(dao), UserDaoImpl({ db }, coroutineContext), ParticipantDaoImpl({ db }, coroutineContext),
-            api, rest, ConversationDaoImpl({ db }, coroutineContext), GroupJoinRequestDaoImpl({ db }, coroutineContext), settings, backgroundScope,
+            api, rest, ConversationDaoImpl({ db }, coroutineContext), GroupJoinRequestDaoImpl({ db }, coroutineContext), null, settings, backgroundScope,
             mediatorFactory = io.mockk.mockk(),
         )
         try {
@@ -230,7 +238,7 @@ class MessageRepositoryDeliveryTest {
             runCurrent()
             assertNotNull(dao.getMessageById(serverId).first())
             assertNotNull(dao.getMessageById(nextId).first())
-            assertEquals(nextId, dao.getSyncCursor(conversationId))
+            assertEquals(nextId, dao.getSyncCursor(conversationId)?.after_id?.let(Uuid::parse))
         }
     }
 
@@ -256,6 +264,130 @@ class MessageRepositoryDeliveryTest {
     }
 
     @Test
+    fun anchorLargeGapJumpsWindowAndSeedsReplyTargetOutsideTimeline() = runTest {
+        val old1 = Uuid.parse("00000000-0000-0000-0000-000000000031")
+        val old2 = Uuid.parse("00000000-0000-0000-0000-000000000032")
+        val new1 = Uuid.parse("00000000-0000-0000-0000-000000000041")
+        val new2 = Uuid.parse("00000000-0000-0000-0000-000000000042")
+        val ancient = Uuid.parse("00000000-0000-0000-0000-000000000030")
+        fixture { repo, dao, _, events, rest ->
+            // Legacy local tail: two confirmed messages, cursor parked at old2/seq 2.
+            dao.insertMessage(message(old1, seq = 1).toMessageEntity(MessageStatus.SENT)!!)
+            dao.insertMessage(message(old2, seq = 2).toMessageEntity(MessageStatus.SENT)!!)
+            dao.setSyncCursor(conversationId, old2, 2L)
+
+            // Server window: two fresh messages; the newest replies to an
+            // ancient message the client has never cached.
+            val freshReply = message(new2, seq = 602).copy(
+                replyTo = message(ancient, seq = 5).copy(
+                    sender = SimpleUser(userId, "user", null, null, now, now, null, UserRole.MEMBER)
+                )
+            )
+            coEvery {
+                rest.getMessages(conversationId, 100, null)
+            } returns listOf(message(new1, seq = 601), freshReply)
+            coEvery { rest.syncMessages(any(), any(), any()) } returns emptyList()
+
+            events.emit(
+                SyncStateResponse.Anchor(
+                    entries = listOf(
+                        SyncAnchorEntry(
+                            conversationId = conversationId,
+                            lastSeq = 602L,
+                            unreadCount = 2,
+                            lastMessageId = new2,
+                        )
+                    ),
+                    timestamp = now,
+                )
+            )
+            runCurrent()
+
+            // Window jump: confirmed history outside the window is dropped…
+            assertNull(dao.getMessageById(old1).first())
+            assertNull(dao.getMessageById(old2).first())
+            // …the fresh window is on disk with cursor at the anchor…
+            assertNotNull(dao.getMessageById(new1).first())
+            assertNotNull(dao.getMessageById(new2).first())
+            assertEquals(602L, dao.getSyncCursor(conversationId)?.after_seq)
+
+            // …and the reply target is present but OUTSIDE the timeline: it
+            // must not appear in the paging window (no stray Paging anchor)
+            // while staying available for the reply preview join.
+            assertNotNull(dao.getMessageById(ancient).first())
+            val timelineIds = dao.getMessagesWithRelationsByPage(conversationId, null, 100)
+                .first()
+                .map { it.id }
+            assertEquals(listOf(new2, new1), timelineIds)
+            assertTrue(ancient !in timelineIds)
+        }
+    }
+
+    @Test
+    fun anchorSmallGapFillsForwardWithoutWindowJump() = runTest {
+        fixture { repo, dao, _, events, rest ->
+            dao.insertMessage(message(old2, seq = 2).toMessageEntity(MessageStatus.SENT)!!)
+            dao.setSyncCursor(conversationId, old2, 2L)
+
+            coEvery {
+                rest.syncMessages(conversationId, old2, any())
+            } returns listOf(message(new1, seq = 3), message(new2, seq = 4))
+            coEvery { rest.syncMessages(conversationId, new2, any()) } returns emptyList()
+
+            events.emit(
+                SyncStateResponse.Anchor(
+                    entries = listOf(
+                        SyncAnchorEntry(
+                            conversationId = conversationId,
+                            lastSeq = 4L,
+                            unreadCount = 2,
+                            lastMessageId = new2,
+                        )
+                    ),
+                    timestamp = now,
+                )
+            )
+            runCurrent()
+
+            // Small gap: forward delta fills the cursor position up to the
+            // anchor; nothing is deleted and the cursor lands on the anchor.
+            assertNotNull(dao.getMessageById(new1).first())
+            assertNotNull(dao.getMessageById(new2).first())
+            assertEquals(4L, dao.getSyncCursor(conversationId)?.after_seq)
+        }
+    }
+
+    @Test
+    fun anchorColdConversationWithNoUnreadSkipsHistoryPrefetch() = runTest {
+        fixture { repo, dao, _, events, rest ->
+            // Fresh login, conversation never opened here: no cursor, zero
+            // unread. The anchor must jump the cursor without fetching any
+            // history — the list preview is already seeded by the list sync,
+            // and opening the chat pulls the newest page via REFRESH.
+            events.emit(
+                SyncStateResponse.Anchor(
+                    entries = listOf(
+                        SyncAnchorEntry(
+                            conversationId = conversationId,
+                            lastSeq = 7L,
+                            unreadCount = 0,
+                            lastMessageId = coldNewest,
+                        )
+                    ),
+                    timestamp = now,
+                )
+            )
+            runCurrent()
+
+            assertEquals(coldNewest, dao.getSyncCursor(conversationId)?.after_id?.let(Uuid::parse))
+            assertEquals(7L, dao.getSyncCursor(conversationId)?.after_seq)
+            // Zero history prefetch: the window fetch never fired.
+            coVerify(exactly = 0) { rest.getMessages(any(), any(), any()) }
+            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
+        }
+    }
+
+    @Test
     fun sessionDoesNotStartImplicitlyAndRepeatedStartIsIdempotent() = runTest {
         fixture(autoStart = false) { repo, dao, _, events, rest ->
             events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
@@ -271,8 +403,9 @@ class MessageRepositoryDeliveryTest {
             repo.startSession()
             runCurrent()
 
-            // Reconnect sync runs once on session start, never twice for a duplicate startSession().
-            coVerify(exactly = 1) { rest.syncMessages(conversationId, Uuid.NIL, any()) }
+            // Content catch-up is anchor-driven now: a bare startSession() must
+            // NOT sweep; only the anchor event (or explicit retry) triggers it.
+            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
         }
     }
 
@@ -353,7 +486,7 @@ class MessageRepositoryDeliveryTest {
     }
 
     @Test
-    fun stopSessionStopsPeriodicSweepReconnectSyncAndConsumerUntilRestarted() = runTest {
+    fun stopSessionStopsPeriodicOutboxRetryAndConsumerUntilRestarted() = runTest {
         val connectionStates = MutableStateFlow<ConnectionState>(ConnectionState.Connected)
         fixture { repo, dao, api, events, rest ->
             every { api.connectionState } returns connectionStates
@@ -361,8 +494,8 @@ class MessageRepositoryDeliveryTest {
             runCurrent()
             clearMocks(rest, answers = false, recordedCalls = true)
 
-            // Flip connectionState while stopped: neither reconnect sync nor
-            // periodic sweep nor event consumption may run.
+            // Flip connectionState while stopped: neither the outbox retry nor
+            // the safety-net sweep nor event consumption may run.
             connectionStates.value = ConnectionState.Idle
             runCurrent()
             connectionStates.value = ConnectionState.Connected
@@ -375,15 +508,21 @@ class MessageRepositoryDeliveryTest {
 
             repo.startSession()
             runCurrent()
-            // Starting a new session with Connected state triggers reconnect sync immediately.
-            coVerify(exactly = 1) { rest.syncMessages(conversationId, any(), any()) }
+            // Content catch-up is anchor-driven: a bare startSession() must
+            // not sweep. The restarted session only consumes live events.
+            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
 
             events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
             runCurrent()
             assertNotNull(dao.getMessageById(serverId).first(), "restarted session consumes events again")
 
+            // The safety-net sweep only covers conversations WITH a cursor
+            // (first fill is anchor-owned), so establish one before driving
+            // the virtual clock past SYNC_NET_TICKS × RETRY_POLL_INTERVAL.
+            dao.setSyncCursor(conversationId, serverId, 1L)
+            coEvery { rest.syncMessages(conversationId, any(), any()) } returns emptyList()
             clearMocks(rest, answers = false, recordedCalls = true)
-            advanceTimeBy(16_000L)
+            advanceTimeBy(620_000L)
             runCurrent()
             coVerify(atLeast = 1) { rest.syncMessages(conversationId, any(), any()) }
         }

@@ -25,6 +25,8 @@ import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncAnchorEntry
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.data.model.toConversation
 import com.github.woodsmarshes.chat.core.data.model.toEntity
 import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
@@ -95,6 +97,7 @@ class OfflineFirstMessageRepositoryImpl(
     private val conversationApi: ConversationApi,
     private val conversationDao: ConversationDao,
     private val groupJoinRequestDao: GroupJoinRequestDao,
+    private val conversationRepository: ConversationRepository? = null,
     private val userSettingDataSource: UserSettingDataSource,
     private val scope: CoroutineScope,
     private val mediatorFactory: MessageMediatorFactory,
@@ -122,6 +125,19 @@ class OfflineFirstMessageRepositoryImpl(
 
         /** Hard cap so a pathological repair cannot loop forever. */
         const val MAX_SYNC_PAGES = 40
+
+        /**
+         * Window size for anchor-driven catch-up: gaps within this many
+         * messages fill forward via the cursor sweep; larger gaps jump to the
+         * newest window and delegate older history to RemoteMediator paging.
+         */
+        const val SYNC_WINDOW_MESSAGES = 100
+
+        /**
+         * Safety-net sweep cadence in retry-poll ticks: RETRY_POLL_INTERVAL
+         * (15s) × SYNC_NET_TICKS = the low-frequency self-healing sweep.
+         */
+        const val SYNC_NET_TICKS = 40
     }
     val ownUser = userSettingDataSource.user
 
@@ -253,6 +269,7 @@ class OfflineFirstMessageRepositoryImpl(
                                 is Normal -> MessageCategory.NORMAL
                             },
                             render_type = determineRenderType(content),
+                            in_timeline = true,
                             content = content,
                             reply_to_message_id = replyToMessageId,
                             created_at = Clock.System.now(),
@@ -329,6 +346,9 @@ class OfflineFirstMessageRepositoryImpl(
                 if (!messageApi.send(request)) {
                     log.warn { "[markAsRead] receipt for $messageId was not delivered" }
                 }
+                // Local badge zeroes immediately; other devices converge via
+                // the Read broadcast.
+                conversationDao.setUnreadCount(conversationId, 0L)
             }
         } catch (_: SessionStoppedException) {
             log.warn { "[markAsRead] refused: session is not active" }
@@ -471,6 +491,9 @@ class OfflineFirstMessageRepositoryImpl(
                                     )
                                 }.onFailure { log.warn(it) { "[ws-consume] failed to record GroupJoinRequestHandled ${event.requestId}" } }
                             }
+                            is SyncStateResponse.Anchor -> {
+                                handleSyncAnchor(session, event)
+                            }
                             else -> {
                                 log.debug { "[ws-consume] unknown event: ${event::class.simpleName}" }
                             }
@@ -512,6 +535,73 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
+    /**
+     * Reconnect anchor: the server's view of every conversation (last message,
+     * last seq, unread). Small gaps fill forward via the cursor sweep; gaps
+     * larger than [SYNC_WINDOW_MESSAGES] trigger a window jump — the newest
+     * window is fetched, confirmed history is dropped, and anything older is
+     * left to RemoteMediator's on-demand paging.
+     */
+    private fun handleSyncAnchor(session: RunningSession, anchor: SyncStateResponse.Anchor) {
+        if (!session.job.isActive || !isActiveSession(session)) return
+        session.scope.launch {
+            runCatching {
+                // Conversation rows must exist before message writes (foreign
+                // key into ConversationEntity); the list sync also seeds
+                // preview rows for conversations the client has never opened.
+                conversationRepository?.syncConversations()
+                anchor.entries.forEach { entry ->
+                    processAnchorEntry(session, entry)
+                }
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                log.warn(e) { "[ws-consume] failed to process SyncStateAnchor" }
+            }
+        }
+    }
+
+    private suspend fun processAnchorEntry(session: RunningSession, entry: SyncAnchorEntry) {
+        if (!session.job.isActive || !isActiveSession(session)) return
+        val ownId = ownUser.firstOrNull()?.id
+        // Server-authoritative unread lands on the conversation row no matter
+        // which content branch runs.
+        conversationDao.setUnreadCount(entry.conversationId, entry.unreadCount.toLong())
+        val anchorLastMessageId = entry.lastMessageId ?: return
+
+        val cursor = messageDao.getSyncCursor(entry.conversationId)
+        // The cursor row stores after_id as TEXT (legacy table shape).
+        val localAfterId = cursor?.after_id?.let(Uuid::parse)
+        val localAfterSeq = cursor?.after_seq ?: 0L
+        when {
+            // Already holding the newest message: nothing to fetch.
+            localAfterId == anchorLastMessageId -> return
+            // Cold conversation on a fresh login: zero unread means there is
+            // nothing worth prefetching. The list sync has already seeded the
+            // preview; jumping the cursor here defers all history to
+            // RemoteMediator's on-demand paging when the user opens the chat.
+            cursor == null && entry.unreadCount == 0 -> {
+                messageDao.setSyncCursor(entry.conversationId, anchorLastMessageId, entry.lastSeq)
+            }
+            // No cursor with pending unread, or a gap larger than the window:
+            // jump — fetch the newest window and drop confirmed history older
+            // than it, so Paging keeps a contiguous tail.
+            cursor == null || entry.lastSeq - localAfterSeq > SYNC_WINDOW_MESSAGES -> {
+                val newest = conversationApi.getMessages(
+                    conversationId = entry.conversationId,
+                    limit = SYNC_WINDOW_MESSAGES,
+                    beforeId = null,
+                )
+                messageDao.transaction {
+                    messageDao.deleteConfirmedForConversation(entry.conversationId)
+                    newest.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
+                    messageDao.setSyncCursor(entry.conversationId, anchorLastMessageId, entry.lastSeq)
+                }
+            }
+            // Small gap: forward delta through the cursor sweep.
+            else -> syncConversationFromServer(entry.conversationId)
+        }
+    }
+
     private suspend fun handleReceivedMessage(session: RunningSession, event: MessageEventResponse.Received) {
         try {
             val message = event.message
@@ -521,7 +611,26 @@ class OfflineFirstMessageRepositoryImpl(
             log.info { "[handleReceived] isOwnMessage=$isOwnMessage requestId=${event.requestId} serverMsgId=${message.id}" }
 
             persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage }, resolvedOwnUserId = currentUser?.id)
-            trackDeliverySeq(session, message)
+            // Live unread increment matching the server's own-messages-excluded
+            // count; mark-as-read / the reader's own Read event zeroes it.
+            if (!isOwnMessage) {
+                runCatching { conversationDao.incrementUnread(message.conversationId) }
+            }
+            val deliveryContinuous = trackDeliverySeq(session, message)
+            // Live messages extend the local timeline: keep the durable cursor
+            // in step (serialized with any in-flight sweep) so the next
+            // reconnect's gap arithmetic reflects what is already on disk.
+            // Skipped on delivery gaps — the scheduled repair fills those and
+            // advances the cursor itself.
+            if (deliveryContinuous) {
+                val seq = message.seq
+                if (seq != null) syncMutex.withLock {
+                    val cursor = messageDao.getSyncCursor(message.conversationId)
+                    if (cursor != null && seq > cursor.after_seq) {
+                        messageDao.setSyncCursor(message.conversationId, message.id, seq)
+                    }
+                }
+            }
             log.info { "[handleReceived] db transaction done" }
         } catch (e: CancellationException) {
             throw e
@@ -531,12 +640,22 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
-    private suspend fun trackDeliverySeq(session: RunningSession, message: Message) {
-        val seq = message.seq ?: return
+    /**
+     * Tracks the per-conversation delivery sequence and repairs gaps.
+     * Returns true only when this message was delivered cleanly (seq present,
+     * session active, no gap detected) — the caller may then safely advance
+     * the durable sync cursor to this message.
+     */
+    private suspend fun trackDeliverySeq(session: RunningSession, message: Message): Boolean {
+        val seq = message.seq ?: return false
         val conversationId = message.conversationId
         var gapDetected = false
+        var sessionActive = true
         seqMutex.withLock {
-            if (!session.job.isActive || !isActiveSession(session)) return
+            if (!session.job.isActive || !isActiveSession(session)) {
+                sessionActive = false
+                return@withLock
+            }
             val last = deliveredSeqs[conversationId]
             if (last == null) {
                 // First message observed for this conversation within this
@@ -553,9 +672,12 @@ class OfflineFirstMessageRepositoryImpl(
             }
             // An older seq re-arriving after a repair is a duplicate.
         }
+        if (!sessionActive) return false
         if (gapDetected) {
             scheduleGapRepair(session, conversationId)
+            return false
         }
+        return true
     }
 
     /** Schedules a gap repair as a child of [session] so [stopSession] cancels and awaits it. */
@@ -589,17 +711,19 @@ class OfflineFirstMessageRepositoryImpl(
     /** Resume REST history from the last page committed atomically with its cursor. */
     private suspend fun syncConversationFromServer(conversationId: Uuid): List<Message> = syncMutex.withLock {
         // Preview ids may point past holes or belong to pending client messages.
-        var afterId = messageDao.getSyncCursor(conversationId) ?: Uuid.NIL
+        val cursor = messageDao.getSyncCursor(conversationId)
+        var afterId = cursor?.after_id?.let(Uuid::parse) ?: Uuid.NIL
         val fetched = mutableListOf<Message>()
         repeat(MAX_SYNC_PAGES) {
             val page = conversationApi.syncMessages(conversationId = conversationId, afterId = afterId)
             if (page.isEmpty()) return@withLock fetched
             val next = page.maxOf { it.id }
             check(next > afterId) { "Message sync cursor did not advance" }
+            val nextSeq = page.maxOf { it.seq ?: 0L }
             val ownId = ownUser.firstOrNull()?.id
             messageDao.transaction {
                 page.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
-                messageDao.setSyncCursor(conversationId, next)
+                messageDao.setSyncCursor(conversationId, next, nextSeq)
             }
             fetched += page
             afterId = next
@@ -610,6 +734,13 @@ class OfflineFirstMessageRepositoryImpl(
     private suspend fun syncAllConversationsFromServer() {
         val conversations = conversationDao.getAllActiveConversations().firstOrNull().orEmpty()
         conversations.forEach { conversation ->
+            // A missing cursor means this conversation has never had its
+            // window established — starting from NIL here would pull full
+            // history; first fill is owned by the anchor's window jump.
+            if (messageDao.getSyncCursor(conversation.id) == null) {
+                log.debug { "[reconnect-sync] skipped ${conversation.id}: no sync cursor yet" }
+                return@forEach
+            }
             try {
                 syncConversationFromServer(conversation.id)
             } catch (e: CancellationException) {
@@ -625,18 +756,29 @@ class OfflineFirstMessageRepositoryImpl(
         message: Message,
         ownRequestId: String?,
         resolvedOwnUserId: Uuid?,
+        asReplyTarget: Boolean = false,
     ) {
         val ownId = resolvedOwnUserId
-        val candidate = if (message.sender?.id == ownId) {
+        val candidate = if (!asReplyTarget && message.sender?.id == ownId) {
             ownRequestId?.let(Uuid::parseOrNull) ?: message.clientRequestId
         } else null
         messageDao.transaction {
-            message.replyTo?.let { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
+            message.replyTo?.let {
+                persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId, asReplyTarget = true)
+            }
             message.toUserEntity()?.let { userDao.insertUser(it) }
             message.toParticipantEntity()?.let { participantDao.insertParticipant(it) }
-            val entity = message.toMessageEntity(MessageStatus.SENT)
+            val entity = message.toMessageEntity(MessageStatus.SENT, inTimeline = !asReplyTarget)
             if (entity == null) {
                 log.warn { "[message-sync] skipping server message ${message.id}: no sender" }
+                return@transaction
+            }
+            if (asReplyTarget) {
+                // Reply targets live outside the local timeline window: seed
+                // only (INSERT OR IGNORE), so they never become Paging anchors
+                // and never clobber an existing timeline row, and the list
+                // preview bump is skipped.
+                messageDao.seedMessage(entity)
                 return@transaction
             }
             val local = candidate?.let { messageDao.findMessageById(it) }
@@ -673,6 +815,12 @@ class OfflineFirstMessageRepositoryImpl(
                 userId = event.readerId,
                 lastMessageId = event.messageId
             )
+            // Multi-device read sync: the server broadcasts the reader's own
+            // Read to every connection, so this device's badge zeroes too.
+            val myId = ownUser.firstOrNull()?.id
+            if (myId != null && event.readerId == myId) {
+                conversationDao.setUnreadCount(event.conversationId, 0L)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -704,13 +852,14 @@ class OfflineFirstMessageRepositoryImpl(
         val connectionSubscribed = CompletableDeferred<Unit>()
         val retryJob = session.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
-                // Resend as soon as the socket comes back up.
+                // Resend as soon as the socket comes back up. Content catch-up
+                // is anchor-driven (SyncStateAnchor on every connect), so no
+                // sweep runs here anymore.
                 messageApi.connectionState
                     .onSubscription { connectionSubscribed.complete(Unit) }
                     .collectLatest { state ->
                         if (state is ConnectionState.Connected) {
                             retryPendingMessagesInternal()
-                            syncAllConversationsFromServer()
                         }
                     }
             } catch (e: CancellationException) {
@@ -726,6 +875,9 @@ class OfflineFirstMessageRepositoryImpl(
                 connectionSubscribed.completeExceptionally(cause)
             }
         }
+        // Slow safety net: heals silent anchor-handling failures that neither
+        // the connect-time anchor nor seq-gap detection would catch.
+        var ticksSinceLastNet = 0
         session.scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(RETRY_POLL_INTERVAL)
@@ -733,7 +885,13 @@ class OfflineFirstMessageRepositoryImpl(
                     if (ownUser.firstOrNull() == null) continue
                     sendMutex.withLock { expireStaleMessages() }
                     retryPendingMessagesInternal()
-                    if (messageApi.connectionState.value is ConnectionState.Connected) syncAllConversationsFromServer()
+                    ticksSinceLastNet++
+                    if (ticksSinceLastNet >= SYNC_NET_TICKS &&
+                        messageApi.connectionState.value is ConnectionState.Connected
+                    ) {
+                        ticksSinceLastNet = 0
+                        syncAllConversationsFromServer()
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

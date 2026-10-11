@@ -10,6 +10,7 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByIds
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
+import io.github.woodsmarshes.chat.db.MessageSyncCursor
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -66,18 +67,23 @@ interface MessageDao {
     suspend fun claimFailedMessage(id: Uuid, now: Instant): Boolean
     suspend fun recordAttempt(id: Uuid, createdAt: Instant, now: Instant)
     suspend fun mergeServerMessage(message: MessageEntity, localId: Uuid?)
-    suspend fun getSyncCursor(conversationId: Uuid): Uuid?
-    suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid)
+
+    /**
+     * Event/preview seed: INSERT OR IGNORE with [MessageEntity.in_timeline]
+     * carried by the entity — never downgrades an existing timeline row.
+     */
+    suspend fun seedMessage(message: MessageEntity)
+
+    suspend fun seedMessages(messages: List<MessageEntity>)
+
+    suspend fun getSyncCursor(conversationId: Uuid): MessageSyncCursor?
+    suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid, afterSeq: Long)
 
     // 删除
     suspend fun deleteMessage(id: Uuid)
 
     suspend fun clearConversationHistory(conversationId: Uuid)
 
-    // 统计
-    fun countUnreadAfter(
-        conversationId: Uuid,
-        myUserId: Uuid,
-        lastReadMessageId: Uuid?
-    ): Flow<Long>
+    /** Drops confirmed (non-outbox) history; keeps SENDING/FAILED rows for retry. */
+    suspend fun deleteConfirmedForConversation(conversationId: Uuid)
 }
