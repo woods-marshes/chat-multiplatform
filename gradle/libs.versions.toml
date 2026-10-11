@@ -14,7 +14,7 @@ composeMultiplatform = "1.12.1"
 # stack to 1.13, where Nucleus (Tao scene host) does not register the Skiko
 # backend yet — see NucleusFramework/Nucleus#671. Dependabot must not bump
 # this until a Nucleus release supports Compose 1.13 stable.
-composeMaterial3 = "1.12.0-alpha03"
+composeMaterial3 = "1.13.0-alpha02"
 material3Adaptive = "1.3.0"
 composeMaterialIcons = "1.7.3"
 lifecycle = "2.11.0"
