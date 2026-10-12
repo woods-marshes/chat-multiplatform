@@ -30,6 +30,8 @@ sealed class MessageEventResponse : RealtimeEvent {
         @ProtoNumber(2) val conversationId: Uuid,
         @ProtoNumber(3) val readerId: Uuid,
         @ProtoNumber(4) val timestamp: Instant,
+        /** Server-computed unread for the reader after this read position. */
+        @ProtoNumber(5) val unreadCount: Int = 0,
     ) : MessageEventResponse()
 
     @Serializable

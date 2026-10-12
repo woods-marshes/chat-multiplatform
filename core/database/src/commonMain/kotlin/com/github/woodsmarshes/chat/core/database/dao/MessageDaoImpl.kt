@@ -3,9 +3,6 @@ package com.github.woodsmarshes.chat.core.database.dao
 import androidx.paging.PagingSource
 import com.github.woodsmarshes.chat.core.database.session.SessionBoundPagingSource
 import app.cash.sqldelight.SuspendingTransactionWithoutReturn
-import app.cash.sqldelight.coroutines.asFlow
-import app.cash.sqldelight.coroutines.mapToList
-import app.cash.sqldelight.coroutines.mapToOneOrNull
 import app.cash.sqldelight.paging3.QueryPagingSource
 import com.github.woodsmarshes.chat.core.model.MessageStatus
 import io.github.woodsmarshes.chat.db.ChatDatabase
@@ -24,8 +21,6 @@ import com.github.woodsmarshes.chat.core.database.session.DirectDatabaseSessionG
 import com.github.woodsmarshes.chat.core.database.session.sessionBoundQueryFlow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -139,16 +134,11 @@ class MessageDaoImpl(
         writeQueries().updateMessageStatus(status, createdAt, newId, oldId)
     }
 
-    override suspend fun revokeMessage(id: Uuid, revokedAt: Instant) {
-        writeQueries().revokeMessage(revokedAt, id)
-    }
+    override suspend fun revokeMessage(id: Uuid, revokedAt: Instant): Boolean =
+        writeQueries().revokeMessage(revokedAt = revokedAt, id = id) > 0L
 
-    override suspend fun getRetryableMessages(retryAfter: Instant): List<MessageEntity> {
-        return writeQueries().getRetryableMessages(retryAfter.toEpochMilliseconds())
-            .asFlow()
-            .mapToList(ioContext)
-            .first()
-    }
+    override suspend fun getRetryableMessages(retryAfter: Instant): List<MessageEntity> =
+        writeQueries().getRetryableMessages(retryAfter.toEpochMilliseconds()).executeAsList()
 
     override suspend fun failStaleMessages(giveUpBefore: Instant) {
         // Generated as a suspend statement (UPDATE), executes directly.
@@ -195,8 +185,7 @@ class MessageDaoImpl(
     }
 
     override suspend fun getSyncCursor(conversationId: Uuid): MessageSyncCursor? =
-        writeQueries().getSyncCursor(conversationId.toString()).asFlow().mapToOneOrNull(ioContext)
-            .first()
+        writeQueries().getSyncCursor(conversationId.toString()).executeAsOneOrNull()
 
     override suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid, afterSeq: Long) {
         writeQueries().setSyncCursor(conversationId.toString(), afterId.toString(), afterSeq)
@@ -222,7 +211,17 @@ class MessageDaoImpl(
         writeQueries().clearConversationHistory(conversationId)
     }
 
-    override suspend fun deleteConfirmedForConversation(conversationId: Uuid) {
-        writeQueries().deleteConfirmedForConversation(conversationId)
+    override suspend fun getWindowGeneration(conversationId: Uuid): Long =
+        writeQueries().getWindowGeneration(conversationId.toString()).executeAsOneOrNull() ?: 0L
+
+    override suspend fun getOldestConfirmedTimelineMessageId(conversationId: Uuid): Uuid? =
+        writeQueries().getOldestConfirmedTimelineMessageId(conversationId).executeAsOneOrNull()
+
+    override suspend fun demoteTimelineBefore(conversationId: Uuid, windowOldestId: Uuid) {
+        val q = writeQueries()
+        q.transaction {
+            q.demoteTimelineBefore(conversationId = conversationId, windowOldestId = windowOldestId)
+            q.advanceWindowGeneration(conversationId.toString())
+        }
     }
 }

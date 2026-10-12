@@ -138,7 +138,7 @@ class ManagedDatabaseSessionGate(
             var failure: Throwable? = null
             pending.forEach { listener ->
                 try { listener() } catch (error: Throwable) {
-                    if (failure == null) failure = error else if (failure !== error) failure!!.addSuppressed(error)
+                    if (failure == null) failure = error else if (failure !== error) failure.addSuppressed(error)
                 }
             }
             failure?.let { throw it }

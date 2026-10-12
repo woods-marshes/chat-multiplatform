@@ -7,12 +7,16 @@ import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepository
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepositoryImpl
 import com.github.woodsmarshes.chat.core.data.repository.ContactRepositoryImpl
+import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.OfflineFirstMessageRepositoryImpl
+import com.github.woodsmarshes.chat.core.data.repository.UnreadRefreshCoordinator
 import com.github.woodsmarshes.chat.core.data.repository.UserRepositoryImpl
 import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.MessageDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.UserDaoImpl
@@ -205,7 +209,7 @@ class SessionManagerTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         db.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
         db.conversationsQueries.upsertConversation(
-            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null)
+            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0)
         )
 
         val dispatcher = StandardTestDispatcher(testScheduler)
@@ -257,8 +261,11 @@ class SessionManagerTest {
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
             groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+            conversationRepository = mockk<ConversationRepository>(relaxed = true),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
+            groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
         )
         val trackedRepo = object : MessageRepository by realRepo {
             override suspend fun startSession() {
@@ -315,7 +322,7 @@ class SessionManagerTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         db.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
         db.conversationsQueries.upsertConversation(
-            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null)
+            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0)
         )
 
         val dispatcher = StandardTestDispatcher(testScheduler)
@@ -369,8 +376,11 @@ class SessionManagerTest {
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
             groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+            conversationRepository = mockk<ConversationRepository>(relaxed = true),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
+            groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
         )
         val trackedRepo = object : MessageRepository by realRepo {
             override suspend fun startSession() {
@@ -804,7 +814,7 @@ class SessionManagerTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         db.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
         db.conversationsQueries.upsertConversation(
-            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null)
+            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0)
         )
 
         val dispatcher = StandardTestDispatcher(testScheduler)
@@ -856,8 +866,11 @@ class SessionManagerTest {
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
             groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+            conversationRepository = mockk<ConversationRepository>(relaxed = true),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
+            groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
         )
 
         try {
@@ -919,7 +932,7 @@ class SessionManagerTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         db.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
         db.conversationsQueries.upsertConversation(
-            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null)
+            ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0)
         )
 
         val dispatcher = StandardTestDispatcher(testScheduler)
@@ -959,8 +972,11 @@ class SessionManagerTest {
             conversationApi = conversationApi,
             conversationDao = ConversationDaoImpl({ db }, dispatcher),
             groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+            conversationRepository = mockk<ConversationRepository>(relaxed = true),
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
+            groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
         )
 
         try {
@@ -1865,6 +1881,10 @@ class SessionManagerTest {
         val contactRepository = ContactRepositoryImpl(
             contactApi = contactApi,
             contactDao = dynamicContactDao,
+            // Must resolve to the same session database as contactDao/userDao:
+            // ContactRepositoryImpl.startSession asserts all three DAOs bind to
+            // one ChatDatabase instance before accepting the session.
+            contactRequestDao = ContactRequestDaoImpl(dbProvider = dbProvider, ioContext = dispatcher),
             userDao = dynamicUserDao,
             scope = repoScope,
         )
@@ -1877,6 +1897,9 @@ class SessionManagerTest {
 
         val realtimeApi = mockk<RealtimeApi>()
         every { realtimeApi.connectionState } returns MutableStateFlow(ConnectionState.Idle)
+        // ContactRepositoryImpl.startSession collects the realtime event flow;
+        // an unstubbed access would crash that collector coroutine.
+        every { realtimeApi.events } returns MutableSharedFlow()
         coEvery { realtimeApi.connect() } coAnswers { steps += "ws.connect" }
         coEvery { realtimeApi.disconnect() } coAnswers { steps += "ws.disconnect" }
 

@@ -78,6 +78,7 @@ class ConversationRepositoryImpl(
     private val fileApi: FileApi,
     private val databaseHolder: DatabaseHolder,
     private val userSettingDataSource: UserSettingDataSource,
+    private val unreadRefreshCoordinator: UnreadRefreshCoordinator,
 ) : ConversationRepository {
 
     private suspend fun <T> sessionOperation(block: suspend () -> Result<T, ConversationError>): Result<T, ConversationError> =
@@ -189,6 +190,7 @@ class ConversationRepositoryImpl(
     }
 
     override suspend fun syncConversations(): Result<Unit, ConversationError> = sessionOperation { coroutineBinding {
+        val snapshotToken = unreadRefreshCoordinator.captureListGeneration()
         bindApi(ConversationError::Unknown) {
             userApi.getMyConversations()
         }.also { responses ->
@@ -217,12 +219,14 @@ class ConversationRepositoryImpl(
                     runCatching { messageDao.seedMessage(message) }
                         .onFailure { if (it is CancellationException) throw it; log.warn(it) { "Skipping unpersistable last message ${message.id}" } }
                 }
-            // Server-computed unread is authoritative: apply it after the
-            // (unread-preserving) upserts so a list refresh refreshes badges
-            // even without a websocket anchor.
-            responses.forEach { response ->
-                conversationDao.setUnreadCount(response.conversationId, response.unreadCount.toLong())
-            }
+            // Server-computed unread is authoritative: apply it through the
+            // shared coordinator so a late list snapshot never overwrites a
+            // newer local read or live-event refresh.
+            unreadRefreshCoordinator.applyListSnapshot(
+                token = snapshotToken,
+                entries = responses.map { it.conversationId to it.unreadCount.toLong() },
+                conversationDao = conversationDao,
+            )
         }
     } }
 

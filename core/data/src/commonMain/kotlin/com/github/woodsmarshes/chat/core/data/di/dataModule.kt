@@ -14,6 +14,7 @@ import com.github.woodsmarshes.chat.core.data.repository.ConversationRepositoryI
 import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.OfflineFirstArticleRepositoryImpl
 import com.github.woodsmarshes.chat.core.data.repository.OfflineFirstMessageRepositoryImpl
+import com.github.woodsmarshes.chat.core.data.repository.UnreadRefreshCoordinator
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepositoryImpl
 import org.koin.core.module.dsl.singleOf
@@ -33,6 +34,7 @@ import org.koin.dsl.module
 @OptIn(ExperimentalPagingApi::class)
 val dataModule = module {
     singleOf(::AuthRepositoryImpl) bind AuthRepository::class
+    singleOf(::UnreadRefreshCoordinator)
     single<MessageRepository> {
         OfflineFirstMessageRepositoryImpl(
             messageDao = get(),
@@ -47,6 +49,7 @@ val dataModule = module {
             scope = get(),
             mediatorFactory = get(),
             groupProfileDao = get(),
+            unreadRefreshCoordinator = get(),
         )
     }
     singleOf(::ConversationRepositoryImpl) bind ConversationRepository::class

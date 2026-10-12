@@ -111,6 +111,7 @@ class MessagePersistenceTest {
             dao.insertMessage(row(local, MessageStatus.FAILED))
             driver.execute(null, "DROP TABLE MessageAttempt", 0).await()
             driver.execute(null, "DROP TABLE MessageSyncCursor", 0).await()
+            driver.execute(null, "DROP TABLE MessageTimelineState", 0).await()
             // Strip the newer columns too so the file really has the legacy
             // v0 shape; 3.sqm's plain ALTERs would otherwise collide.
             driver.execute(null, "ALTER TABLE MessageEntity DROP COLUMN in_timeline", 0).await()
@@ -125,8 +126,32 @@ class MessagePersistenceTest {
             assertEquals(false, dao.claimFailedMessage(local, now))
             dao.setSyncCursor(conversation, server, 0L)
             assertEquals(server, dao.getSyncCursor(conversation)?.after_id?.let(Uuid::parse))
+            assertEquals(0L, dao.getWindowGeneration(conversation))
+            dao.demoteTimelineBefore(conversation, server)
+            assertEquals(1L, dao.getWindowGeneration(conversation))
         } finally {
             driver.close()
+        }
+    }
+
+    @Test
+    fun upsertPromotesHiddenSeedToTimelineAndNeverDowngradesExistingTimelineRow() = runBlocking {
+        fixture { dao, _ ->
+            // 1. Seeded row (in_timeline = false) is promoted when upserted with in_timeline = true.
+            dao.seedMessage(row(server, MessageStatus.SENT).copy(in_timeline = false))
+            assertEquals(false, dao.getMessageById(server).first()?.in_timeline)
+
+            dao.insertMessage(row(server, MessageStatus.SENT).copy(in_timeline = true))
+            assertEquals(true, dao.getMessageById(server).first()?.in_timeline)
+
+            // 2. An already in_timeline = true row is never downgraded by a generic upsert with in_timeline = false.
+            dao.insertMessage(row(server, MessageStatus.SENT).copy(in_timeline = false))
+            assertEquals(true, dao.getMessageById(server).first()?.in_timeline)
+
+            // 3. Explicit demoteTimelineBefore is the only path that demotes a confirmed row.
+            val newer = Uuid.parse("00000000-0000-0000-0000-000000000099")
+            dao.demoteTimelineBefore(conversation, newer)
+            assertEquals(false, dao.getMessageById(server).first()?.in_timeline)
         }
     }
     @Test

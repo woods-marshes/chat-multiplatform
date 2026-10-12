@@ -58,7 +58,7 @@ ON CONFLICT(id) DO UPDATE SET
     created_at          = excluded.created_at,
     revoked_at          = COALESCE(excluded.revoked_at, revoked_at),
     local_send_status   = COALESCE(excluded.local_send_status, local_send_status),
-    in_timeline         = excluded.in_timeline;
+    in_timeline         = MAX(MessageEntity.in_timeline, excluded.in_timeline);
 
 -- 【增/播种】reply 目标等时间轴外行的写入：已存在的行一律不动
 -- （不降级 in_timeline、不触发 reply 外键的 ON DELETE SET NULL 副作用）。
@@ -275,7 +275,7 @@ WHERE local_send_status = 'SENDING' AND COALESCE((SELECT started_at_ms FROM Mess
 revokeMessage:
 UPDATE MessageEntity
 SET revoked_at = :revokedAt
-WHERE id = :id;
+WHERE id = :id AND revoked_at IS NULL;
 
 -- 删除单条消息（本地删除）
 deleteMessage:
@@ -338,9 +338,39 @@ setSyncCursor:
 INSERT INTO MessageSyncCursor(conversation_id, after_id, after_seq) VALUES (:conversationId, :afterId, :afterSeq)
 ON CONFLICT(conversation_id) DO UPDATE SET after_id = excluded.after_id, after_seq = excluded.after_seq;
 
--- 窗口跳变：清除已确认的历史缓存（保留发件箱行），
--- 使本地时间轴收缩为一段连续窗口，APPEND 才能在窗口底端触发回填。
-deleteConfirmedForConversation:
-DELETE FROM MessageEntity
+CREATE TABLE MessageTimelineState (
+    conversation_id TEXT NOT NULL PRIMARY KEY,
+    window_generation INTEGER NOT NULL DEFAULT 0
+);
+
+getWindowGeneration:
+SELECT window_generation FROM MessageTimelineState WHERE conversation_id = :conversationId;
+
+advanceWindowGeneration:
+INSERT INTO MessageTimelineState(conversation_id, window_generation)
+VALUES (:conversationId, 1)
+ON CONFLICT(conversation_id) DO UPDATE SET window_generation = MessageTimelineState.window_generation + 1;
+
+-- Oldest confirmed message currently in the active timeline window.
+-- Excludes outbox rows (SENDING/FAILED whose client requestIds must not be
+-- sent as server beforeId cursors) and hidden seed rows (in_timeline = 0).
+getOldestConfirmedTimelineMessageId:
+SELECT id FROM MessageEntity
 WHERE conversation_id = :conversationId
-  AND (local_send_status IS NULL OR local_send_status = 'SENT');
+  AND in_timeline = 1
+  AND (local_send_status IS NULL OR local_send_status = 'SENT')
+ORDER BY id ASC
+LIMIT 1;
+
+-- 窗口跳变：把窗口之前的已确认消息降级为时间轴外（in_timeline = 0），
+-- 而不是物理删除——保住发件箱行（SENDING/FAILED）对外键目标的引用
+-- （reply 外键是 ON DELETE SET NULL，物理删除会把待发消息的回复目标置空），
+-- 也保留这些行作为回复预览的 JOIN 目标。降级后它们不会出现在
+-- Paging 边界与关联查询里。
+demoteTimelineBefore:
+UPDATE MessageEntity
+SET in_timeline = 0
+WHERE conversation_id = :conversationId
+  AND in_timeline = 1
+  AND id < :windowOldestId
+  AND (local_send_status IS NULL OR local_send_status NOT IN ('SENDING', 'FAILED'));

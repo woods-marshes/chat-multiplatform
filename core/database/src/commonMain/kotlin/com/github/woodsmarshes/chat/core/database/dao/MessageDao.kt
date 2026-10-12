@@ -57,7 +57,36 @@ interface MessageDao {
     // 更新与状态管理
     suspend fun updateMessageStatus(oldId: Uuid, newId: Uuid, createdAt: Instant, status: MessageStatus)
 
-    suspend fun revokeMessage(id: Uuid, revokedAt: Instant)
+    /**
+     * Marks the message revoked. Returns false for an already-revoked row so
+     * duplicate withdraw events do not retract the unread badge twice.
+     */
+    suspend fun revokeMessage(id: Uuid, revokedAt: Instant): Boolean
+
+    /**
+     * Demotes confirmed messages older than [windowOldestId] to
+     * [MessageEntity.in_timeline] = false (window jump) and increments the
+     * persistent timeline window generation for [conversationId] in the same
+     * transaction so in-flight history page loads can detect and discard stale
+     * responses. Outbox rows (SENDING/FAILED) are never demoted so their reply
+     * targets survive; demoted rows stay on disk for reply-preview joins.
+     */
+    suspend fun demoteTimelineBefore(conversationId: Uuid, windowOldestId: Uuid)
+
+    /**
+     * Returns the persistent timeline window generation for [conversationId]
+     * (0 when the conversation has never experienced a window demotion).
+     */
+    suspend fun getWindowGeneration(conversationId: Uuid): Long
+
+    /**
+     * Returns the oldest confirmed (`local_send_status IS NULL` or `SENT`)
+     * message ID currently in the active timeline (`in_timeline = true`), or
+     * null when no confirmed timeline rows exist. Outbox placeholders
+     * (`SENDING`/`FAILED`) and hidden reply/preview seeds (`in_timeline = false`)
+     * are excluded.
+     */
+    suspend fun getOldestConfirmedTimelineMessageId(conversationId: Uuid): Uuid?
 
     suspend fun getRetryableMessages(retryAfter: Instant): List<MessageEntity>
 
@@ -83,7 +112,4 @@ interface MessageDao {
     suspend fun deleteMessage(id: Uuid)
 
     suspend fun clearConversationHistory(conversationId: Uuid)
-
-    /** Drops confirmed (non-outbox) history; keeps SENDING/FAILED rows for retry. */
-    suspend fun deleteConfirmedForConversation(conversationId: Uuid)
 }

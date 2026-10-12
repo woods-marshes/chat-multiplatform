@@ -9,6 +9,7 @@ import androidx.paging.map
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
+import com.github.woodsmarshes.chat.core.common.session.ResourceSession
 import com.github.woodsmarshes.chat.core.data.model.toUiModel
 import com.github.woodsmarshes.chat.core.data.paging.MessageMediatorFactory
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
@@ -97,11 +98,14 @@ class OfflineFirstMessageRepositoryImpl(
     private val conversationApi: ConversationApi,
     private val conversationDao: ConversationDao,
     private val groupJoinRequestDao: GroupJoinRequestDao,
-    private val conversationRepository: ConversationRepository? = null,
+    // Required: the anchor consumer runs conversation list syncs before
+    // message writes, so message rows always have their parent rows on disk.
+    private val conversationRepository: ConversationRepository,
     private val userSettingDataSource: UserSettingDataSource,
     private val scope: CoroutineScope,
     private val mediatorFactory: MessageMediatorFactory,
     private val groupProfileDao: GroupProfileDao? = null,
+    private val unreadRefreshCoordinator: UnreadRefreshCoordinator,
 ) : MessageRepository {
     override val connectionState get() = messageApi.connectionState
 
@@ -143,9 +147,15 @@ class OfflineFirstMessageRepositoryImpl(
 
     private val sendMutex = Mutex()
     private val syncMutex = Mutex()
-    private val lifecycle = com.github.woodsmarshes.chat.core.common.session.ResourceSession(
-        dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default,
-        create = { RunningSession(this, scope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Default) },
+    private val lifecycle = ResourceSession(
+        dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher
+            ?: Dispatchers.Default,
+        create = {
+            RunningSession(
+                this,
+                scope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Default
+            )
+        },
         prepare = { session ->
             startMessageConsumption(session)
             startOutboxRetryLoop(session)
@@ -153,6 +163,7 @@ class OfflineFirstMessageRepositoryImpl(
         beforeStop = { it.job.cancel() },
         dispose = { session ->
             session.job.join()
+            unreadRefreshCoordinator.clearSessionState()
             seqMutex.withLock {
                 deliveredSeqs.clear()
                 gapRepairs.clear()
@@ -216,6 +227,7 @@ class OfflineFirstMessageRepositoryImpl(
         return Pager(
             config = PagingConfig(
                 pageSize = limit,
+            initialLoadSize = limit,
                 enablePlaceholders = false,
             ),
             remoteMediator = mediatorFactory.create(ownUserId, conversationId, isGroup),
@@ -331,7 +343,7 @@ class OfflineFirstMessageRepositoryImpl(
 
     override suspend fun markAsRead(conversationId: Uuid, messageId: Uuid) {
         try {
-            lifecycle.execute {
+            lifecycle.execute { session ->
                 val currentUser = ownUser.firstOrNull() ?: return@execute
 
                 val request = MessageRequest.Read(
@@ -342,13 +354,26 @@ class OfflineFirstMessageRepositoryImpl(
 
                 // Receipts are not retried: re-entering the chat re-reports
                 // the current last message, so a dropped one only costs a
-                // stale unread state until then. Logged, not surfaced.
+                // stale unread state until then. Do not touch the local badge
+                // when the socket rejected the receipt.
                 if (!messageApi.send(request)) {
                     log.warn { "[markAsRead] receipt for $messageId was not delivered" }
+                    return@execute
                 }
-                // Local badge zeroes immediately; other devices converge via
-                // the Read broadcast.
-                conversationDao.setUnreadCount(conversationId, 0L)
+                // Sending over the WebSocket does not mean the server has
+                // committed the read position yet, and reading up to messageId
+                // may leave newer messages unread. Schedule an authoritative
+                // detail refresh (which also covers duplicate UNCHANGED reads
+                // where the server suppresses the Read broadcast) and let any
+                // subsequent Read broadcast invalidate and refresh again.
+                if (session.job.isActive && isActiveSession(session)) {
+                    unreadRefreshCoordinator.requestRefresh(
+                        sessionScope = session.scope,
+                        conversationId = conversationId,
+                        conversationApi = conversationApi,
+                        conversationDao = conversationDao,
+                    )
+                }
             }
         } catch (_: SessionStoppedException) {
             log.warn { "[markAsRead] refused: session is not active" }
@@ -423,10 +448,10 @@ class OfflineFirstMessageRepositoryImpl(
                                 handleReceivedMessage(session, event)
                             }
                             is MessageEventResponse.Withdrawn -> {
-                                handleWithdrawnMessage(event)
+                                handleWithdrawnMessage(session, event)
                             }
                             is MessageEventResponse.Read -> {
-                                handleReadMessage(event)
+                                handleReadMessage(session, event)
                             }
                             is MessageEventResponse.UserTyping -> {
                                 handleUserTyping(session, event)
@@ -549,9 +574,22 @@ class OfflineFirstMessageRepositoryImpl(
                 // Conversation rows must exist before message writes (foreign
                 // key into ConversationEntity); the list sync also seeds
                 // preview rows for conversations the client has never opened.
-                conversationRepository?.syncConversations()
+                val syncResult = conversationRepository.syncConversations()
+                if (syncResult.isErr) {
+                    log.warn { "[ws-consume] syncConversations failed before anchor processing; scheduling retry" }
+                    unreadRefreshCoordinator.markListSyncFailed()
+                }
                 anchor.entries.forEach { entry ->
-                    processAnchorEntry(session, entry)
+                    try {
+                        processAnchorEntry(session, entry)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Per-entry isolation: one conversation's failed refresh
+                        // must not abort the remaining entries — the next
+                        // anchor (every reconnect) retries them.
+                        log.warn(e) { "[ws-consume] anchor entry failed for ${entry.conversationId}" }
+                    }
                 }
             }.onFailure { e ->
                 if (e is CancellationException) throw e
@@ -563,39 +601,62 @@ class OfflineFirstMessageRepositoryImpl(
     private suspend fun processAnchorEntry(session: RunningSession, entry: SyncAnchorEntry) {
         if (!session.job.isActive || !isActiveSession(session)) return
         val ownId = ownUser.firstOrNull()?.id
-        // Server-authoritative unread lands on the conversation row no matter
-        // which content branch runs.
-        conversationDao.setUnreadCount(entry.conversationId, entry.unreadCount.toLong())
-        val anchorLastMessageId = entry.lastMessageId ?: return
 
         val cursor = messageDao.getSyncCursor(entry.conversationId)
         // The cursor row stores after_id as TEXT (legacy table shape).
-        val localAfterId = cursor?.after_id?.let(Uuid::parse)
         val localAfterSeq = cursor?.after_seq ?: 0L
+        // List sync already refreshed unread from a newer REST snapshot.
+        // Message sequences do not version reads or withdrawals.
+        if (cursor != null && entry.lastSeq <= localAfterSeq) return
+
+        val anchorLastMessageId = entry.lastMessageId ?: return
+
         when {
-            // Already holding the newest message: nothing to fetch.
-            localAfterId == anchorLastMessageId -> return
             // Cold conversation on a fresh login: zero unread means there is
             // nothing worth prefetching. The list sync has already seeded the
             // preview; jumping the cursor here defers all history to
             // RemoteMediator's on-demand paging when the user opens the chat.
             cursor == null && entry.unreadCount == 0 -> {
-                messageDao.setSyncCursor(entry.conversationId, anchorLastMessageId, entry.lastSeq)
+                syncMutex.withLock {
+                    if (messageDao.getSyncCursor(entry.conversationId) == null) {
+                        messageDao.setSyncCursor(entry.conversationId, anchorLastMessageId, entry.lastSeq)
+                    }
+                }
             }
             // No cursor with pending unread, or a gap larger than the window:
-            // jump — fetch the newest window and drop confirmed history older
-            // than it, so Paging keeps a contiguous tail.
+            // jump — fetch the newest window and demote confirmed history
+            // older than it, so Paging keeps a contiguous tail.
             cursor == null || entry.lastSeq - localAfterSeq > SYNC_WINDOW_MESSAGES -> {
                 val newest = conversationApi.getMessages(
                     conversationId = entry.conversationId,
                     limit = SYNC_WINDOW_MESSAGES,
                     beforeId = null,
                 )
-                messageDao.transaction {
-                    messageDao.deleteConfirmedForConversation(entry.conversationId)
-                    newest.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
-                    messageDao.setSyncCursor(entry.conversationId, anchorLastMessageId, entry.lastSeq)
+                // The demote + insert + cursor commit is serialized with the
+                // sweep and live cursor advances: a live message arriving
+                // while the window request was in flight is newer than every
+                // fetched row, so the demote bound leaves it untouched.
+                syncMutex.withLock {
+                    messageDao.transaction {
+                        check(newest.isNotEmpty()) { "Anchor window unexpectedly empty" }
+                        val newestMessage = newest.maxBy { it.id }
+                        val windowSeq = checkNotNull(newestMessage.seq) { "Window message has no delivery sequence" }
+                        check(newestMessage.id >= anchorLastMessageId && windowSeq >= entry.lastSeq) {
+                            "History window does not cover the advertised anchor"
+                        }
+                        val current = messageDao.getSyncCursor(entry.conversationId)
+                        // A newer concurrent window must not be replaced by this older response.
+                        if (current == null || current.after_seq < windowSeq) {
+                            messageDao.demoteTimelineBefore(entry.conversationId, newest.minOf { it.id })
+                            newest.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
+                            // Keep the ID and sequence from the SAME persisted message.
+                            messageDao.setSyncCursor(entry.conversationId, newestMessage.id, windowSeq)
+                        }
+                    }
                 }
+                // Close the network-window/live-delivery handoff. Messages received
+                // before this commit could not advance the old durable cursor.
+                syncConversationFromServer(entry.conversationId)
             }
             // Small gap: forward delta through the cursor sweep.
             else -> syncConversationFromServer(entry.conversationId)
@@ -610,24 +671,36 @@ class OfflineFirstMessageRepositoryImpl(
             val isOwnMessage = currentUser != null && event.senderId == currentUser.id
             log.info { "[handleReceived] isOwnMessage=$isOwnMessage requestId=${event.requestId} serverMsgId=${message.id}" }
 
-            persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage }, resolvedOwnUserId = currentUser?.id)
-            // Live unread increment matching the server's own-messages-excluded
-            // count; mark-as-read / the reader's own Read event zeroes it.
-            if (!isOwnMessage) {
-                runCatching { conversationDao.incrementUnread(message.conversationId) }
+            syncMutex.withLock {
+                messageDao.transaction {
+                    persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage }, resolvedOwnUserId = currentUser?.id)
+                }
+            }
+            if (!isOwnMessage && message.revokedAt == null && session.job.isActive && isActiveSession(session)) {
+                unreadRefreshCoordinator.requestRefresh(
+                    sessionScope = session.scope,
+                    conversationId = message.conversationId,
+                    conversationApi = conversationApi,
+                    conversationDao = conversationDao,
+                )
             }
             val deliveryContinuous = trackDeliverySeq(session, message)
             // Live messages extend the local timeline: keep the durable cursor
-            // in step (serialized with any in-flight sweep) so the next
-            // reconnect's gap arithmetic reflects what is already on disk.
-            // Skipped on delivery gaps — the scheduled repair fills those and
-            // advances the cursor itself.
+            // in step (serialized with any in-flight sweep). Advance only on
+            // EXACT continuation of the persisted cursor — the first message
+            // of a session may sit far ahead of it (offline backlog that the
+            // anchor is about to backfill), and fast-forwarding here would
+            // skip that backlog permanently. Skipped on delivery gaps — the
+            // scheduled repair fills those and advances the cursor itself.
             if (deliveryContinuous) {
                 val seq = message.seq
                 if (seq != null) syncMutex.withLock {
                     val cursor = messageDao.getSyncCursor(message.conversationId)
-                    if (cursor != null && seq > cursor.after_seq) {
+                    if (cursor != null && seq == cursor.after_seq + 1) {
                         messageDao.setSyncCursor(message.conversationId, message.id, seq)
+                    } else if (cursor != null && seq > cursor.after_seq + 1) {
+                        // Memory delivery continuity cannot prove durable continuity.
+                        scheduleGapRepair(session, message.conversationId)
                     }
                 }
             }
@@ -794,12 +867,20 @@ class OfflineFirstMessageRepositoryImpl(
             }
         }
     }
-    private suspend fun handleWithdrawnMessage(event: MessageEventResponse.Withdrawn) {
+    private suspend fun handleWithdrawnMessage(session: RunningSession, event: MessageEventResponse.Withdrawn) {
         try {
             messageDao.revokeMessage(event.messageId, event.timestamp)
-//                .also {
-//                    _invalidationEvents.tryEmit(Unit)
-//                }
+            // The local window cannot determine whether this message was unread:
+            // coalesce an authoritative detail refresh without holding syncMutex
+            // or blocking the realtime event collector.
+            if (session.job.isActive && isActiveSession(session)) {
+                unreadRefreshCoordinator.requestRefresh(
+                    sessionScope = session.scope,
+                    conversationId = event.conversationId,
+                    conversationApi = conversationApi,
+                    conversationDao = conversationDao,
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -807,7 +888,7 @@ class OfflineFirstMessageRepositoryImpl(
         }
     }
 
-    private suspend fun handleReadMessage(event: MessageEventResponse.Read) {
+    private suspend fun handleReadMessage(session: RunningSession, event: MessageEventResponse.Read) {
         try {
             log.debug { "Message read: ${event.messageId} by ${event.readerId}" }
             participantDao.updateLastReadMessage(
@@ -815,11 +896,18 @@ class OfflineFirstMessageRepositoryImpl(
                 userId = event.readerId,
                 lastMessageId = event.messageId
             )
-            // Multi-device read sync: the server broadcasts the reader's own
-            // Read to every connection, so this device's badge zeroes too.
+            // Multi-device read sync: coalesce an authoritative detail refresh
+            // rather than trusting the event's unreadCount directly (which may
+            // default to 0 on older frames or arrive out of order with newer
+            // messages).
             val myId = ownUser.firstOrNull()?.id
-            if (myId != null && event.readerId == myId) {
-                conversationDao.setUnreadCount(event.conversationId, 0L)
+            if (myId != null && event.readerId == myId && session.job.isActive && isActiveSession(session)) {
+                unreadRefreshCoordinator.requestRefresh(
+                    sessionScope = session.scope,
+                    conversationId = event.conversationId,
+                    conversationApi = conversationApi,
+                    conversationDao = conversationDao,
+                )
             }
         } catch (e: CancellationException) {
             throw e
@@ -860,6 +948,12 @@ class OfflineFirstMessageRepositoryImpl(
                     .collectLatest { state ->
                         if (state is ConnectionState.Connected) {
                             retryPendingMessagesInternal()
+                            unreadRefreshCoordinator.retryPending(
+                                sessionScope = session.scope,
+                                conversationRepository = conversationRepository,
+                                conversationApi = conversationApi,
+                                conversationDao = conversationDao,
+                            )
                         }
                     }
             } catch (e: CancellationException) {
@@ -885,6 +979,14 @@ class OfflineFirstMessageRepositoryImpl(
                     if (ownUser.firstOrNull() == null) continue
                     sendMutex.withLock { expireStaleMessages() }
                     retryPendingMessagesInternal()
+                    if (messageApi.connectionState.value is ConnectionState.Connected) {
+                        unreadRefreshCoordinator.retryPending(
+                            sessionScope = session.scope,
+                            conversationRepository = conversationRepository,
+                            conversationApi = conversationApi,
+                            conversationDao = conversationDao,
+                        )
+                    }
                     ticksSinceLastNet++
                     if (ticksSinceLastNet >= SYNC_NET_TICKS &&
                         messageApi.connectionState.value is ConnectionState.Connected

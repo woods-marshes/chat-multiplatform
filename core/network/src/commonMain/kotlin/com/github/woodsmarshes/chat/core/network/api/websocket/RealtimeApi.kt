@@ -3,6 +3,8 @@ package com.github.woodsmarshes.chat.core.network.api.websocket
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
@@ -61,9 +63,9 @@ import kotlin.time.TimeSource
  */
 class RealtimeApi(
     private val client: HttpClient,
-    private val config: com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig,
+    private val config: NetworkConfig,
     private val authTokenDataSource: AuthTokenDataSource,
-    private val tokenRefresher: com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher,
+    private val tokenRefresher: TokenRefresher,
     private val scope: CoroutineScope
 ) {
     val log = KotlinLogging.logger {}

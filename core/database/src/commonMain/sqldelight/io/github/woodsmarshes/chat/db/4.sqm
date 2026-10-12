@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS MessageTimelineState (
+    conversation_id TEXT NOT NULL PRIMARY KEY,
+    window_generation INTEGER NOT NULL DEFAULT 0
+);

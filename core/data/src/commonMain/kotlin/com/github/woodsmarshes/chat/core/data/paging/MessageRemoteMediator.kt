@@ -37,106 +37,156 @@ class MessageRemoteMediator(
 ) : SessionBoundRemoteMediator<Uuid, KeyedMessagesWithRelations>(databaseHolder.sessionGate) {
     private val log = KotlinLogging.logger {}
 
+    private class StaleWindowGenerationException(
+        conversationId: Uuid,
+        expectedGeneration: Long,
+        actualGeneration: Long,
+    ) : IllegalStateException(
+        "Timeline window generation changed for $conversationId during history load (expected=$expectedGeneration, actual=$actualGeneration)",
+    )
+
     override suspend fun loadInSession(
         loadType: LoadType,
         state: PagingState<Uuid, KeyedMessagesWithRelations>
     ): MediatorResult {
-        return run {
-            val lastMsgId = when (loadType) {
-                LoadType.REFRESH -> {
-                    log.debug(tag = "MessageRemoteMediator", message = "loadType is REFRESH")
-                    null
-                }
-                LoadType.PREPEND -> {
-                    log.debug(tag = "MessageRemoteMediator", message = "loadType is PREPEND")
-                    return MediatorResult.Success(endOfPaginationReached = true)
-                }
-                LoadType.APPEND -> {
-                    log.debug(tag = "MessageRemoteMediator", message = "loadType is APPEND")
-                    state.lastItemOrNull()?.id
-                }
-            }
-            log.debug(tag = "MessageRemoteMediator", message = "lastMsgId: $lastMsgId")
-            val pageSize = state.config.pageSize
-            val response = conversationApi.getMessages(
-                conversationId = conversationId,
-                limit = pageSize,
-                beforeId = lastMsgId
-            )
-            currentCoroutineContext().ensureActive()
-            if (response.isEmpty()) {
-                return MediatorResult.Success(endOfPaginationReached = true)
-            }
-            if (isGroup) {
-                // Reply targets must be persisted with THEIR OWN content, so map
-                // the referenced message directly (toReplyMessageEntity would
-                // walk to reply.replyTo and store the grandparent instead).
-                // They are seeded (INSERT OR IGNORE, in_timeline=false): they sit
-                // outside the local timeline window and must never become Paging
-                // anchors ahead of the window (see MessageSyncCursor).
-                val replyEntities = response
-                    .mapNotNull { it.replyTo }
-                    // A reply target without a sender cannot be persisted; skip
-                    // it instead of aborting the whole page.
-                    .filter { it.sender != null }
-                    .map { reply ->
-                        Triple(
-                            reply.toMessageEntity(inTimeline = false),
-                            reply.toUserEntity(),
-                            reply.toParticipantEntity()
-                        )
-                    }
-
-                val mainEntities = response
-                    .map { message ->
-                        Triple(
-                            message.toMessageEntity(),
-                            message.toUserEntity(),
-                            message.toParticipantEntity()
-                        )
-                    }
-                val userEntities = (replyEntities + mainEntities)
-                    .mapNotNull { it.second }
-                    .filter { it.id != ownUserId }
-                    .distinct()
-                val participantEntities = (replyEntities + mainEntities)
-                    .mapNotNull { it.third }
-                    .distinct()
-                val replyMessageEntities = replyEntities.mapNotNull { it.first }
-                val mainMessageEntities = mainEntities.mapNotNull { it.first }
-
-                withContext(appDispatchers.io) {
-                    messageDao.transaction{
-                        userDao.insertUsers(userEntities)
-                        participantDao.insertParticipants(participantEntities)
-                        messageDao.seedMessages(replyMessageEntities)
-                        messageDao.insertMessages(mainMessageEntities)
-                    }
-                }
-            } else {
-                // Private chats need sender users cached too, or the sender join
-                // in keyedMessagesWithRelations returns null names.
-                val replyEntities = response
-                    .mapNotNull { it.replyTo }
-                    .filter { it.sender != null }
-                    .map { reply -> reply.toMessageEntity(inTimeline = false) }
-                val userEntities = (response.mapNotNull { it.replyTo } + response)
-                    .mapNotNull { it.toUserEntity() }
-                    .filter { it.id != ownUserId }
-                    .distinct()
-                val mainEntities = response.map { it.toMessageEntity() }
-                withContext(appDispatchers.io) {
-                    messageDao.transaction {
-                        userDao.insertUsers(userEntities)
-                        messageDao.seedMessages(replyEntities.filterNotNull())
-                        messageDao.insertMessages(mainEntities.filterNotNull())
-                    }
-                }
-            }
-            MediatorResult.Success(
-                endOfPaginationReached = response.size < pageSize
-            )
+        if (loadType == LoadType.PREPEND) {
+            log.debug(tag = "MessageRemoteMediator", message = "loadType is PREPEND")
+            return MediatorResult.Success(endOfPaginationReached = true)
         }
+
+        // Capture the persistent window generation and the oldest confirmed
+        // timeline message ID inside one DB read before issuing the network
+        // call. APPEND must never use state.lastItemOrNull()?.id because the
+        // tail item in PagingState can be an unacked outbox row (SENDING/FAILED)
+        // whose client requestId does not exist as a server cursor; when no
+        // confirmed timeline row exists yet (e.g. only outbox rows are cached),
+        // beforeId falls back to null to fetch the newest server page.
+        val (expectedGeneration, lastMsgId) = withContext(appDispatchers.io) {
+            var generation = 0L
+            var cursorId: Uuid? = null
+            messageDao.transaction {
+                generation = messageDao.getWindowGeneration(conversationId)
+                cursorId = when (loadType) {
+                    LoadType.REFRESH -> null
+                    LoadType.APPEND -> messageDao.getOldestConfirmedTimelineMessageId(conversationId)
+                    LoadType.PREPEND -> null
+                }
+            }
+            generation to cursorId
+        }
+        log.debug(
+            tag = "MessageRemoteMediator",
+            message = "loadType=$loadType expectedGeneration=$expectedGeneration lastMsgId=$lastMsgId",
+        )
+
+        val pageSize = state.config.pageSize
+        val response = conversationApi.getMessages(
+            conversationId = conversationId,
+            limit = pageSize,
+            beforeId = lastMsgId,
+        )
+        currentCoroutineContext().ensureActive()
+
+        val staleFailure: StaleWindowGenerationException? = if (response.isEmpty()) {
+            withContext(appDispatchers.io) {
+                var err: StaleWindowGenerationException? = null
+                messageDao.transaction {
+                    val currentGen = messageDao.getWindowGeneration(conversationId)
+                    if (currentGen != expectedGeneration) {
+                        err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+                    }
+                }
+                err
+            }
+        } else if (isGroup) {
+            // Reply targets must be persisted with THEIR OWN content, so map
+            // the referenced message directly (toReplyMessageEntity would
+            // walk to reply.replyTo and store the grandparent instead).
+            // They are seeded (INSERT OR IGNORE, in_timeline=false): they sit
+            // outside the local timeline window and must never become Paging
+            // anchors ahead of the window (see MessageSyncCursor).
+            val replyEntities = response
+                .mapNotNull { it.replyTo }
+                // A reply target without a sender cannot be persisted; skip
+                // it instead of aborting the whole page.
+                .filter { it.sender != null }
+                .map { reply ->
+                    Triple(
+                        reply.toMessageEntity(inTimeline = false),
+                        reply.toUserEntity(),
+                        reply.toParticipantEntity(),
+                    )
+                }
+
+            val mainEntities = response
+                .map { message ->
+                    Triple(
+                        message.toMessageEntity(),
+                        message.toUserEntity(),
+                        message.toParticipantEntity(),
+                    )
+                }
+            val userEntities = (replyEntities + mainEntities)
+                .mapNotNull { it.second }
+                .filter { it.id != ownUserId }
+                .distinct()
+            val participantEntities = (replyEntities + mainEntities)
+                .mapNotNull { it.third }
+                .distinct()
+            val replyMessageEntities = replyEntities.mapNotNull { it.first }
+            val mainMessageEntities = mainEntities.mapNotNull { it.first }
+
+            withContext(appDispatchers.io) {
+                var err: StaleWindowGenerationException? = null
+                messageDao.transaction {
+                    val currentGen = messageDao.getWindowGeneration(conversationId)
+                    if (currentGen != expectedGeneration) {
+                        err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+                        return@transaction
+                    }
+                    userDao.insertUsers(userEntities)
+                    participantDao.insertParticipants(participantEntities)
+                    messageDao.seedMessages(replyMessageEntities)
+                    messageDao.insertMessages(mainMessageEntities)
+                }
+                err
+            }
+        } else {
+            // Private chats need sender users cached too, or the sender join
+            // in keyedMessagesWithRelations returns null names.
+            val replyEntities = response
+                .mapNotNull { it.replyTo }
+                .filter { it.sender != null }
+                .map { reply -> reply.toMessageEntity(inTimeline = false) }
+            val userEntities = (response.mapNotNull { it.replyTo } + response)
+                .mapNotNull { it.toUserEntity() }
+                .filter { it.id != ownUserId }
+                .distinct()
+            val mainEntities = response.map { it.toMessageEntity() }
+            withContext(appDispatchers.io) {
+                var err: StaleWindowGenerationException? = null
+                messageDao.transaction {
+                    val currentGen = messageDao.getWindowGeneration(conversationId)
+                    if (currentGen != expectedGeneration) {
+                        err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+                        return@transaction
+                    }
+                    userDao.insertUsers(userEntities)
+                    messageDao.seedMessages(replyEntities.filterNotNull())
+                    messageDao.insertMessages(mainEntities.filterNotNull())
+                }
+                err
+            }
+        }
+
+        if (staleFailure != null) {
+            onLoadFailure(staleFailure)
+            return MediatorResult.Error(staleFailure)
+        }
+
+        return MediatorResult.Success(
+            endOfPaginationReached = response.size < pageSize,
+        )
     }
 
     override fun onLoadFailure(failure: Exception) {
