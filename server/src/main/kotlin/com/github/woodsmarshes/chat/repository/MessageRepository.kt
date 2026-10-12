@@ -157,7 +157,15 @@ class MessageDataSourceImpl : MessageRepository {
         // the conversation (or sender) vanished mid-flight; anything else is
         // a generic storage failure.
         try {
-            insertMessageInTransaction(conversationId, senderId, content, category, renderType, replyToMessageId, requestId)
+            insertMessageInTransaction(
+                conversationId = conversationId,
+                senderId = senderId,
+                content = content,
+                category = category,
+                renderType = renderType,
+                replyToMessageId = replyToMessageId,
+                requestId = requestId
+            )
         } catch (e: SQLException) {
             if (e.sqlState in FK_VIOLATION_SQL_STATES) throw AppException(MessageError.ConversationNotFound)
             throw AppException(MessageError.OperationFailed)
@@ -642,11 +650,12 @@ class MessageDataSourceImpl : MessageRepository {
                 val conversationId = row[Conversations.id].value
                 // Plain uuid() column: get() already yields Uuid? (no EntityID wrapper).
                 val lastMessageId = row[Conversations.lastMessageId]
+                val lastSeq = row[Conversations.nextSeq]
                 SyncAnchor(
                     conversationId = conversationId,
                     lastMessageId = lastMessageId,
                     // nextSeq stores the last ASSIGNED seq (bumped before insert).
-                    lastSeq = row[Conversations.nextSeq],
+                    lastSeq = lastSeq,
                     unreadCount = (unread[conversationId] ?: 0L).toInt(),
                 )
             }

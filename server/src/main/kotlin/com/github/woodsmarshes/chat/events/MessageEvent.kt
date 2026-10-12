@@ -27,6 +27,8 @@ sealed class MessageEvent {
         val messageId: Uuid,
         val conversationId: Uuid,
         val readerId: Uuid,
+        /** Server-computed unread for the reader after this read position. */
+        val unreadCount: Int,
         val timestamp: Instant,
     ) : MessageEvent()
 

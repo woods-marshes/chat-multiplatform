@@ -42,11 +42,12 @@ class MessageServiceTest {
         val messageId = Uuid.random()
         coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorUpdate.ADVANCED
 
+        coEvery { messageRepository.getUnreadCount(conversationId, userId) } returns 3L
         val result = service.markAsRead(conversationId, userId, messageId)
 
         assertTrue(result.isOk)
         coVerify(exactly = 1) { eventBus.publishMessageEvent(match {
-            it is MessageEvent.ReadMessage && it.messageId == messageId && it.readerId == userId && it.conversationId == conversationId
+            it is MessageEvent.ReadMessage && it.messageId == messageId && it.readerId == userId && it.conversationId == conversationId && it.unreadCount == 3
         }) }
         coVerify(exactly = 1) {
             participantRepository.updateReadLastMessage(userId, conversationId, messageId)

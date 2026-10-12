@@ -305,11 +305,15 @@ class MessageService(
             userId = userId, conversationId = conversationId, messageId = messageId
         )
         if (outcome == ReadCursorUpdate.ADVANCED) {
+            // The broadcast carries the recomputed unread so every device of
+            // the reader converges even when the local window has holes.
+            val unreadCount = messageRepository.getUnreadCount(conversationId, userId).toInt()
             eventBus.publishMessageEvent(
                 MessageEvent.ReadMessage(
                     messageId = messageId,
                     conversationId = conversationId,
                     readerId = userId,
+                    unreadCount = unreadCount,
                     timestamp = Clock.System.now()
                 )
             )

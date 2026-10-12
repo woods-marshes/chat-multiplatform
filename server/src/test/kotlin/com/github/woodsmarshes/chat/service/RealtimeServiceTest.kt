@@ -87,7 +87,7 @@ class RealtimeServiceTest {
         val messageId = Uuid.random()
 
         bus.publishMessageEvent(MessageEvent.WithdrawMessage(messageId, conversationId, senderId, now))
-        bus.publishMessageEvent(MessageEvent.ReadMessage(messageId, conversationId, senderId, now))
+        bus.publishMessageEvent(MessageEvent.ReadMessage(messageId, conversationId, senderId, unreadCount = 2, timestamp = now))
 
         coVerify(exactly = 1) {
             delivery.sendToConversation(conversationId, match { it is MessageEventResponse.Withdrawn })

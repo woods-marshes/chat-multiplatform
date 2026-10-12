@@ -156,6 +156,7 @@ class RealtimeService(
                 messageId = event.messageId,
                 conversationId = event.conversationId,
                 readerId = event.readerId,
+                unreadCount = event.unreadCount,
                 timestamp = event.timestamp
             )
         )
