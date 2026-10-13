@@ -1,0 +1,152 @@
+# AGENTS.md
+
+**重要：所有编程助手必须始终使用中文对话。回复、解释、建议、计划 — 全部中文。但生成的代码（含注释和 KDoc）必须使用英文。**
+
+**重要：当你对某件事不明白、不清楚、不确定、或需要询问用户才能继续时，必须先向用户确认清楚再行动，禁止猜测后直接动手。**
+
+## Ponytail：最小且完整的改动
+
+本项目采用 [Ponytail](https://github.com/DietrichGebert/ponytail) 的规则文件接入方式。本文件是项目规则的唯一维护入口；CLAUDE.md 仅作兼容引用。项目具体约束优先于通用精简建议。
+
+- 先理解任务并读取相关代码，追踪调用方、数据流、测试、fixtures、配置和导出；确认对现有用户、数据和兼容性的影响，再修改。
+- 按顺序选择第一个完整满足需求的方案：不增加不必要功能 → 复用项目已有组件与模式 → 标准库或平台能力 → 已安装依赖 → 清楚易读的一行实现 → 最少必要的新代码。项目已有组件优先于另造平台包装。
+- 不添加未要求的抽象、包装、类型转换、选项、配置或“以后可能用”的代码。遵守现有架构，不为减少行数破坏分层，也不写难读的一行代码。
+- 修复前检索所有调用方，在共享根因处修复；改动必须覆盖受影响的调用方、测试和配置，而不只是眼前的报错。
+- 移动或合并代码时保留校验和错误处理。不得削减信任边界校验、防止数据丢失的处理、安全性、无障碍支持、硬件所需校准和用户明确要求。
+- 新增非平凡逻辑（分支、循环、解析、金额或安全相关逻辑、新脚本或应用）须有最小有效测试或断言自检。纯文档或平凡改动不强行增加测试；验证以覆盖风险为准。
+- 注释只解释代码无法表达的原因。已知限制的有意捷径使用英文注释 `shortcut: <limitation>, <revisit condition>`；不得用此标记掩盖安全或数据完整性缺陷。
+- 审查时读取 diff 之外的相关调用链，按严重程度报告问题、证据、修复方式和不修复的影响，不为凑数建议改动。
+- 回复直接说明结果与验证证据；结尾用一至两行说明未做或未验证的事项及剩余风险，不能把未运行的检查说成通过。
+
+### 接入与跨环境边界
+
+- 支持 AGENTS.md 的客户端直接读取本文件；Claude Code 通过 CLAUDE.md 导入。其他客户端需在其项目规则入口引用或加载本文件，不要维护重复的规则副本。
+- 本次仅接入常驻规则，不注册 `/ponytail`、review、audit 等命令，也不安装 hooks 或修改用户级配置。完整功能须按 [官方安装文档](https://github.com/DietrichGebert/ponytail/blob/main/INSTALL.md) 在对应客户端单独安装并授权。
+- Git 同步只传播项目文件，不传播插件安装、hooks 授权或本机运行环境。插件的 `off` 也不会删除本文件中的常驻项目规则。
+- 不硬编码助手专属工具。先检查当前操作系统、shell、已安装命令及权限；没有所需能力时明确说明，不虚构工具或结果。
+- 以下架构与命令以主分支为参考。旧分支可能没有独立 desktopApp、network-api 或相同的 DI 装配；执行前核对当前分支的 settings、构建文件、版本目录和入口。不要为了符合本文把主分支业务实现迁移到旧分支。
+
+## 核心约束
+
+- **Koin DI**：ViewModel → `viewModelOf(::X)` 或 `viewModel { (params) -> X(get(), params) }`。Repository → `single<Interface> { Impl(get()) }`。Repository 接口和实现均在 `core:data`。禁止 nullable 构造函数依赖。ViewModel 直接注入 Repository，不在 domain 中建无意义的转发 UseCase。详见 `notes/koin-di.md`
+- **版本目录**：`gradle/libs.versions.toml` 是依赖版本的唯一来源。添加依赖时先加到 catalog，再通过 `libs.<alias>` 引用。完整版本清单见 `notes/versions.md`
+- **平台分离**：composewebview 库不支持 Kotlin/JS，需用 `expect`/`actual` 分离。非 JS 平台依赖加在 `jvmMain`/`androidMain`/`wasmJsMain` 的 `dependencies` 块中。KMP 不支持 JVM+Android 共享源集，需各自独立 `actual`。
+- **桌面 WebView2 UDF**：项目统一使用可写的共享 `dataDirectory`（jvm actual 设为 `~/.chat-multiplatform/webview`），这是应用策略，并非 WebView2 的同进程限制。默认目录位于可执行文件旁，可能因权限不足失败。不同 UDF 受支持；共享浏览器进程的环境选项必须兼容。创建失败应检查具体阶段与 HRESULT，不能仅凭目录差异归因。
+
+## 架构速览
+
+```
+依赖方向：androidApp / desktopApp / webApp（平台入口）→ composeApp（共享 UI 装配）→ core/* + features/*     server → core:model + core:network     web → core:common + core:model + core:network + core:datastore
+```
+
+| 层 | 模块 | 关键内容 |
+|---|---|---|
+| Common | `core:common` | AppDispatchers, Koin commonModule, PlatformContext |
+| Model | `core:model` | 领域模型、Error 密封类、UiState、Article/ArticleStatus（纯数据，仅依赖 kotlinx-serialization） |
+| Domain | `core:domain` | 预留：未来有真实业务逻辑的 UseCase（当前 module{} 空壳） |
+| Data | `core:data` | 仓库接口 + 实现，编排 network ↔ database ↔ datastore，ArticleRepository（离线优先），RemoteMediator |
+| Network | `core:network` | Ktor HttpClient, REST API (ArticleApi), WebSocket, DTOs (ArticleListResponse 等), Ktor Resources 路由 (V1) |
+| Database | `core:database` | SQLDelight（含 Article；表数量以当前 schema 为准）+ DAO + QueryPagingSource；`core:database-room` 为 Room 3.0 替代 |
+| Datastore | `core:datastore` | Key-value 存储（token、偏好设置） |
+| UI | `core:ui` | Compose Multiplatform 组件, Material 3 (Miuix), i18n (Lyricist), ArticleCardItem |
+| Navigation | `core:navigation` | Navigation3 路由 |
+| Features | `features/*` | 每个 feature 含 model/ui/di/navigation 四层 |
+| Server | `server/` | Ktor + Netty, Exposed ORM（表数量以当前 schema 为准）, JWT auth, WebSocket, Ktor Resources 路由 |
+| Web 前端 | `web/` | Kotlin/JS (ES2015) + React + Tiptap，通过 Koin 注入 core 模块 |
+| Tiptap 桥接 | `tiptap-bridge/` | React 组件库：UMD 打包供 web 调用 + Vite 自包含 HTML 供 ComposeNativeWebView 加载 |
+
+**DI 注册顺序**：`commonModule → dataStoreModule → databaseModule → daosModule → serializersModule → networkModule → dataModule → domainModule → sessionModule → feature ViewModel modules`
+
+## 文章系统概览
+
+```
+tiptap-bridge (React/Vite)
+├── UMD 构建 ──▶ web (Kotlin/JS) ──▶ 浏览器直接渲染
+└── 自包含 HTML ──▶ ComposeNativeWebView ──▶ Desktop/Android 原生 WebView
+                           │
+                    features/article (浏览) + features/article-editor (编辑)
+                           │
+                    ArticleRepository (离线优先: DB → API → Paging)
+                           │
+                    core:network (ArticleApi, UUIDv7 游标分页)
+                           │
+                    server (ArticleService → ArticleRepository → Exposed ORM)
+```
+
+- **web 模块**：使用 `@file:JsModule` 声明调用 UMD，列表 + 详情 + 编辑均已实现分页
+- **Compose 客户端**：features/article（列表 + 详情 WebView）+ features/article-editor（Tiptap 编辑器 WebView）
+- **server**：UUIDv7 游标分页（`beforeId`），完整 REST CRUD
+- **ComposeNativeWebView**：`dev.nucleusframework:composewebview:1.0.3`，支持 android/jvm/wasmJs，不支持 js；桌面端由 Nucleus Tao 后端托管（`desktopApp` 入口为 `nucleusApplication(backend = NucleusBackend.Tao)`），WebView 与 Compose 同窗口栈合成，可正常叠加 Compose 浮层
+- **JS Bridge 通信**：Base64 编码传 JSON，`rememberUpdatedState` 防闭包过期，"一次性初始化"防白屏重载
+
+## 常用命令
+
+| 目的 | 命令 |
+|---|---|
+| 编译检查（客户端） | `./gradlew :desktopApp:compileKotlin` |
+| 运行全部测试 | `./gradlew check` |
+| 运行桌面客户端 | `./gradlew :desktopApp:run` |
+| 运行服务端 (端口 9051) | `./gradlew :server:run` |
+| 服务端测试 | `./gradlew :server:test` |
+| Web 开发构建 | `./gradlew :web:jsBrowserDevelopmentRun` |
+| Web 生产构建 | `./gradlew :web:jsBrowserDistribution` |
+| Tiptap WebView 构建 | `npm run build:webview`（在 tiptap-bridge/ 下） |
+| 列出所有任务 | `./gradlew tasks` |
+
+Windows PowerShell 使用 `./gradlew.bat` 替代 `./gradlew`。旧分支没有 desktopApp 时，先确认 `:composeApp:jvmMainClasses` 和 `:composeApp:run` 是否存在，不直接套用主分支命令。
+
+**注意**：配置缓存已启用，遇到异常行为用 `--no-configuration-cache`。JVM daemon: `-Xmx3072M`。代理: `127.0.0.1:10808`（`gradle.properties`）。更多命令和测试详情见 `notes/testing.md`。
+
+## 约定
+
+- **Git Commit**：`<scope>: <summary>`，scope 可选 `client`/`server`/`web`/`core`/`features`/`build`/`deps`/`tiptap`，主题 ≤72 字符，英文
+- **代码风格**：Kotlin official style，4 空格缩进，显式 import（不用通配符），英文标识符和注释
+- **Compose**：参数顺序 → required callbacks, `Modifier`, flags, visual params, content lambda 最后。颜色用 `MiuixTheme.colorScheme.*`。不确定 API 用法时用当前环境可用的网页检索或浏览工具 查官方文档，禁止猜测
+- **失败策略**：server 是数据权威方，跨多表写入 → 单事务 + `Err(...).bind()` 整体回滚，不用 runCatching 吞错；client 往本地缓存应用服务端批量数据 → 逐行隔离（坏行跳过、好行入库，一条坏数据不得中止整批同步），`runCatching` 只允许包住单行插入，不许包转换逻辑或整段流程
+- **JVM 目标**：composeApp/Android → JVM 17，desktopApp → JVM 25，server → JVM 25
+- **JS 目标**：web 模块 → ES2015，browser 平台
+- **API 基址**：`http://127.0.0.1:9051/v1/`。复制 `network-config.properties.template` → `network-config.properties` 自定义（该文件已 gitignore）
+- **Web 模块特殊规则**：
+  - Kotlin/JS 通过 `@file:JsModule` + `@file:JsNonModule` 声明外部 JS 模块
+  - React 组件包装为 `FC<Props>` 的 `external` 声明或 `val X = FC<XProps> { ... }` 的 Kotlin DSL
+  - JSON 序列化：Kotlin `JsonElement` ↔ JS `dynamic` 需通过 `JSON.stringify` + `ProjectJson` 手动转换
+
+## 工作效率与验证
+
+- 优先用内容检索（例如 `rg`）定位关键行，再按需读取上下文，避免反复读取大文件。
+- 重要功能或重构前先给出简短计划；复杂多步骤任务使用当前客户端可用的任务工具，或简短文本记录进度。小改动不强制建计划。
+- 上文已提供的信息直接引用，不复述；不主动输出完整文件。长对话按客户端能力建议压缩上下文或提供交接摘要。
+- 对不确定的 Compose / Kotlin / Ktor / React API，先查下方官方文档；无法核实且会影响方案时向用户确认，不猜测接口。
+- 修改前检查 Git 状态，保护用户未提交工作，不擅自 reset、stash、覆盖或合并无关业务改动。
+- 选择覆盖改动风险的最小验证；明确列出实际执行的命令、结果和未执行原因。纯规则修改检查 diff、引用和跨分支文件一致性即可。
+
+## 实时文档查询
+
+| 场景 | 查询 URL |
+|---|---|
+| Compose Multiplatform 组件/API | `https://www.jetbrains.com/compose-multiplatform/docs/` |
+| Android Compose 状态/性能/Modifier | `https://developer.android.com/develop/ui/compose/` + 子路径 |
+| Kotlin 标准库 / coroutines | `https://kotlinlang.org/api/kotlinx.coroutines/` |
+| Ktor Client/Server | `https://ktor.io/docs/` |
+| Koin DI (Compose 集成) | `https://insert-koin.io/docs/reference/koin-compose/` |
+| Coil 图片加载 | `https://coil-kt.github.io/coil/compose/` |
+| Navigation3 | `https://developer.android.com/jetpack/androidx/releases/navigation` |
+| SQLDelight | `https://cashapp.github.io/sqldelight/` |
+| ComposeNativeWebView | `https://github.com/kdroidFilter/ComposeNativeWebview` |
+| Kotlin/JS React Wrappers | `https://github.com/JetBrains/kotlin-wrappers` |
+
+## 详细文档索引
+
+| 文档 | 内容 |
+|---|---|
+| `notes/navigation3.md` | Navigation 3 核心：back stack、NavEntry、Scene、SceneStrategy、动画、模块化 |
+| `notes/adaptive-layout.md` | M3 Adaptive：WindowSizeClass、ListDetailSceneStrategy、NavigationSuiteScaffold、Drawer、Canonical Layouts |
+| `notes/koin-di.md` | Koin DI 完整规则、代码示例、反模式、Scope、测试 |
+| `notes/ktor-di.md` | Server 端 Ktor + Koin 集成 |
+| `notes/versions.md` | 完整依赖版本清单 |
+| `notes/testing.md` | 各模块测试配置与命令 |
+| `notes/workflows.md` | 添加 Feature / 修改数据库 / 修复 Bug 详细步骤 |
+
+## 来源与许可
+
+Ponytail 原则依据上游 AGENTS.md 改编（2026-10-14 查阅）；项目架构约束来自原 CLAUDE.md。上游采用 MIT License，许可原文见 [notes/ponytail-LICENSE.txt](notes/ponytail-LICENSE.txt)。这是一份项目适配规则，不会自动跟随上游升级。
