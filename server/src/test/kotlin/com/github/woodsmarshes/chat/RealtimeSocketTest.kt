@@ -9,6 +9,7 @@ import com.github.woodsmarshes.chat.core.network.dto.conversation.CreatePrivateR
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
 import io.ktor.client.*
@@ -84,42 +85,45 @@ class RealtimeSocketTest {
         }.body<Conversation>()
 
         val received = CompletableDeferred<MessageEventResponse.UserTyping>()
-        val bConnected = CompletableDeferred<Unit>()
+        // The handshake's SyncStateResponse.Anchor frame is sent right after
+        // addUserSession, so receiving it proves Bob's connection is in the
+        // shared session index — a deterministic registration signal. A fixed
+        // sleep here raced that registration under CI load and dropped the
+        // typing broadcast.
+        val bobRegistered = CompletableDeferred<Unit>()
 
         coroutineScope {
             val bobJob = launch {
                 client.webSocket("/ws?access_token=$tokenB") {
-                    bConnected.complete(Unit)
                     while (true) {
                         // withTimeoutOrNull instead of withTimeout: a plain
                         // timeout exception would cancel this coroutine
                         // silently and leave the awaiting test body hanging.
-                        // Decode as the RealtimeEvent base: the handshake now
-                        // also delivers a SyncStateResponse.Anchor frame,
-                        // which must be skipped here rather than failing the
-                        // MessageEventResponse-only decode.
+                        // Decode as the RealtimeEvent base: the handshake also
+                        // delivers a SyncStateResponse.Anchor frame, which
+                        // doubles as the registration signal below.
                         val event = withTimeoutOrNull(15.seconds) {
                             receiveDeserialized<RealtimeEvent>()
                         }
                         if (event == null) {
                             received.completeExceptionally(
-                                AssertionError("no MessageEventResponse within 15s")
+                                AssertionError("no realtime frame within 15s")
                             )
                             return@webSocket
                         }
-                        if (event is MessageEventResponse.UserTyping) {
-                            received.complete(event)
-                            return@webSocket
+                        when (event) {
+                            is SyncStateResponse.Anchor -> bobRegistered.complete(Unit)
+                            is MessageEventResponse.UserTyping -> {
+                                received.complete(event)
+                                return@webSocket
+                            }
+                            else -> Unit
                         }
                     }
                 }
             }
 
-            bConnected.await()
-            // The client-side handshake returning does not guarantee the
-            // server has registered the session in the shared index yet;
-            // give that registration a beat before triggering a lookup.
-            delay(500)
+            bobRegistered.await()
 
             client.webSocket("/ws?access_token=$tokenA") {
                 // Explicit sealed type: serializing the concrete Typing
@@ -133,6 +137,12 @@ class RealtimeSocketTest {
                         isTyping = true,
                     )
                 )
+                // Hold A's connection open: the typing broadcast goes through
+                // a 1s server-side debounce, and disconnect cleanup cancels
+                // that pending job. Closing the socket right after sending
+                // races the cleanup against the debounce and intermittently
+                // swallows the broadcast.
+                received.await()
             }
 
             val typing = received.await()
