@@ -1,0 +1,2 @@
+# Preserve upstream prompt bytes on every platform.
+AGENTS.md -text
