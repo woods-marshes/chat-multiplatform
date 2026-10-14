@@ -158,10 +158,6 @@ class MessageServiceSendTest {
     @Test
     fun outboxResendReturnsPersistedMessageWithoutConsumingUploadOrBroadcasting() = runBlocking {
         givenMembership()
-        val persisted = message(requestId)
-        coEvery {
-            messageRepository.findMessageByRequestId(requestId, conversationId, userId)
-        } returns persisted
         val media = ImageContent(
             url = "/uploads/image/abc.png",
             fileName = "abc.png",
@@ -169,6 +165,12 @@ class MessageServiceSendTest {
             height = 1,
             size = 1,
         )
+        // The outbox resend must repeat the SAME payload: a mismatched
+        // requestId/content pair is a hard rejection (InvalidContent).
+        val persisted = message(requestId).copy(content = media)
+        coEvery {
+            messageRepository.findMessageByRequestId(requestId, conversationId, userId)
+        } returns persisted
 
         val result = service.sendMessage(
             userId = userId,

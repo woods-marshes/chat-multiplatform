@@ -151,18 +151,6 @@ fun Route.conversationRoutes() {
             call.respond(messages)
         }
 
-        // 增量同步消息
-        get<V1.Conversations.Id.Messages.Sync> { params ->
-            val userId = call.extractUserId()
-            val messages = messageService.syncMessages(
-                userId = userId,
-                conversationId = params.parent.parent.id,
-                afterId = params.afterId,
-                limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE)
-            ).getOrThrow()
-            call.respond(messages)
-        }
-
         // 上报已读
         post<V1.Conversations.Id.Read> { params ->
             val userId = call.extractUserId()

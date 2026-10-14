@@ -40,7 +40,8 @@ fun GetLatestMessage.toMessageUiModel(replyMessageUiModel: MessageUiModel) = Mes
         MessageStatus.SENDING -> MessageState.Sending
         MessageStatus.FAILED -> MessageState.SendFailed("failed")
         MessageStatus.SENT, null -> MessageState.Completed
-    }
+    },
+    isReadReceiptEligible = this.revoked_at == null,
 )
 
 
@@ -89,7 +90,8 @@ fun GetMessagesWithAllRelationsByPage.toUiModel(): MessageUiModel {
                 replyTo = null, // 这里只做一层回复，不再递归
                 content = reply_content!!,
                 bubbleColor = reply_senderParticipantSettings?.bubbleColor,
-                sendStatus = reply_local_send_status.toUiState()
+                sendStatus = reply_local_send_status.toUiState(),
+                isReadReceiptEligible = reply_revoked_at == null,
             )
         } else {
             null
@@ -106,7 +108,8 @@ fun GetMessagesWithAllRelationsByPage.toUiModel(): MessageUiModel {
         replyTo = replyUi,
         content = content,
         bubbleColor = senderParticipantSettings?.bubbleColor, // 你如果有气泡颜色规则，可以在这里算
-        sendStatus = local_send_status.toUiState()
+        sendStatus = local_send_status.toUiState(),
+        isReadReceiptEligible = revoked_at == null,
     )
 }
 
@@ -249,7 +252,8 @@ fun KeyedMessagesWithRelations.toUiModel(): MessageUiModel {
                 replyTo = null, // 这里只做一层回复，不再递归
                 content = reply_content!!,
                 bubbleColor = reply_senderParticipantSettings?.bubbleColor,
-                sendStatus = reply_local_send_status.toUiState()
+                sendStatus = reply_local_send_status.toUiState(),
+                isReadReceiptEligible = reply_revoked_at == null,
             )
         } else {
             null
@@ -266,6 +270,7 @@ fun KeyedMessagesWithRelations.toUiModel(): MessageUiModel {
         replyTo = replyUi,
         content = content,
         bubbleColor = senderParticipantSettings?.bubbleColor, // 你如果有气泡颜色规则，可以在这里算
-        sendStatus = local_send_status.toUiState()
+        sendStatus = local_send_status.toUiState(),
+        isReadReceiptEligible = revoked_at == null,
     )
 }

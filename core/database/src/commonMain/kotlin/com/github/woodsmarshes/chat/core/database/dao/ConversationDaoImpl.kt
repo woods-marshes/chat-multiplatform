@@ -31,6 +31,9 @@ class ConversationDaoImpl(
     override suspend fun findConversationById(id: Uuid): ConversationEntity? =
         writeQueries().getConversationById(id).executeAsOneOrNull()
 
+    override suspend fun findAllActiveConversations(): List<ConversationEntity> =
+        writeQueries().getAllActiveConversations().executeAsList()
+
     override suspend fun insertConversation(conversation: ConversationEntity) {
         writeQueries().upsertConversation(conversation)
     }

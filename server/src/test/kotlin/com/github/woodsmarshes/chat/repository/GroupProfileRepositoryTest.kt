@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.GroupMetadata
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
@@ -46,7 +47,7 @@ class GroupProfileRepositoryTest {
     private fun seed() = runBlocking {
         val now = Clock.System.now()
         transaction(database) {
-            SchemaUtils.create(Users, Conversations, GroupProfiles)
+            SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
             Users.insert {
                 it[id] = groupOwnerId
                 it[username] = "owner-$groupOwnerId"

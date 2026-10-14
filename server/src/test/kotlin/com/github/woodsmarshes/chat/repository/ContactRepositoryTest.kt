@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.connectToH2Database
@@ -46,7 +47,7 @@ class ContactRepositoryTest {
     private fun seed() = runBlocking {
         val now = Clock.System.now()
         transaction(database) {
-            SchemaUtils.create(Users, Contacts)
+            SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
             listOf(userA, userB).forEach { id ->
                 Users.insert {
                     it[this.id] = id

@@ -112,6 +112,9 @@ class ContactDaoImpl(
             extractor = { it.executeAsList() },
         )
 
+    override suspend fun selectAllContactsForSync(): List<ContactEntity> =
+        writeQueries().selectAllContactsForSync().executeAsList()
+
     override fun searchContacts(query: String): Flow<List<SearchContacts>> =
         sessionBoundQueryFlow(
             gate = sessionGate,
@@ -138,6 +141,10 @@ class ContactDaoImpl(
 
     override suspend fun deleteContact(contactId: Uuid) {
         writeQueries().deleteContact(contactId)
+    }
+
+    override suspend fun deleteContacts(contactIds: List<Uuid>) {
+        if (contactIds.isNotEmpty()) writeQueries().deleteContacts(contactIds)
     }
 
     override fun countFriends(): Flow<Long> =
@@ -214,6 +221,9 @@ private class PinnedContactDao(
             extractor = { it.executeAsList() },
         )
 
+    override suspend fun selectAllContactsForSync(): List<ContactEntity> =
+        writeQueries().selectAllContactsForSync().executeAsList()
+
     override fun searchContacts(query: String): Flow<List<SearchContacts>> =
         sessionBoundQueryFlow(
             gate = sessionGate,
@@ -240,6 +250,10 @@ private class PinnedContactDao(
 
     override suspend fun deleteContact(contactId: Uuid) {
         writeQueries().deleteContact(contactId)
+    }
+
+    override suspend fun deleteContacts(contactIds: List<Uuid>) {
+        if (contactIds.isNotEmpty()) writeQueries().deleteContacts(contactIds)
     }
 
     override fun countFriends(): Flow<Long> =

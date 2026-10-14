@@ -12,6 +12,7 @@ import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.OfflineFirstMessageRepositoryImpl
 import com.github.woodsmarshes.chat.core.data.repository.UnreadRefreshCoordinator
 import com.github.woodsmarshes.chat.core.data.repository.UserRepositoryImpl
+import com.github.woodsmarshes.chat.core.data.repository.UserSyncApplier
 import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDaoImpl
@@ -48,6 +49,7 @@ import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ConversationEntity
@@ -196,7 +198,6 @@ class SessionManagerTest {
             category = MessageCategory.NORMAL,
             createdAt = now,
             content = TextContent("hello $seq"),
-            seq = seq,
         ),
         conversationId,
         userId,
@@ -250,7 +251,7 @@ class SessionManagerTest {
         }
 
         val conversationApi = mockk<ConversationApi>()
-        coEvery { conversationApi.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { conversationApi.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
 
         val realRepo = OfflineFirstMessageRepositoryImpl(
             mediatorFactory = io.mockk.mockk(),
@@ -265,7 +266,19 @@ class SessionManagerTest {
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
             groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
-            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(dao),
+            userSyncApplier = UserSyncApplier(
+                contactApi = mockk<ContactApi>(),
+                conversationApi = mockk<ConversationApi>(),
+                contactDao = ContactDaoImpl({ db }, dispatcher),
+                contactRequestDao = ContactRequestDaoImpl({ db }, dispatcher),
+                userDao = UserDaoImpl({ db }, dispatcher),
+                groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+                participantDao = ParticipantDaoImpl({ db }, dispatcher),
+                conversationDao = ConversationDaoImpl({ db }, dispatcher),
+                groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+                messageDao = dao,
+            ),
         )
         val trackedRepo = object : MessageRepository by realRepo {
             override suspend fun startSession() {
@@ -365,7 +378,7 @@ class SessionManagerTest {
         }
 
         val conversationApi = mockk<ConversationApi>()
-        coEvery { conversationApi.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { conversationApi.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
 
         val realRepo = OfflineFirstMessageRepositoryImpl(
             mediatorFactory = io.mockk.mockk(),
@@ -380,7 +393,19 @@ class SessionManagerTest {
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
             groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
-            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(dao),
+            userSyncApplier = UserSyncApplier(
+                contactApi = mockk<ContactApi>(),
+                conversationApi = mockk<ConversationApi>(),
+                contactDao = ContactDaoImpl({ db }, dispatcher),
+                contactRequestDao = ContactRequestDaoImpl({ db }, dispatcher),
+                userDao = UserDaoImpl({ db }, dispatcher),
+                groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+                participantDao = ParticipantDaoImpl({ db }, dispatcher),
+                conversationDao = ConversationDaoImpl({ db }, dispatcher),
+                groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+                messageDao = dao,
+            ),
         )
         val trackedRepo = object : MessageRepository by realRepo {
             override suspend fun startSession() {
@@ -855,7 +880,7 @@ class SessionManagerTest {
         }
 
         val conversationApi = mockk<ConversationApi>()
-        coEvery { conversationApi.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { conversationApi.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
 
         val repo = OfflineFirstMessageRepositoryImpl(
             mediatorFactory = io.mockk.mockk(),
@@ -870,7 +895,19 @@ class SessionManagerTest {
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
             groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
-            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(dao),
+            userSyncApplier = UserSyncApplier(
+                contactApi = mockk<ContactApi>(),
+                conversationApi = mockk<ConversationApi>(),
+                contactDao = ContactDaoImpl({ db }, dispatcher),
+                contactRequestDao = ContactRequestDaoImpl({ db }, dispatcher),
+                userDao = UserDaoImpl({ db }, dispatcher),
+                groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+                participantDao = ParticipantDaoImpl({ db }, dispatcher),
+                conversationDao = ConversationDaoImpl({ db }, dispatcher),
+                groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+                messageDao = dao,
+            ),
         )
 
         try {
@@ -961,7 +998,7 @@ class SessionManagerTest {
         coEvery { realtimeApi.send(any()) } returns true
 
         val conversationApi = mockk<ConversationApi>()
-        coEvery { conversationApi.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { conversationApi.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
 
         val repo = OfflineFirstMessageRepositoryImpl(
             mediatorFactory = io.mockk.mockk(),
@@ -976,7 +1013,19 @@ class SessionManagerTest {
             userSettingDataSource = userSettingDataSource,
             scope = repoScope,
             groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
-            unreadRefreshCoordinator = UnreadRefreshCoordinator(),
+            unreadRefreshCoordinator = UnreadRefreshCoordinator(dao),
+            userSyncApplier = UserSyncApplier(
+                contactApi = mockk<ContactApi>(),
+                conversationApi = mockk<ConversationApi>(),
+                contactDao = ContactDaoImpl({ db }, dispatcher),
+                contactRequestDao = ContactRequestDaoImpl({ db }, dispatcher),
+                userDao = UserDaoImpl({ db }, dispatcher),
+                groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, dispatcher),
+                participantDao = ParticipantDaoImpl({ db }, dispatcher),
+                conversationDao = ConversationDaoImpl({ db }, dispatcher),
+                groupProfileDao = GroupProfileDaoImpl({ db }, dispatcher),
+                messageDao = dao,
+            ),
         )
 
         try {

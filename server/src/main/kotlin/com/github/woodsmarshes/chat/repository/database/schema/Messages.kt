@@ -20,9 +20,6 @@ object Messages : UuidTable(name = "messages", uuidVersion = UuidVersion.V7) {
     val replyToMessageId = reference("reply_to_message_id", Messages).nullable()
     val createdAt = timestamp("created_at")
     val revokedAt = timestamp("revoked_at").nullable()
-    // Per-conversation delivery order, allocated gap-free in the insert
-    // transaction; clients detect delivery gaps from it.
-    val seq = long("seq").nullable()
     // The sender's outbox id (UUIDv7 from the client). Stored separately from
     // the primary key so the server, not the client, owns message identity;
     // unique per sender+conversation for idempotent retries.

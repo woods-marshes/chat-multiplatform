@@ -13,7 +13,7 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByIds
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
-import io.github.woodsmarshes.chat.db.MessageSyncCursor
+
 import kotlinx.coroutines.flow.Flow
 import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
 import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
@@ -184,13 +184,26 @@ class MessageDaoImpl(
         }
     }
 
-    override suspend fun getSyncCursor(conversationId: Uuid): MessageSyncCursor? =
-        writeQueries().getSyncCursor(conversationId.toString()).executeAsOneOrNull()
+    override suspend fun getScopeCursor(scope: String, id: Uuid): Long? =
+        writeQueries().getScopeCursor(scope, id.toString()).executeAsOneOrNull()
 
-    override suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid, afterSeq: Long) {
-        writeQueries().setSyncCursor(conversationId.toString(), afterId.toString(), afterSeq)
+    override suspend fun setScopeCursor(scope: String, id: Uuid, revision: Long) {
+        writeQueries().setScopeCursor(scope, id.toString(), revision)
     }
 
+    override suspend fun markUnreadRefreshPending(conversationId: Uuid) {
+        writeQueries().markUnreadRefreshPending(conversationId.toString())
+    }
+
+    override suspend fun getUnreadRefreshPendingConversations(): List<Uuid> =
+        writeQueries().getUnreadRefreshPendingConversations().executeAsList().map(Uuid::parse)
+
+    override suspend fun getUnreadRefreshPendingGeneration(conversationId: Uuid): Long? =
+        writeQueries().getUnreadRefreshPendingGeneration(conversationId.toString()).executeAsOneOrNull()
+
+    override suspend fun confirmUnreadRefreshPending(conversationId: Uuid, expectedGeneration: Long) {
+        writeQueries().confirmUnreadRefreshPending(conversationId.toString(), expectedGeneration)
+    }
     override suspend fun seedMessage(message: MessageEntity) {
         writeQueries().seedMessage(message)
     }
@@ -223,5 +236,17 @@ class MessageDaoImpl(
             q.demoteTimelineBefore(conversationId = conversationId, windowOldestId = windowOldestId)
             q.advanceWindowGeneration(conversationId.toString())
         }
+    }
+
+    override suspend fun demoteAllTimelineMessages(conversationId: Uuid) {
+        val q = writeQueries()
+        q.transaction {
+            q.demoteAllTimelineMessages(conversationId = conversationId)
+            q.advanceWindowGeneration(conversationId.toString())
+        }
+    }
+
+    override suspend fun advanceWindowGeneration(conversationId: Uuid) {
+        writeQueries().advanceWindowGeneration(conversationId.toString())
     }
 }

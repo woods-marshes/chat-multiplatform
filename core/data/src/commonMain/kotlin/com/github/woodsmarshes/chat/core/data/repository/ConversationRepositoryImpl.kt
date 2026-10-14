@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
 import com.github.woodsmarshes.chat.core.data.model.toConversation
@@ -38,6 +39,7 @@ import com.github.woodsmarshes.chat.core.model.ui.LastMessageInfo
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
+import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.network.dto.conversation.CreateGroupRequest
 import com.github.woodsmarshes.chat.core.network.dto.conversation.CreatePrivateRequest
 import com.github.woodsmarshes.chat.core.network.dto.conversation.GroupJoinRequestAction
@@ -146,7 +148,8 @@ class ConversationRepositoryImpl(
                                             senderName = entity.last_message_sender_participant_settings?.nickname ?: entity.last_message_sender_username,
                                             senderAvatar = entity.last_message_sender_avatar,
                                             createdAt = entity.last_message_created_at!!,
-                                            isOwnMessage = currentUser.id == entity.last_message_sender_id
+                                            isOwnMessage = currentUser.id == entity.last_message_sender_id,
+                                            revokedAt = entity.last_message_revoked_at,
                                         )
                                     } else null
                                 log.debug { "[getConversationListFlow] lastMessage=$lastMessage" }
@@ -191,44 +194,72 @@ class ConversationRepositoryImpl(
 
     override suspend fun syncConversations(): Result<Unit, ConversationError> = sessionOperation { coroutineBinding {
         val snapshotToken = unreadRefreshCoordinator.captureListGeneration()
-        bindApi(ConversationError::Unknown) {
-            userApi.getMyConversations()
-        }.also { responses ->
-            conversationDao.insertConversations(responses.map { it.toConversation().toEntity() })
-            val (groupResponses, privateResponses) = responses.partition { it.type == ConversationType.GROUP }
-            userDao.insertUsers(
-                privateResponses.mapNotNull { it.toUserEntity() }
-                        + groupResponses.mapNotNull { it.toGroupOwnerUserEntity() }
-                        // A group's last message can come from any member (or
-                        // from self in a private chat); MessageEntity.user_id
-                        // has a foreign key, so every sender needs a row.
-                        + responses.mapNotNull { it.lastMessage?.sender?.toUserEntity() }
-            )
-            groupProfileDao.insertGroupProfiles(groupResponses.mapNotNull { it.toGroupProfileEntity() })
-            participantDao.insertParticipants(responses.map { it.toParticipantEntity() })
-            // The sync API carries no peer participant row for private chats;
-            // seed it once so peer lookups (name, avatar) resolve.
-            participantDao.insertParticipantsIfAbsent(responses.mapNotNull { it.toPeerParticipantEntity() })
-            // A single malformed lastMessage must not abort the whole sync:
-            // each insert runs in its own transaction, so one row violating a
-            // foreign key (sender, conversation, anything) skips only itself.
-            // Preview-only seed (in_timeline=false): the row feeds the list
-            // preview without becoming a Paging anchor ahead of the window.
-            responses.mapNotNull { response -> response.toMessageEntity() }
-                .forEach { message ->
-                    runCatching { messageDao.seedMessage(message) }
-                        .onFailure { if (it is CancellationException) throw it; log.warn(it) { "Skipping unpersistable last message ${message.id}" } }
-                }
-            // Server-computed unread is authoritative: apply it through the
-            // shared coordinator so a late list snapshot never overwrites a
-            // newer local read or live-event refresh.
-            unreadRefreshCoordinator.applyListSnapshot(
-                token = snapshotToken,
-                entries = responses.map { it.conversationId to it.unreadCount.toLong() },
-                conversationDao = conversationDao,
-            )
-        }
+        val responses = bindApi(ConversationError::Unknown) { userApi.getMyConversations() }
+        persistConversationResponses(responses, snapshotToken, softDeleteMissing = false)
     } }
+
+    /**
+     * Joins the caller's active database transaction (see the interface KDoc):
+     * every statement below is a one-shot write on the session-bound database,
+     * so they all commit or roll back together with the snapshot cursor.
+     * Unread counts are NOT applied here (and the unread coordinator is not
+     * touched at all while the transaction is open) — the sync worker schedules
+     * coalesced authoritative detail refreshes after the commit, so no
+     * in-memory generation state can outlive a rolled-back transaction.
+     */
+    override suspend fun applyUserSnapshotConversations(
+        responses: List<ConversationResponse>,
+    ): Result<Unit, ConversationError> {
+        return try {
+            persistConversationResponses(
+                responses = responses,
+                snapshotToken = null,
+                softDeleteMissing = true,
+                applyUnreadSnapshot = false,
+            )
+            Ok(Unit)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Err(ConversationError.Unknown(failure.message ?: "Failed to apply USER conversation snapshot"))
+        }
+    }
+
+    private suspend fun persistConversationResponses(
+        responses: List<ConversationResponse>,
+        snapshotToken: UnreadRefreshCoordinator.ListSnapshotToken?,
+        softDeleteMissing: Boolean,
+        applyUnreadSnapshot: Boolean = true,
+    ) {
+        val now = Clock.System.now()
+        val meId = ownUser.firstOrNull()?.id
+        val snapshotIds = responses.mapTo(HashSet(responses.size)) { it.conversationId }
+        if (softDeleteMissing) {
+            val activeLocal = conversationDao.findAllActiveConversations()
+            for (local in activeLocal) {
+                if (local.id !in snapshotIds) {
+                    if (meId != null) participantDao.removeParticipant(local.id, meId)
+                    conversationDao.softDeleteConversation(local.id, now)
+                    groupJoinRequestDao.deleteGroupJoinRequestsForConversation(local.id)
+                }
+            }
+        }
+        conversationDao.insertConversations(responses.map { it.toConversation().toEntity() })
+        val (groups, privates) = responses.partition { it.type == ConversationType.GROUP }
+        userDao.insertUsers(privates.mapNotNull { it.toUserEntity() } + groups.mapNotNull { it.toGroupOwnerUserEntity() } + responses.mapNotNull { it.lastMessage?.sender?.toUserEntity() })
+        groupProfileDao.insertGroupProfiles(groups.mapNotNull { it.toGroupProfileEntity() })
+        participantDao.insertParticipants(responses.map { it.toParticipantEntity() })
+        participantDao.insertParticipantsIfAbsent(responses.mapNotNull { it.toPeerParticipantEntity() })
+        responses.mapNotNull { it.toMessageEntity() }.forEach { message ->
+            runCatching { messageDao.seedMessage(message) }
+                .onFailure { if (it is CancellationException) throw it; log.warn(it) { "Skipping unpersistable last message ${message.id}" } }
+        }
+        if (applyUnreadSnapshot && snapshotToken != null) unreadRefreshCoordinator.applyListSnapshot(
+            token = snapshotToken,
+            entries = responses.map { it.conversationId to it.unreadCount.toLong() },
+            conversationDao = conversationDao,
+        )
+    }
 
     override suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError> = sessionOperation { coroutineBinding {
         val conversation = bindApi(ConversationError::Unknown) {

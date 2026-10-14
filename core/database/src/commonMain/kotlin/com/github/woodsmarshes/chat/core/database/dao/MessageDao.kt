@@ -10,7 +10,7 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByIds
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
-import io.github.woodsmarshes.chat.db.MessageSyncCursor
+
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -74,6 +74,19 @@ interface MessageDao {
     suspend fun demoteTimelineBefore(conversationId: Uuid, windowOldestId: Uuid)
 
     /**
+     * Demotes all confirmed messages in [conversationId] to
+     * [MessageEntity.in_timeline] = false and increments the persistent
+     * timeline window generation in the same transaction (used when a
+     * conversation snapshot is empty).
+     */
+    suspend fun demoteAllTimelineMessages(conversationId: Uuid)
+
+    /**
+     * Increments the persistent timeline window generation for [conversationId].
+     */
+    suspend fun advanceWindowGeneration(conversationId: Uuid)
+
+    /**
      * Returns the persistent timeline window generation for [conversationId]
      * (0 when the conversation has never experienced a window demotion).
      */
@@ -105,8 +118,20 @@ interface MessageDao {
 
     suspend fun seedMessages(messages: List<MessageEntity>)
 
-    suspend fun getSyncCursor(conversationId: Uuid): MessageSyncCursor?
-    suspend fun setSyncCursor(conversationId: Uuid, afterId: Uuid, afterSeq: Long)
+    suspend fun getScopeCursor(scope: String, id: Uuid): Long?
+    suspend fun setScopeCursor(scope: String, id: Uuid, revision: Long)
+
+    /**
+     * Crash-safe unread recovery task for a conversation, kept separate from
+     * the sync cursor (a pending task must not make an uninitialized
+     * conversation look initialized). [markUnreadRefreshPending] increments a
+     * monotonic generation; [confirmUnreadRefreshPending] retires the task
+     * only when the generation still matches the one the request read.
+     */
+    suspend fun markUnreadRefreshPending(conversationId: Uuid)
+    suspend fun getUnreadRefreshPendingConversations(): List<Uuid>
+    suspend fun getUnreadRefreshPendingGeneration(conversationId: Uuid): Long?
+    suspend fun confirmUnreadRefreshPending(conversationId: Uuid, expectedGeneration: Long)
 
     // 删除
     suspend fun deleteMessage(id: Uuid)

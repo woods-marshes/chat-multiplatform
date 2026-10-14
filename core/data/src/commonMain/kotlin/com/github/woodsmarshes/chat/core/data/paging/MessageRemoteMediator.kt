@@ -102,9 +102,9 @@ class MessageRemoteMediator(
             // Reply targets must be persisted with THEIR OWN content, so map
             // the referenced message directly (toReplyMessageEntity would
             // walk to reply.replyTo and store the grandparent instead).
-            // They are seeded (INSERT OR IGNORE, in_timeline=false): they sit
-            // outside the local timeline window and must never become Paging
-            // anchors ahead of the window (see MessageSyncCursor).
+                // They are seeded (INSERT OR IGNORE, in_timeline=false): they sit
+                // outside the local timeline window and must never become Paging
+                // anchors ahead of the window (see ScopeSyncCursor).
             val replyEntities = response
                 .mapNotNull { it.replyTo }
                 // A reply target without a sender cannot be persisted; skip

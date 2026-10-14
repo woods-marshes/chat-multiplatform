@@ -44,6 +44,10 @@ WHERE id = :id;
 selectAllContactRequests:
 SELECT * FROM ContactRequestEntity ORDER BY updated_at DESC;
 
+-- One-shot authoritative read used while applying a USER sync snapshot.
+selectAllContactRequestsForSync:
+SELECT * FROM ContactRequestEntity;
+
 -- 【删】删除申请
 deleteContactRequest:
 DELETE FROM ContactRequestEntity WHERE id = :id;

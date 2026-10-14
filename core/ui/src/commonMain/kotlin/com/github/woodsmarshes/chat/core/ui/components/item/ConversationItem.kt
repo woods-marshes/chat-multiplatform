@@ -187,12 +187,15 @@ private fun LastMessagePreview(
 
     val senderPrefix = if (lastMessage.senderName != null) "${lastMessage.senderName}: " else ""
     val strings = LocalStrings.current
-    val contentPreview = when (lastMessage.renderType) {
-        MessageRenderType.IMAGE -> strings.messagePreviewImage
-        MessageRenderType.VIDEO -> strings.messagePreviewVideo
-        MessageRenderType.AUDIO -> strings.messagePreviewAudio
-        MessageRenderType.FILE -> strings.messagePreviewFile
-        else -> lastMessage.contentTruncated(50)
+    val contentPreview = when {
+        lastMessage.revokedAt != null -> strings.messageRevoked
+        else -> when (lastMessage.renderType) {
+            MessageRenderType.IMAGE -> strings.messagePreviewImage
+            MessageRenderType.VIDEO -> strings.messagePreviewVideo
+            MessageRenderType.AUDIO -> strings.messagePreviewAudio
+            MessageRenderType.FILE -> strings.messagePreviewFile
+            else -> lastMessage.contentTruncated(50)
+        }
     }
     val fullPreview = "$senderPrefix$contentPreview"
 

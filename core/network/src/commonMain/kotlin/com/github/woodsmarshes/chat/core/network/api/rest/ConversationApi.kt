@@ -16,6 +16,11 @@ import com.github.woodsmarshes.chat.core.network.dto.conversation.InviteUserRequ
 import com.github.woodsmarshes.chat.core.network.dto.conversation.InviteUsersRequest
 import com.github.woodsmarshes.chat.core.network.dto.conversation.JoinGroupRequest
 import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncHead
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncBatch
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncSnapshot
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.network.dto.message.ReadReportRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -132,17 +137,39 @@ class ConversationApi(
         return client.get(searchRes).body()
     }
 
-    // 增量同步消息
-    suspend fun syncMessages(
-        conversationId: Uuid,
-        afterId: Uuid,
-        limit: Int = 50
-    ): List<Message> {
-        val idRes = V1.Conversations.Id(id = conversationId)
-        val msgRes = V1.Conversations.Id.Messages(parent = idRes, limit = limit)
-        val syncRes = V1.Conversations.Id.Messages.Sync(parent = msgRes, afterId = afterId)
+    // Sync stream high-water marks for the authenticated user
+    suspend fun getSyncHeads(): SyncStateResponse.Heads =
+        client.get(V1.Sync.Heads()).body()
+    // Incremental delta batch for a single sync stream
+    suspend fun getSyncChanges(
+        scope: SyncScope,
+        id: Uuid,
+        afterRevision: Long,
+        limit: Int = 100,
+    ): SyncBatch {
+        return client.get(
+            V1.Sync.Changes(
+                scope = scope,
+                id = id,
+                afterRevision = afterRevision,
+                limit = limit,
+            )
+        ).body()
+    }
 
-        return client.get(syncRes).body()
+    // Consistent point-in-time snapshot for a single sync stream
+    suspend fun getSyncSnapshot(
+        scope: SyncScope,
+        id: Uuid,
+        limit: Int = 100,
+    ): SyncSnapshot {
+        return client.get(
+            V1.Sync.Snapshot(
+                scope = scope,
+                id = id,
+                limit = limit,
+            )
+        ).body()
     }
 
     // 上报已读

@@ -12,6 +12,8 @@ import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.utils.connectToH2Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import io.ktor.client.*
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -61,6 +63,9 @@ class RealtimeSocketTest {
         environment {
             config = ApplicationConfig("application-test.conf")
         }
+        transaction(connectToH2Database()) {
+            exec("SET MODE MYSQL")
+        }
         val client = wsClient()
 
         val (tokenA, userA) = registerUser(client, "alice")
@@ -84,12 +89,9 @@ class RealtimeSocketTest {
             assertEquals(HttpStatusCode.OK, status)
         }.body<Conversation>()
 
+        // The first Heads frame is sent after the session is indexed. Awaiting
+        // it gives the test a deterministic registration signal without a sleep.
         val received = CompletableDeferred<MessageEventResponse.UserTyping>()
-        // The handshake's SyncStateResponse.Anchor frame is sent right after
-        // addUserSession, so receiving it proves Bob's connection is in the
-        // shared session index — a deterministic registration signal. A fixed
-        // sleep here raced that registration under CI load and dropped the
-        // typing broadcast.
         val bobRegistered = CompletableDeferred<Unit>()
 
         coroutineScope {
@@ -99,9 +101,8 @@ class RealtimeSocketTest {
                         // withTimeoutOrNull instead of withTimeout: a plain
                         // timeout exception would cancel this coroutine
                         // silently and leave the awaiting test body hanging.
-                        // Decode as the RealtimeEvent base: the handshake also
-                        // delivers a SyncStateResponse.Anchor frame, which
-                        // doubles as the registration signal below.
+                        // The first SyncStateResponse.Heads frame is the
+                        // deterministic signal that the session was registered.
                         val event = withTimeoutOrNull(15.seconds) {
                             receiveDeserialized<RealtimeEvent>()
                         }
@@ -112,7 +113,7 @@ class RealtimeSocketTest {
                             return@webSocket
                         }
                         when (event) {
-                            is SyncStateResponse.Anchor -> bobRegistered.complete(Unit)
+                            is SyncStateResponse.Heads -> bobRegistered.complete(Unit)
                             is MessageEventResponse.UserTyping -> {
                                 received.complete(event)
                                 return@webSocket

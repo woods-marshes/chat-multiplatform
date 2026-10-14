@@ -24,12 +24,6 @@ data class Message(
     @ProtoNumber(8) val content: MessageContent,
     @ProtoNumber(9) val senderContext: MessageSenderContext? = null,
     /**
-     * Position of the message within its conversation, allocated gap-free by
-     * the server. Realtime consumers use it to detect delivery gaps and
-     * repair them from REST history; null on rows predating the column.
-     */
-    @ProtoNumber(10) val seq: Long? = null,
-    /**
      * The sender's outbox id for this message (server-echoed). The sending
      * client matches it against its local SENDING row and renames that row
      * to [id]; absent on system messages and pre-A-8 rows.

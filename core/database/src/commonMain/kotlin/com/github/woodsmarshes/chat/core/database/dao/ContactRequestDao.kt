@@ -52,6 +52,8 @@ interface ContactRequestDao {
 
     fun selectAllContactRequests(): Flow<List<ContactRequestEntity>>
 
+    suspend fun selectAllContactRequestsForSync(): List<ContactRequestEntity>
+
     suspend fun deleteContactRequest(id: Uuid)
 }
 
@@ -127,6 +129,9 @@ class ContactRequestDaoImpl(
             extractor = { it.executeAsList() },
         )
 
+    override suspend fun selectAllContactRequestsForSync(): List<ContactRequestEntity> =
+        writeQueries().selectAllContactRequestsForSync().executeAsList()
+
     override suspend fun deleteContactRequest(id: Uuid) {
         writeQueries().deleteContactRequest(id)
     }
@@ -182,6 +187,9 @@ private class PinnedContactRequestDao(
             queryFactory = { db -> db.contactRequestsQueries.selectAllContactRequests() },
             extractor = { it.executeAsList() },
         )
+
+    override suspend fun selectAllContactRequestsForSync(): List<ContactRequestEntity> =
+        writeQueries().selectAllContactRequestsForSync().executeAsList()
 
     override suspend fun deleteContactRequest(id: Uuid) {
         writeQueries().deleteContactRequest(id)

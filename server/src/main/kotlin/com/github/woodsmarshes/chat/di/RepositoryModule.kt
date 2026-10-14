@@ -26,8 +26,11 @@ import com.github.woodsmarshes.chat.repository.UserSettingDataSourceImpl
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
+import com.github.woodsmarshes.chat.repository.SyncRepository
+import com.github.woodsmarshes.chat.repository.SyncDataSourceImpl
 import org.koin.dsl.module
 val repositoryModule = module {
+    single<SyncRepository> { SyncDataSourceImpl() }
 
     singleOf(::UserDataSourceImpl){
         bind<UserRepository>()

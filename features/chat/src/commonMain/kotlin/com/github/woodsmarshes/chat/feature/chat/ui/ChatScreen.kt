@@ -55,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -62,7 +63,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
@@ -70,6 +74,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.ui.MessageState
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
 import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenu
@@ -87,6 +92,10 @@ import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
@@ -109,6 +118,8 @@ fun ChatScreen(
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
     val strings = LocalStrings.current
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState = lifecycleOwner.lifecycle.currentStateAsState().value
 
     // Send/forward failures surface once as a snackbar; the ViewModel clears
     // the state after display so a rotation does not replay the toast.
@@ -117,6 +128,27 @@ fun ChatScreen(
             snackbarHostState.showSnackbar(message)
             viewModel.consumeError()
         }
+    }
+
+    LaunchedEffect(listState, lazyMessages, lifecycleState, viewModel) {
+        snapshotFlow {
+            if (lifecycleState != Lifecycle.State.RESUMED) {
+                emptyList()
+            } else {
+                listState.layoutInfo.visibleItemsInfo.mapNotNull { itemInfo ->
+                    if (itemInfo.index !in 0 until lazyMessages.itemCount) return@mapNotNull null
+                    lazyMessages.peek(itemInfo.index)
+                        ?.takeIf {
+                            it.revokedAt == null &&
+                                it.sendStatus == MessageState.Completed
+                        }
+                }
+            }
+        }
+            .map { visible -> visible.distinctBy { it.id } }
+            .distinctUntilChanged()
+            .filter { it.isNotEmpty() }
+            .collect(viewModel::onMessagesVisible)
     }
 
     // 记录最新一条消息的 ID

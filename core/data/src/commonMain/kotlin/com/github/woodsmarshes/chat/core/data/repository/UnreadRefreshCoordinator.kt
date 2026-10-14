@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
+import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
@@ -32,8 +33,16 @@ import kotlin.uuid.Uuid
  * per conversation (and detail apply also advances `globalEpoch`) so an older
  * list response can never overwrite a newer list response or a newer detail
  * refresh.
+ *
+ * The coordinator owns the persisted [MessageDao] unread-recovery tasks: a
+ * worker that applies a value must confirm the exact persisted task
+ * generation it read before fetching, inside the same database transaction as
+ * the unread write. A generation mismatch means a newer journal commit
+ * re-marked the conversation and the stale response retires nothing.
  */
-class UnreadRefreshCoordinator {
+class UnreadRefreshCoordinator(
+    private val messageDao: MessageDao,
+) {
     private val log = KotlinLogging.logger {}
     private val mutex = Mutex()
 
@@ -103,11 +112,13 @@ class UnreadRefreshCoordinator {
     }
 
     /**
-     * Marks [conversationId] as needing an authoritative unread refresh from
+     * Marks [conversationId] as needing an authoritative unread count from
      * `conversationApi.getDetail(conversationId)` and schedules a coalesced
      * worker in [sessionScope]. Network I/O runs outside any repository or
      * coordinator lock (bounded by [fetchConcurrency]) so realtime event
-     * consumption is never blocked.
+     * consumption is never blocked. Every worker applies the same confirmation
+     * rule against the persisted task generation, so no entry point can leave
+     * a successfully served task unconfirmed.
      */
     suspend fun requestRefresh(
         sessionScope: CoroutineScope,
@@ -212,7 +223,8 @@ class UnreadRefreshCoordinator {
                         }
                         requestedGenerations[conversationId] ?: targetGen
                     }
-                    latestGenBeforeFetch to conversationApi.getDetail(conversationId)
+                    val taskGenBeforeFetch = messageDao.getUnreadRefreshPendingGeneration(conversationId)
+                    Triple(latestGenBeforeFetch, taskGenBeforeFetch, conversationApi.getDetail(conversationId))
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -225,15 +237,29 @@ class UnreadRefreshCoordinator {
                 return
             }
 
-            val (fetchedGen, response) = detail
+            val (fetchedGen, taskGenBeforeFetch, response) = detail
             val done = mutex.withLock {
                 if (sessionEpoch != targetSession) {
                     refreshJobs.remove(conversationId)
                     return@withLock true
                 }
                 val currentReqGen = requestedGenerations[conversationId] ?: sessionFloorEpoch
+                var confirmed = false
                 if (currentReqGen == fetchedGen && conversationId in dirtyConversations) {
-                    conversationDao.setUnreadCount(conversationId, response.unreadCount.toLong())
+                    messageDao.transaction {
+                        val currentDbTaskGen = messageDao.getUnreadRefreshPendingGeneration(conversationId)
+                        // If generation changed in DB while fetch was in flight (e.g. newer journal commit),
+                        // this response is stale: do not apply unread count and do not confirm.
+                        if (taskGenBeforeFetch == currentDbTaskGen) {
+                            conversationDao.setUnreadCount(conversationId, response.unreadCount.toLong())
+                            taskGenBeforeFetch?.let { expected ->
+                                messageDao.confirmUnreadRefreshPending(conversationId, expected)
+                            }
+                            confirmed = true
+                        }
+                    }
+                }
+                if (confirmed) {
                     val appliedGen = ++globalEpoch
                     requestedGenerations[conversationId] = appliedGen
                     appliedGenerations[conversationId] = appliedGen
@@ -244,7 +270,8 @@ class UnreadRefreshCoordinator {
                     refreshJobs.remove(conversationId)
                     true
                 } else {
-                    // Another unread-affecting event arrived while getDetail was in flight; re-fetch.
+                    // Either in-memory requestedGeneration changed or DB task generation changed:
+                    // loop to re-fetch and converge.
                     false
                 }
             }

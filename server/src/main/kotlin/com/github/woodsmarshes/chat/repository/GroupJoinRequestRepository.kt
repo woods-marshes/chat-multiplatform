@@ -2,6 +2,8 @@ package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
 import com.github.woodsmarshes.chat.core.model.RequestStatus
+import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.GroupJoinRequests
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -49,7 +51,9 @@ interface GroupJoinRequestRepository {
     suspend fun deleteJoinRequest(joinRequestId: Uuid): Boolean
 }
 
-class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
+class GroupJoinRequestSourceImpl(
+    private val syncRepository: SyncRepository = SyncDataSourceImpl(),
+) : GroupJoinRequestRepository {
     override suspend fun insertGroupJoinRequest(
         conversationId: Uuid,
         applicantId: Uuid,
@@ -67,7 +71,7 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
         if (existing) return@dbQuery null
 
         val now = Clock.System.now()
-        GroupJoinRequests.insert {
+        val inserted = GroupJoinRequests.insert {
             it[this.conversationId] = conversationId
             it[this.applicantId] = applicantId
             it[this.message] = message
@@ -77,6 +81,23 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
             .resultedValues
             ?.singleOrNull()
             ?.toGroupJoinRequest()
+
+        if (inserted != null) {
+            val event = ConversationEventResponse.GroupJoinRequest(
+                requestId = inserted.id,
+                conversationId = conversationId,
+                applicantId = applicantId,
+                message = message,
+                timestamp = now,
+            )
+            syncRepository.appendChanges(
+                listOf(
+                    SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event),
+                    SyncAppendTarget(SyncScope.USER, applicantId, event),
+                )
+            )
+        }
+        inserted
     }
 
     override suspend fun updateJoinRequestStatus(
@@ -85,15 +106,43 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
         reason: String?,
         status: RequestStatus,
     ): Boolean = dbQuery {
-        GroupJoinRequests.update({
+        val existing = GroupJoinRequests
+            .selectAll()
+            .where {
+                (GroupJoinRequests.id eq joinRequestId) and
+                    (GroupJoinRequests.status eq RequestStatus.PENDING)
+            }
+            .singleOrNull()
+            ?.toGroupJoinRequest()
+            ?: return@dbQuery false
+
+        val now = Clock.System.now()
+        val updated = GroupJoinRequests.update({
             (GroupJoinRequests.id eq joinRequestId) and
                     (GroupJoinRequests.status eq RequestStatus.PENDING)
         }) {
             it[this.handledById] = handledId
             it[this.message] = reason
             it[this.status] = status
-            it[this.updatedAt] = Clock.System.now()
+            it[this.updatedAt] = now
         } > 0
+
+        if (updated) {
+            syncRepository.appendChange(
+                scope = SyncScope.USER,
+                id = existing.applicantId,
+                event = ConversationEventResponse.GroupJoinRequestHandled(
+                    requestId = joinRequestId,
+                    conversationId = existing.conversationId,
+                    applicantId = existing.applicantId,
+                    handlerId = handledId,
+                    approved = status == RequestStatus.ACCEPTED,
+                    reason = reason,
+                    timestamp = now,
+                ),
+            )
+        }
+        updated
     }
 
     override suspend fun updateGroupJoinRequests(
@@ -103,8 +152,17 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
         if (updates.isEmpty()) return@dbQuery false
         var updatedCount = 0
         val currentTimestamp = Clock.System.now()
+        val targets = mutableListOf<SyncAppendTarget>()
 
         updates.forEach { (joinRequestId, reason, status) ->
+            val existing = GroupJoinRequests
+                .selectAll()
+                .where {
+                    (GroupJoinRequests.id eq joinRequestId) and
+                        (GroupJoinRequests.status eq RequestStatus.PENDING)
+                }
+                .singleOrNull()
+                ?.toGroupJoinRequest()
             val count = GroupJoinRequests.update({
                 (GroupJoinRequests.id eq joinRequestId) and
                         (GroupJoinRequests.status eq RequestStatus.PENDING)
@@ -115,8 +173,29 @@ class GroupJoinRequestSourceImpl : GroupJoinRequestRepository {
                 it[this.updatedAt] = currentTimestamp
             }
             updatedCount += count
+            if (count > 0 && existing != null) {
+                targets.add(
+                    SyncAppendTarget(
+                        scope = SyncScope.USER,
+                        id = existing.applicantId,
+                        event = ConversationEventResponse.GroupJoinRequestHandled(
+                            requestId = joinRequestId,
+                            conversationId = existing.conversationId,
+                            applicantId = existing.applicantId,
+                            handlerId = handledId,
+                            approved = status == RequestStatus.ACCEPTED,
+                            reason = reason,
+                            timestamp = currentTimestamp,
+                        ),
+                    )
+                )
+            }
         }
-        updatedCount == updates.size
+        val allSucceeded = updatedCount == updates.size
+        if (allSucceeded && targets.isNotEmpty()) {
+            syncRepository.appendChanges(targets)
+        }
+        allSucceeded
     }
 
     override suspend fun getJoinRequestById(joinRequestId: Uuid): GroupJoinRequest? = dbQuery {

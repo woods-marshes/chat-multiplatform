@@ -37,6 +37,7 @@ ON CONFLICT(contact_id) DO UPDATE SET
     -- so that a server-side cleared remark actually clears locally.
     nickname   = excluded.nickname,
     alias      = excluded.alias,
+    created_at = excluded.created_at,
     updated_at = excluded.updated_at;
 
 
@@ -64,6 +65,10 @@ ORDER BY
 -- 【查】获取特定联系人详情
 getContactById:
 SELECT * FROM ContactEntity WHERE contact_id = :contactId;
+
+-- One-shot authoritative read used while applying a USER sync snapshot.
+selectAllContactsForSync:
+SELECT * FROM ContactEntity;
 
 -- 【查】获取黑名单列表
 getBlockedContacts:
@@ -127,6 +132,9 @@ WHERE contact_id = :contactId;
 -- 【删】删除联系人 (物理删除)
 deleteContact:
 DELETE FROM ContactEntity WHERE contact_id = :contactId;
+
+deleteContacts:
+DELETE FROM ContactEntity WHERE contact_id IN :contactIds;
 
 -- 【统计】统计好友总数
 countFriends:

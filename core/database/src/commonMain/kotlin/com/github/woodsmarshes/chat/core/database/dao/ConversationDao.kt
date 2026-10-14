@@ -13,6 +13,9 @@ interface ConversationDao {
     /** One-shot query for decisions inside an existing transaction. */
     suspend fun findConversationById(id: Uuid): ConversationEntity?
 
+    /** One-shot query returning all active conversations on the current transaction connection. */
+    suspend fun findAllActiveConversations(): List<ConversationEntity>
+
     // 写入与同步
     suspend fun insertConversation(conversation: ConversationEntity)
     suspend fun insertConversations(conversations: List<ConversationEntity>)

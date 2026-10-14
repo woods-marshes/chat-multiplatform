@@ -16,6 +16,14 @@ import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.FormattingEntity.Spoiler
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncBatch
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncChange
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncHead
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncSnapshot
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -210,6 +218,84 @@ class SerializationRoundTripTest {
         )
 
         assertEquals(group, decoded)
+    }
+
+    @Test
+    fun `sync DTOs round-trip through JSON and Protobuf without recursive loop`() {
+        val convId = Uuid.random()
+        val msg = textMessage()
+        val sender = msg.sender!!
+        val heads: RealtimeEvent = SyncStateResponse.Heads(
+            entries = listOf(
+                SyncHead(scope = SyncScope.USER, id = Uuid.random(), revision = 5L),
+                SyncHead(scope = SyncScope.CONVERSATION, id = convId, revision = 12L),
+            ),
+            timestamp = t0,
+        )
+        val batch = SyncBatch(
+            scope = SyncScope.CONVERSATION,
+            id = convId,
+            fromRevision = 10L,
+            nextRevision = 12L,
+            hasMore = false,
+            resetRequired = false,
+            changes = listOf(
+                SyncChange(
+                    revision = 11L,
+                    event = MessageEventResponse.Received(
+                        message = msg,
+                        conversationId = convId,
+                        senderId = sender.id,
+                        requestId = Uuid.random().toString(),
+                    ),
+                ),
+                SyncChange(
+                    revision = 12L,
+                    event = MessageEventResponse.Withdrawn(
+                        messageId = msg.id,
+                        conversationId = convId,
+                        senderId = sender.id,
+                        timestamp = t0,
+                    ),
+                ),
+            ),
+        )
+        val snapshot = SyncSnapshot(
+            scope = SyncScope.CONVERSATION,
+            id = convId,
+            revision = 12L,
+            messages = listOf(msg),
+            events = listOf(
+                MessageEventResponse.Read(
+                    messageId = msg.id,
+                    conversationId = convId,
+                    readerId = sender.id,
+                    timestamp = t0,
+                    unreadCount = 0,
+                )
+            ),
+            conversations = emptyList(),
+        )
+
+        // JSON round-trip
+        val headsJson = ProjectJson.encodeToString(RealtimeEvent.serializer(), heads)
+        assertEquals(heads, ProjectJson.decodeFromString(RealtimeEvent.serializer(), headsJson))
+
+        val batchJson = ProjectJson.encodeToString(SyncBatch.serializer(), batch)
+        assertEquals(batch, ProjectJson.decodeFromString(SyncBatch.serializer(), batchJson))
+
+        val snapshotJson = ProjectJson.encodeToString(SyncSnapshot.serializer(), snapshot)
+        assertEquals(snapshot, ProjectJson.decodeFromString(SyncSnapshot.serializer(), snapshotJson))
+
+        // Protobuf round-trip
+        val headsProto = ProjectProtobuf.encodeToByteArray(RealtimeEvent.serializer(), heads)
+        assertEquals(heads, ProjectProtobuf.decodeFromByteArray(RealtimeEvent.serializer(), headsProto))
+
+        val batchProto = ProjectProtobuf.encodeToByteArray(SyncBatch.serializer(), batch)
+        assertEquals(batch, ProjectProtobuf.decodeFromByteArray(SyncBatch.serializer(), batchProto))
+
+        val snapshotProto = ProjectProtobuf.encodeToByteArray(SyncSnapshot.serializer(), snapshot)
+        assertEquals(snapshot, ProjectProtobuf.decodeFromByteArray(SyncSnapshot.serializer(), snapshotProto))
     }
 
     // ── helpers ─────────────────────────────────────────────────────────

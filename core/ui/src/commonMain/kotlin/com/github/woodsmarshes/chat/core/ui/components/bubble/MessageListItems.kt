@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.core.ui.components.bubble
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
+import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
@@ -33,7 +34,7 @@ fun LazyListScope.messageItems(
     itemProvider: (Int) -> MessageUiModel?,
     formatter: MessageFormatter,
     ownUserId: Uuid? = null,
-    connectionState: com.github.woodsmarshes.chat.core.model.ConnectionState = com.github.woodsmarshes.chat.core.model.ConnectionState.Idle,
+    connectionState: ConnectionState = ConnectionState.Idle,
     audioState: KmpMediaPlaybackState = KmpMediaPlaybackState(),
     videoIsPlaying: Boolean = false,
     onImageClick: ((ImageContent) -> Unit)? = null,
@@ -64,10 +65,8 @@ fun LazyListScope.messageItems(
 
         val content: @Composable () -> Unit = {
             MessageBubbleContent(
-                renderType = message.renderType,
-                content = message.content,
+                message = message,
                 isOwnMessage = isOwn,
-                sendStatus = message.sendStatus,
                 formatter = formatter,
                 audioState = audioState,
                 videoIsPlaying = videoIsPlaying,

@@ -36,6 +36,7 @@ interface ContactDao {
     // 查询 - 基础
     fun getContactById(contactId: Uuid): Flow<ContactEntity?>
     fun getBlockedContacts(): Flow<List<ContactEntity>>
+    suspend fun selectAllContactsForSync(): List<ContactEntity>
 
     // 搜索
     fun searchContacts(query: String): Flow<List<SearchContacts>>
@@ -46,6 +47,8 @@ interface ContactDao {
 
     // 删除
     suspend fun deleteContact(contactId: Uuid)
+
+    suspend fun deleteContacts(contactIds: List<Uuid>)
 
     // 统计
     fun countFriends(): Flow<Long>

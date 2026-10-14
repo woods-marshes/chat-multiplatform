@@ -27,16 +27,15 @@ class ReadCursorDatabaseTest {
     @BeforeTest
     fun reset() = TestDb.reset()
 
-    private fun insert(id: Uuid, conversation: Uuid, sender: Uuid, seq: Long) = transaction(TestDb.database) {
+    private fun insert(id: Uuid, conversation: Uuid, sender: Uuid, body: String) = transaction(TestDb.database) {
         Messages.insert {
             it[Messages.id] = id
             it[conversationId] = conversation
             it[senderId] = sender
-            it[content] = TextContent("message $seq")
+            it[content] = TextContent(body)
             it[category] = MessageCategory.NORMAL
             it[renderType] = MessageRenderType.TEXT
             it[createdAt] = Clock.System.now()
-            it[Messages.seq] = seq
         }
     }
 
@@ -47,9 +46,9 @@ class ReadCursorDatabaseTest {
         val outsider = TestDb.user("outsider")
         val conversation = TestDb.privateConversation(alice, bob)
         val other = TestDb.privateConversation(alice, outsider)
-        insert(first, conversation, alice, 1)
-        insert(second, conversation, alice, 2)
-        insert(third, other, alice, 1)
+        insert(first, conversation, alice, "first")
+        insert(second, conversation, alice, "second")
+        insert(third, other, alice, "other")
         assertEquals(ReadCursorUpdate.ADVANCED, participants.updateReadLastMessage(bob, conversation, second))
         assertEquals(ReadCursorUpdate.UNCHANGED, participants.updateReadLastMessage(bob, conversation, first))
         assertEquals(ReadCursorUpdate.UNCHANGED, participants.updateReadLastMessage(bob, conversation, second))
@@ -68,11 +67,11 @@ class ReadCursorDatabaseTest {
         val outsider = TestDb.user("outsider")
         val conversation = TestDb.groupConversation(alice, listOf(bob, carol, dave))
         val other = TestDb.privateConversation(alice, outsider)
-        insert(first, conversation, alice, 1)
-        insert(second, conversation, alice, 2)
-        insert(third, conversation, alice, 3)
+        insert(first, conversation, alice, "first")
+        insert(second, conversation, alice, "second")
+        insert(third, conversation, alice, "third")
         val otherId = Uuid.parse("01960000-0000-7000-8000-000000000004")
-        insert(otherId, other, alice, 1)
+        insert(otherId, other, alice, "other")
         participants.updateReadLastMessage(alice, conversation, first)
         participants.updateReadLastMessage(bob, conversation, second)
         participants.updateReadLastMessage(carol, conversation, third)

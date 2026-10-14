@@ -8,6 +8,9 @@ import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.User
+import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
@@ -15,8 +18,11 @@ import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
@@ -105,10 +111,12 @@ interface ConversationParticipantRepository {
     suspend fun getUserConversationRole(userId: Uuid, conversationId: Uuid): ConversationRole?
 }
 
-class ConversationParticipantDataSourceImpl : ConversationParticipantRepository {
+class ConversationParticipantDataSourceImpl(
+    private val syncRepository: SyncRepository = SyncDataSourceImpl(),
+) : ConversationParticipantRepository {
 
     override suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant? = dbQuery {
-        ConversationParticipants.insert {
+        val inserted = ConversationParticipants.insert {
             it[this.conversationId] = conversationParticipant.conversationId
             it[this.userId] = conversationParticipant.userId
             it[this.role] = conversationParticipant.role
@@ -117,6 +125,22 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
             .resultedValues
             ?.singleOrNull()
             ?.toConversationParticipant()
+
+        if (inserted != null) {
+            val event = ConversationEventResponse.UserJoinedConversation(
+                conversationId = inserted.conversationId,
+                userId = listOf(inserted.userId),
+                inviterId = null,
+                timestamp = inserted.joinedAt,
+            )
+            syncRepository.appendChanges(
+                listOf(
+                    SyncAppendTarget(SyncScope.CONVERSATION, inserted.conversationId, event),
+                    SyncAppendTarget(SyncScope.USER, inserted.userId, event),
+                )
+            )
+        }
+        inserted
     }
 
     override suspend fun updateParticipantSettings(
@@ -124,7 +148,7 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
         conversationId: Uuid,
         settings: ParticipantSettings
     ): Boolean = dbQuery {
-        ConversationParticipants.update(
+        val updated = ConversationParticipants.update(
             where = {
                 (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId)
@@ -132,6 +156,19 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
         ) {
             it[this.settings] = settings
         } > 0
+        if (updated) {
+            syncRepository.appendChange(
+                scope = SyncScope.USER,
+                id = userId,
+                event = ConversationEventResponse.PersonalSettingsUpdated(
+                    conversationId = conversationId,
+                    userId = userId,
+                    settings = settings,
+                    timestamp = Clock.System.now(),
+                ),
+            )
+        }
+        updated
     }
 
     override suspend fun updateReadLastMessage(
@@ -169,7 +206,42 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
         ) {
             it[this.lastReadMessageId] = messageId
         }
-        if (updated > 0) ReadCursorUpdate.ADVANCED else ReadCursorUpdate.UNCHANGED
+        if (updated > 0) {
+            val unreadCount = Messages
+                .join(
+                    ConversationParticipants,
+                    JoinType.INNER,
+                    additionalConstraint = {
+                        (ConversationParticipants.conversationId eq Messages.conversationId) and
+                            (ConversationParticipants.userId eq userId)
+                    },
+                )
+                .select(Messages.id.count())
+                .where {
+                    (Messages.conversationId eq conversationId) and
+                        (Messages.senderId neq userId) and
+                        Messages.revokedAt.isNull() and
+                        (ConversationParticipants.lastReadMessageId.isNull() or
+                            (Messages.id greater ConversationParticipants.lastReadMessageId))
+                }
+                .firstOrNull()
+                ?.get(Messages.id.count()) ?: 0L
+
+            syncRepository.appendChange(
+                scope = SyncScope.USER,
+                id = userId,
+                event = MessageEventResponse.Read(
+                    messageId = messageId,
+                    conversationId = conversationId,
+                    readerId = userId,
+                    timestamp = Clock.System.now(),
+                    unreadCount = unreadCount.toInt(),
+                ),
+            )
+            ReadCursorUpdate.ADVANCED
+        } else {
+            ReadCursorUpdate.UNCHANGED
+        }
     }
 
     override suspend fun updateConversationParticipantRole(
@@ -188,10 +260,24 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
     }
 
     override suspend fun deleteConversationParticipant(userId: Uuid, conversationId: Uuid): Boolean = dbQuery {
-        ConversationParticipants.deleteWhere {
+        val deleted = ConversationParticipants.deleteWhere {
             (ConversationParticipants.userId eq userId) and
                     (ConversationParticipants.conversationId eq conversationId)
         } > 0
+        if (deleted) {
+            val event = ConversationEventResponse.UserLeftConversation(
+                conversationId = conversationId,
+                userId = userId,
+                timestamp = Clock.System.now(),
+            )
+            syncRepository.appendChanges(
+                listOf(
+                    SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event),
+                    SyncAppendTarget(SyncScope.USER, userId, event),
+                )
+            )
+        }
+        deleted
     }
 
     override suspend fun getConversationParticipant(
@@ -383,6 +469,20 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
             this[ConversationParticipants.settings] = participant.settings
         }
 
+        val event = ConversationEventResponse.UserJoinedConversation(
+            conversationId = conversationId,
+            userId = participants.map { it.userId },
+            inviterId = inviterId,
+            timestamp = Clock.System.now(),
+        )
+        val targets = buildList {
+            add(SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event))
+            participants.forEach { p ->
+                add(SyncAppendTarget(SyncScope.USER, p.userId, event))
+            }
+        }
+        syncRepository.appendChanges(targets)
+
         participants
     }
 
@@ -417,6 +517,18 @@ class ConversationParticipantDataSourceImpl : ConversationParticipantRepository 
                 it[ConversationParticipants.joinedAt] = participant.joinedAt
                 it[ConversationParticipants.settings] = participant.settings
             }.resultedValues?.singleOrNull()?.let {
+                val event = ConversationEventResponse.UserJoinedConversation(
+                    conversationId = conversationId,
+                    userId = listOf(userId),
+                    inviterId = inviterId,
+                    timestamp = participant.joinedAt,
+                )
+                syncRepository.appendChanges(
+                    listOf(
+                        SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event),
+                        SyncAppendTarget(SyncScope.USER, userId, event),
+                    )
+                )
                 participant
             }
         } else null

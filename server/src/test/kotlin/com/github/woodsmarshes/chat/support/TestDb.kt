@@ -45,6 +45,7 @@ object TestDb {
         TransactionManager.defaultDatabase = database
         runBlocking { clearDatabaseData(database) }
         transaction(database) {
+            exec("SET MODE MYSQL")
             SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
         }
     }

@@ -29,6 +29,7 @@ data class LastMessageInfo(
     val senderName: String? = null,
     val senderAvatar: String? = null,
     val createdAt: Instant,
-    val isOwnMessage: Boolean = false
+    val isOwnMessage: Boolean = false,
+    val revokedAt: Instant? = null,
 )
 

@@ -3,14 +3,12 @@ package com.github.woodsmarshes.chat.service
 import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncAnchorEntry
+import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
-import com.github.woodsmarshes.chat.core.network.dto.conversation.SimpleMessage
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
-import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
 import io.ktor.server.websocket.WebSocketServerSession
@@ -31,7 +29,7 @@ class RealtimeService(
     private val delivery: RealtimeDelivery,
     private val sessionManager: WebSocketSessionManager,
     private val scope: CoroutineScope,
-    private val messageRepository: MessageRepository,
+    private val syncService: SyncService,
     private val typingDebounceMs: Long = 1_000L,
 ) {
     private val typingDebounceMap = ConcurrentHashMap<Uuid, Job>()
@@ -80,28 +78,25 @@ class RealtimeService(
         session: WebSocketServerSession,
     ) {
         sessionManager.addUserSession(userId, session)
-        // Push the server-held sync state immediately: the client sizes its
-        // reconnect gaps against these anchors instead of polling blindly.
-        // Previews for never-opened conversations are seeded by the REST list
-        // sync the client runs right after receiving this frame.
-        val anchors = messageRepository.getSyncAnchors(userId)
-        if (anchors.isNotEmpty()) {
-            delivery.sendToUser(
-                userId = userId,
-                data = SyncStateResponse.Anchor(
-                    entries = anchors.map { anchor ->
-                        SyncAnchorEntry(
-                            conversationId = anchor.conversationId,
-                            lastSeq = anchor.lastSeq,
-                            unreadCount = anchor.unreadCount,
-                            lastMessageId = anchor.lastMessageId,
-                        )
-                    },
-                    timestamp = Clock.System.now(),
-                ),
-            )
+        if (!delivery.registerSession(session)) {
+            throw IllegalStateException("Failed to register websocket session for user $userId")
         }
+        val heads = syncService.getHeads(userId)
+        delivery.sendToSession(
+            session = session,
+            data = SyncStateResponse.Heads(
+                entries = heads,
+                timestamp = Clock.System.now(),
+            ),
+        )
     }
+
+    /**
+     * Sends an event (ACK, error, or notification) directly to a single connection's
+     * bounded outbound queue, ensuring all frames to this session share one writer.
+     */
+    suspend fun sendToSession(session: WebSocketServerSession, event: RealtimeEvent): Boolean =
+        delivery.sendToSession(session, event)
 
     /**
      * 清理 WebSocket 连接
@@ -112,6 +107,7 @@ class RealtimeService(
             typingDebounceMap[userId]?.cancel()
             typingDebounceMap.remove(userId)
         }
+        delivery.closeSession(session)
         sessionManager.removeUserSession(session)
     }
 

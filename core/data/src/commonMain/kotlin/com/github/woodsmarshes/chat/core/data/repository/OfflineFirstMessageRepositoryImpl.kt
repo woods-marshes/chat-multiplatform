@@ -10,46 +10,54 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.common.session.ResourceSession
+import com.github.woodsmarshes.chat.core.common.session.SessionExecutor
+import com.github.woodsmarshes.chat.core.common.session.SessionStoppedException
+import com.github.woodsmarshes.chat.core.data.model.toConversation
+import com.github.woodsmarshes.chat.core.data.model.toEntity
+import com.github.woodsmarshes.chat.core.data.model.toGroupOwnerUserEntity
+import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
+import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
+import com.github.woodsmarshes.chat.core.data.model.toPeerParticipantEntity
+import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
 import com.github.woodsmarshes.chat.core.data.model.toUiModel
+import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.data.paging.MessageMediatorFactory
+import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
-import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
+import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
+import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.ConnectionState
-import com.github.woodsmarshes.chat.core.model.RequestStatus
+import com.github.woodsmarshes.chat.core.model.FileContent
+import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageContent
+import com.github.woodsmarshes.chat.core.model.MessageRenderType
+import com.github.woodsmarshes.chat.core.model.MessageStatus
+import com.github.woodsmarshes.chat.core.model.Normal
+import com.github.woodsmarshes.chat.core.model.RequestStatus
+import com.github.woodsmarshes.chat.core.model.System
+import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncAnchorEntry
+import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncBatch
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
-import com.github.woodsmarshes.chat.core.data.model.toConversation
-import com.github.woodsmarshes.chat.core.data.model.toEntity
-import com.github.woodsmarshes.chat.core.data.model.toGroupProfileEntity
-import com.github.woodsmarshes.chat.core.data.model.toMessageEntity
-import com.github.woodsmarshes.chat.core.data.model.toUserEntity
-import com.github.woodsmarshes.chat.core.data.model.toParticipantEntity
-import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
-import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDao
-import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
-import com.github.woodsmarshes.chat.core.model.AudioContent
-import com.github.woodsmarshes.chat.core.model.FileContent
-import com.github.woodsmarshes.chat.core.model.ImageContent
-import com.github.woodsmarshes.chat.core.model.Message
-import com.github.woodsmarshes.chat.core.model.MessageCategory
-import com.github.woodsmarshes.chat.core.model.MessageRenderType
-import com.github.woodsmarshes.chat.core.model.MessageStatus
-import com.github.woodsmarshes.chat.core.model.Normal
-import com.github.woodsmarshes.chat.core.model.System
-import com.github.woodsmarshes.chat.core.model.TextContent
-import com.github.woodsmarshes.chat.core.model.VideoContent
-import com.github.woodsmarshes.chat.core.common.session.SessionExecutor
-import com.github.woodsmarshes.chat.core.common.session.SessionStoppedException
+import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
+import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
+import io.github.woodsmarshes.chat.db.MessageEntity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CompletableJob
@@ -60,27 +68,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onSubscription
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.collect
-import io.github.oshai.kotlinlogging.KotlinLogging
-import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
-import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
-import io.github.woodsmarshes.chat.db.MessageEntity
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.ContinuationInterceptor
@@ -89,7 +95,6 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
-
 class OfflineFirstMessageRepositoryImpl(
     private val messageDao: MessageDao,
     private val userDao: UserDao,
@@ -98,14 +103,15 @@ class OfflineFirstMessageRepositoryImpl(
     private val conversationApi: ConversationApi,
     private val conversationDao: ConversationDao,
     private val groupJoinRequestDao: GroupJoinRequestDao,
-    // Required: the anchor consumer runs conversation list syncs before
-    // message writes, so message rows always have their parent rows on disk.
+
+    // Conversation snapshots are applied before message streams.
     private val conversationRepository: ConversationRepository,
     private val userSettingDataSource: UserSettingDataSource,
     private val scope: CoroutineScope,
     private val mediatorFactory: MessageMediatorFactory,
     private val groupProfileDao: GroupProfileDao? = null,
     private val unreadRefreshCoordinator: UnreadRefreshCoordinator,
+    private val userSyncApplier: UserSyncApplier,
 ) : MessageRepository {
     override val connectionState get() = messageApi.connectionState
 
@@ -124,64 +130,37 @@ class OfflineFirstMessageRepositoryImpl(
         /** Give up on unacked messages older than this. */
         val MESSAGE_TTL = 24.hours
 
-        /** Server-side sync page size; a short page ends a repair walk. */
-        const val SYNC_PAGE_SIZE = 50
-
-        /** Hard cap so a pathological repair cannot loop forever. */
-        const val MAX_SYNC_PAGES = 40
-
-        /**
-         * Window size for anchor-driven catch-up: gaps within this many
-         * messages fill forward via the cursor sweep; larger gaps jump to the
-         * newest window and delegate older history to RemoteMediator paging.
-         */
         const val SYNC_WINDOW_MESSAGES = 100
 
-        /**
-         * Safety-net sweep cadence in retry-poll ticks: RETRY_POLL_INTERVAL
-         * (15s) × SYNC_NET_TICKS = the low-frequency self-healing sweep.
-         */
-        const val SYNC_NET_TICKS = 40
+        const val SYNC_PAGE_SIZE = 100
+        const val MAX_SYNC_PAGES = 40
+        val SYNC_POLL_INTERVAL = 30.seconds
     }
     val ownUser = userSettingDataSource.user
 
     private val sendMutex = Mutex()
     private val syncMutex = Mutex()
+    private val syncWakeups = MutableSharedFlow<Unit>(replay = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
     private val lifecycle = ResourceSession(
         dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher
             ?: Dispatchers.Default,
         create = {
-            RunningSession(
-                this,
+            RunningSession(this@OfflineFirstMessageRepositoryImpl,
                 scope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Default
             )
         },
         prepare = { session ->
             startMessageConsumption(session)
             startOutboxRetryLoop(session)
+            startSyncWorker(session)
         },
         beforeStop = { it.job.cancel() },
         dispose = { session ->
             session.job.join()
             unreadRefreshCoordinator.clearSessionState()
-            seqMutex.withLock {
-                deliveredSeqs.clear()
-                gapRepairs.clear()
-            }
             _typingUsers.value = emptyMap()
         },
     )
-
-    /**
-     * In-memory delivery high-water mark used to trigger repair. A jump in the
-     * stream means events were lost in flight (socket hiccup or a server-side
-     * drop); the missing span is then repaired from REST history. The first
-     * message observed per conversation in a session only establishes the
-     * baseline — it is not a gap.
-     */
-    private val seqMutex = Mutex()
-    private val deliveredSeqs = mutableMapOf<Uuid, Long>()
-    private val gapRepairs = mutableMapOf<Uuid, Job>()
 
     private class SessionElement(
         val owner: OfflineFirstMessageRepositoryImpl,
@@ -227,7 +206,7 @@ class OfflineFirstMessageRepositoryImpl(
         return Pager(
             config = PagingConfig(
                 pageSize = limit,
-            initialLoadSize = limit,
+                initialLoadSize = limit,
                 enablePlaceholders = false,
             ),
             remoteMediator = mediatorFactory.create(ownUserId, conversationId, isGroup),
@@ -473,16 +452,16 @@ class OfflineFirstMessageRepositoryImpl(
                                 }
                             }
                             is ConversationEventResponse.ConversationCreated -> {
-                                handleConversationSyncEvent(session, event.conversationId)
+                                syncWakeups.tryEmit(Unit)
                             }
                             is ConversationEventResponse.UserJoinedConversation -> {
-                                handleConversationSyncEvent(session, event.conversationId)
+                                syncWakeups.tryEmit(Unit)
                             }
                             is ConversationEventResponse.GroupProfileUpdated -> {
-                                handleConversationSyncEvent(session, event.conversationId)
+                                syncWakeups.tryEmit(Unit)
                             }
                             is ConversationEventResponse.PersonalSettingsUpdated -> {
-                                handleConversationSyncEvent(session, event.conversationId)
+                                syncWakeups.tryEmit(Unit)
                             }
                             is ConversationEventResponse.GroupJoinRequest -> {
                                 // The event payload is complete (id, applicant, message):
@@ -516,9 +495,7 @@ class OfflineFirstMessageRepositoryImpl(
                                     )
                                 }.onFailure { log.warn(it) { "[ws-consume] failed to record GroupJoinRequestHandled ${event.requestId}" } }
                             }
-                            is SyncStateResponse.Anchor -> {
-                                handleSyncAnchor(session, event)
-                            }
+                            is SyncStateResponse.Heads -> syncWakeups.tryEmit(Unit)
                             else -> {
                                 log.debug { "[ws-consume] unknown event: ${event::class.simpleName}" }
                             }
@@ -540,331 +517,313 @@ class OfflineFirstMessageRepositoryImpl(
         subscriptionReady.await()
     }
 
-    private fun handleConversationSyncEvent(session: RunningSession, conversationId: Uuid) {
-        if (!session.job.isActive || !isActiveSession(session)) return
+    private fun startSyncWorker(session: RunningSession) {
         session.scope.launch {
-            runCatching {
-                val detail = conversationApi.getDetail(conversationId)
-                conversationDao.insertConversation(detail.toConversation().toEntity())
-                detail.toGroupProfileEntity()?.let { groupProfileDao?.insertGroupProfile(it) }
-                participantDao.insertParticipant(detail.toParticipantEntity())
-                if (detail.type == com.github.woodsmarshes.chat.core.model.ConversationType.GROUP) {
-                    val participants = conversationApi.getParticipants(conversationId)
-                    userDao.insertUsers(participants.map { (_, u) -> u.toUserEntity() })
-                    participantDao.insertParticipants(participants.map { (p, _) -> p.toEntity() })
+        messageApi.connectionState.collectLatest { state ->
+            if (state !is ConnectionState.Connected) return@collectLatest
+            syncWakeups.tryEmit(Unit)
+            // Crash-safe badge recovery: a committed cursor whose refresh died
+            // with the previous process left a persisted pending marker (same
+            // transaction as the cursor). Re-schedule those refreshes; the
+            // marker is cleared once the authoritative value applies.
+            try {
+                messageDao.getUnreadRefreshPendingConversations().forEach { conversationId ->
+                    requestUnreadRefresh(session, conversationId)
                 }
-            }.onFailure { e ->
-                if (e is CancellationException) throw e
-                log.debug(e) { "[ws-consume] failed to sync conversation $conversationId" }
+            } catch (e: Exception) {
+                log.warn(e) { "[sync] failed to restore pending unread refreshes; they stay persisted" }
             }
-        }
-    }
-
-    /**
-     * Reconnect anchor: the server's view of every conversation (last message,
-     * last seq, unread). Small gaps fill forward via the cursor sweep; gaps
-     * larger than [SYNC_WINDOW_MESSAGES] trigger a window jump — the newest
-     * window is fetched, confirmed history is dropped, and anything older is
-     * left to RemoteMediator's on-demand paging.
-     */
-    private fun handleSyncAnchor(session: RunningSession, anchor: SyncStateResponse.Anchor) {
-        if (!session.job.isActive || !isActiveSession(session)) return
-        session.scope.launch {
-            runCatching {
-                // Conversation rows must exist before message writes (foreign
-                // key into ConversationEntity); the list sync also seeds
-                // preview rows for conversations the client has never opened.
-                val syncResult = conversationRepository.syncConversations()
-                if (syncResult.isErr) {
-                    log.warn { "[ws-consume] syncConversations failed before anchor processing; scheduling retry" }
-                    unreadRefreshCoordinator.markListSyncFailed()
+            val poll = session.scope.launch {
+                while (true) {
+                    delay(SYNC_POLL_INTERVAL)
+                    syncWakeups.emit(Unit)
                 }
-                anchor.entries.forEach { entry ->
+            }
+            try {
+                syncWakeups.collect {
                     try {
-                        processAnchorEntry(session, entry)
+                        syncHeads(session)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        // Per-entry isolation: one conversation's failed refresh
-                        // must not abort the remaining entries — the next
-                        // anchor (every reconnect) retries them.
-                        log.warn(e) { "[ws-consume] anchor entry failed for ${entry.conversationId}" }
+                        log.warn(e) { "[sync] pull failed; waiting for next wakeup" }
                     }
                 }
-            }.onFailure { e ->
-                if (e is CancellationException) throw e
-                log.warn(e) { "[ws-consume] failed to process SyncStateAnchor" }
+            } finally {
+                poll.cancel()
             }
         }
     }
+}
 
-    private suspend fun processAnchorEntry(session: RunningSession, entry: SyncAnchorEntry) {
-        if (!session.job.isActive || !isActiveSession(session)) return
-        val ownId = ownUser.firstOrNull()?.id
-
-        val cursor = messageDao.getSyncCursor(entry.conversationId)
-        // The cursor row stores after_id as TEXT (legacy table shape).
-        val localAfterSeq = cursor?.after_seq ?: 0L
-        // List sync already refreshed unread from a newer REST snapshot.
-        // Message sequences do not version reads or withdrawals.
-        if (cursor != null && entry.lastSeq <= localAfterSeq) return
-
-        val anchorLastMessageId = entry.lastMessageId ?: return
-
-        when {
-            // Cold conversation on a fresh login: zero unread means there is
-            // nothing worth prefetching. The list sync has already seeded the
-            // preview; jumping the cursor here defers all history to
-            // RemoteMediator's on-demand paging when the user opens the chat.
-            cursor == null && entry.unreadCount == 0 -> {
-                syncMutex.withLock {
-                    if (messageDao.getSyncCursor(entry.conversationId) == null) {
-                        messageDao.setSyncCursor(entry.conversationId, anchorLastMessageId, entry.lastSeq)
-                    }
-                }
+    private suspend fun syncHeads(session: RunningSession) = syncMutex.withLock {
+    val me = ownUser.firstOrNull()?.id ?: return@withLock
+    val heads = conversationApi.getSyncHeads().entries
+        .filter { it.scope != SyncScope.USER || it.id == me }
+        .filter { head -> messageDao.getScopeCursor(head.scope.name, head.id) != head.revision }
+        .sortedBy { if (it.scope == SyncScope.USER) 0 else 1 }
+    val userHead = heads.firstOrNull { it.scope == SyncScope.USER }
+    if (userHead != null) {
+        // User-scoped entities can seed foreign-key rows needed by conversation sync.
+        syncStream(session, userHead.scope, userHead.id)
+    }
+    heads.asSequence()
+        .filter { it.scope == SyncScope.CONVERSATION }
+        .forEach { head ->
+            try {
+                syncStream(session, head.scope, head.id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                log.warn(failure) { "[sync] conversation stream failed for ${head.id}; continuing" }
             }
-            // No cursor with pending unread, or a gap larger than the window:
-            // jump — fetch the newest window and demote confirmed history
-            // older than it, so Paging keeps a contiguous tail.
-            cursor == null || entry.lastSeq - localAfterSeq > SYNC_WINDOW_MESSAGES -> {
-                val newest = conversationApi.getMessages(
-                    conversationId = entry.conversationId,
-                    limit = SYNC_WINDOW_MESSAGES,
-                    beforeId = null,
-                )
-                // The demote + insert + cursor commit is serialized with the
-                // sweep and live cursor advances: a live message arriving
-                // while the window request was in flight is newer than every
-                // fetched row, so the demote bound leaves it untouched.
-                syncMutex.withLock {
-                    messageDao.transaction {
-                        check(newest.isNotEmpty()) { "Anchor window unexpectedly empty" }
-                        val newestMessage = newest.maxBy { it.id }
-                        val windowSeq = checkNotNull(newestMessage.seq) { "Window message has no delivery sequence" }
-                        check(newestMessage.id >= anchorLastMessageId && windowSeq >= entry.lastSeq) {
-                            "History window does not cover the advertised anchor"
-                        }
-                        val current = messageDao.getSyncCursor(entry.conversationId)
-                        // A newer concurrent window must not be replaced by this older response.
-                        if (current == null || current.after_seq < windowSeq) {
-                            messageDao.demoteTimelineBefore(entry.conversationId, newest.minOf { it.id })
-                            newest.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
-                            // Keep the ID and sequence from the SAME persisted message.
-                            messageDao.setSyncCursor(entry.conversationId, newestMessage.id, windowSeq)
-                        }
-                    }
-                }
-                // Close the network-window/live-delivery handoff. Messages received
-                // before this commit could not advance the old durable cursor.
-                syncConversationFromServer(entry.conversationId)
-            }
-            // Small gap: forward delta through the cursor sweep.
-            else -> syncConversationFromServer(entry.conversationId)
         }
+}
+
+    private suspend fun syncStream(session: RunningSession, scope: SyncScope, id: Uuid) {
+        val storedRevision = messageDao.getScopeCursor(scope.name, id)
+        if (storedRevision == null) {
+            syncSnapshot(session, scope, id)
+            if (scope == SyncScope.USER) syncDeltaAfterSnapshot(session, scope, id)
+            return
+        }
+        syncDeltaAfterSnapshot(session, scope, id, storedRevision)
+    }
+
+    private suspend fun syncDeltaAfterSnapshot(
+        session: RunningSession,
+        scope: SyncScope,
+        id: Uuid,
+        initialRevision: Long? = null,
+    ) {
+        var revision = initialRevision ?: messageDao.getScopeCursor(scope.name, id)
+            ?: error("Snapshot did not persist a cursor for $scope/$id")
+        repeat(MAX_SYNC_PAGES) {
+            val batch = conversationApi.getSyncChanges(scope, id, revision, SYNC_PAGE_SIZE)
+            check(batch.scope == scope && batch.id == id && batch.fromRevision == revision) {
+                "Sync batch identity/fromRevision mismatch for $scope/$id"
+            }
+            if (batch.resetRequired) {
+                syncSnapshot(session, scope, id)
+                if (scope == SyncScope.USER) {
+                    revision = messageDao.getScopeCursor(scope.name, id)
+                        ?: error("Snapshot did not persist a cursor for $scope/$id")
+                    return@repeat
+                }
+                return
+            }
+            if (batch.changes.isEmpty()) {
+                check(batch.nextRevision == revision) { "Empty sync batch advanced its revision" }
+                return
+            }
+            var expected = revision + 1L
+            batch.changes.forEach { change ->
+                check(change.revision == expected++) { "Non-contiguous sync journal for $scope/$id" }
+            }
+            check(batch.nextRevision == batch.changes.last().revision) { "Sync nextRevision mismatch" }
+            try {
+                applySyncBatch(session, scope, id, batch)
+            } catch (reset: UserSyncResetRequiredException) {
+                // A historical journal entry has become unapplicable (e.g. an
+                // offline join whose membership has lapsed). Re-sync the stream
+                // from a controlled snapshot — the authoritative current state
+                // replaces both the stale entry and anything after it — then
+                // continue delta pulls from the fresh cursor.
+                syncSnapshot(session, scope, id)
+                syncDeltaAfterSnapshot(session, scope, id)
+                return
+            }
+            revision = batch.nextRevision
+            if (!batch.hasMore) return
+        }
+        error("Sync page budget exhausted for $scope/$id")
+    }
+
+    private suspend fun syncSnapshot(session: RunningSession, scope: SyncScope, id: Uuid) {
+        val snapshot = conversationApi.getSyncSnapshot(scope, id, SYNC_WINDOW_MESSAGES)
+        check(snapshot.scope == scope && snapshot.id == id) { "Sync snapshot identity mismatch" }
+        when (scope) {
+            SyncScope.USER -> {
+                // Prepare REST state before the transaction; never issue HTTP while holding a DB lock.
+                val prepared = userSyncApplier.prepareSnapshot(snapshot.events)
+                messageDao.transaction {
+                    val applied = conversationRepository.applyUserSnapshotConversations(snapshot.conversations)
+                    if (applied.isErr) error("Failed to apply USER conversation snapshot: $applied")
+                    userSyncApplier.apply(prepared)
+                    messageDao.setScopeCursor(scope.name, id, snapshot.revision)
+                    // Persist the badge-recovery markers in the SAME commit:
+                    // a process death before the scheduled refreshes run must
+                    // leave a recoverable state.
+                    snapshot.conversations.forEach { response ->
+                        messageDao.markUnreadRefreshPending(response.conversationId)
+                    }
+                }
+                // Unread refreshes are scheduled AFTER the commit, never inside
+                // the transaction: the coordinator lock must not be taken while
+                // a database transaction is held (the detail worker takes them
+                // in the opposite order), and in-memory generations must only
+                // advance for committed state.
+                snapshot.conversations.forEach { response ->
+                    requestUnreadRefresh(session, response.conversationId)
+                }
+            }
+                SyncScope.CONVERSATION -> {
+                    val me = ownUser.firstOrNull()?.id
+                    messageDao.transaction {
+                        if (snapshot.messages.isEmpty()) {
+                            messageDao.demoteAllTimelineMessages(id)
+                        } else {
+                            messageDao.demoteTimelineBefore(id, snapshot.messages.minOf { it.id })
+                            snapshot.messages.forEach { message ->
+                                check(message.toMessageEntity() != null) { "Snapshot contains a message without sender" }
+                                persistServerMessage(messageDao, userDao, participantDao, conversationDao, message, null, me)
+                            }
+                        }
+                        messageDao.setScopeCursor(scope.name, id, snapshot.revision)
+                        // Committed with the cursor: a process death before the
+                        // scheduled refresh runs leaves a recoverable marker.
+                        if (snapshot.messages.isNotEmpty()) messageDao.markUnreadRefreshPending(id)
+                    }
+                    // Journal recovery applied messages without realtime events:
+                    // without this refresh the unread badge would keep its
+                    // pre-offline value (or a fresh device's default) forever.
+                    if (snapshot.messages.isNotEmpty()) requestUnreadRefresh(session, id)
+                }
+            }
+        }
+
+    /** Schedules a coalesced authoritative unread refresh bound to the live session. */
+    private suspend fun requestUnreadRefresh(session: RunningSession, conversationId: Uuid) {
+        if (session.job.isActive && isActiveSession(session)) {
+            unreadRefreshCoordinator.requestRefresh(
+                sessionScope = session.scope,
+                conversationId = conversationId,
+                conversationApi = conversationApi,
+                conversationDao = conversationDao,
+            )
+        }
+    }
+
+    private suspend fun applySyncBatch(session: RunningSession, scope: SyncScope, id: Uuid, batch: SyncBatch) {
+        if (scope == SyncScope.USER) {
+            val prepared = userSyncApplier.prepareBatch(batch.changes.map { it.event })
+            messageDao.transaction {
+                userSyncApplier.apply(prepared)
+                messageDao.setScopeCursor(scope.name, id, batch.nextRevision)
+                // A restored Read moved this account's read cursor inside the
+                // same transaction; persist the badge-recovery marker with it.
+                batch.changes.mapNotNull { (it.event as? MessageEventResponse.Read)?.conversationId }
+                    .distinct()
+                    .forEach { conversationId -> messageDao.markUnreadRefreshPending(conversationId) }
+            }
+            // Multi-device read sync (journal recovery path): a restored Read
+            // moved this account's last-read cursor without any realtime
+            // fan-out, so the badge needs the same coalesced authoritative
+            // refresh the live Read handler performs.
+            batch.changes.mapNotNull { (it.event as? MessageEventResponse.Read)?.conversationId }
+                .distinct()
+                .forEach { conversationId -> requestUnreadRefresh(session, conversationId) }
+            return
+        }
+        val me = ownUser.firstOrNull()?.id
+        val metadataRefreshes = linkedSetOf<Uuid>()
+        // Fetch metadata before checkpointing. Any failed refresh leaves the cursor behind.
+        batch.changes.forEach { change ->
+            when (val event = change.event) {
+                is ConversationEventResponse.ConversationDeleted -> Unit
+                is ConversationEventResponse.UserLeftConversation -> if (event.userId == me) Unit
+                is ConversationEventResponse.ConversationCreated -> metadataRefreshes += event.conversationId
+                is ConversationEventResponse.UserJoinedConversation -> metadataRefreshes += event.conversationId
+                is ConversationEventResponse.GroupProfileUpdated -> metadataRefreshes += event.conversationId
+                is ConversationEventResponse.PersonalSettingsUpdated -> metadataRefreshes += event.conversationId
+                else -> Unit
+            }
+        }
+        metadataRefreshes.forEach { conversationId ->
+            val current = conversationDao.findConversationById(conversationId)
+            if (current?.deleted_at == null) {
+                val existingGroup = groupProfileDao?.getGroupProfile(conversationId)?.firstOrNull()
+                if (current != null || existingGroup != null) refreshConversation(conversationId)
+            }
+        }
+        messageDao.transaction {
+            batch.changes.forEach { change ->
+                when (val event = change.event) {
+                    is MessageEventResponse.Received -> {
+                        check(event.message.toMessageEntity() != null) { "Received event has no sender" }
+                        persistServerMessage(messageDao, userDao, participantDao, conversationDao, event.message, event.requestId.takeIf { event.senderId == me }, me)
+                    }
+                    is MessageEventResponse.Withdrawn -> messageDao.revokeMessage(event.messageId, event.timestamp)
+                    is MessageEventResponse.Read -> participantDao.updateLastReadMessage(
+                        event.conversationId, event.readerId, event.messageId,
+                    )
+                    is ConversationEventResponse.ConversationDeleted -> {
+                        conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
+                        groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                    }
+                    is ConversationEventResponse.UserLeftConversation -> {
+                        participantDao.removeParticipant(event.conversationId, event.userId)
+                        if (event.userId == me) {
+                            conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
+                            groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                        }
+                    }
+                    is ConversationEventResponse.GroupJoinRequest,
+                    is ConversationEventResponse.GroupJoinRequestHandled,
+                    is ContactEventResponse -> error("Unexpected USER event in conversation scope")
+                    is ConversationEventResponse -> Unit // Metadata was refreshed successfully above.
+                    else -> error("Unsupported journal event at revision ${change.revision}: ${event::class.simpleName}")
+                    }
+                }
+                messageDao.setScopeCursor(scope.name, id, batch.nextRevision)
+                // Persist the badge-recovery marker in the SAME transaction as
+                // the cursor: a crash before the post-commit refresh scheduling
+                // must still leave a recoverable state.
+                if (batch.changes.any { it.event is MessageEventResponse.Received || it.event is MessageEventResponse.Withdrawn || it.event is MessageEventResponse.Read }) {
+                    messageDao.markUnreadRefreshPending(id)
+                }
+            }
+        // The batch restored unread-affecting events without realtime fan-out;
+        // coalesce one authoritative detail refresh so the badge converges even
+        // when no live Received/Read event follows.
+        if (batch.changes.any { it.event is MessageEventResponse.Received || it.event is MessageEventResponse.Withdrawn || it.event is MessageEventResponse.Read }) {
+            requestUnreadRefresh(session, id)
+        }
+        }
+
+
+
+    private suspend fun refreshConversation(id: Uuid) {
+        val detail = conversationApi.getDetail(id)
+        detail.toUserEntity()?.let { userDao.insertUser(it) }
+        detail.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
+        detail.lastMessage?.sender?.toUserEntity()?.let { userDao.insertUser(it) }
+        conversationDao.insertConversation(detail.toConversation().toEntity())
+        detail.toGroupProfileEntity()?.let { groupProfileDao?.insertGroupProfile(it) }
+        participantDao.insertParticipant(detail.toParticipantEntity())
+        detail.toPeerParticipantEntity()?.let { participantDao.insertParticipantIfAbsent(it) }
     }
 
     private suspend fun handleReceivedMessage(session: RunningSession, event: MessageEventResponse.Received) {
         try {
-            val message = event.message
-            val currentUser = ownUser.firstOrNull()
-
-            val isOwnMessage = currentUser != null && event.senderId == currentUser.id
-            log.info { "[handleReceived] isOwnMessage=$isOwnMessage requestId=${event.requestId} serverMsgId=${message.id}" }
-
-            syncMutex.withLock {
-                messageDao.transaction {
-                    persistServerMessage(message, ownRequestId = event.requestId.takeIf { isOwnMessage }, resolvedOwnUserId = currentUser?.id)
-                }
+            val me = ownUser.firstOrNull()?.id
+            messageDao.transaction {
+                persistServerMessage(messageDao, userDao, participantDao, conversationDao, event.message, event.requestId.takeIf { event.senderId == me }, me)
             }
-            if (!isOwnMessage && message.revokedAt == null && session.job.isActive && isActiveSession(session)) {
+            if (event.senderId != me && event.message.revokedAt == null && session.job.isActive && isActiveSession(session)) {
                 unreadRefreshCoordinator.requestRefresh(
                     sessionScope = session.scope,
-                    conversationId = message.conversationId,
+                    conversationId = event.message.conversationId,
                     conversationApi = conversationApi,
                     conversationDao = conversationDao,
                 )
             }
-            val deliveryContinuous = trackDeliverySeq(session, message)
-            // Live messages extend the local timeline: keep the durable cursor
-            // in step (serialized with any in-flight sweep). Advance only on
-            // EXACT continuation of the persisted cursor — the first message
-            // of a session may sit far ahead of it (offline backlog that the
-            // anchor is about to backfill), and fast-forwarding here would
-            // skip that backlog permanently. Skipped on delivery gaps — the
-            // scheduled repair fills those and advances the cursor itself.
-            if (deliveryContinuous) {
-                val seq = message.seq
-                if (seq != null) syncMutex.withLock {
-                    val cursor = messageDao.getSyncCursor(message.conversationId)
-                    if (cursor != null && seq == cursor.after_seq + 1) {
-                        messageDao.setSyncCursor(message.conversationId, message.id, seq)
-                    } else if (cursor != null && seq > cursor.after_seq + 1) {
-                        // Memory delivery continuity cannot prove durable continuity.
-                        scheduleGapRepair(session, message.conversationId)
-                    }
-                }
-            }
-            log.info { "[handleReceived] db transaction done" }
+            syncWakeups.tryEmit(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.error(e) { "[handleReceived] error: ${e.message}" }
-            scheduleGapRepair(session, event.message.conversationId)
-        }
-    }
-
-    /**
-     * Tracks the per-conversation delivery sequence and repairs gaps.
-     * Returns true only when this message was delivered cleanly (seq present,
-     * session active, no gap detected) — the caller may then safely advance
-     * the durable sync cursor to this message.
-     */
-    private suspend fun trackDeliverySeq(session: RunningSession, message: Message): Boolean {
-        val seq = message.seq ?: return false
-        val conversationId = message.conversationId
-        var gapDetected = false
-        var sessionActive = true
-        seqMutex.withLock {
-            if (!session.job.isActive || !isActiveSession(session)) {
-                sessionActive = false
-                return@withLock
-            }
-            val last = deliveredSeqs[conversationId]
-            if (last == null) {
-                // First message observed for this conversation within this
-                // session: it only establishes the baseline. Anything older
-                // is backfilled by the reconnect sync from the durable
-                // cursor — treating "no baseline" as a gap used to fire a
-                // pointless full repair per conversation on every launch.
-                deliveredSeqs[conversationId] = seq
-            } else if (seq > last) {
-                if (seq > last + 1) {
-                    gapDetected = true
-                }
-                if (!gapDetected) deliveredSeqs[conversationId] = seq
-            }
-            // An older seq re-arriving after a repair is a duplicate.
-        }
-        if (!sessionActive) return false
-        if (gapDetected) {
-            scheduleGapRepair(session, conversationId)
-            return false
-        }
-        return true
-    }
-
-    /** Schedules a gap repair as a child of [session] so [stopSession] cancels and awaits it. */
-    private suspend fun scheduleGapRepair(session: RunningSession, conversationId: Uuid) {
-        seqMutex.withLock {
-            if (!session.job.isActive || !isActiveSession(session)) return
-            if (gapRepairs[conversationId]?.isActive == true) return
-            gapRepairs[conversationId] = session.scope.launch {
-                try {
-                    val fetched = syncConversationFromServer(conversationId)
-                    val highest = fetched.maxOfOrNull { it.seq ?: 0L }
-                    if (highest != null) {
-                        seqMutex.withLock {
-                            if (session.job.isActive && isActiveSession(session)) {
-                                deliveredSeqs[conversationId] = maxOf(deliveredSeqs[conversationId] ?: 0L, highest)
-                            }
-                        }
-                    }
-                    log.info { "[gap-repair] repaired ${fetched.size} message(s) in $conversationId" }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // The cursor stays behind, so the next received event
-                    // re-triggers the repair.
-                    log.error(e) { "[gap-repair] failed for $conversationId" }
-                }
-            }
-        }
-    }
-
-    /** Resume REST history from the last page committed atomically with its cursor. */
-    private suspend fun syncConversationFromServer(conversationId: Uuid): List<Message> = syncMutex.withLock {
-        // Preview ids may point past holes or belong to pending client messages.
-        val cursor = messageDao.getSyncCursor(conversationId)
-        var afterId = cursor?.after_id?.let(Uuid::parse) ?: Uuid.NIL
-        val fetched = mutableListOf<Message>()
-        repeat(MAX_SYNC_PAGES) {
-            val page = conversationApi.syncMessages(conversationId = conversationId, afterId = afterId)
-            if (page.isEmpty()) return@withLock fetched
-            val next = page.maxOf { it.id }
-            check(next > afterId) { "Message sync cursor did not advance" }
-            val nextSeq = page.maxOf { it.seq ?: 0L }
-            val ownId = ownUser.firstOrNull()?.id
-            messageDao.transaction {
-                page.forEach { persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId) }
-                messageDao.setSyncCursor(conversationId, next, nextSeq)
-            }
-            fetched += page
-            afterId = next
-            if (page.size < SYNC_PAGE_SIZE) return@withLock fetched
-        }
-        error("Message sync page budget exhausted; resume on the next sweep")
-    }
-    private suspend fun syncAllConversationsFromServer() {
-        val conversations = conversationDao.getAllActiveConversations().firstOrNull().orEmpty()
-        conversations.forEach { conversation ->
-            // A missing cursor means this conversation has never had its
-            // window established — starting from NIL here would pull full
-            // history; first fill is owned by the anchor's window jump.
-            if (messageDao.getSyncCursor(conversation.id) == null) {
-                log.debug { "[reconnect-sync] skipped ${conversation.id}: no sync cursor yet" }
-                return@forEach
-            }
-            try {
-                syncConversationFromServer(conversation.id)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.warn(e) { "[reconnect-sync] failed for ${conversation.id}" }
-            }
-        }
-    }
-
-    /** Merge server data and all local references within one transaction. */
-    private suspend fun persistServerMessage(
-        message: Message,
-        ownRequestId: String?,
-        resolvedOwnUserId: Uuid?,
-        asReplyTarget: Boolean = false,
-    ) {
-        val ownId = resolvedOwnUserId
-        val candidate = if (!asReplyTarget && message.sender?.id == ownId) {
-            ownRequestId?.let(Uuid::parseOrNull) ?: message.clientRequestId
-        } else null
-        messageDao.transaction {
-            message.replyTo?.let {
-                persistServerMessage(it, ownRequestId = null, resolvedOwnUserId = ownId, asReplyTarget = true)
-            }
-            message.toUserEntity()?.let { userDao.insertUser(it) }
-            message.toParticipantEntity()?.let { participantDao.insertParticipant(it) }
-            val entity = message.toMessageEntity(MessageStatus.SENT, inTimeline = !asReplyTarget)
-            if (entity == null) {
-                log.warn { "[message-sync] skipping server message ${message.id}: no sender" }
-                return@transaction
-            }
-            if (asReplyTarget) {
-                // Reply targets live outside the local timeline window: seed
-                // only (INSERT OR IGNORE), so they never become Paging anchors
-                // and never clobber an existing timeline row, and the list
-                // preview bump is skipped.
-                messageDao.seedMessage(entity)
-                return@transaction
-            }
-            val local = candidate?.let { messageDao.findMessageById(it) }
-            val matchingId = candidate?.takeIf {
-                local != null && local.user_id == entity.user_id &&
-                    local.conversation_id == message.conversationId &&
-                    local.local_send_status in listOf(MessageStatus.SENDING, MessageStatus.FAILED)
-            }
-            messageDao.mergeServerMessage(entity, matchingId)
-            val currentLast = conversationDao.findConversationById(message.conversationId)?.last_message_id
-            if (currentLast == null || message.id > currentLast) {
-                conversationDao.updateLastMessage(message.conversationId, message.id, message.createdAt)
-            }
+            log.error(e) { "[handleReceived] failed to persist realtime ACK" }
+            syncWakeups.tryEmit(Unit)
         }
     }
     private suspend fun handleWithdrawnMessage(session: RunningSession, event: MessageEventResponse.Withdrawn) {
@@ -921,9 +880,7 @@ class OfflineFirstMessageRepositoryImpl(
     }
 
     internal suspend fun inMemorySessionStateCountsForTest(): Triple<Int, Int, Int> =
-        seqMutex.withLock {
-            Triple(deliveredSeqs.size, gapRepairs.size, _typingUsers.value.size)
-        }
+        Triple(0, 0, _typingUsers.value.size)
 
     /**
      * Outbox driver: `SENDING` rows double as the outbox. `FAILED` rows are
@@ -941,8 +898,8 @@ class OfflineFirstMessageRepositoryImpl(
         val retryJob = session.scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 // Resend as soon as the socket comes back up. Content catch-up
-                // is anchor-driven (SyncStateAnchor on every connect), so no
-                // sweep runs here anymore.
+                // is journal-driven (SyncStateResponse.Heads on every connect),
+                // so no sweep runs here anymore.
                 messageApi.connectionState
                     .onSubscription { connectionSubscribed.complete(Unit) }
                     .collectLatest { state ->
@@ -969,12 +926,9 @@ class OfflineFirstMessageRepositoryImpl(
                 connectionSubscribed.completeExceptionally(cause)
             }
         }
-        // Slow safety net: heals silent anchor-handling failures that neither
-        // the connect-time anchor nor seq-gap detection would catch.
-        var ticksSinceLastNet = 0
         session.scope.launch {
             while (true) {
-                kotlinx.coroutines.delay(RETRY_POLL_INTERVAL)
+                delay(RETRY_POLL_INTERVAL)
                 try {
                     if (ownUser.firstOrNull() == null) continue
                     sendMutex.withLock { expireStaleMessages() }
@@ -986,13 +940,6 @@ class OfflineFirstMessageRepositoryImpl(
                             conversationApi = conversationApi,
                             conversationDao = conversationDao,
                         )
-                    }
-                    ticksSinceLastNet++
-                    if (ticksSinceLastNet >= SYNC_NET_TICKS &&
-                        messageApi.connectionState.value is ConnectionState.Connected
-                    ) {
-                        ticksSinceLastNet = 0
-                        syncAllConversationsFromServer()
                     }
                 } catch (e: CancellationException) {
                     throw e

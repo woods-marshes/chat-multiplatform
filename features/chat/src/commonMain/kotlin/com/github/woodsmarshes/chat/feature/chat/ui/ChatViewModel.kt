@@ -13,6 +13,7 @@ import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.ui.MessageState
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.chat.model.ChatUiState
@@ -71,6 +72,7 @@ class ChatViewModel(
 
     private var isTypingActive = false
     private var lastTypingSentAt = 0L
+    private var lastReportedReadMessageId: Uuid? = null
     private var typingStopJob: Job? = null
     private var forwardJob: Job? = null
 
@@ -95,22 +97,6 @@ class ChatViewModel(
                 conversationRepository.getConversationHeaderFlow(convId).collect { header ->
                     _uiState.update { it.copy(header = header) }
                 }
-            }
-
-            // Read receipts: while this chat is open, every newest message is
-            // acknowledged. The Read event drives both the unread badge (own
-            // list) and the peer's read indicator; the distinct-until-changed
-            // cursor means one receipt per message, not per recomposition.
-            viewModelScope.launch {
-                conversationRepository.getConversationListFlow().mapNotNull { conversations ->
-                    conversations
-                        .firstOrNull { it.id == convId }
-                        ?.lastMessage?.id
-                }
-                    .distinctUntilChanged()
-                    .collect { lastMessageId ->
-                        messageRepository.markAsRead(convId, lastMessageId)
-                    }
             }
 
             // Members + typing indicator, combined with a 1s ticker so stale
@@ -172,6 +158,28 @@ class ChatViewModel(
             log.info { "[ChatVM-messages] got new PagingData from getMessages" }
         }
         .cachedIn(viewModelScope)
+
+    /**
+     * Reports the messages currently visible in the chat viewport. Only
+     * persisted messages are eligible for read receipts; local pending and
+     * failed bubbles must never advance the server read cursor.
+     */
+    fun onMessagesVisible(messages: List<MessageUiModel>) {
+        val conversationId = conversationUuid ?: return
+        val readMessageId = messages.asSequence()
+            .filter { it.conversationId == conversationId }
+            .filter { it.revokedAt == null }
+            .filter { it.isReadReceiptEligible }
+            .filter { it.sendStatus == MessageState.Completed }
+            .map { it.id }
+            .maxOrNull() ?: return
+
+        if (readMessageId == lastReportedReadMessageId) return
+        lastReportedReadMessageId = readMessageId
+        viewModelScope.launch {
+            messageRepository.markAsRead(conversationId, readMessageId)
+        }
+    }
 
     fun onInputChanged(value: TextFieldValue) {
         _input.value = value

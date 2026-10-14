@@ -10,12 +10,15 @@ import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
+import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.repository.ContactSourceImpl
 import com.github.woodsmarshes.chat.repository.ConversationDataSourceImpl
 import com.github.woodsmarshes.chat.repository.ConversationParticipantDataSourceImpl
 import com.github.woodsmarshes.chat.repository.GroupProfileDataSourceImpl
 import com.github.woodsmarshes.chat.repository.MessageDataSourceImpl
+import com.github.woodsmarshes.chat.repository.SyncDataSourceImpl
 import com.github.woodsmarshes.chat.repository.PrivateFileSourceImpl
 import com.github.woodsmarshes.chat.repository.UserSettingDataSourceImpl
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
@@ -42,16 +45,16 @@ import kotlin.test.assertNull
 import kotlin.uuid.Uuid
 
 /**
- * Business flows against a real database: send, ordering (seq), history,
- * incremental sync, read cursors, blocked contacts and the private
- * attachment mapping + GC lifecycle.
+ * Business flows against a real database: send, server identity and idempotency,
+ * history, incremental sync, read cursors, blocked contacts and attachment GC.
  */
 @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
 class MessageFlowDatabaseTest {
 
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
 
-    private val messageRepository = MessageDataSourceImpl()
+    private val syncRepository = SyncDataSourceImpl()
+    private val messageRepository = MessageDataSourceImpl(syncRepository)
     private val contactRepository = ContactSourceImpl()
     private val participantRepository = ConversationParticipantDataSourceImpl()
     private val conversationRepository = ConversationDataSourceImpl()
@@ -118,19 +121,22 @@ class MessageFlowDatabaseTest {
         val m2 = sendText(bob, conversationId, "two")
         val m3 = sendText(alice, conversationId, "three")
 
-        // Gap-free per-conversation seq across both senders.
-        assertEquals(listOf(1L, 2L, 3L), listOf(m1, m2, m3).map { it.seq })
+        // Each send receives a distinct server-owned message identity.
+        assertEquals(3, listOf(m1.id, m2.id, m3.id).toSet().size)
+        assertTrue(listOf(m1, m2, m3).all { it.clientRequestId != null })
 
         // The conversation's last-message cursor points at the newest row.
         val conversation = conversationRepository.getExistingPrivateConversation(alice, bob)!!
         assertEquals(m3.id, conversation.lastMessageId)
 
-        // History returns the full thread; sync after the first message
-        // yields exactly the two newer ones.
+        // History is newest-first and keyed by the server-minted message ids.
         val history = service.getHistory(alice, conversationId, limit = 10, beforeId = null).get()!!
         assertEquals(setOf(m1.id, m2.id, m3.id), history.map { it.id }.toSet())
-        val synced = service.syncMessages(bob, conversationId, afterId = m1.id).get()!!
-        assertEquals(setOf(m2.id, m3.id), synced.map { it.id }.toSet())
+        val syncBatch = SyncDataSourceImpl().getChanges(SyncScope.CONVERSATION, conversationId, 0L, 10)
+        assertEquals(3L, syncBatch.nextRevision)
+        assertEquals(setOf(m1.id, m2.id, m3.id), syncBatch.changes.mapNotNull {
+            (it.event as? MessageEventResponse.Received)?.message?.id
+        }.toSet())
 
         // Read cursor lands on the acknowledged message.
         service.markAsRead(conversationId, bob, m2.id)
@@ -422,7 +428,7 @@ class MessageFlowDatabaseTest {
         storedFiles.add(physical)
 
         // Seed a pre-existing message and its conversation-level mapping row
-        // directly in the original schema (seq = null, clientRequestId = null,
+        // directly in the current schema without a client request id,
         // searchText = display name != uniqueName).
         val legacyMessageId = transaction(TestDb.database) {
             val insertedRow = Messages.insert {

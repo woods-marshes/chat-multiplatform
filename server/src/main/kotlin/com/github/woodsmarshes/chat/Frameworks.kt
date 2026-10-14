@@ -8,10 +8,8 @@ import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.UserRepository
-import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
-import com.github.woodsmarshes.chat.repository.database.schema.backfillMessageSeq
 import com.github.woodsmarshes.chat.service.FileService
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.closeHikariDataSource
@@ -33,9 +31,6 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.core.SortOrder
-import kotlin.uuid.Uuid
 import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.fileProperties
 import org.koin.ktor.ext.getKoin
@@ -60,7 +55,6 @@ fun Application.configureFrameworks() {
     val dbType = environment.config.propertyOrNull("database.type")?.getString() ?: "h2"
     val database = configureDatabase(appConfig, dbType)
     configureSchema(database)
-    backfillMessageSeq(database)
     configurePrivateFileBackfill(database, dbType)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
     configureUploadDirectories()
@@ -177,8 +171,6 @@ private fun configureSchema(database: Database) {
         // SchemaUtils.create skips existing tables, so databases created
         // before these additions never receive them from the schema objects.
         exec("CREATE INDEX IF NOT EXISTS idx_conversation_participants_user_id ON conversation_participants (user_id)")
-        exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS seq BIGINT")
-        exec("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS next_seq BIGINT DEFAULT 0 NOT NULL")
         exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS client_request_id UUID")
         // Unique across (sender, conversation, client_request_id): NULLs are
         // distinct in both H2 and PostgreSQL, so system messages coexist.
@@ -213,6 +205,14 @@ private fun Application.configureDependencyInjection(
         bridge { koinToKtor() }
         modules(MainModule, repositoryModule, serviceModule)
         createEagerInstances()
+    }
+
+    monitor.subscribe(ApplicationStopping) { app ->
+        runCatching {
+            (app.getKoin().getOrNull<com.github.woodsmarshes.chat.websocket.RealtimeDelivery>() as? AutoCloseable)?.close()
+        }.onFailure { e ->
+            log.error("Failed to close RealtimeDelivery during ApplicationStopping", e)
+        }
     }
 
     monitor.subscribe(ApplicationStopped) {

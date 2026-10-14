@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.core.data.repository
 
 import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
@@ -14,6 +15,7 @@ import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.ui.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlin.uuid.Uuid
@@ -22,6 +24,25 @@ interface ConversationRepository {
     suspend fun getConversationListFlow(): Flow<List<ConversationUiModel>>
 
     suspend fun syncConversations(): Result<Unit, ConversationError>
+
+    /**
+     * Applies an authoritative conversation list snapshot (such as a `USER`
+     * stream [com.github.woodsmarshes.chat.core.network.dto.events.SyncSnapshot]),
+     * soft-deleting any previously active local conversations omitted from
+     * [responses]. Must be invoked inside the caller's active database
+     * transaction (the USER snapshot cursor commits in that same transaction);
+     * this method does not open, dispatch to, or close any transaction itself.
+     *
+     * Deliberately does NOT touch the unread coordinator while the database
+     * transaction is open: the coordinator lock must always be taken AFTER
+     * (never inside) a database transaction, or the detail refresh worker
+     * (coordinator lock → database write) forms a lock-order inversion. The
+     * sync worker schedules coalesced authoritative unread refreshes for the
+     * restored conversations after the commit instead.
+     */
+    suspend fun applyUserSnapshotConversations(
+        responses: List<ConversationResponse>,
+    ): Result<Unit, ConversationError> = Ok(Unit)
 
     suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError>
 

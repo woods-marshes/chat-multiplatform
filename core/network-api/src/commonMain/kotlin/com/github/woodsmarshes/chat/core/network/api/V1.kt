@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.FileType
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.RequestType
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import io.ktor.resources.Resource
 import kotlin.uuid.Uuid
 
@@ -129,23 +130,17 @@ class V1 {
                 class Personal(val parent: Settings)
             }
 
-            // GET /v1/conversations/{id}/messages?limit=20&before_seq=100
+            // GET /v1/conversations/{id}/messages?limit=20&beforeId=xxx
             @Resource("/messages")
             class Messages(
                 val parent: Id,
                 val limit: Int = 20,
-                val beforeId: Uuid? = null, // 基于序列号分页
+                val beforeId: Uuid? = null,
             ) {
                 @Resource("/search")
                 class Search(
                     val parent: Messages,
                     val keyword: String,
-                )
-
-                @Resource("/sync")
-                class Sync(
-                    val parent: Messages,
-                    val afterId: Uuid,
                 )
             }
 
@@ -230,6 +225,29 @@ class V1 {
             val parent: Files = Files(),
             val isGroup: Boolean, // true=群头像, false=用户头像
             val targetId: Uuid? = null // 如果是 GROUP，则必填
+        )
+    }
+
+    @Resource("/sync")
+    class Sync(val parent: V1 = V1()) {
+        @Resource("/heads")
+        class Heads(val parent: Sync = Sync())
+
+        @Resource("/changes")
+        class Changes(
+            val parent: Sync = Sync(),
+            val scope: SyncScope,
+            val id: Uuid,
+            val afterRevision: Long,
+            val limit: Int = 100,
+        )
+
+        @Resource("/snapshot")
+        class Snapshot(
+            val parent: Sync = Sync(),
+            val scope: SyncScope,
+            val id: Uuid,
+            val limit: Int = 100,
         )
     }
 }

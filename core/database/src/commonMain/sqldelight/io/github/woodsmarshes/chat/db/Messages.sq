@@ -301,12 +301,22 @@ CREATE TABLE MessageAttempt (
     last_attempt_ms INTEGER NOT NULL
 );
 
-CREATE TABLE MessageSyncCursor (
+CREATE TABLE ScopeSyncCursor (
+    scope TEXT NOT NULL,
+    scope_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    PRIMARY KEY (scope, scope_id)
+);
+
+-- Crash-safe unread badge recovery, kept SEPARATE from ScopeSyncCursor on
+-- purpose: a pending row must never make an uninitialized conversation look
+-- like it has a sync cursor (cursor presence decides snapshot vs journal
+-- replay). generation increases on every re-mark so a stale in-flight detail
+-- response can only confirm the exact task it served.
+CREATE TABLE UnreadRefreshPending (
     conversation_id TEXT NOT NULL PRIMARY KEY,
-    after_id TEXT NOT NULL,
-    -- Seq of after_id at the time the cursor advanced; lets the client size
-    -- the reconnect gap against the server's SyncStateAnchor.lastSeq.
-    after_seq INTEGER NOT NULL DEFAULT 0
+    pending INTEGER NOT NULL DEFAULT 1,
+    generation INTEGER NOT NULL
 );
 
 startAttempt:
@@ -331,13 +341,34 @@ UPDATE ConversationEntity SET last_message_id = :newId WHERE last_message_id = :
 replaceReadReferences:
 UPDATE ParticipantEntity SET last_read_message_id = :newId WHERE last_read_message_id = :oldId;
 
-getSyncCursor:
-SELECT * FROM MessageSyncCursor WHERE conversation_id = :conversationId;
+getScopeCursor:
+SELECT revision FROM ScopeSyncCursor WHERE scope = :scope AND scope_id = :scopeId;
 
-setSyncCursor:
-INSERT INTO MessageSyncCursor(conversation_id, after_id, after_seq) VALUES (:conversationId, :afterId, :afterSeq)
-ON CONFLICT(conversation_id) DO UPDATE SET after_id = excluded.after_id, after_seq = excluded.after_seq;
+setScopeCursor:
+INSERT INTO ScopeSyncCursor(scope, scope_id, revision) VALUES (:scope, :scopeId, :revision)
+ON CONFLICT(scope, scope_id) DO UPDATE SET revision = excluded.revision;
 
+-- (Re)marks the conversation as owing one authoritative unread refresh. Rows
+-- are never deleted: generation grows monotonically so a re-mark after
+-- completion can never collide with a still-in-flight older request.
+markUnreadRefreshPending:
+INSERT INTO UnreadRefreshPending(conversation_id, pending, generation)
+VALUES (:conversationId, 1, 0)
+ON CONFLICT(conversation_id) DO UPDATE SET pending = 1, generation = UnreadRefreshPending.generation + 1;
+
+getUnreadRefreshPendingConversations:
+SELECT conversation_id FROM UnreadRefreshPending WHERE pending = 1;
+
+getUnreadRefreshPendingGeneration:
+SELECT generation FROM UnreadRefreshPending
+WHERE conversation_id = :conversationId AND pending = 1;
+
+-- Only the task this request actually read may be confirmed; a generation
+-- mismatch means a newer journal commit re-marked the conversation and the
+-- stale response must NOT retire it.
+confirmUnreadRefreshPending:
+UPDATE UnreadRefreshPending SET pending = 0
+WHERE conversation_id = :conversationId AND pending = 1 AND generation = :expectedGeneration;
 CREATE TABLE MessageTimelineState (
     conversation_id TEXT NOT NULL PRIMARY KEY,
     window_generation INTEGER NOT NULL DEFAULT 0
@@ -373,4 +404,11 @@ SET in_timeline = 0
 WHERE conversation_id = :conversationId
   AND in_timeline = 1
   AND id < :windowOldestId
+  AND (local_send_status IS NULL OR local_send_status NOT IN ('SENDING', 'FAILED'));
+
+demoteAllTimelineMessages:
+UPDATE MessageEntity
+SET in_timeline = 0
+WHERE conversation_id = :conversationId
+  AND in_timeline = 1
   AND (local_send_status IS NULL OR local_send_status NOT IN ('SENDING', 'FAILED'));

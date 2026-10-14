@@ -18,6 +18,7 @@ import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.core.model.ui.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.ui.LastMessageInfo
 import com.github.woodsmarshes.chat.core.model.ui.MessageState
 import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.model.ui.SenderUser
@@ -59,10 +60,13 @@ class ChatViewModelTest {
     private val sentReplies = mutableListOf<Pair<Uuid, Uuid?>>()
     private val typingSignals = mutableListOf<Pair<Uuid, Boolean>>()
     private val retriedMessageIds = mutableListOf<Uuid>()
+    private val readReceipts = mutableListOf<Pair<Uuid, Uuid>>()
+    private val lastMessageId = Uuid.parse("00000000-0000-0000-0000-000000000002")
     private var sendInvocations = 0
     private var sendGate: (suspend () -> Unit)? = null
 
     private fun withViewModel(
+        conversationFlow: Flow<List<ConversationUiModel>> = emptyFlow(),
         block: (ChatViewModel) -> Unit,
     ) {
         val messageRepository = FakeMessageRepository(
@@ -74,9 +78,12 @@ class ChatViewModelTest {
             onSendGate = { sendGate?.invoke() },
             onTyping = { id, isTyping -> typingSignals += id to isTyping },
             onRetry = { messageId -> retriedMessageIds += messageId },
+            onMarkAsRead = { id, messageId -> readReceipts += id to messageId },
         )
         val userRepository = FakeUserRepository(MutableStateFlow(null))
-        val conversationRepository = FakeConversationRepository()
+        val conversationRepository = FakeConversationRepository(
+            conversations = conversationFlow,
+        )
         val vm = ChatViewModel(
             conversationId = conversationId.toString(),
             isGroup = true,
@@ -103,6 +110,62 @@ class ChatViewModelTest {
             } finally {
                 Dispatchers.resetMain()
             }
+        }
+    }
+
+    @Test
+    fun visibleMessagesMarkOnlyCompletedMessagesAndDeduplicateReceipts() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            withViewModel { vm ->
+                val completed = testMessage("visible-completed")
+                val sending = testMessage("visible-sending").copy(sendStatus = MessageState.Sending)
+                val failed = testMessage("visible-failed").copy(
+                    sendStatus = MessageState.SendFailed("offline"),
+                )
+                val revoked = testMessage("visible-revoked").copy(
+                    revokedAt = Instant.fromEpochMilliseconds(1),
+                )
+                val foreignConversation = completed.copy(
+                    id = testMessage("foreign-id").id,
+                    conversationId = Uuid.parse("00000000-0000-0000-0000-000000000099"),
+                )
+
+                vm.onMessagesVisible(listOf(sending, failed, revoked, foreignConversation, completed, completed))
+                vm.onMessagesVisible(listOf(completed, completed))
+
+                assertEquals(listOf(conversationId to completed.id), readReceipts)
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun openingChatDoesNotAutomaticallyMarkLatestMessageRead() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val latest = LastMessageInfo(
+                id = lastMessageId,
+                content = TextContent("latest message"),
+                renderType = MessageRenderType.TEXT,
+                createdAt = Instant.fromEpochMilliseconds(1),
+            )
+            withViewModel(
+                conversationFlow = MutableStateFlow(
+                    listOf(
+                        ConversationUiModel(
+                            id = conversationId,
+                            type = com.github.woodsmarshes.chat.core.model.ConversationType.GROUP,
+                            lastMessage = latest,
+                        ),
+                    ),
+                ),
+            ) {
+                assertTrue(readReceipts.isEmpty())
+            }
+        } finally {
+            Dispatchers.resetMain()
         }
     }
 
@@ -298,6 +361,7 @@ class ChatViewModelTest {
         sentMessages.clear()
         sentReplies.clear()
         typingSignals.clear()
+        readReceipts.clear()
         sendInvocations = 0
         sendGate = null
     }
@@ -335,8 +399,9 @@ private class FakeUserRepository(
 private class FakeConversationRepository(
     private val header: Flow<ConversationHeader?> = MutableStateFlow(null),
     private val members: Flow<List<SenderUser>> = MutableStateFlow(emptyList()),
+    private val conversations: Flow<List<ConversationUiModel>> = emptyFlow(),
 ) : ConversationRepository {
-    override suspend fun getConversationListFlow() = emptyFlow<List<ConversationUiModel>>()
+    override suspend fun getConversationListFlow() = conversations
     override suspend fun syncConversations() = Ok(Unit)
     override suspend fun createDirectChat(targetUserId: Uuid) = error("not used")
     override suspend fun createGroup(
@@ -372,6 +437,7 @@ private class FakeMessageRepository(
     private val onSendGate: suspend () -> Unit = {},
     private val onTyping: (Uuid, Boolean) -> Unit = { _, _ -> },
     private val onRetry: (Uuid) -> Unit = {},
+    private val onMarkAsRead: (Uuid, Uuid) -> Unit = { _, _ -> },
 ) : MessageRepository {
     override val connectionState = kotlinx.coroutines.flow.MutableStateFlow<com.github.woodsmarshes.chat.core.model.ConnectionState>(com.github.woodsmarshes.chat.core.model.ConnectionState.Connected)
 
@@ -399,7 +465,9 @@ private class FakeMessageRepository(
         return Ok(Unit)
     }
     override suspend fun revokeMessage(messageId: Uuid) = Ok(Unit)
-    override suspend fun markAsRead(conversationId: Uuid, messageId: Uuid) = Unit
+    override suspend fun markAsRead(conversationId: Uuid, messageId: Uuid) {
+        onMarkAsRead(conversationId, messageId)
+    }
     override fun getTypingUsersFlow(conversationId: Uuid) = MutableStateFlow(emptyMap<Uuid, Long>())
     override suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean) {
         onTyping(conversationId, isTyping)

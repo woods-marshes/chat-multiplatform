@@ -17,6 +17,7 @@ import com.github.woodsmarshes.chat.core.data.repository.OfflineFirstMessageRepo
 import com.github.woodsmarshes.chat.core.data.repository.UnreadRefreshCoordinator
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepositoryImpl
+import com.github.woodsmarshes.chat.core.data.repository.UserSyncApplier
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
@@ -26,6 +27,12 @@ import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
+import com.github.woodsmarshes.chat.core.database.dao.ContactDao
+import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDao
+import com.github.woodsmarshes.chat.core.database.dao.ConversationDao
+import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
+import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
 import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
@@ -34,7 +41,21 @@ import org.koin.dsl.module
 @OptIn(ExperimentalPagingApi::class)
 val dataModule = module {
     singleOf(::AuthRepositoryImpl) bind AuthRepository::class
-    singleOf(::UnreadRefreshCoordinator)
+    single { UnreadRefreshCoordinator(messageDao = get<MessageDao>()) }
+    single {
+        UserSyncApplier(
+            contactApi = get(),
+            conversationApi = get(),
+            contactDao = get<ContactDao>(),
+            contactRequestDao = get<ContactRequestDao>(),
+            userDao = get<UserDao>(),
+            groupJoinRequestDao = get<GroupJoinRequestDao>(),
+            participantDao = get<ParticipantDao>(),
+            conversationDao = get<ConversationDao>(),
+            groupProfileDao = get(),
+            messageDao = get<MessageDao>(),
+        )
+    }
     single<MessageRepository> {
         OfflineFirstMessageRepositoryImpl(
             messageDao = get(),
@@ -50,6 +71,7 @@ val dataModule = module {
             mediatorFactory = get(),
             groupProfileDao = get(),
             unreadRefreshCoordinator = get(),
+            userSyncApplier = get(),
         )
     }
     singleOf(::ConversationRepositoryImpl) bind ConversationRepository::class

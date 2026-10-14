@@ -102,7 +102,6 @@ fun ResultRow.toMessage(user: SimpleUser? = null, replyTo: Message? = null): Mes
     createdAt = this[Messages.createdAt],
     revokedAt = this[Messages.revokedAt],
     senderContext = null,
-    seq = this[Messages.seq],
     clientRequestId = this[Messages.clientRequestId],
 )
 
@@ -136,27 +135,38 @@ fun ResultRow.toSimpleUser() = SimpleUser(
 
 fun ResultRow.toMessageSenderContext() = MessageSenderContext(
     conversationRole = this.getOrNull(ConversationParticipants.role) ?: ConversationRole.UNKNOWN,
-    participantSettings = this.getOrNull(ConversationParticipants.settings)?.copy(
-        alias = null,
-        backgroundImage = null,
-        enableNotification = true,
-        pinnedAt = null
-    ),
+    participantSettings = this.getOrNull(ConversationParticipants.settings)?.sanitizedForBroadcast(),
     joinedAt = this.getOrNull(ConversationParticipants.joinedAt) ?: Clock.System.now(),
-    lastReadMessageId = this.getOrNull(ConversationParticipants.lastReadMessageId),
+    lastReadMessageId = null,
     mutedUntil = this.getOrNull(ConversationParticipants.mutedUntil)
 )
+
+/**
+ * Strips private per-user preferences (alias, background image, notification
+ * toggle, pinned timestamp) before embedding [ParticipantSettings] into a
+ * public message's [MessageSenderContext]. Only conversation-visible fields
+ * (`nickname`, `bubbleColor`) may leave the sender's user scope.
+ */
+fun ParticipantSettings.sanitizedForBroadcast(): ParticipantSettings = copy(
+    alias = null,
+    backgroundImage = null,
+    enableNotification = true,
+    pinnedAt = null,
+)
+
 fun ResultRow.toFilteredUser(replyTo: Message? = null): Message = Message(
     id = this[Messages.id].value,
     conversationId = this[Messages.conversationId].value,
-    sender = toSimpleUser(),
+    sender = toSimpleUser().let { base ->
+        val groupNick = this.getOrNull(ConversationParticipants.settings)?.nickname
+        if (groupNick != null) base.copy(displayName = groupNick) else base
+    },
     category = this[Messages.category],
     content = this[Messages.content],
     replyTo = replyTo,
     createdAt = this[Messages.createdAt],
     revokedAt = this[Messages.revokedAt],
     senderContext = toMessageSenderContext(),
-    seq = this[Messages.seq],
     clientRequestId = this[Messages.clientRequestId],
 )
 

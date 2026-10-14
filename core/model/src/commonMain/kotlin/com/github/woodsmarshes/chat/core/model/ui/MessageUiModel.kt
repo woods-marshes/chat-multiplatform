@@ -20,6 +20,8 @@ data class MessageUiModel(
     val content: MessageContent,
     val bubbleColor: String? = null,
     val sendStatus: MessageState,
+    /** False for a withdrawn message whose stored content is retained for sync. */
+    val isReadReceiptEligible: Boolean = true,
 )
 
 data class SenderUser(

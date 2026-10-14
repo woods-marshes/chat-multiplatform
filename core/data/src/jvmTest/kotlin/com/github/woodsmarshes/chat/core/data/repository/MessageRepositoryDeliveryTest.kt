@@ -2,6 +2,9 @@ package com.github.woodsmarshes.chat.core.data.repository
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.github.woodsmarshes.chat.core.database.dao.ConversationDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.ContactDao
+import com.github.woodsmarshes.chat.core.database.dao.ContactDaoImpl
+import com.github.woodsmarshes.chat.core.database.dao.ContactRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.GroupJoinRequestDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDaoImpl
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
@@ -13,6 +16,9 @@ import com.github.woodsmarshes.chat.core.database.di.createDatabase
 import com.github.woodsmarshes.chat.core.database.session.ManagedDatabaseSessionGate
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.ConnectionState
+import com.github.woodsmarshes.chat.core.model.Contact
+import com.github.woodsmarshes.chat.core.model.ContactRequest
+import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ConversationType
@@ -20,23 +26,36 @@ import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageStatus
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
+import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
+import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
+import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncAnchorEntry
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncBatch
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncChange
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncHead
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncSnapshot
 import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import io.github.woodsmarshes.chat.db.ChatDatabase
+import io.github.woodsmarshes.chat.db.ContactEntity
 import io.github.woodsmarshes.chat.db.ConversationEntity
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.UserEntity
 import io.mockk.coEvery
@@ -44,15 +63,24 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -86,11 +114,15 @@ class MessageRepositoryDeliveryTest {
     private val ancient = Uuid.parse("00000000-0000-0000-0000-000000000030")
     private val now = Instant.fromEpochMilliseconds(1_700_000_000_000)
     private val sender = SimpleUser(userId, "user", null, null, now, now, null, UserRole.MEMBER)
-    private fun message(id: Uuid, requestId: Uuid? = null, seq: Long? = null) = Message(
+    private fun message(id: Uuid, requestId: Uuid? = null) = Message(
         id, conversationId, sender, MessageCategory.NORMAL, now,
-        content = TextContent("hello"), seq = seq, clientRequestId = requestId,
+        content = TextContent("hello"), clientRequestId = requestId,
     )
 
+    private fun conversationHeads(revision: Long) = SyncStateResponse.Heads(
+        entries = listOf(SyncHead(SyncScope.CONVERSATION, conversationId, revision)),
+        timestamp = now,
+    )
     private fun detailResponse(id: Uuid = conversationId, unreadCount: Int = 0) = ConversationResponse(
         conversationId = id,
         type = ConversationType.PRIVATE,
@@ -138,14 +170,14 @@ class MessageRepositoryDeliveryTest {
         every { api.connectionState } returns MutableStateFlow(ConnectionState.Connected)
         coEvery { api.send(any()) } returns true
         val rest = mockk<ConversationApi>()
-        coEvery { rest.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { rest.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
         coEvery { rest.getDetail(any()) } answers { detailResponse(id = firstArg(), unreadCount = 0) }
         val conversationRepository = mockk<ConversationRepository>(relaxed = true)
         coEvery { conversationRepository.syncConversations() } returns com.github.michaelbull.result.Ok(Unit)
         observeConversationRepository(conversationRepository)
         val settings = mockk<UserSettingDataSource>()
         every { settings.user } returns MutableStateFlow(User(userId, "user", null, null, null, null, now, now, null))
-        val coordinator = UnreadRefreshCoordinator()
+        val coordinator = UnreadRefreshCoordinator(dao)
         val repo = OfflineFirstMessageRepositoryImpl(
             decorate(dao), UserDaoImpl({ db }, coroutineContext), ParticipantDaoImpl({ db }, coroutineContext),
             api, rest, ConversationDaoImpl({ db }, coroutineContext), GroupJoinRequestDaoImpl({ db }, coroutineContext),
@@ -153,6 +185,7 @@ class MessageRepositoryDeliveryTest {
             mediatorFactory = io.mockk.mockk(),
             groupProfileDao = GroupProfileDaoImpl({ db }, coroutineContext),
             unreadRefreshCoordinator = coordinator,
+            userSyncApplier = mockk(relaxed = true),
         )
         try {
             if (autoStart) repo.startSession()
@@ -161,6 +194,854 @@ class MessageRepositoryDeliveryTest {
             repo.stopSession()
             runCurrent()
             driver.close()
+        }
+    }
+
+    /**
+     * Fixture wired with the REAL [UserSyncApplier] and REAL
+     * [ConversationRepositoryImpl] over the same database, so USER-scope
+     * snapshot/delta application is exercised end to end: the conversation
+     * list apply, the contact/contact-request apply, and the scope cursor
+     * either all commit together or all roll back together.
+     */
+    private suspend fun TestScope.userSyncFixture(
+        userApi: UserApi = mockk(),
+        contactDaoOverride: (ContactDao) -> ContactDao = { it },
+        block: suspend (
+            repo: OfflineFirstMessageRepositoryImpl,
+            dao: MessageDaoImpl,
+            events: MutableSharedFlow<RealtimeEvent>,
+            rest: ConversationApi,
+            contactApi: ContactApi,
+            db: ChatDatabase,
+        ) -> Unit,
+    ) {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY, Properties().apply { put("foreign_keys", "true") })
+        val db = createDatabase { schema -> schema.create(driver).await(); driver }
+        // A real session gate so ConversationRepositoryImpl's sessionOperation
+        // paths (syncConversations calibration) execute against this database.
+        val gate = ManagedDatabaseSessionGate(UnconfinedTestDispatcher(testScheduler), { db }, { 1L })
+        try {
+            db.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
+            db.usersQueries.upsertUser(UserEntity(ancient, "peer", null, null, null, null, now, now, null, UserRole.MEMBER))
+            db.conversationsQueries.upsertConversation(ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
+            val events = MutableSharedFlow<RealtimeEvent>(extraBufferCapacity = 64)
+            val api = mockk<RealtimeApi>()
+            every { api.events } returns events
+            every { api.connectionState } returns MutableStateFlow(ConnectionState.Connected)
+            coEvery { api.send(any()) } returns true
+            val rest = mockk<ConversationApi>()
+            val contactApi = mockk<ContactApi>()
+            val settings = mockk<UserSettingDataSource>()
+            every { settings.user } returns MutableStateFlow(User(userId, "user", null, null, null, null, now, now, null))
+            val dao = MessageDaoImpl({ db }, coroutineContext)
+            val userDao = UserDaoImpl({ db }, coroutineContext)
+            val participantDao = ParticipantDaoImpl({ db }, coroutineContext)
+            val conversationDao = ConversationDaoImpl({ db }, coroutineContext)
+            val groupJoinRequestDao = GroupJoinRequestDaoImpl({ db }, coroutineContext)
+            val groupProfileDao = GroupProfileDaoImpl({ db }, coroutineContext)
+            val contactDao = contactDaoOverride(ContactDaoImpl({ db }, coroutineContext))
+            val contactRequestDao = ContactRequestDaoImpl({ db }, coroutineContext)
+            gate.start()
+            val conversationRepo = ConversationRepositoryImpl(
+                groupProfileDao = groupProfileDao,
+                conversationDao = conversationDao,
+                participantDao = participantDao,
+                messageDao = dao,
+                groupJoinRequestDao = groupJoinRequestDao,
+                userDao = userDao,
+                conversationApi = rest,
+                userApi = userApi,
+                fileApi = mockk<FileApi>(relaxed = true),
+                databaseHolder = mockk { every { sessionGate } returns gate },
+                userSettingDataSource = settings,
+                unreadRefreshCoordinator = UnreadRefreshCoordinator(dao),
+            )
+            val applier = UserSyncApplier(
+                contactApi = contactApi,
+                conversationApi = rest,
+                contactDao = contactDao,
+                contactRequestDao = contactRequestDao,
+                userDao = userDao,
+                groupJoinRequestDao = groupJoinRequestDao,
+                participantDao = participantDao,
+                conversationDao = conversationDao,
+                groupProfileDao = groupProfileDao,
+                messageDao = dao,
+            )
+            val repo = OfflineFirstMessageRepositoryImpl(
+                dao, userDao, participantDao, api, rest, conversationDao, groupJoinRequestDao,
+                conversationRepo, settings, backgroundScope,
+                mediatorFactory = io.mockk.mockk(),
+                groupProfileDao = groupProfileDao,
+                unreadRefreshCoordinator = UnreadRefreshCoordinator(dao),
+                userSyncApplier = applier,
+            )
+            try {
+                block(repo, dao, events, rest, contactApi, db)
+            } finally {
+                repo.stopSession()
+                runCurrent()
+            }
+        } finally {
+            gate.stop()
+            driver.close()
+        }
+    }
+
+    private fun userHeads(revision: Long) = SyncStateResponse.Heads(
+        entries = listOf(SyncHead(SyncScope.USER, userId, revision)),
+        timestamp = now,
+    )
+
+    @Test
+    fun userSnapshotRollsBackConversationApplyWhenAStageFailsAndAppliesAtomicallyOnRetry() = runTest {
+        val snapshotConversationId = Uuid.parse("00000000-0000-0000-0000-000000000043")
+        var failContactInsert = true
+        userSyncFixture(
+            contactDaoOverride = { delegate ->
+                object : ContactDao by delegate {
+                    override suspend fun insertContacts(contacts: List<ContactEntity>) {
+                        if (failContactInsert) error("Injected contact write failure")
+                        delegate.insertContacts(contacts)
+                    }
+                }
+            },
+        ) { repo, dao, events, rest, contactApi, db ->
+            coEvery { contactApi.getContacts() } returns listOf(
+                Contact(userId, ancient, ContactStatus.FRIEND, null, null, now, now) to
+                    User(ancient, "peer", null, null, null, null, now, now, null),
+            )
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 2L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = snapshotConversationId)),
+            )
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 2L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 2L, 2L, false, false, emptyList(),
+            )
+            coEvery { rest.getDetail(any()) } returns detailResponse(id = snapshotConversationId, unreadCount = 4)
+            repo.startSession(); runCurrent()
+
+            // The contact write failed inside the snapshot transaction: the
+            // conversation list apply and the cursor must roll back with it.
+            assertNull(
+                db.conversationsQueries.getConversationById(snapshotConversationId).executeAsOneOrNull(),
+                "a failed snapshot stage must not leave a half-applied conversation list",
+            )
+            assertNull(dao.getScopeCursor(SyncScope.USER.name, userId), "a failed snapshot must not checkpoint")
+            assertNull(
+                db.conversationsQueries.getConversationById(conversationId).executeAsOne().deleted_at,
+                "the omission cleanup must roll back too, not just the new rows",
+            )
+            // A rolled-back snapshot must not schedule any unread refresh: the
+            // coordinator must never treat uncommitted data as applied.
+            coVerify(exactly = 0) { rest.getDetail(any()) }
+
+            failContactInsert = false
+            events.emit(userHeads(2L)); runCurrent()
+
+            // Retry commits everything in one transaction.
+            assertNotNull(db.conversationsQueries.getConversationById(snapshotConversationId).executeAsOneOrNull())
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            assertEquals(
+                listOf(ancient),
+                db.contactsQueries.selectAllContactsForSync().executeAsList().map { it.contact_id },
+            )
+            // The pre-existing conversation is absent from the snapshot: the
+            // same committed apply soft-deletes it and drops its membership.
+            assertNotNull(db.conversationsQueries.getConversationById(conversationId).executeAsOne().deleted_at)
+            // Post-commit, the sync worker schedules the authoritative unread
+            // refresh for the restored conversation; it converges the badge.
+            coVerify(exactly = 1) { rest.getDetail(snapshotConversationId) }
+            assertEquals(
+                4,
+                db.conversationsQueries.getConversationById(snapshotConversationId).executeAsOne().unread_count,
+            )
+            // One failed pull + one successful retry pull, both snapshots.
+            coVerify(exactly = 2) { rest.getSyncSnapshot(SyncScope.USER, userId, any()) }
+        }
+    }
+
+    @Test
+    fun journalDeltaRecoveryTriggersAuthoritativeUnreadRefreshWithoutRealtimeEvents() = runTest {
+        var conversationDao: ConversationDaoImpl? = null
+        fixture(observeConversations = { conversationDao = it }) { repo, dao, _, _, rest ->
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversationId, 1L)
+            // Pure offline recovery: the message arrives ONLY through the
+            // journal batch, no live Received event follows it.
+            coEvery { rest.getSyncHeads() } returns conversationHeads(2)
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) } returns SyncBatch(
+                SyncScope.CONVERSATION, conversationId, 1L, 2L, false, false,
+                listOf(SyncChange(2L, MessageEventResponse.Received(message(serverId), conversationId, userId, ""))),
+            )
+            coEvery { rest.getDetail(conversationId) } returns detailResponse(unreadCount = 5)
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            // The coalesced authoritative refresh must have converged the badge
+            // to the server value even without any realtime trigger.
+            assertEquals(
+                5,
+                conversationDao?.getConversationById(conversationId)?.first()?.unread_count,
+                "offline journal recovery must converge the unread count",
+            )
+        }
+    }
+
+    @Test
+    fun userSnapshotRecoveryAppliesAuthoritativeUnreadCounts() = runTest {
+        val snapshotConversationId = Uuid.parse("00000000-0000-0000-0000-000000000043")
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 2L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = snapshotConversationId, unreadCount = 99)),
+            )
+            coEvery { rest.getDetail(snapshotConversationId) } returns detailResponse(
+                id = snapshotConversationId, unreadCount = 7,
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            // The snapshot transaction must not touch the coordinator; the
+            // post-commit refresh converges the badge to the server value.
+            coVerify(exactly = 1) { rest.getDetail(snapshotConversationId) }
+            assertEquals(
+                7,
+                db.conversationsQueries.getConversationById(snapshotConversationId).executeAsOne().unread_count,
+                "offline USER snapshot recovery must converge the unread count via the post-commit refresh",
+            )
+        }
+    }
+
+    @Test
+    fun userDeltaAppliesContactStateAndRecordsMissingGroupJoinDecision() = runTest {
+        val requestId = Uuid.parse("00000000-0000-0000-0000-000000000051")
+        val handledRequestId = Uuid.parse("00000000-0000-0000-0000-000000000052")
+        userSyncFixture { repo, dao, events, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 0L)
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns listOf(
+                ContactRequest(requestId, userId, ancient, "hi", RequestStatus.PENDING, now, now),
+            )
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 0L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 0L, 2L, false, false,
+                listOf(
+                    SyncChange(1L, ContactEventResponse.FriendRequestSent(requestId, userId, ancient, now)),
+                    SyncChange(2L, ContactEventResponse.ContactAdded(userId, ancient, now)),
+                ),
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            assertEquals(
+                listOf(requestId),
+                db.contactRequestsQueries.selectAllContactRequestsForSync().executeAsList().map { it.id },
+            )
+            coVerify(exactly = 1) { contactApi.getContacts() }
+
+            // A handled group-join decision whose request row does not exist
+            // locally must still be recorded (synthetic row), never dropped
+            // with the cursor advancing past it.
+            val heads3 = userHeads(3L)
+            coEvery { rest.getSyncHeads() } returns heads3
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 2L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 2L, 3L, false, false,
+                listOf(
+                    SyncChange(
+                        3L,
+                        ConversationEventResponse.GroupJoinRequestHandled(
+                            requestId = handledRequestId,
+                            conversationId = conversationId,
+                            applicantId = ancient,
+                            handlerId = userId,
+                            approved = false,
+                            reason = null,
+                            timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            events.emit(heads3); runCurrent()
+
+            assertEquals(3L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            val recorded = db.groupJoinRequestsQueries.selectGroupJoinRequestsByConversation(
+                conversationId = conversationId,
+                status = null,
+            ).executeAsList().first { it.id == handledRequestId }
+            assertEquals(RequestStatus.REJECTED, recorded.status)
+            assertEquals(userId, recorded.handled_by)
+            // Without a contact event in the batch, no second contact refetch.
+            coVerify(exactly = 1) { contactApi.getContacts() }
+        }
+    }
+
+    @Test
+    fun userDeltaRecoveryOfOwnReadTriggersAuthoritativeUnreadRefresh() = runTest {
+        var conversationDao: ConversationDaoImpl? = null
+        fixture(observeConversations = { conversationDao = it }) { repo, dao, _, _, rest ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            // The other device read the conversation while this one was
+            // offline; the Read is restored ONLY through the USER journal.
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, false, false,
+                listOf(
+                    SyncChange(
+                        2L,
+                        MessageEventResponse.Read(
+                            messageId = serverId,
+                            conversationId = conversationId,
+                            readerId = userId,
+                            timestamp = now,
+                            unreadCount = 9,
+                        ),
+                    ),
+                ),
+            )
+            // The event's own unreadCount is NOT trusted (it may be stale);
+            // the coalesced authoritative refresh decides the final value.
+            coEvery { rest.getDetail(conversationId) } returns detailResponse(unreadCount = 3)
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            assertEquals(
+                3,
+                conversationDao?.getConversationById(conversationId)?.first()?.unread_count,
+                "a restored USER-scope Read must converge the unread count",
+            )
+        }
+    }
+
+    @Test
+    fun userDeltaAppliesJoinedConversationFromDetail() = runTest {
+        val joinedId = Uuid.parse("00000000-0000-0000-0000-000000000044")
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getDetail(joinedId) } returns detailResponse(id = joinedId, unreadCount = 2)
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, false, false,
+                listOf(
+                    SyncChange(
+                        2L,
+                        ConversationEventResponse.UserJoinedConversation(
+                            conversationId = joinedId,
+                            userId = listOf(userId),
+                            inviterId = null,
+                            timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            val conversation = db.conversationsQueries.getConversationById(joinedId).executeAsOneOrNull()
+            assertNotNull(conversation, "a restored join must create the conversation row")
+            assertNull(conversation.deleted_at)
+            assertNotNull(db.participantsQueries.getParticipant(joinedId, userId).executeAsOneOrNull())
+        }
+    }
+
+    @Test
+    fun userDeltaAppliesOwnLeaveByHidingConversation() = runTest {
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            db.participantsQueries.upsertParticipant(
+                io.github.woodsmarshes.chat.db.ParticipantEntity(
+                    conversationId, userId, ConversationRole.MEMBER, null, now, null, ParticipantSettings(),
+                ),
+            )
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, false, false,
+                listOf(
+                    SyncChange(
+                        2L,
+                        ConversationEventResponse.UserLeftConversation(
+                            conversationId = conversationId,
+                            userId = userId,
+                            timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            assertNull(
+                db.participantsQueries.getParticipant(conversationId, userId).executeAsOneOrNull(),
+                "a restored leave must drop the local membership",
+            )
+            assertNotNull(
+                db.conversationsQueries.getConversationById(conversationId).executeAsOne().deleted_at,
+                "a restored leave must hide the conversation",
+            )
+        }
+    }
+
+    @Test
+    fun userDeltaAppliesPersonalSettingsWithoutTouchingReadCursor() = runTest {
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            db.participantsQueries.upsertParticipant(
+                io.github.woodsmarshes.chat.db.ParticipantEntity(
+                    conversationId, userId, ConversationRole.MEMBER, serverId, now, null, ParticipantSettings(),
+                ),
+            )
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, false, false,
+                listOf(
+                    SyncChange(
+                        2L,
+                        ConversationEventResponse.PersonalSettingsUpdated(
+                            conversationId = conversationId,
+                            userId = userId,
+                            settings = ParticipantSettings(nickname = "alice"),
+                            timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            val participant = db.participantsQueries.getParticipant(conversationId, userId).executeAsOne()
+            assertEquals("alice", participant.settings.nickname)
+            assertEquals(
+                serverId,
+                participant.last_read_message_id,
+                "personal settings sync must not clobber the read cursor",
+            )
+        }
+    }
+
+    /** The server answers the joined conversation's detail with 403 once the
+     *  offline join-then-leave history has lapsed the membership. The batch
+     *  must recover through a controlled USER snapshot reset instead of
+     *  retrying the unapplicable join forever. */
+    @Test
+    fun userDeltaJoinedThenLeftInSameBatchResetsThroughSnapshot() = runTest {
+        val joinedId = Uuid.parse("00000000-0000-0000-0000-000000000044")
+        userSyncFixture { repo, dao, events, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            val forbidden = mockk<HttpResponse>(relaxed = true) { every { status } returns HttpStatusCode.Forbidden }
+            coEvery { rest.getDetail(joinedId) } throws ClientRequestException(forbidden, "")
+            coEvery { rest.getSyncHeads() } returns userHeads(3L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 3L, false, false,
+                listOf(
+                    SyncChange(
+                        2L,
+                        ConversationEventResponse.UserJoinedConversation(
+                            conversationId = joinedId, userId = listOf(userId), inviterId = null, timestamp = now,
+                        ),
+                    ),
+                    SyncChange(
+                        3L,
+                        ConversationEventResponse.UserLeftConversation(
+                            conversationId = joinedId, userId = userId, timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 3L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = conversationId)),
+            )
+            coEvery { rest.getDetail(conversationId) } returns detailResponse(id = conversationId, unreadCount = 0)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 3L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 3L, 3L, false, false, emptyList(),
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(3L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            // The lapsed join must not retry: the snapshot replaced the batch.
+            coVerify(exactly = 1) { rest.getDetail(joinedId) }
+            assertNull(db.conversationsQueries.getConversationById(joinedId).executeAsOneOrNull())
+        }
+    }
+
+    @Test
+    fun userDeltaJoinedOnFirstPageAndLeftOnNextRecoversThroughSnapshot() = runTest {
+        val joinedId = Uuid.parse("00000000-0000-0000-0000-000000000044")
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            val forbidden = mockk<HttpResponse>(relaxed = true) { every { status } returns HttpStatusCode.Forbidden }
+            coEvery { rest.getDetail(joinedId) } throws ClientRequestException(forbidden, "")
+            coEvery { rest.getSyncHeads() } returns userHeads(3L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, true, false,
+                listOf(
+                    SyncChange(
+                        2L,
+                        ConversationEventResponse.UserJoinedConversation(
+                            conversationId = joinedId, userId = listOf(userId), inviterId = null, timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 2L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 2L, 3L, false, false,
+                listOf(
+                    SyncChange(
+                        3L,
+                        ConversationEventResponse.UserLeftConversation(
+                            conversationId = joinedId, userId = userId, timestamp = now,
+                        ),
+                    ),
+                ),
+            )
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 3L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = conversationId)),
+            )
+            coEvery { rest.getDetail(conversationId) } returns detailResponse(id = conversationId, unreadCount = 0)
+            repo.startSession(); runCurrent()
+
+            // The snapshot jumped the cursor past both pages; page two is never
+            // pulled and the first page is never retried.
+            assertEquals(3L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            coVerify(exactly = 1) { rest.getDetail(joinedId) }
+            coVerify(exactly = 0) { rest.getSyncChanges(SyncScope.USER, userId, 2L, any()) }
+            assertNull(db.conversationsQueries.getConversationById(joinedId).executeAsOneOrNull())
+        }
+    }
+
+    /** Crash window: the cursor and its persisted refresh-pending marker commit
+     *  together, the scheduled refresh never completes (session stopped with
+     *  the detail request in flight), and the journal has nothing to replay
+     *  afterwards. Reconnecting must restore the refresh from the marker and
+     *  clear it once the authoritative value applied. */
+    @Test
+    fun unreadRefreshPendingMarkerSurvivesSessionRestart() = runTest {
+        val detailGate = CompletableDeferred<Unit>()
+        userSyncFixture { repo, dao, events, rest, contactApi, db ->
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 2L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = conversationId, unreadCount = 99)),
+            )
+            // The post-commit refresh hangs in flight until released.
+            coEvery { rest.getDetail(conversationId) } coAnswers {
+                detailGate.await()
+                detailResponse(id = conversationId, unreadCount = 3)
+            }
+            repo.startSession(); runCurrent()
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            assertEquals(
+                listOf(conversationId),
+                dao.getUnreadRefreshPendingConversations(),
+                "the marker must be persisted in the cursor transaction",
+            )
+
+            // Simulate the crash: the refresh never completes and the session's
+            // in-memory dirty set dies with it — the marker does not.
+            repo.stopSession(); runCurrent()
+            assertEquals(listOf(conversationId), dao.getUnreadRefreshPendingConversations())
+
+            repo.startSession(); runCurrent()
+            detailGate.complete(Unit); runCurrent()
+            // The journal must NOT replay (cursor already committed); the
+            // restored refresh converges the badge and clears the marker.
+            coVerify(exactly = 1) { rest.getSyncSnapshot(SyncScope.USER, userId, any()) }
+            assertEquals(
+                3,
+                db.conversationsQueries.getConversationById(conversationId).executeAsOne().unread_count,
+                "the restored refresh must repair a badge lost in the crash window",
+            )
+            assertEquals(
+                emptyList(),
+                dao.getUnreadRefreshPendingConversations(),
+                "a successfully applied refresh must clear its pending marker",
+            )
+        }
+    }
+
+    /**
+     * P1 regression: marking unread-refresh pending for a conversation during
+     * USER snapshot recovery must NEVER create or synthesize a ScopeSyncCursor
+     * row for that conversation. Cursor presence decides whether conversation
+     * sync requests a window snapshot (cursor == null) or replays from revision
+     * (cursor != null); a fresh device must recover the conversation via
+     * getSyncSnapshot, not by replaying all historical changes from revision 0.
+     */
+    @Test
+    fun userSnapshotLeavesUnreadPendingWithoutInitializingConversationSyncCursor() = runTest {
+        val convId = Uuid.parse("00000000-0000-0000-0000-000000000045")
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            // Server heads: USER head at rev 2, CONVERSATION head at rev 10.
+            coEvery { rest.getSyncHeads() } returns SyncStateResponse.Heads(
+                entries = listOf(
+                    SyncHead(SyncScope.USER, userId, 2L),
+                    SyncHead(SyncScope.CONVERSATION, convId, 10L),
+                ),
+                timestamp = now,
+            )
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 2L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = convId, unreadCount = 5)),
+            )
+            coEvery { rest.getDetail(convId) } returns detailResponse(id = convId, unreadCount = 5)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 2L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 2L, 2L, false, false, emptyList(),
+            )
+            coEvery { rest.getSyncSnapshot(SyncScope.CONVERSATION, convId, any()) } returns SyncSnapshot(
+                SyncScope.CONVERSATION, convId, 10L,
+                messages = listOf(message(new1)),
+            )
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, convId, any(), any()) } returns SyncBatch(
+                SyncScope.CONVERSATION, convId, 0L, 10L, false, false, emptyList(),
+            )
+
+            repo.startSession(); runCurrent()
+
+            // 1. The USER stream cursor is committed at rev 2.
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            // 2. The CONVERSATION was recovered via snapshot, NOT by replaying from 0.
+            coVerify(exactly = 1) { rest.getSyncSnapshot(SyncScope.CONVERSATION, convId, any()) }
+            coVerify(exactly = 0) { rest.getSyncChanges(SyncScope.CONVERSATION, convId, any(), any()) }
+            assertEquals(10L, dao.getScopeCursor(SyncScope.CONVERSATION.name, convId))
+        }
+    }
+
+    /**
+     * P1 regression: an in-flight detail response reading an older task
+     * generation must not retire a newer task generation committed by a
+     * concurrent journal batch. If a new journal commit advances the task
+     * generation while detail is in flight, the old response must NOT clear
+     * the task; the task must survive process restart and recover.
+     */
+    @Test
+    fun staleDetailResponseDoesNotRetireNewerPersistedUnreadTask() = runTest {
+        val firstDetailGate = CompletableDeferred<Unit>()
+        val secondDetailGate = CompletableDeferred<Unit>()
+        var detailCallCount = 0
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(1L)
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 1L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = conversationId, unreadCount = 1)),
+            )
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 1L, false, false, emptyList(),
+            )
+            coEvery { rest.getDetail(conversationId) } coAnswers {
+                when (++detailCallCount) {
+                    1 -> {
+                        firstDetailGate.await()
+                        detailResponse(id = conversationId, unreadCount = 1)
+                    }
+                    else -> {
+                        secondDetailGate.await()
+                        detailResponse(id = conversationId, unreadCount = 9)
+                    }
+                }
+            }
+
+            repo.startSession(); runCurrent()
+            assertEquals(1L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            // Task generation in DB is currently 0. Refresh #1 is parked waiting on firstDetailGate.
+            assertEquals(0L, dao.getUnreadRefreshPendingGeneration(conversationId))
+
+            // Now, while detail #1 is in flight, commit a new journal task (bumping generation to 1).
+            dao.transaction {
+                dao.markUnreadRefreshPending(conversationId)
+            }
+            assertEquals(1L, dao.getUnreadRefreshPendingGeneration(conversationId))
+
+            // Release detail #1: it reads generation 0 from before fetch, which
+            // no longer matches current DB generation 1. It must not retire the task;
+            // the loop begins fetch #2 and parks on secondDetailGate.
+            firstDetailGate.complete(Unit); runCurrent()
+
+            // Stop the session to simulate an exit before refresh #2 finishes.
+            repo.stopSession(); runCurrent()
+
+            // The newer task (generation 1) must still be pending in the database!
+            assertEquals(
+                listOf(conversationId),
+                dao.getUnreadRefreshPendingConversations(),
+                "a stale detail response must never clear a newer persisted task generation",
+            )
+            assertEquals(1L, dao.getUnreadRefreshPendingGeneration(conversationId))
+
+            // Re-start session: the surviving task is recovered, fetches detail #2, and retires generation 1.
+            repo.startSession(); runCurrent()
+            secondDetailGate.complete(Unit); runCurrent()
+
+            assertEquals(
+                9,
+                db.conversationsQueries.getConversationById(conversationId).executeAsOne().unread_count,
+            )
+            assertEquals(
+                emptyList(),
+                dao.getUnreadRefreshPendingConversations(),
+                "the recovered task must be retired once its matching detail applies",
+            )
+        }
+    }
+
+    /**
+     * P2 regression: when an initial detail fetch fails with an exception, the
+     * pending task must remain in UnreadRefreshPending. When retried (e.g. by
+     * retryPending or reconnect), the worker must use the same confirmation
+     * logic and clear the persisted task once the authoritative value applies.
+     */
+    @Test
+    fun failedRefreshRetriedBySweepClearsPendingTaskOnSuccess() = runTest {
+        var failDetail = true
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(1L)
+            coEvery { rest.getSyncSnapshot(SyncScope.USER, userId, any()) } returns SyncSnapshot(
+                SyncScope.USER, userId, 1L,
+                events = emptyList(),
+                conversations = listOf(detailResponse(id = conversationId, unreadCount = 2)),
+            )
+            coEvery { rest.getDetail(conversationId) } coAnswers {
+                if (failDetail) throw RuntimeException("injected network error")
+                detailResponse(id = conversationId, unreadCount = 4)
+            }
+
+            repo.startSession(); runCurrent()
+            // The initial detail call failed: the task must remain pending in DB.
+            assertEquals(
+                listOf(conversationId),
+                dao.getUnreadRefreshPendingConversations(),
+                "a failed refresh must leave its task pending in the database",
+            )
+
+            // Allow the detail call to succeed and simulate the retry pass via reconnect.
+            failDetail = false
+            repo.stopSession(); runCurrent()
+            repo.startSession(); runCurrent()
+
+            assertEquals(
+                4,
+                db.conversationsQueries.getConversationById(conversationId).executeAsOne().unread_count,
+            )
+            assertEquals(
+                emptyList(),
+                dao.getUnreadRefreshPendingConversations(),
+                "a successful retry must clear the persisted pending task",
+            )
+        }
+    }
+
+    /**
+     * Lock-order regression: a USER-snapshot-shaped database transaction and a
+     * coordinator detail refresh (coordinator mutex → database write) run
+     * against the SAME real file database through TWO SEPARATE connections
+     * from independent execution contexts. The snapshot transaction must never
+     * take the coordinator lock while the transaction is open, or these two
+     * interleave into a lock-order inversion that only manifests under real
+     * cross-connection concurrency. Transient SQLite write contention is
+     * tolerated (busy timeout + retry via requestRefresh); a lock-order
+     * deadlock would blow the outer timeout instead.
+     */
+    @Test
+    fun snapshotApplyAndDetailRefreshStayConcurrentOnFileDatabase() = runBlocking {
+        val file = java.nio.file.Files.createTempFile("chat-unread-lock-", ".db")
+        val fileUrl = "jdbc:sqlite:$file"
+        val driverA = JdbcSqliteDriver(fileUrl, Properties().apply { put("foreign_keys", "true") })
+        val driverB = JdbcSqliteDriver(fileUrl, Properties().apply { put("foreign_keys", "true") })
+        driverA.execute(null, "PRAGMA busy_timeout=5000", 0).await()
+        driverB.execute(null, "PRAGMA busy_timeout=5000", 0).await()
+        val writerDispatcher = java.util.concurrent.Executors.newSingleThreadExecutor()
+            .asCoroutineDispatcher()
+        try {
+            createDatabase { schema -> schema.create(driverA).await(); driverA }
+            val dbA = createDatabase { driverA }
+            val dbB = createDatabase { driverB }
+            dbA.usersQueries.upsertUser(UserEntity(userId, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
+            dbA.usersQueries.upsertUser(UserEntity(ancient, "peer", null, null, null, null, now, now, null, UserRole.MEMBER))
+            // The snapshot writer and the refresh worker each own one connection;
+            // the coordinator confirms its tasks on the WORKER's connection so
+            // the unread write and the generation-confirmed retire share one
+            // transaction.
+            val writerDao = MessageDaoImpl({ dbA }, Dispatchers.Unconfined)
+            val writerConversations = ConversationDaoImpl({ dbA }, Dispatchers.Unconfined)
+            val writerParticipants = ParticipantDaoImpl({ dbA }, Dispatchers.Unconfined)
+            val workerConversations = ConversationDaoImpl({ dbB }, Dispatchers.Unconfined)
+            val coordinator = UnreadRefreshCoordinator(MessageDaoImpl({ dbB }, Dispatchers.Unconfined))
+            val detailApi = mockk<ConversationApi>()
+            coEvery { detailApi.getDetail(conversationId) } returns detailResponse(unreadCount = 6)
+            val workerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                // Seed the conversation once; later snapshot-shaped transactions
+                // only rewrite membership, which must never reset the badge.
+                writerConversations.insertConversation(
+                    ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0),
+                )
+                withTimeout(30_000) {
+                    var converged = false
+                    while (!converged) {
+                        val worker = workerScope.launch {
+                            coordinator.requestRefresh(workerScope, conversationId, detailApi, workerConversations)
+                        }
+                        val snapshotApply = launch(writerDispatcher) {
+                            writerDao.transaction {
+                                writerParticipants.insertParticipant(
+                                    io.github.woodsmarshes.chat.db.ParticipantEntity(
+                                        conversationId, userId, ConversationRole.MEMBER, null, now, null, ParticipantSettings(),
+                                    ),
+                                )
+                            }
+                        }
+                        snapshotApply.join()
+                        worker.join()
+                        // requestRefresh returns before the worker finishes:
+                        // poll until the badge converges (or retry next round).
+                        val roundDeadline = System.currentTimeMillis() + 2_000
+                        while (System.currentTimeMillis() < roundDeadline) {
+                            if (writerConversations.getConversationById(conversationId).first()?.unread_count == 6L) {
+                                converged = true
+                                break
+                            }
+                            delay(10)
+                        }
+                    }
+                }
+            } finally {
+                workerScope.cancel()
+            }
+        } finally {
+            writerDispatcher.close()
+            driverA.close()
+            driverB.close()
+            java.nio.file.Files.deleteIfExists(file)
         }
     }
 
@@ -244,6 +1125,7 @@ class MessageRepositoryDeliveryTest {
             assertNull(dao.getMessageById(localId!!).first())
             assertEquals(MessageStatus.SENT, dao.getMessageById(serverId).first()?.local_send_status)
             assertEquals(1, dao.getMessagesPaged(conversationId, Instant.DISTANT_FUTURE, 100).first().size)
+            assertNull(dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId), "ACK must not advance the journal cursor")
         }
     }
 
@@ -270,274 +1152,156 @@ class MessageRepositoryDeliveryTest {
     }
 
     @Test
-    fun failedPersistenceRepairsFromDurableCursorNotPreview() = runTest {
-        var fail = true
-        fixture(decorate = { delegate ->
+    fun failedJournalBatchRollsBackMessagesAndCursorThenRetries() = runTest {
+        var failWrite = true
+        fixture(autoStart = false, decorate = { delegate ->
             object : MessageDao by delegate {
                 override suspend fun mergeServerMessage(message: MessageEntity, localId: Uuid?) {
-                    if (message.id == serverId && fail) {
-                        fail = false
-                        error("Injected write failure")
-                    }
+                    if (message.id == serverId && failWrite) error("Injected journal write failure")
                     delegate.mergeServerMessage(message, localId)
                 }
             }
-        }) { _, dao, _, events, rest ->
-            coEvery { rest.syncMessages(conversationId, Uuid.NIL, any()) } returns listOf(message(serverId, seq = 10), message(nextId, seq = 11))
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 10), conversationId, userId, ""))
-            events.emit(MessageEventResponse.Received(message(nextId, seq = 11), conversationId, userId, ""))
-            runCurrent()
+        }) { repo, dao, _, events, rest ->
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversationId, 1L)
+            // Heads stay above the local cursor across both pulls: the first
+            // delta fails on the injected write error, the wakeup-triggered
+            // retry must re-pull and succeed against the same head.
+            coEvery { rest.getSyncHeads() } returns conversationHeads(2)
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) } returns SyncBatch(
+                SyncScope.CONVERSATION, conversationId, 1L, 2L, false, false,
+                listOf(SyncChange(2L, MessageEventResponse.Received(message(serverId), conversationId, userId, ""))),
+            )
+            repo.startSession(); runCurrent()
+            assertEquals(1L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            assertNull(dao.getMessageById(serverId).first())
+            failWrite = false
+            events.emit(conversationHeads(2)); runCurrent()
             assertNotNull(dao.getMessageById(serverId).first())
-            assertNotNull(dao.getMessageById(nextId).first())
-            assertEquals(nextId, dao.getSyncCursor(conversationId)?.after_id?.let(Uuid::parse))
+            assertEquals(2L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            coVerify(exactly = 2) { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) }
         }
     }
 
     @Test
-    fun firstMessageOfSessionEstablishesBaselineWithoutGapRepair() = runTest {
-        fixture { _, dao, _, events, rest ->
-            // The reconnect sync at startSession() has already run; forget its
-            // recorded calls so only repair-triggered fetches count below.
-            clearMocks(rest, answers = false, recordedCalls = true)
-
-            // First live message of the session: establishes the baseline only.
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 10), conversationId, userId, ""))
-            runCurrent()
-            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
-            assertNotNull(dao.getMessageById(serverId).first())
-
-            // A genuine jump (10 -> 12) still repairs exactly once.
-            events.emit(MessageEventResponse.Received(message(nextId, seq = 12), conversationId, userId, ""))
-            runCurrent()
-            coVerify(exactly = 1) { rest.syncMessages(conversationId, any(), any()) }
-            assertNotNull(dao.getMessageById(nextId).first())
-        }
-    }
-
-    @Test
-    fun anchorLargeGapJumpsWindowAndSeedsReplyTargetOutsideTimeline() = runTest {
-        val old1 = Uuid.parse("00000000-0000-0000-0000-000000000031")
-        val old2 = Uuid.parse("00000000-0000-0000-0000-000000000032")
-        val new1 = Uuid.parse("00000000-0000-0000-0000-000000000041")
-        val new2 = Uuid.parse("00000000-0000-0000-0000-000000000042")
-        val ancient = Uuid.parse("00000000-0000-0000-0000-000000000030")
-        fixture { repo, dao, _, events, rest ->
-            // Legacy local tail: two confirmed messages, cursor parked at old2/seq 2.
-            dao.insertMessage(message(old1, seq = 1).toMessageEntity(MessageStatus.SENT)!!)
-            dao.insertMessage(message(old2, seq = 2).toMessageEntity(MessageStatus.SENT)!!)
-            dao.setSyncCursor(conversationId, old2, 2L)
-
-            // Server window: two fresh messages; the newest replies to an
-            // ancient message the client has never cached.
-            val freshReply = message(new2, seq = 602).copy(
-                replyTo = message(ancient, seq = 5).copy(
-                    sender = SimpleUser(userId, "user", null, null, now, now, null, UserRole.MEMBER)
-                )
+    fun conversationSnapshotDemotesOldTimelineAndCommitsItsRevision() = runTest {
+        fixture(autoStart = false) { repo, dao, _, _, rest ->
+            dao.insertMessage(message(old1).toMessageEntity(MessageStatus.SENT)!!)
+            dao.insertMessage(message(old2).toMessageEntity(MessageStatus.SENT)!!)
+            coEvery { rest.getSyncHeads() } returns conversationHeads(5)
+            coEvery { rest.getSyncSnapshot(SyncScope.CONVERSATION, conversationId, any()) } returns SyncSnapshot(
+                SyncScope.CONVERSATION, conversationId, 5L, messages = listOf(message(new2), message(new1)),
             )
-            coEvery {
-                rest.getMessages(conversationId, 100, null)
-            } returns listOf(message(new1, seq = 601), freshReply)
-            coEvery { rest.syncMessages(any(), any(), any()) } returns emptyList()
-
-            events.emit(
-                SyncStateResponse.Anchor(
-                    entries = listOf(
-                        SyncAnchorEntry(
-                            conversationId = conversationId,
-                            lastSeq = 602L,
-                            unreadCount = 2,
-                            lastMessageId = new2,
-                        )
-                    ),
-                    timestamp = now,
-                )
-            )
-            runCurrent()
-
-            // Diagnose: the window fetch must have been issued exactly once.
-            coVerify(exactly = 1) { rest.getMessages(conversationId, any(), any()) }
-
-            // Window jump: confirmed history outside the window is DEMOTED
-            // (rows survive for reply-preview joins, but leave the timeline).
+            repo.startSession(); runCurrent()
             assertEquals(false, dao.getMessageById(old1).first()?.in_timeline)
             assertEquals(false, dao.getMessageById(old2).first()?.in_timeline)
-            // …the fresh window is on disk with cursor at the anchor…
-            assertNotNull(dao.getMessageById(new1).first())
-            assertNotNull(dao.getMessageById(new2).first())
             assertEquals(true, dao.getMessageById(new1).first()?.in_timeline)
-            assertEquals(602L, dao.getSyncCursor(conversationId)?.after_seq)
-
-            // …and the reply target is present but OUTSIDE the timeline: it
-            // must not appear in the paging window (no stray Paging anchor)
-            // while staying available for the reply preview join.
-            assertNotNull(dao.getMessageById(ancient).first())
-            val timelineIds = dao.getMessagesWithRelationsByPage(conversationId, null, 100)
-                .first()
-                .map { it.id }
-            assertEquals(listOf(new2, new1), timelineIds)
-            assertTrue(ancient !in timelineIds)
+            assertEquals(true, dao.getMessageById(new2).first()?.in_timeline)
+            assertEquals(5L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            coVerify(exactly = 1) { rest.getSyncSnapshot(SyncScope.CONVERSATION, conversationId, any()) }
         }
     }
 
     @Test
-    fun anchorSmallGapFillsForwardWithoutWindowJump() = runTest {
-        fixture { repo, dao, _, events, rest ->
-            dao.insertMessage(message(old2, seq = 2).toMessageEntity(MessageStatus.SENT)!!)
-            dao.setSyncCursor(conversationId, old2, 2L)
-
-            coEvery {
-                rest.syncMessages(conversationId, old2, any())
-            } returns listOf(message(new1, seq = 3), message(new2, seq = 4))
-            coEvery { rest.syncMessages(conversationId, new2, any()) } returns emptyList()
-
-            events.emit(
-                SyncStateResponse.Anchor(
-                    entries = listOf(
-                        SyncAnchorEntry(
-                            conversationId = conversationId,
-                            lastSeq = 4L,
-                            unreadCount = 2,
-                            lastMessageId = new2,
-                        )
-                    ),
-                    timestamp = now,
-                )
+    fun journalDeltaAppliesChangesInRevisionOrderAndAdvancesCursor() = runTest {
+        fixture(autoStart = false) { repo, dao, _, _, rest ->
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversationId, 1L)
+            coEvery { rest.getSyncHeads() } returns conversationHeads(3)
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) } returns SyncBatch(
+                SyncScope.CONVERSATION, conversationId, 1L, 3L, false, false,
+                listOf(
+                    SyncChange(2L, MessageEventResponse.Received(message(serverId), conversationId, userId, "")),
+                    SyncChange(3L, MessageEventResponse.Received(message(nextId), conversationId, userId, "")),
+                ),
             )
-            runCurrent()
+            repo.startSession(); runCurrent()
+            assertNotNull(dao.getMessageById(serverId).first())
+            assertNotNull(dao.getMessageById(nextId).first())
+            assertEquals(3L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            coVerify(exactly = 1) { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) }
+        }
+    }
 
-            // Small gap: forward delta fills the cursor position up to the
-            // anchor; nothing is deleted and the cursor lands on the anchor.
+    @Test
+    fun resetRequiredRecoversFromSnapshotAndStoresSnapshotRevision() = runTest {
+        fixture(autoStart = false) { repo, dao, _, _, rest ->
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversationId, 1L)
+            coEvery { rest.getSyncHeads() } returns conversationHeads(8)
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) } returns SyncBatch(
+                SyncScope.CONVERSATION, conversationId, 1L, 1L, false, true,
+            )
+            coEvery { rest.getSyncSnapshot(SyncScope.CONVERSATION, conversationId, any()) } returns SyncSnapshot(
+                SyncScope.CONVERSATION, conversationId, 8L, messages = listOf(message(new1)),
+            )
+            repo.startSession(); runCurrent()
             assertNotNull(dao.getMessageById(new1).first())
-            assertNotNull(dao.getMessageById(new2).first())
-            assertEquals(4L, dao.getSyncCursor(conversationId)?.after_seq)
+            assertEquals(8L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            coVerify(exactly = 1) { rest.getSyncSnapshot(SyncScope.CONVERSATION, conversationId, any()) }
         }
     }
 
     @Test
-    fun anchorColdConversationWithNoUnreadSkipsHistoryPrefetch() = runTest {
-        fixture { repo, dao, _, events, rest ->
-            // Fresh login, conversation never opened here: no cursor, zero
-            // unread. The anchor must jump the cursor without fetching any
-            // history — the list preview is already seeded by the list sync,
-            // and opening the chat pulls the newest page via REFRESH.
-            events.emit(
-                SyncStateResponse.Anchor(
-                    entries = listOf(
-                        SyncAnchorEntry(
-                            conversationId = conversationId,
-                            lastSeq = 7L,
-                            unreadCount = 0,
-                            lastMessageId = coldNewest,
-                        )
-                    ),
-                    timestamp = now,
-                )
+    fun repeatedHeadsWakeupsDoNotReapplyAnAlreadyCommittedDelta() = runTest {
+        fixture(autoStart = false) { repo, dao, _, events, rest ->
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversationId, 1L)
+            coEvery { rest.getSyncHeads() } coAnswers { if (dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId) == 1L) conversationHeads(2) else SyncStateResponse.Heads(timestamp = now) }
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) } returns SyncBatch(
+                SyncScope.CONVERSATION, conversationId, 1L, 2L, false, false,
+                listOf(SyncChange(2L, MessageEventResponse.Received(message(serverId), conversationId, userId, ""))),
             )
-            runCurrent()
-
-            assertEquals(coldNewest, dao.getSyncCursor(conversationId)?.after_id?.let(Uuid::parse))
-            assertEquals(7L, dao.getSyncCursor(conversationId)?.after_seq)
-            // Zero history prefetch: the window fetch never fired.
-            coVerify(exactly = 0) { rest.getMessages(any(), any(), any()) }
-            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
+            repo.startSession(); runCurrent()
+            events.emit(conversationHeads(2)); events.emit(conversationHeads(2)); runCurrent()
+            assertNotNull(dao.getMessageById(serverId).first())
+            assertEquals(2L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
+            coVerify(exactly = 1) { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) }
         }
     }
 
     @Test
     fun sessionDoesNotStartImplicitlyAndRepeatedStartIsIdempotent() = runTest {
         fixture(autoStart = false) { repo, dao, _, events, rest ->
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
+            // With no local cursor the first pull after start is a snapshot;
+            // the journal must deliver the pre-session backlog through it.
+            coEvery { rest.getSyncHeads() } returns conversationHeads(2)
+            coEvery { rest.getSyncSnapshot(SyncScope.CONVERSATION, conversationId, any()) } returns SyncSnapshot(
+                SyncScope.CONVERSATION, conversationId, 2L, messages = listOf(message(serverId)),
+            )
+            events.emit(MessageEventResponse.Received(message(serverId), conversationId, userId, ""))
             events.emit(MessageEventResponse.UserTyping(conversationId, userId, true, now))
             advanceTimeBy(20_000L)
             runCurrent()
-
             assertNull(dao.getMessageById(serverId).first(), "no events may be consumed before startSession()")
             assertEquals(Triple(0, 0, 0), repo.inMemorySessionStateCountsForTest())
-            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
-
+            coVerify(exactly = 0) { rest.getSyncHeads() }
             repo.startSession()
             repo.startSession()
             runCurrent()
-
-            // Content catch-up is anchor-driven now: a bare startSession() must
-            // NOT sweep; only the anchor event (or explicit retry) triggers it.
-            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
+            assertNotNull(dao.getMessageById(serverId).first())
+            coVerify(exactly = 1) { rest.getSyncHeads() }
         }
     }
-
     @Test
-    fun stopSessionWaitsForInFlightWorkersAndClearsMemoryBeforeRestart() = runTest {
-        fixture { repo, _, _, events, rest ->
-            // Seed seq = 1 (via the initial gap repair) and a typing entry in memory.
-            coEvery { rest.syncMessages(conversationId, any(), any()) } returns listOf(message(serverId, seq = 1))
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
-            events.emit(MessageEventResponse.UserTyping(conversationId, userId, true, now))
-            runCurrent()
-            assertEquals(1, repo.getTypingUsersFlow(conversationId).first().size)
-
-            val repairStarted = CompletableDeferred<Unit>()
-            val allowRepairCleanupFinish = CompletableDeferred<Unit>()
-            var repairCleanupFinished = false
-            coEvery { rest.syncMessages(conversationId, any(), any()) } coAnswers {
-                repairStarted.complete(Unit)
-                try {
-                    awaitCancellation()
-                } finally {
-                    withContext(NonCancellable) {
-                        allowRepairCleanupFinish.await()
-                        repairCleanupFinished = true
-                    }
+    fun stopSessionCancelsAndWaitsForInFlightJournalPull() = runTest {
+        val pullStarted = CompletableDeferred<Unit>()
+        val allowCleanupFinish = CompletableDeferred<Unit>()
+        var cleanupFinished = false
+        fixture(autoStart = false) { repo, dao, _, _, rest ->
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversationId, 1L)
+            coEvery { rest.getSyncHeads() } returns conversationHeads(2)
+            coEvery { rest.getSyncChanges(SyncScope.CONVERSATION, conversationId, 1L, any()) } coAnswers {
+                pullStarted.complete(Unit)
+                try { awaitCancellation() } finally {
+                    withContext(NonCancellable) { allowCleanupFinish.await(); cleanupFinished = true }
                 }
             }
-
-            // Jump to seq = 3 to trigger a gap repair child job.
-            events.emit(MessageEventResponse.Received(message(nextId, seq = 3), conversationId, userId, ""))
+            repo.startSession(); runCurrent(); pullStarted.await()
+            var stopReturned = false
+            val stopJob = launch { repo.stopSession(); stopReturned = true }
             runCurrent()
-            repairStarted.await()
-            assertEquals(Triple(1, 1, 1), repo.inMemorySessionStateCountsForTest())
-
-            var firstStopReturned = false
-            val firstStop = launch {
-                repo.stopSession()
-                firstStopReturned = true
-            }
-            var secondStopReturned = false
-            val secondStop = launch {
-                repo.stopSession()
-                secondStopReturned = true
-            }
-            runCurrent()
-
-            var restartReturned = false
-            var stateCountsAtRestart: Triple<Int, Int, Int>? = null
-            val restartJob = launch {
-                repo.startSession()
-                stateCountsAtRestart = repo.inMemorySessionStateCountsForTest()
-                restartReturned = true
-            }
-            runCurrent()
-
-            assertFalse(firstStopReturned, "stopSession must wait for in-flight gap repair cleanup")
-            assertFalse(secondStopReturned, "concurrent stopSession must wait for the same stop")
-            assertFalse(restartReturned, "startSession must wait until the stopping session finishes")
-
-            coEvery { rest.syncMessages(conversationId, any(), any()) } returns emptyList()
-            allowRepairCleanupFinish.complete(Unit)
-            runCurrent()
-            firstStop.join()
-            secondStop.join()
-            restartJob.join()
-
-            assertTrue(repairCleanupFinished)
-            assertTrue(firstStopReturned)
-            assertTrue(secondStopReturned)
-            assertTrue(restartReturned)
-            assertEquals(
-                Triple(0, 0, 0),
-                stateCountsAtRestart,
-                "in-memory seq, gap-repair, and typing state must be cleared before the new session starts",
-            )
-            assertTrue(repo.getTypingUsersFlow(conversationId).first().isEmpty())
+            assertFalse(stopReturned)
+            allowCleanupFinish.complete(Unit); runCurrent(); stopJob.join()
+            assertTrue(stopReturned)
+            assertTrue(cleanupFinished)
+            assertEquals(1L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversationId))
         }
     }
 
@@ -551,36 +1315,29 @@ class MessageRepositoryDeliveryTest {
             clearMocks(rest, answers = false, recordedCalls = true)
 
             // Flip connectionState while stopped: neither the outbox retry nor
-            // the safety-net sweep nor event consumption may run.
+            // the sync-head pull nor event consumption may run.
             connectionStates.value = ConnectionState.Idle
             runCurrent()
             connectionStates.value = ConnectionState.Connected
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
+            events.emit(MessageEventResponse.Received(message(serverId), conversationId, userId, ""))
             advanceTimeBy(35_000L)
             runCurrent()
 
             assertNull(dao.getMessageById(serverId).first(), "stopped session must not consume events")
-            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
 
             repo.startSession()
             runCurrent()
-            // Content catch-up is anchor-driven: a bare startSession() must
+            // Content catch-up is journal-head-driven: a bare startSession() must
             // not sweep. The restarted session only consumes live events.
-            coVerify(exactly = 0) { rest.syncMessages(any(), any(), any()) }
 
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
+            events.emit(MessageEventResponse.Received(message(serverId), conversationId, userId, ""))
             runCurrent()
             assertNotNull(dao.getMessageById(serverId).first(), "restarted session consumes events again")
 
-            // The safety-net sweep only covers conversations WITH a cursor
-            // (first fill is anchor-owned), so establish one before driving
-            // the virtual clock past SYNC_NET_TICKS × RETRY_POLL_INTERVAL.
-            dao.setSyncCursor(conversationId, serverId, 1L)
-            coEvery { rest.syncMessages(conversationId, any(), any()) } returns emptyList()
             clearMocks(rest, answers = false, recordedCalls = true)
-            advanceTimeBy(620_000L)
+            advanceTimeBy(35_000L)
             runCurrent()
-            coVerify(atLeast = 1) { rest.syncMessages(conversationId, any(), any()) }
+            coVerify(atLeast = 1) { rest.getSyncHeads() }
         }
     }
 
@@ -590,7 +1347,7 @@ class MessageRepositoryDeliveryTest {
             // No runCurrent() between startSession() and events.emit(): the
             // subscription must already be registered when startSession() returns.
             repo.startSession()
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 1), conversationId, userId, ""))
+            events.emit(MessageEventResponse.Received(message(serverId), conversationId, userId, ""))
             runCurrent()
 
             assertNotNull(
@@ -675,7 +1432,7 @@ class MessageRepositoryDeliveryTest {
         fixture(observeConversations = { conversations = it }) { _, _, _, events, rest ->
             coEvery { rest.getDetail(conversationId) } returns detailResponse(conversationId, unreadCount = 1)
             val peer = sender.copy(id = ancient, username = "peer")
-            val incoming = message(serverId, seq = 1).copy(sender = peer)
+            val incoming = message(serverId).copy(sender = peer)
             repeat(2) {
                 events.emit(MessageEventResponse.Received(incoming, conversationId, peer.id, ""))
                 runCurrent()
@@ -688,7 +1445,7 @@ class MessageRepositoryDeliveryTest {
     fun slowWithdrawnDetailRefreshDoesNotBlockSubsequentReceivedPersistence() = runTest {
         lateinit var conversations: ConversationDaoImpl
         fixture(observeConversations = { conversations = it }) { _, dao, _, events, rest ->
-            dao.insertMessage(message(serverId, seq = 1).toMessageEntity(MessageStatus.SENT)!!)
+            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.SENT)!!)
             val detailEntered = CompletableDeferred<Unit>()
             val releaseDetail = CompletableDeferred<Unit>()
             var detailCalls = 0
@@ -708,7 +1465,7 @@ class MessageRepositoryDeliveryTest {
             detailEntered.await()
 
             val peer = sender.copy(id = ancient, username = "peer")
-            val incoming = message(nextId, seq = 2).copy(sender = peer)
+            val incoming = message(nextId).copy(sender = peer)
             events.emit(MessageEventResponse.Received(incoming, conversationId, peer.id, ""))
             runCurrent()
 
@@ -727,8 +1484,8 @@ class MessageRepositoryDeliveryTest {
     fun consecutiveAndDuplicateWithdrawsCoalesceDetailRefreshAndReFetchWhenNewEventArrivesInFlight() = runTest {
         lateinit var conversations: ConversationDaoImpl
         fixture(observeConversations = { conversations = it }) { _, dao, _, events, rest ->
-            dao.insertMessage(message(serverId, seq = 1).toMessageEntity(MessageStatus.SENT)!!)
-            dao.insertMessage(message(nextId, seq = 2).toMessageEntity(MessageStatus.SENT)!!)
+            dao.insertMessage(message(serverId).toMessageEntity(MessageStatus.SENT)!!)
+            dao.insertMessage(message(nextId).toMessageEntity(MessageStatus.SENT)!!)
 
             val firstFetchEntered = CompletableDeferred<Unit>()
             val releaseFirstFetch = CompletableDeferred<Unit>()
@@ -766,7 +1523,7 @@ class MessageRepositoryDeliveryTest {
         lateinit var conversations: ConversationDaoImpl
         fixture(observeConversations = { conversations = it }) { _, dao, _, events, rest ->
             val peer = sender.copy(id = ancient, username = "peer")
-            val incoming = message(serverId, seq = 1).copy(sender = peer)
+            val incoming = message(serverId).copy(sender = peer)
             // Pre-seed the message row as a preview/reply target (in_timeline = false) before the live Received arrives.
             dao.seedMessage(incoming.toMessageEntity(MessageStatus.SENT, inTimeline = false)!!)
             coEvery { rest.getDetail(conversationId) } returns detailResponse(conversationId, unreadCount = 1)
@@ -815,7 +1572,7 @@ class MessageRepositoryDeliveryTest {
             }
 
             val peer = sender.copy(id = ancient, username = "peer")
-            events.emit(MessageEventResponse.Received(message(serverId, seq = 1).copy(sender = peer), conversationId, peer.id, ""))
+            events.emit(MessageEventResponse.Received(message(serverId).copy(sender = peer), conversationId, peer.id, ""))
             runCurrent()
             detailStarted.await()
 
@@ -859,7 +1616,7 @@ class MessageRepositoryDeliveryTest {
         coEvery { api.send(any()) } returns true
 
         val rest = mockk<ConversationApi>()
-        coEvery { rest.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { rest.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
         coEvery { rest.getDetail(conversationId) } returns detailResponse(conversationId, unreadCount = 1)
 
         val listEntered = CompletableDeferred<Unit>()
@@ -878,7 +1635,7 @@ class MessageRepositoryDeliveryTest {
         val settings = mockk<UserSettingDataSource>()
         every { settings.user } returns MutableStateFlow(User(userId, "user", null, null, null, null, now, now, null))
 
-        val coordinator = UnreadRefreshCoordinator()
+        val coordinator = UnreadRefreshCoordinator(dao)
         val conversationRepo = ConversationRepositoryImpl(
             groupProfileDao = groupProfileDao,
             conversationDao = conversationDao,
@@ -899,6 +1656,7 @@ class MessageRepositoryDeliveryTest {
             mediatorFactory = io.mockk.mockk(),
             groupProfileDao = groupProfileDao,
             unreadRefreshCoordinator = coordinator,
+            userSyncApplier = mockk(relaxed = true),
         )
         try {
             gate.start()
@@ -965,7 +1723,7 @@ class MessageRepositoryDeliveryTest {
         coEvery { api.send(any()) } returns true
 
         val rest = mockk<ConversationApi>()
-        coEvery { rest.syncMessages(any(), any(), any()) } returns emptyList()
+        coEvery { rest.getSyncHeads() } returns SyncStateResponse.Heads(timestamp = now)
         coEvery { rest.getDetail(conversationId) } returns detailResponse(conversationId, unreadCount = 2)
 
         val firstListEntered = CompletableDeferred<Unit>()
@@ -1008,7 +1766,7 @@ class MessageRepositoryDeliveryTest {
         val settings = mockk<UserSettingDataSource>()
         every { settings.user } returns MutableStateFlow(User(userId, "user", null, null, null, null, now, now, null))
 
-        val coordinator = UnreadRefreshCoordinator()
+        val coordinator = UnreadRefreshCoordinator(dao)
         val conversationRepo = ConversationRepositoryImpl(
             groupProfileDao = groupProfileDao,
             conversationDao = conversationDao,
@@ -1029,6 +1787,7 @@ class MessageRepositoryDeliveryTest {
             mediatorFactory = io.mockk.mockk(),
             groupProfileDao = groupProfileDao,
             unreadRefreshCoordinator = coordinator,
+            userSyncApplier = mockk(relaxed = true),
         )
         try {
             gate.start()
@@ -1094,49 +1853,7 @@ class MessageRepositoryDeliveryTest {
         }
     }
 
-    @Test
-    fun anchorListSyncErrorIsRecordedAndRetriedWithoutBlindlyApplyingStaleAnchorUnread() = runTest {
-        lateinit var conversations: ConversationDaoImpl
-        lateinit var convRepo: ConversationRepository
-        fixture(
-            observeConversations = { conversations = it },
-            observeConversationRepository = { convRepo = it },
-        ) { _, dao, _, events, _ ->
-            conversations.setUnreadCount(conversationId, 0L)
-            var syncAttempts = 0
-            coEvery { convRepo.syncConversations() } coAnswers {
-                syncAttempts++
-                if (syncAttempts == 1) {
-                    com.github.michaelbull.result.Err(ConversationError.Unknown("network down"))
-                } else {
-                    conversations.setUnreadCount(conversationId, 4L)
-                    com.github.michaelbull.result.Ok(Unit)
-                }
-            }
 
-            // Emit an anchor with unreadCount = 7 while syncConversations() fails on the first attempt.
-            events.emit(
-                SyncStateResponse.Anchor(
-                    entries = listOf(SyncAnchorEntry(conversationId, lastSeq = 1L, unreadCount = 7, lastMessageId = serverId)),
-                    timestamp = now,
-                )
-            )
-            runCurrent()
-
-            assertEquals(1, syncAttempts)
-            assertEquals(
-                0L,
-                conversations.getConversationById(conversationId).first()?.unread_count,
-                "anchor processing must not blindly apply anchor.unreadCount when syncConversations fails",
-            )
-
-            // Next retry tick retries the failed list sync and converges to the authoritative list count.
-            advanceTimeBy(16_000L)
-            runCurrent()
-            assertEquals(2, syncAttempts)
-            assertEquals(4L, conversations.getConversationById(conversationId).first()?.unread_count)
-        }
-    }
 
     @Test
     fun revokeReportsOnlyActualRowChanges() = runTest {
@@ -1161,70 +1878,12 @@ class MessageRepositoryDeliveryTest {
         }
     }
 
-    @Test
-    fun firstLiveMessageCannotSkipDurableBacklog() = runTest {
-        fixture { _, dao, _, events, _ ->
-            dao.setSyncCursor(conversationId, serverId, 1L)
-            events.emit(MessageEventResponse.Received(message(nextId, seq = 50), conversationId, userId, ""))
-            runCurrent()
-            assertEquals(1L, dao.getSyncCursor(conversationId)?.after_seq)
-        }
-    }
 
-    @Test
-    fun delayedWindowCannotRegressNewerCursor() = runTest {
-        fixture { _, dao, _, events, rest ->
-            dao.setSyncCursor(conversationId, serverId, 1L)
-            val release = CompletableDeferred<Unit>()
-            coEvery { rest.getMessages(conversationId, 100, null) } coAnswers {
-                release.await()
-                listOf(message(new1, seq = 500))
-            }
-            events.emit(SyncStateResponse.Anchor(listOf(SyncAnchorEntry(conversationId, 500, 1, new1)), now))
-            runCurrent()
-            dao.insertMessage(message(new2, seq = 501).toMessageEntity(MessageStatus.SENT)!!)
-            dao.setSyncCursor(conversationId, new2, 501L)
-            release.complete(Unit)
-            runCurrent()
-            assertEquals(501L, dao.getSyncCursor(conversationId)?.after_seq)
-            assertEquals(true, dao.getMessageById(new2).first()?.in_timeline)
-        }
-    }
-    @Test
-    fun liveMessageDuringWindowFetchIsReconciledBeforeNextDelivery() = runTest {
-        fixture { _, dao, _, events, rest ->
-            dao.setSyncCursor(conversationId, serverId, 1L)
-            val release = CompletableDeferred<Unit>()
-            coEvery { rest.getMessages(conversationId, 100, null) } coAnswers {
-                release.await()
-                listOf(message(new1, seq = 500))
-            }
-            coEvery { rest.syncMessages(conversationId, new1, any()) } returns listOf(message(new2, seq = 501))
-            events.emit(SyncStateResponse.Anchor(listOf(SyncAnchorEntry(conversationId, 500, 1, new1)), now))
-            runCurrent()
-            events.emit(MessageEventResponse.Received(message(new2, seq = 501), conversationId, userId, ""))
-            runCurrent()
-            release.complete(Unit)
-            runCurrent()
-            assertEquals(501L, dao.getSyncCursor(conversationId)?.after_seq)
-            assertEquals(new2.toString(), dao.getSyncCursor(conversationId)?.after_id)
-            val last = Uuid.parse("00000000-0000-0000-0000-000000000043")
-            events.emit(MessageEventResponse.Received(message(last, seq = 502), conversationId, userId, ""))
-            runCurrent()
-            assertEquals(502L, dao.getSyncCursor(conversationId)?.after_seq)
-        }
-    }
 
-    @Test
-    fun windowNewerThanAnchorKeepsMatchingIdAndSequence() = runTest {
-        fixture { _, dao, _, events, rest ->
-            dao.setSyncCursor(conversationId, serverId, 1L)
-            coEvery { rest.getMessages(conversationId, 100, null) } returns
-                listOf(message(new2, seq = 501), message(new1, seq = 500))
-            events.emit(SyncStateResponse.Anchor(listOf(SyncAnchorEntry(conversationId, 500, 1, new1)), now))
-            runCurrent()
-            assertEquals(501L, dao.getSyncCursor(conversationId)?.after_seq)
-            assertEquals(new2.toString(), dao.getSyncCursor(conversationId)?.after_id)
-        }
-    }
+
+
+
+
+
+
 }

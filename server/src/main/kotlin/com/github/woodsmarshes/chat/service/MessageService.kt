@@ -14,6 +14,7 @@ import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
+import com.github.woodsmarshes.chat.repository.sanitizedForBroadcast
 import kotlin.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
@@ -104,6 +105,9 @@ class MessageService(
             senderId = userId,
         )
         if (persisted != null) {
+            if (!isIdempotentPayloadMatch(persisted, content, replyToMessageId)) {
+                Err(MessageError.InvalidContent).bind()
+            }
             return@coroutineBinding persisted.withSenderContext(user, participant)
         }
 
@@ -281,24 +285,6 @@ class MessageService(
         messageRepository.searchMessages(conversationId, keyword, limit)
     }
 
-    /**
-     * 增量同步消息
-     */
-    suspend fun syncMessages(
-        userId: Uuid,
-        conversationId: Uuid,
-        afterId: Uuid,
-        limit: Int = 50
-    ): Result<List<Message>, MessageError> = coroutineBinding {
-        checkIfUserInConversation(conversationId = conversationId, userId = userId).bind()
-
-        messageRepository.getHistory(
-            conversationId = conversationId,
-            limit = limit,
-            afterId = afterId
-        )
-    }
-
     // 更新已读的消息
     suspend fun markAsRead(conversationId: Uuid, userId: Uuid, messageId: Uuid): Result<Unit, MessageError> = coroutineBinding {
         val outcome = conversationParticipantRepository.updateReadLastMessage(
@@ -345,6 +331,23 @@ class MessageService(
         }
     }
 
+    private fun isIdempotentPayloadMatch(
+        persisted: Message,
+        requestedContent: MessageContent,
+        requestedReplyToMessageId: Uuid?,
+    ): Boolean {
+        if (persisted.category != MessageCategory.NORMAL) return false
+        val replyMatches = persisted.replyTo?.id == requestedReplyToMessageId ||
+            (persisted.replyTo == null && requestedReplyToMessageId != null)
+        if (!replyMatches) return false
+        if (persisted.revokedAt != null) return true
+        return persisted.content == requestedContent ||
+            (persisted.content is MediaContent &&
+                requestedContent is MediaContent &&
+                (persisted.content as MediaContent).url == requestedContent.url &&
+                (persisted.content as MediaContent).fileName == requestedContent.fileName)
+    }
+
     private fun Message.withSenderContext(
         user: User,
         participant: ConversationParticipant,
@@ -361,9 +364,9 @@ class MessageService(
         ),
         senderContext = MessageSenderContext(
             conversationRole = participant.role,
-            participantSettings = participant.settings,
+            participantSettings = participant.settings.sanitizedForBroadcast(),
             joinedAt = participant.joinedAt,
-            lastReadMessageId = participant.lastReadMessageId,
+            lastReadMessageId = null,
             mutedUntil = participant.mutedUntil
         )
     )

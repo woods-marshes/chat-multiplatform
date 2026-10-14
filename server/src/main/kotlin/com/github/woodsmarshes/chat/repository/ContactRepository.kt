@@ -4,6 +4,8 @@ import com.github.woodsmarshes.chat.core.model.Contact
 import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.User
+import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
@@ -104,7 +106,9 @@ interface ContactRepository {
 
 
 
-class ContactSourceImpl : ContactRepository {
+class ContactSourceImpl(
+    private val syncRepository: SyncRepository = SyncDataSourceImpl(),
+) : ContactRepository {
     override suspend fun insertContact(
         userId: Uuid,
         contactId: Uuid,
@@ -113,7 +117,7 @@ class ContactSourceImpl : ContactRepository {
         alias: String?
     ): Contact? = dbQuery {
         val now = Clock.System.now()
-        Contacts.insert {
+        val inserted = Contacts.insert {
             it[this.userId] = userId
             it[this.contactId] = contactId
             it[this.status] = status
@@ -125,6 +129,11 @@ class ContactSourceImpl : ContactRepository {
             .resultedValues
             ?.singleOrNull()
             ?.toContact()
+
+        if (inserted != null) {
+            recordContactStatusChange(userId, contactId, status, nickname, alias, now)
+        }
+        inserted
     }
 
     override suspend fun updateContact(
@@ -134,14 +143,33 @@ class ContactSourceImpl : ContactRepository {
         alias: String?,
         status: ContactStatus?,
     ): Boolean = dbQuery {
-        Contacts.update(
+        val now = Clock.System.now()
+        val updated = Contacts.update(
             where = { (Contacts.userId eq userId) and (Contacts.contactId eq contactId) }
         ) {
             if (nickname != null) it[this.nickname] = nickname
             if (alias != null) it[this.alias] = alias
             if (status != null) it[this.status] = status
-            it[this.updatedAt] = Clock.System.now()
+            it[this.updatedAt] = now
         } > 0
+        if (updated) {
+            if (status != null) {
+                recordContactStatusChange(userId, contactId, status, nickname, alias, now)
+            } else {
+                syncRepository.appendChange(
+                    scope = SyncScope.USER,
+                    id = userId,
+                    event = ContactEventResponse.ContactUpdated(
+                        userId = userId,
+                        contactId = contactId,
+                        nickname = nickname,
+                        alias = alias,
+                        timestamp = now,
+                    ),
+                )
+            }
+        }
+        updated
     }
 
     override suspend fun upsertContact(
@@ -151,10 +179,11 @@ class ContactSourceImpl : ContactRepository {
         alias: String?,
         status: ContactStatus?
     ): Boolean = dbQuery {
+        val now = Clock.System.now()
         // No explicit keys: the (user_id, contact_id) primary key is the
         // conflict target. A where clause would be equivalent on PostgreSQL
         // but is unsupported by H2's MERGE-based upsert.
-        Contacts.upsert(
+        val upserted = Contacts.upsert(
             // Updating an existing row must not reset when the friendship began.
             onUpdateExclude = listOf(Contacts.createdAt),
         ) {
@@ -163,9 +192,27 @@ class ContactSourceImpl : ContactRepository {
             if (nickname != null) it[this.nickname] = nickname
             if (alias != null) it[this.alias] = alias
             if (status != null) it[this.status] = status
-            it[this.updatedAt] = Clock.System.now()
-            it[this.createdAt] = Clock.System.now()
+            it[this.updatedAt] = now
+            it[this.createdAt] = now
         }.resultedValues?.isNotEmpty() == true
+        if (upserted) {
+            if (status != null) {
+                recordContactStatusChange(userId, contactId, status, nickname, alias, now)
+            } else {
+                syncRepository.appendChange(
+                    scope = SyncScope.USER,
+                    id = userId,
+                    event = ContactEventResponse.ContactUpdated(
+                        userId = userId,
+                        contactId = contactId,
+                        nickname = nickname,
+                        alias = alias,
+                        timestamp = now,
+                    ),
+                )
+            }
+        }
+        upserted
     }
 
     override suspend fun upsertContactStatus(
@@ -173,15 +220,20 @@ class ContactSourceImpl : ContactRepository {
         contactId: Uuid,
         status: ContactStatus
     ): Boolean = dbQuery {
-        Contacts.upsert(
+        val now = Clock.System.now()
+        val upserted = Contacts.upsert(
             onUpdateExclude = listOf(Contacts.createdAt),
         ) {
             it[this.userId] = userId
             it[this.contactId] = contactId
             it[this.status] = status
-            it[this.updatedAt] = Clock.System.now()
-            it[this.createdAt] = Clock.System.now()
+            it[this.updatedAt] = now
+            it[this.createdAt] = now
         }.resultedValues?.isNotEmpty() == true
+        if (upserted) {
+            recordContactStatusChange(userId, contactId, status, null, null, now)
+        }
+        upserted
     }
 
     override suspend fun updateContactStatusIf(
@@ -190,21 +242,103 @@ class ContactSourceImpl : ContactRepository {
         expected: ContactStatus,
         newStatus: ContactStatus
     ): Boolean = dbQuery {
-        Contacts.update(
+        val now = Clock.System.now()
+        val updated = Contacts.update(
             where = {
                 (Contacts.userId eq userId) and (Contacts.contactId eq contactId) and
                         (Contacts.status eq expected)
             }
         ) {
             it[this.status] = newStatus
-            it[this.updatedAt] = Clock.System.now()
+            it[this.updatedAt] = now
         } > 0
+        if (updated) {
+            val event = if (expected == ContactStatus.BLOCKED) {
+                ContactEventResponse.UserUnblocked(
+                    userId = userId,
+                    unblockedUserId = contactId,
+                    timestamp = now,
+                )
+            } else {
+                statusToEvent(userId, contactId, newStatus, null, null, now)
+            }
+            syncRepository.appendChanges(
+                listOf(
+                    SyncAppendTarget(SyncScope.USER, userId, event),
+                    SyncAppendTarget(SyncScope.USER, contactId, event),
+                )
+            )
+        }
+        updated
     }
 
     override suspend fun deleteContact(userId: Uuid, contactId: Uuid): Boolean = dbQuery {
-        Contacts.deleteWhere {
+        val deleted = Contacts.deleteWhere {
             (Contacts.userId eq userId) and (Contacts.contactId eq contactId)
         } > 0
+        if (deleted) {
+            val event = ContactEventResponse.ContactDeleted(
+                userId = userId,
+                contactId = contactId,
+                timestamp = Clock.System.now(),
+            )
+            syncRepository.appendChanges(
+                listOf(
+                    SyncAppendTarget(SyncScope.USER, userId, event),
+                    SyncAppendTarget(SyncScope.USER, contactId, event),
+                )
+            )
+        }
+        deleted
+    }
+
+    private suspend fun recordContactStatusChange(
+        userId: Uuid,
+        contactId: Uuid,
+        status: ContactStatus,
+        nickname: String?,
+        alias: String?,
+        timestamp: kotlin.time.Instant,
+    ) {
+        val event = statusToEvent(userId, contactId, status, nickname, alias, timestamp)
+        syncRepository.appendChanges(
+            listOf(
+                SyncAppendTarget(SyncScope.USER, userId, event),
+                SyncAppendTarget(SyncScope.USER, contactId, event),
+            )
+        )
+    }
+
+    private fun statusToEvent(
+        userId: Uuid,
+        contactId: Uuid,
+        status: ContactStatus,
+        nickname: String?,
+        alias: String?,
+        timestamp: kotlin.time.Instant,
+    ): ContactEventResponse = when (status) {
+        ContactStatus.FRIEND -> ContactEventResponse.ContactAdded(
+            userId = userId,
+            contactId = contactId,
+            timestamp = timestamp,
+        )
+        ContactStatus.BLOCKED -> ContactEventResponse.UserBlocked(
+            userId = userId,
+            blockedUserId = contactId,
+            timestamp = timestamp,
+        )
+        ContactStatus.DELETED -> ContactEventResponse.ContactDeleted(
+            userId = userId,
+            contactId = contactId,
+            timestamp = timestamp,
+        )
+        ContactStatus.BLOCKED_BY -> ContactEventResponse.ContactUpdated(
+            userId = userId,
+            contactId = contactId,
+            nickname = nickname,
+            alias = alias,
+            timestamp = timestamp,
+        )
     }
 
     override suspend fun getContact(userId: Uuid, contactId: Uuid): Contact? = dbQuery {

@@ -95,6 +95,7 @@ SELECT
     M.id AS last_message_id,
     M.content AS last_message_content,
     M.render_type AS last_message_render_type,
+    M.revoked_at AS last_message_revoked_at,
     M.user_id AS last_message_sender_id,
     M.created_at AS last_message_created_at,
 

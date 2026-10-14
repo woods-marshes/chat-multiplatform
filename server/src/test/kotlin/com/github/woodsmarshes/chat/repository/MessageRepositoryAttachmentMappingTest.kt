@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.PrivateMetadata
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
@@ -46,7 +47,7 @@ class MessageRepositoryAttachmentMappingTest {
     fun seed() {
         runBlocking {
             transaction(database) {
-                SchemaUtils.create(Users, Conversations, Messages, PrivateFiles)
+                SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
                 Users.insert {
                     it[id] = senderId
                     it[username] = "sender-$senderId"

@@ -367,13 +367,17 @@ private fun ReplyPreview(
     val bubbleColors = LocalBubbleColors.current
     val strings = LocalStrings.current
     val senderName = message.sender?.displayName ?: message.sender?.username ?: ""
-    val excerpt = when (val content = message.content) {
-        is TextContent -> content.text
-        is ImageContent -> strings.messagePreviewImage
-        is VideoContent -> strings.messagePreviewVideo
-        is AudioContent -> strings.messagePreviewAudio
-        is FileContent -> strings.messagePreviewFile
-        else -> ""
+    val excerpt = if (message.revokedAt != null) {
+        strings.messageRevoked
+    } else {
+        when (val content = message.content) {
+            is TextContent -> content.text
+            is ImageContent -> strings.messagePreviewImage
+            is VideoContent -> strings.messagePreviewVideo
+            is AudioContent -> strings.messagePreviewAudio
+            is FileContent -> strings.messagePreviewFile
+            else -> ""
+        }
     }
     Row(
         modifier = modifier

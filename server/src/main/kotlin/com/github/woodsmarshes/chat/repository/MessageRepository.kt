@@ -6,6 +6,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.JoinGroupContent
+import com.github.woodsmarshes.chat.core.model.MediaContent
 import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageContent
@@ -16,6 +17,8 @@ import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
+import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
@@ -24,10 +27,9 @@ import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX
 import com.github.woodsmarshes.chat.utils.dbQuery
-import org.jetbrains.exposed.v1.core.ResultRow
-import java.sql.SQLException
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
@@ -40,14 +42,13 @@ import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.or
-import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.upsert
-import kotlin.collections.emptyMap
+import java.sql.SQLException
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -55,10 +56,10 @@ interface MessageRepository {
     /**
      * Persists a message and returns `(message, isNew)`.
      *
-     * When [requestId] is supplied (client outbox resend), it becomes the
-     * message primary key so retries are idempotent: an already-persisted
-     * request returns the existing row with `isNew = false` and leaves
-     * conversation state untouched.
+     * When [requestId] is supplied (client outbox resend), retries with an
+     * identical payload return the already-persisted row with `isNew = false`
+     * and leave conversation state and the sync journal untouched. Reusing a
+     * [requestId] with a different payload throws `AppException(MessageError.InvalidContent)`.
      */
     suspend fun insertMessage(
         conversationId: Uuid,
@@ -73,10 +74,6 @@ interface MessageRepository {
     /**
      * Looks up a previously persisted message by its client-generated
      * [requestId], scoped to the conversation and sender that created it.
-     *
-     * The scope is what makes the outbox retry safe: a request id observed in
-     * another conversation (or authored by somebody else) must never be
-     * replayed as if it were this sender's message.
      */
     suspend fun findMessageByRequestId(
         requestId: Uuid,
@@ -88,20 +85,22 @@ interface MessageRepository {
         conversationId: Uuid,
         limit: Int,
         beforeId: Uuid? = null,
-        afterId: Uuid? = null
     ): List<Message>
 
     suspend fun searchMessages(
         conversationId: Uuid,
         keyword: String,
-        limit: Int = 20
+        limit: Int = 20,
     ): List<Message>
 
     suspend fun getMessageById(messageId: Uuid): Message?
 
     suspend fun getLastMessage(conversationId: Uuid): Message?
 
-    suspend fun getMessageRevokeContext(userId: Uuid, messageId: Uuid): Triple<Pair<Uuid, Message>, ConversationParticipant, Conversation>?
+    suspend fun getMessageRevokeContext(
+        userId: Uuid,
+        messageId: Uuid,
+    ): Triple<Pair<Uuid, Message>, ConversationParticipant, Conversation>?
 
     suspend fun revokeMessage(messageId: Uuid): Boolean
 
@@ -119,28 +118,17 @@ interface MessageRepository {
     suspend fun getUnreadCounts(userId: Uuid): Map<Uuid, Long>
 
     suspend fun getUnreadCount(conversationId: Uuid, userId: Uuid): Long
-
-    suspend fun getSyncAnchors(userId: Uuid): List<SyncAnchor>
 }
 
-/**
- * Server-held sync state for one conversation, pushed to the client right
- * after the websocket handshake so it can choose between a small forward
- * delta and a window jump instead of polling. Preview content is NOT carried
- * here — the client's list sync seeds it right after receiving the anchor.
- */
-data class SyncAnchor(
-    val conversationId: Uuid,
-    val lastMessageId: Uuid?,
-    val lastSeq: Long,
-    val unreadCount: Int,
-)
-
-class MessageDataSourceImpl : MessageRepository {
+class MessageDataSourceImpl(
+    private val syncRepository: SyncRepository = SyncDataSourceImpl(),
+) : MessageRepository {
 
     private companion object {
         /** 23503 = PostgreSQL FK violation, 23506 = H2 referential integrity. */
         val FK_VIOLATION_SQL_STATES = setOf("23503", "23506")
+        /** 23505 = PostgreSQL / H2 unique constraint violation. */
+        val UNIQUE_VIOLATION_SQL_STATES = setOf("23505")
     }
 
     override suspend fun insertMessage(
@@ -152,10 +140,6 @@ class MessageDataSourceImpl : MessageRepository {
         replyToMessageId: Uuid?,
         requestId: Uuid?,
     ): Pair<Message, Boolean>? =
-        // Constraint violations are translated here, at the SQL boundary: the
-        // service layer must not know vendor error codes. FK violations mean
-        // the conversation (or sender) vanished mid-flight; anything else is
-        // a generic storage failure.
         try {
             insertMessageInTransaction(
                 conversationId = conversationId,
@@ -164,9 +148,20 @@ class MessageDataSourceImpl : MessageRepository {
                 category = category,
                 renderType = renderType,
                 replyToMessageId = replyToMessageId,
-                requestId = requestId
+                requestId = requestId,
             )
+        } catch (e: AppException) {
+            throw e
         } catch (e: SQLException) {
+            if (e.sqlState in UNIQUE_VIOLATION_SQL_STATES && requestId != null) {
+                // Concurrent duplicate send with the same (senderId, conversationId, requestId)
+                // won the insert race between our pre-check and INSERT. Look up
+                // the winner's row and validate payload equivalence.
+                val winner = findMessageByRequestIdWithReply(requestId, conversationId, senderId)
+                    ?: throw AppException(MessageError.OperationFailed)
+                validateIdempotentPayload(winner, content, category, replyToMessageId)
+                return Pair(winner, false)
+            }
             if (e.sqlState in FK_VIOLATION_SQL_STATES) throw AppException(MessageError.ConversationNotFound)
             throw AppException(MessageError.OperationFailed)
         }
@@ -180,6 +175,20 @@ class MessageDataSourceImpl : MessageRepository {
         replyToMessageId: Uuid?,
         requestId: Uuid?,
     ): Pair<Message, Boolean>? = dbQuery {
+        // Lock the conversation row first so concurrent sends in the same
+        // conversation serialize on the conversation row before touching
+        // Messages or SyncStreams. This also prevents unique-index races from
+        // aborting the enclosing transaction under PostgreSQL when two
+        // identical requestIds arrive concurrently.
+        val convExists = Conversations
+            .selectAll()
+            .where { Conversations.id eq conversationId }
+            .forUpdate()
+            .singleOrNull() != null
+        if (!convExists) {
+            throw AppException(MessageError.ConversationNotFound)
+        }
+
         val replyTo = replyToMessageId?.let {
             Messages
                 .innerJoin(Users)
@@ -195,6 +204,22 @@ class MessageDataSourceImpl : MessageRepository {
                 ?.toFilteredUser()
         }
 
+        if (requestId != null) {
+            val existing = Messages
+                .selectAll()
+                .where {
+                    (Messages.clientRequestId eq requestId) and
+                        (Messages.conversationId eq conversationId) and
+                        (Messages.senderId eq senderId)
+                }
+                .singleOrNull()
+            if (existing != null) {
+                val existingMsg = existing.toMessage(replyTo = replyTo)
+                validateIdempotentPayload(existingMsg, content, category, replyTo?.id)
+                return@dbQuery Pair(existingMsg, false)
+            }
+        }
+
         val textToStore = when (content) {
             is System -> {
                 when (content) {
@@ -208,47 +233,14 @@ class MessageDataSourceImpl : MessageRepository {
             }
             is Normal -> {
                 when (content) {
-                    is TextContent -> {
-                        content.text
-                    }
-                    is FileContent -> {
-                        content.fileName
-                    }
+                    is TextContent -> content.text
+                    is FileContent -> content.fileName
                     is ImageContent -> null
                     is VideoContent -> null
                     is AudioContent -> null
                 }
             }
         }
-
-        // Outbox resends reuse the client's request id; the first insert wins
-        // and any later one is a no-op that returns the persisted message.
-        // The primary key stays server-owned (UuidTable v7) — the request id
-        // lives in client_request_id, unique per sender+conversation.
-        if (requestId != null) {
-            val existing = Messages
-                .selectAll()
-                .where {
-                    (Messages.clientRequestId eq requestId) and
-                        (Messages.conversationId eq conversationId) and
-                        (Messages.senderId eq senderId)
-                }
-                .singleOrNull()
-            if (existing != null) {
-                return@dbQuery Pair(existing.toMessage(), false)
-            }
-        }
-
-        // Allocate the delivery position under the conversation row lock,
-        // which serializes concurrent senders per conversation; clients use
-        // this to detect delivery gaps and repair them via REST sync.
-        Conversations.update({ Conversations.id eq conversationId }) {
-            it[nextSeq] = nextSeq + 1
-        }
-        val seq = Conversations
-            .selectAll()
-            .where { Conversations.id eq conversationId }
-            .single()[Conversations.nextSeq]
 
         Messages.insert {
             it[Messages.conversationId] = conversationId
@@ -259,13 +251,13 @@ class MessageDataSourceImpl : MessageRepository {
             it[Messages.renderType] = renderType
             it[Messages.replyToMessageId] = replyTo?.id
             it[Messages.createdAt] = Clock.System.now()
-            it[Messages.seq] = seq
             it[Messages.clientRequestId] = requestId
         }
             .resultedValues
             ?.singleOrNull()
-            ?.also { row ->
+            ?.let { row ->
                 val newMessageId = row[Messages.id].value
+                val message = row.toMessage(replyTo = replyTo)
 
                 // Record which conversation each private attachment reached,
                 // atomically with the message: the download authorization for
@@ -279,32 +271,91 @@ class MessageDataSourceImpl : MessageRepository {
 
                 Conversations.update({
                     (Conversations.id eq conversationId) and (
-                            (Conversations.lastMessageId.isNull()) or
-                                    (Conversations.lastMessageId less newMessageId)
-                            )
+                        Conversations.lastMessageId.isNull() or
+                            (Conversations.lastMessageId less newMessageId)
+                        )
                 }) {
                     it[Conversations.lastMessageId] = newMessageId
                     it[Conversations.updatedAt] = Clock.System.now()
                 }
+
+                // Append the message creation to the conversation sync stream
+                // in the exact same transaction.
+                syncRepository.appendChange(
+                    scope = SyncScope.CONVERSATION,
+                    id = conversationId,
+                    event = MessageEventResponse.Received(
+                        message = message,
+                        conversationId = conversationId,
+                        senderId = senderId,
+                        requestId = (requestId ?: newMessageId).toString(),
+                    ),
+                )
+
+                Pair(message, true)
             }
-            ?.let { row -> Pair(row.toMessage(replyTo = replyTo), true) }
     }
 
-    override suspend fun findMessageByRequestId(
+    private fun validateIdempotentPayload(
+        existing: Message,
+        requestedContent: MessageContent,
+        requestedCategory: MessageCategory,
+        requestedReplyToId: Uuid?,
+    ) {
+        val existingReplyId = existing.replyTo?.id
+        // If the message was already revoked, its content was wiped to TextContent(""),
+        // so only verify category and replyTo when revokedAt is non-null.
+        val contentMatches = if (existing.revokedAt != null) {
+            true
+        } else {
+            existing.content == requestedContent ||
+                (existing.content is MediaContent &&
+                    requestedContent is MediaContent &&
+                    (existing.content as MediaContent).url == requestedContent.url &&
+                    (existing.content as MediaContent).fileName == requestedContent.fileName)
+        }
+        val replyMatches = existingReplyId == requestedReplyToId ||
+            (existing.replyTo == null && requestedReplyToId != null && existingReplyId == null)
+        if (!contentMatches || existing.category != requestedCategory || !replyMatches) {
+            throw AppException(MessageError.InvalidContent)
+        }
+    }
+
+    private suspend fun findMessageByRequestIdWithReply(
         requestId: Uuid,
         conversationId: Uuid,
         senderId: Uuid,
     ): Message? = dbQuery {
-        Messages
+        val row = Messages
             .selectAll()
             .where {
                 (Messages.clientRequestId eq requestId) and
                     (Messages.conversationId eq conversationId) and
                     (Messages.senderId eq senderId)
             }
-            .singleOrNull()
-            ?.toMessage()
+            .singleOrNull() ?: return@dbQuery null
+        val replyTo = row[Messages.replyToMessageId]?.value?.let { replyId ->
+            Messages
+                .innerJoin(Users)
+                .leftJoin(
+                    otherTable = ConversationParticipants,
+                    onColumn = { Users.id },
+                    otherColumn = { ConversationParticipants.userId },
+                    additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
+                )
+                .selectAll()
+                .where { (Messages.id eq replyId) and (Messages.conversationId eq conversationId) }
+                .singleOrNull()
+                ?.toFilteredUser()
+        }
+        row.toMessage(replyTo = replyTo)
     }
+
+    override suspend fun findMessageByRequestId(
+        requestId: Uuid,
+        conversationId: Uuid,
+        senderId: Uuid,
+    ): Message? = findMessageByRequestIdWithReply(requestId, conversationId, senderId)
 
     private fun String.escapeLike(): String =
         replace("\\", "\\\\")
@@ -326,12 +377,7 @@ class MessageDataSourceImpl : MessageRepository {
         conversationId: Uuid,
         limit: Int,
         beforeId: Uuid?,
-        afterId: Uuid?,
     ): List<Message> = dbQuery {
-        if (beforeId != null && afterId != null && afterId >= beforeId) {
-            return@dbQuery emptyList()
-        }
-
         val query = Messages
             .innerJoin(Users)
             .leftJoin(
@@ -347,18 +393,8 @@ class MessageDataSourceImpl : MessageRepository {
             query.andWhere { Messages.id less it }
         }
 
-        afterId?.let {
-            query.andWhere { Messages.id greater it }
-        }
-
-        val sortOrder = if (afterId != null) {
-            SortOrder.ASC
-        } else {
-            SortOrder.DESC
-        }
-
         val messageRows = query
-            .orderBy(Messages.id to sortOrder)
+            .orderBy(Messages.id to SortOrder.DESC)
             .limit(limit)
             .toList()
 
@@ -387,10 +423,10 @@ class MessageDataSourceImpl : MessageRepository {
             .selectAll()
             .where {
                 (Messages.conversationId eq conversationId) and
-                        (Messages.revokedAt.isNull()) and (
+                    (Messages.revokedAt.isNull()) and (
                         (Messages.searchText like searchPattern) or
-                                (Users.username like searchPattern) or
-                                (Users.displayName like searchPattern)
+                            (Users.username like searchPattern) or
+                            (Users.displayName like searchPattern)
                         )
             }
             .orderBy(Messages.id to SortOrder.DESC)
@@ -489,8 +525,12 @@ class MessageDataSourceImpl : MessageRepository {
                 }
                 .singleOrNull()
                 ?.let {
+                    val replyId = it[Messages.replyToMessageId]?.value
+                    val replyTo = replyId?.let { rid ->
+                        Messages.selectAll().where { Messages.id eq rid }.singleOrNull()?.toMessage()
+                    }
                     Triple(
-                        Pair(it[Messages.senderId].value, it.toMessage()),
+                        Pair(it[Messages.senderId].value, it.toMessage(replyTo = replyTo)),
                         it.toConversationParticipant(),
                         it.toConversation()
                     )
@@ -498,17 +538,41 @@ class MessageDataSourceImpl : MessageRepository {
         }
 
     override suspend fun revokeMessage(messageId: Uuid): Boolean = dbQuery {
+        val existingRow = Messages
+            .selectAll()
+            .where { (Messages.id eq messageId) and Messages.revokedAt.isNull() }
+            .forUpdate()
+            .singleOrNull() ?: return@dbQuery false
+
+        val conversationId = existingRow[Messages.conversationId].value
+        val senderId = existingRow[Messages.senderId].value
+        val now = Clock.System.now()
+
         // Blanking the payload is what makes a revoke irreversible from the
-        // read paths: history, "last message" and search all read these
-        // columns. A second revoke reports failure instead of rewriting the
-        // timestamp.
-        Messages.update(
+        // read paths: history, "last message", sync delta hydration, and search
+        // all read these columns. A second revoke reports failure instead of
+        // rewriting the timestamp.
+        val updated = Messages.update(
             where = { (Messages.id eq messageId) and Messages.revokedAt.isNull() }
         ) {
-            it[Messages.revokedAt] = Clock.System.now()
+            it[Messages.revokedAt] = now
             it[Messages.content] = TextContent("")
             it[Messages.searchText] = ""
         } > 0
+
+        if (updated) {
+            syncRepository.appendChange(
+                scope = SyncScope.CONVERSATION,
+                id = conversationId,
+                event = MessageEventResponse.Withdrawn(
+                    messageId = messageId,
+                    conversationId = conversationId,
+                    senderId = senderId,
+                    timestamp = now,
+                ),
+            )
+        }
+        updated
     }
 
     override suspend fun countLiveFileReferences(fileName: String): Long = dbQuery {
@@ -553,8 +617,8 @@ class MessageDataSourceImpl : MessageRepository {
             .selectAll()
             .where {
                 ((ConversationParticipants.lastReadMessageId eq messageId) or
-                        (ConversationParticipants.lastReadMessageId greater messageId)) and
-                        (ConversationParticipants.conversationId eq message.conversationId)
+                    (ConversationParticipants.lastReadMessageId greater messageId)) and
+                    (ConversationParticipants.conversationId eq message.conversationId)
             }
             .map { it.toUser() }
 
@@ -637,27 +701,5 @@ class MessageDataSourceImpl : MessageRepository {
             }
             .firstOrNull()
             ?.get(Messages.id.count()) ?: 0L
-    }
-
-    override suspend fun getSyncAnchors(userId: Uuid): List<SyncAnchor> = dbQuery {
-        val unread = getUnreadCounts(userId)
-        (ConversationParticipants innerJoin Conversations)
-            .select(Conversations.columns)
-            .where {
-                (ConversationParticipants.userId eq userId) and Conversations.deletedAt.isNull()
-            }
-            .map { row ->
-                val conversationId = row[Conversations.id].value
-                // Plain uuid() column: get() already yields Uuid? (no EntityID wrapper).
-                val lastMessageId = row[Conversations.lastMessageId]
-                val lastSeq = row[Conversations.nextSeq]
-                SyncAnchor(
-                    conversationId = conversationId,
-                    lastMessageId = lastMessageId,
-                    // nextSeq stores the last ASSIGNED seq (bumped before insert).
-                    lastSeq = lastSeq,
-                    unreadCount = (unread[conversationId] ?: 0L).toInt(),
-                )
-            }
     }
 }

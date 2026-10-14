@@ -72,7 +72,7 @@ class TransactionReadIsolationTest {
     }
 
     @Test
-    fun fileDatabaseGetSyncCursorAndGetRetryableMessagesStayOnTransactionConnection() = runBlocking {
+    fun fileDatabaseScopeCursorAndGetRetryableMessagesStayOnTransactionConnection() = runBlocking {
         val file = Files.createTempFile("chat-tx-cursor-", ".db")
         val driver = JdbcSqliteDriver("jdbc:sqlite:$file")
         val writer = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
@@ -100,10 +100,10 @@ class TransactionReadIsolationTest {
             assertFailsWith<IllegalStateException> {
                 withContext(writer) {
                     dao.transaction {
-                        dao.setSyncCursor(conversationId, msgId, 42L)
-                        val cursor = dao.getSyncCursor(conversationId)
-                        assertEquals(msgId.toString(), cursor?.after_id)
-                        assertEquals(42L, cursor?.after_seq)
+                        // "CONVERSATION" must stay in sync with SyncScope.CONVERSATION.name,
+                        // the scope label production code persists under.
+                        dao.setScopeCursor("CONVERSATION", conversationId, 42L)
+                        assertEquals(42L, dao.getScopeCursor("CONVERSATION", conversationId))
 
                         dao.insertMessage(
                             MessageEntity(
@@ -134,7 +134,7 @@ class TransactionReadIsolationTest {
             }
 
             withContext(writer) {
-                assertNull(dao.getSyncCursor(conversationId))
+                assertNull(dao.getScopeCursor("CONVERSATION", conversationId))
                 assertEquals(
                     emptyList(),
                     dao.getRetryableMessages(kotlin.time.Instant.fromEpochMilliseconds(now.toEpochMilliseconds() + 1_000)),

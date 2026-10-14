@@ -13,6 +13,7 @@ import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.MessageStatus
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.UserEntity
@@ -110,8 +111,9 @@ class MessagePersistenceTest {
             val dao = MessageDaoImpl({ db }, Dispatchers.Unconfined)
             dao.insertMessage(row(local, MessageStatus.FAILED))
             driver.execute(null, "DROP TABLE MessageAttempt", 0).await()
-            driver.execute(null, "DROP TABLE MessageSyncCursor", 0).await()
             driver.execute(null, "DROP TABLE MessageTimelineState", 0).await()
+            driver.execute(null, "DROP TABLE ScopeSyncCursor", 0).await()
+            driver.execute(null, "DROP TABLE UnreadRefreshPending", 0).await()
             // Strip the newer columns too so the file really has the legacy
             // v0 shape; 3.sqm's plain ALTERs would otherwise collide.
             driver.execute(null, "ALTER TABLE MessageEntity DROP COLUMN in_timeline", 0).await()
@@ -124,8 +126,8 @@ class MessagePersistenceTest {
             assertEquals(MessageStatus.FAILED, dao.getMessageById(local).first()?.local_send_status)
             assertTrue(dao.claimFailedMessage(local, now))
             assertEquals(false, dao.claimFailedMessage(local, now))
-            dao.setSyncCursor(conversation, server, 0L)
-            assertEquals(server, dao.getSyncCursor(conversation)?.after_id?.let(Uuid::parse))
+            dao.setScopeCursor(SyncScope.CONVERSATION.name, conversation, 0L)
+            assertEquals(0L, dao.getScopeCursor(SyncScope.CONVERSATION.name, conversation))
             assertEquals(0L, dao.getWindowGeneration(conversation))
             dao.demoteTimelineBefore(conversation, server)
             assertEquals(1L, dao.getWindowGeneration(conversation))
@@ -160,13 +162,13 @@ class MessagePersistenceTest {
             try {
                 dao.transaction {
                     dao.insertMessage(row(server))
-                    dao.setSyncCursor(conversation, server, 0L)
+                    dao.setScopeCursor(SyncScope.CONVERSATION.name, conversation, 0L)
                     error("Injected page failure")
                 }
             } catch (_: IllegalStateException) {
                 // Expected rollback.
             }
-            assertNull(dao.getSyncCursor(conversation))
+            assertNull(dao.getScopeCursor(SyncScope.CONVERSATION.name, conversation))
             assertNull(dao.getMessageById(server).first())
         }
     }

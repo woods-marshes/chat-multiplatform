@@ -90,22 +90,15 @@ class SchemaDiffTest {
         val db = freshH2()
         transaction(db) {
             SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
-            // Simulate a database from before the seq / next_seq /
-            // client_request_id era (the columns configureSchema today
-            // back-fills with hand-written ADD COLUMN IF NOT EXISTS).
-            // Every statement is idempotent: Exposed retries the whole
-            // transaction block on failure, and a half-applied drop set
-            // must not poison the retry.
+            // Simulate a database missing the client-request column.
+            // Exposed retries the whole transaction block on failure, and a
+            // half-applied drop set must not poison the retry.
             exec("ALTER TABLE messages DROP CONSTRAINT IF EXISTS MESSAGES_USER_ID_CONVERSATION_ID_CLIENT_REQUEST_ID_UNIQUE")
-            exec("ALTER TABLE messages DROP COLUMN IF EXISTS seq")
             exec("ALTER TABLE messages DROP COLUMN IF EXISTS client_request_id")
-            exec("ALTER TABLE conversations DROP COLUMN IF EXISTS next_seq")
         }
         val statements = diff(db)
         val adds = statements.filter { it.trimStart().startsWith("ALTER TABLE", ignoreCase = true) && it.contains(" ADD ", ignoreCase = true) }
-        assertTrue(adds.any { it.contains("MESSAGES") && it.contains("SEQ") })
         assertTrue(adds.any { it.contains("MESSAGES") && it.contains("CLIENT_REQUEST_ID") })
-        assertTrue(adds.any { it.contains("CONVERSATIONS") && it.contains("NEXT_SEQ") })
     }
 
     @Test

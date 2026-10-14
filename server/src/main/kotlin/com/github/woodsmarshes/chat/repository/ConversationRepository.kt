@@ -5,6 +5,8 @@ import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
@@ -51,7 +53,9 @@ interface ConversationRepository {
     suspend fun getConversationIncludeDeleted(conversationId: Uuid): Conversation?
 }
 
-class ConversationDataSourceImpl : ConversationRepository {
+class ConversationDataSourceImpl(
+    private val syncRepository: SyncRepository = SyncDataSourceImpl(),
+) : ConversationRepository {
     override suspend fun insertConversation(
         type: ConversationType,
         metadata: ConversationMetadata?,
@@ -152,9 +156,29 @@ class ConversationDataSourceImpl : ConversationRepository {
     }
 
     override suspend fun softDeleteConversation(conversationId: Uuid): Boolean = dbQuery {
-        Conversations.update({ Conversations.id eq conversationId }) {
-            it[deletedAt] = Clock.System.now()
+        val now = Clock.System.now()
+        val updated = Conversations.update({ Conversations.id eq conversationId }) {
+            it[deletedAt] = now
         } > 0
+        if (updated) {
+            val memberIds = ConversationParticipants
+                .select(ConversationParticipants.userId)
+                .where { ConversationParticipants.conversationId eq conversationId }
+                .map { it[ConversationParticipants.userId].value }
+            val event = ConversationEventResponse.ConversationDeleted(
+                conversationId = conversationId,
+                deleterId = memberIds.firstOrNull() ?: conversationId,
+                timestamp = now,
+            )
+            val targets = buildList {
+                add(SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event))
+                memberIds.forEach { uid ->
+                    add(SyncAppendTarget(SyncScope.USER, uid, event))
+                }
+            }
+            syncRepository.appendChanges(targets)
+        }
+        updated
     }
 
     override suspend fun getConversationIncludeDeleted(conversationId: Uuid): Conversation? = dbQuery {

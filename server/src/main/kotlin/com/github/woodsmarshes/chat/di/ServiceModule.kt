@@ -12,9 +12,11 @@ import com.github.woodsmarshes.chat.service.ArticleService
 import com.github.woodsmarshes.chat.service.RealtimeService
 import com.github.woodsmarshes.chat.service.UserService
 import org.koin.core.module.dsl.singleOf
+import com.github.woodsmarshes.chat.service.SyncService
 import org.koin.dsl.module
 
 val serviceModule = module {
+    singleOf(::SyncService)
     singleOf(::AuthService)
     single {
         ContactService(
@@ -54,7 +56,7 @@ val serviceModule = module {
             delivery = get(),
             sessionManager = get(),
             scope = get(),
-            messageRepository = get(),
+            syncService = get(),
         )
     }
 }

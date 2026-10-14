@@ -5,6 +5,9 @@ import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncHead
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
@@ -14,6 +17,7 @@ import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
 import io.ktor.util.logging.Logger
 import io.mockk.Called
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
@@ -34,7 +38,10 @@ import kotlin.uuid.Uuid
  */
 class RealtimeServiceTest {
 
-    private val delivery = mockk<RealtimeDelivery>(relaxUnitFun = true)
+    private val delivery = mockk<RealtimeDelivery>(relaxed = true) {
+        io.mockk.every { registerSession(any()) } returns true
+        coEvery { sendToSession(any(), any()) } returns true
+    }
     private val sessionManager = mockk<WebSocketSessionManager>(relaxUnitFun = true)
     private val logger = mockk<Logger>(relaxUnitFun = true)
     private val bus: EventBus = EventBusImpl()
@@ -49,7 +56,9 @@ class RealtimeServiceTest {
         delivery = delivery,
         sessionManager = sessionManager,
         scope = CoroutineScope(Dispatchers.Unconfined),
-        messageRepository = mockk(relaxed = true),
+        syncService = mockk<SyncService> {
+            coEvery { getHeads(any()) } returns emptyList()
+        },
         typingDebounceMs = typingDebounceMs,
     )
 
@@ -59,11 +68,10 @@ class RealtimeServiceTest {
         category = MessageCategory.NORMAL,
         createdAt = now,
         content = TextContent("hello"),
-        seq = 1L,
     )
 
     @Test
-    fun sendMessageEventIsDeliveredAsReceivedWithItsSeq() {
+    fun sendMessageEventIsDeliveredAsReceivedWithServerIdentityAndRequestId() {
         newService()
         val message = message()
 
@@ -73,12 +81,39 @@ class RealtimeServiceTest {
             delivery.sendToConversation(conversationId, match {
                 it is MessageEventResponse.Received &&
                     it.message.id == message.id &&
-                    it.message.seq == 1L &&
                     it.senderId == senderId &&
                     it.requestId == "req-1"
             })
         }
         verify { sessionManager wasNot Called }
+    }
+
+    @Test
+    fun websocketInitializationSendsHeadsOnlyToTheNewSession() = runBlocking {
+        val userId = Uuid.random()
+        val session = mockk<io.ktor.server.websocket.WebSocketServerSession>()
+        val heads = listOf(SyncHead(SyncScope.USER, userId, 7L))
+        val syncService = mockk<SyncService>()
+        coEvery { syncService.getHeads(userId) } returns heads
+        val service = RealtimeService(
+            log = logger,
+            eventBus = bus,
+            delivery = delivery,
+            sessionManager = sessionManager,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            syncService = syncService,
+        )
+
+        service.initializeWebSocketConnection(userId, session)
+
+        coVerify(exactly = 1) { sessionManager.addUserSession(userId, session) }
+        coVerify(exactly = 1) {
+            delivery.sendToSession(session, match {
+                it is SyncStateResponse.Heads && it.entries == heads
+            })
+        }
+        coVerify(exactly = 0) { delivery.sendToUser(any(), any()) }
+        coVerify(exactly = 0) { delivery.sendToConversation(any(), any()) }
     }
 
     @Test

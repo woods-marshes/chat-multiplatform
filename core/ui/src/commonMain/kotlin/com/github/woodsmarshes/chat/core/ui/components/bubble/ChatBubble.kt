@@ -1,7 +1,11 @@
 package com.github.woodsmarshes.chat.core.ui.components.bubble
 
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextDecoration
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
@@ -11,6 +15,7 @@ import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.ui.MessageState
+import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 /**
  * Dispatches the correct bubble composable based on [MessageRenderType].
@@ -18,10 +23,8 @@ import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
  */
 @Composable
 fun MessageBubbleContent(
-    renderType: MessageRenderType,
-    content: MessageContent,
+    message: MessageUiModel,
     isOwnMessage: Boolean,
-    sendStatus: MessageState,
     modifier: Modifier = Modifier,
     formatter: MessageFormatter = rememberFormatter(),
     audioState: KmpMediaPlaybackState = KmpMediaPlaybackState(),
@@ -33,30 +36,43 @@ fun MessageBubbleContent(
     onAudioSeek: ((AudioContent, Float) -> Unit)? = null,
     onFileClick: ((FileContent) -> Unit)?,
 ) {
-    when (renderType) {
+    val strings = LocalStrings.current
+    if (message.revokedAt != null) {
+        BasicText(
+            text = strings.messageRevoked,
+            style = LocalTextStyle.current.copy(
+                fontStyle = FontStyle.Italic,
+                textDecoration = TextDecoration.LineThrough,
+            ),
+            modifier = modifier,
+        )
+        return
+    }
+
+    when (message.renderType) {
         MessageRenderType.TEXT -> TextBubble(
-            content = content as? TextContent ?: TextContent(""),
+            content = message.content as? TextContent ?: TextContent(""),
             isOwnMessage = isOwnMessage,
-            sendStatus = sendStatus,
+            sendStatus = message.sendStatus,
             modifier = modifier,
             formatter = formatter,
             onRetry = onRetry,
         )
         MessageRenderType.IMAGE -> ImageBubble(
-            content = content as? ImageContent,
+            content = message.content as? ImageContent,
             isOwnMessage = isOwnMessage,
             modifier = modifier,
             onImageClick = onImageClick,
         )
         MessageRenderType.VIDEO -> VideoBubble(
-            content = content as? VideoContent,
+            content = message.content as? VideoContent,
             isOwnMessage = isOwnMessage,
             modifier = modifier,
             isPlaying = videoIsPlaying,
             onPlayClick = onVideoPlayClick,
         )
         MessageRenderType.AUDIO -> {
-            val audioContent = content as? AudioContent
+            val audioContent = message.content as? AudioContent
             AudioBubble(
                 content = audioContent,
                 isOwnMessage = isOwnMessage,
@@ -71,15 +87,15 @@ fun MessageBubbleContent(
             )
         }
         MessageRenderType.FILE -> FileBubble(
-            content = content as? FileContent,
+            content = message.content as? FileContent,
             isOwnMessage = isOwnMessage,
             modifier = modifier,
             onFileClick = onFileClick,
         )
         MessageRenderType.OTHER -> TextBubble(
-            content = TextContent(LocalStrings.current.unsupportedMessage),
+            content = TextContent(strings.unsupportedMessage),
             isOwnMessage = isOwnMessage,
-            sendStatus = sendStatus,
+            sendStatus = message.sendStatus,
             modifier = modifier,
             onRetry = null,
         )

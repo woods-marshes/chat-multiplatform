@@ -3,6 +3,9 @@ package com.github.woodsmarshes.chat.repository
 import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.User
+import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
+import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
@@ -58,7 +61,9 @@ interface GroupProfileRepository {
     suspend fun checkHandleExists(handle: String): Boolean
 }
 
-class GroupProfileDataSourceImpl : GroupProfileRepository {
+class GroupProfileDataSourceImpl(
+    private val syncRepository: SyncRepository = SyncDataSourceImpl(),
+) : GroupProfileRepository {
     override suspend fun initGroupProfile(
         conversationId: Uuid,
         name: String,
@@ -95,7 +100,7 @@ class GroupProfileDataSourceImpl : GroupProfileRepository {
         settings: GroupSettings?
     ): Boolean = dbQuery {
         val now = Clock.System.now()
-        GroupProfiles.update({
+        val updated = GroupProfiles.update({
             GroupProfiles.conversationId eq conversationId
         }) {
             if (name != null) it[this.name] = name
@@ -106,6 +111,32 @@ class GroupProfileDataSourceImpl : GroupProfileRepository {
             if (settings != null) it[this.settings] = settings
             it[this.updatedAt] = now
         } > 0
+        if (updated) {
+            val currentOwner = ownerId ?: GroupProfiles
+                .select(GroupProfiles.ownerId)
+                .where { GroupProfiles.conversationId eq conversationId }
+                .singleOrNull()
+                ?.get(GroupProfiles.ownerId)
+                ?.value ?: conversationId
+            syncRepository.appendChange(
+                scope = SyncScope.CONVERSATION,
+                id = conversationId,
+                event = ConversationEventResponse.GroupProfileUpdated(
+                    conversationId = conversationId,
+                    updaterId = currentOwner,
+                    profile = UpdateConversationSettingsRequest(
+                        name = name,
+                        handle = handle,
+                        ownerId = ownerId,
+                        description = description,
+                        avatarUrl = avatarUrl,
+                        settings = settings,
+                    ),
+                    timestamp = now,
+                ),
+            )
+        }
+        updated
     }
 
     override suspend fun getGroupProfile(conversationId: Uuid): GroupProfile? = dbQuery {
