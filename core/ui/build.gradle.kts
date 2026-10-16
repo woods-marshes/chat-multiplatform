@@ -88,6 +88,14 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().con
     }
 }
 
+// KSP2 tasks also read the metadata output dir above as a commonMain srcDir;
+// Gradle 9.8 strict validation fails the build on the undeclared implicit dependency.
+tasks.withType<com.google.devtools.ksp.gradle.KspAATask>().configureEach {
+    if (name != "kspCommonMainKotlinMetadata") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+}
+
 kotlin.sourceSets.commonMain {
     kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
 }

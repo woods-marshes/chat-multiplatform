@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.chat.core.database.room
 
-import androidx.room3.TypeConverter
+import androidx.room3.ColumnTypeConverter
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
@@ -23,60 +23,60 @@ object RoomTypeConverters {
         isLenient = true
     }
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun uuidFromString(value: String): Uuid = Uuid.parse(value)
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun uuidToString(uuid: Uuid): String = uuid.toString()
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun instantFromLong(value: Long): Instant = Instant.fromEpochMilliseconds(value)
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun instantToLong(instant: Instant): Long = instant.toEpochMilliseconds()
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun instantFromLongNullable(value: Long?): Instant? = value?.let { Instant.fromEpochMilliseconds(it) }
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun instantToLongNullable(instant: Instant?): Long? = instant?.toEpochMilliseconds()
 
     // Enums: unknown wire values (e.g. a role added server-side) fall back to
     // the *_UNKNOWN variant instead of throwing and wedging the DB sync.
-    @TypeConverter
+    @ColumnTypeConverter
     fun userRoleToString(role: UserRole): String = role.name
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun userRoleFromString(value: String): UserRole =
         UserRole.entries.firstOrNull { it.name == value } ?: UserRole.GUEST
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageCategoryToString(category: MessageCategory): String = category.name
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageCategoryFromString(value: String): MessageCategory =
         MessageCategory.entries.firstOrNull { it.name == value } ?: MessageCategory.NORMAL
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageRenderTypeToString(renderType: MessageRenderType): String = renderType.name
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageRenderTypeFromString(value: String): MessageRenderType =
         MessageRenderType.entries.firstOrNull { it.name == value } ?: MessageRenderType.OTHER
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageContentToJson(content: MessageContent): String =
         DbJson.encodeToString(MessageContent.serializer(), content)
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageContentFromJson(value: String): MessageContent =
         DbJson.decodeFromString(MessageContent.serializer(), value)
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageContentToJsonNullable(content: MessageContent?): String? =
         content?.let { DbJson.encodeToString(MessageContent.serializer(), it) }
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun messageContentFromJsonNullable(value: String?): MessageContent? =
         value?.let { DbJson.decodeFromString(MessageContent.serializer(), it) }
 }

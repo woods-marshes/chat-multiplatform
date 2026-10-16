@@ -22,7 +22,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -47,7 +47,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -72,7 +72,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -97,7 +97,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -122,7 +122,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -147,7 +147,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -172,7 +172,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -194,7 +194,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -216,7 +216,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -238,7 +238,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -263,7 +263,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -288,15 +288,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.animation:animation",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Animation",
             "description": "Compose animation library",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-animation#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-animation#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -313,15 +313,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.animation:animation-core",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Animation Core",
             "description": "Animation engine and animation primitives that are the building blocks of the Compose animation library",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-animation#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-animation#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -338,15 +338,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.foundation:foundation",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Foundation",
             "description": "Higher level abstractions of the Compose UI primitives. This library is design system agnostic, providing the high-level building blocks for both application and design-system developers",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-foundation#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-foundation#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -363,15 +363,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.foundation:foundation-layout",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Layouts",
             "description": "Compose layout implementations",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-foundation#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-foundation#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -388,7 +388,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -413,7 +413,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -438,7 +438,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -463,7 +463,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -488,7 +488,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -513,7 +513,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -538,7 +538,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -563,7 +563,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -588,7 +588,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -613,15 +613,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.runtime:runtime",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Runtime",
             "description": "Tree composition support for code generated by the Compose compiler plugin and corresponding public API",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -638,15 +638,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.runtime:runtime-annotation",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Runtime Annotation",
             "description": "Provides Compose-specific annotations used by the compiler and tooling",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -663,15 +663,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.runtime:runtime-retain",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Runtime Retain",
             "description": "Preserve state in composable methods across configuration changes and other transient content destruction scenarios",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -688,15 +688,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.runtime:runtime-saveable",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Saveable",
             "description": "Compose components that allow saving and restoring the local ui state",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -713,15 +713,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UI",
             "description": "Compose UI primitives. This library contains the primitives that form the Compose UI Toolkit, such as drawing, measurement and layout.",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -738,15 +738,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui-geometry",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Geometry",
             "description": "Compose classes related to dimensions without units",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -763,15 +763,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui-graphics",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Graphics",
             "description": "Compose graphics",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -788,15 +788,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui-text",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UI Text",
             "description": "Compose Text primitives and utilities",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -813,15 +813,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui-tooling-preview",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UI Preview Tooling",
             "description": "Compose tooling library API. This library provides the API required to declare @Preview composables in user apps.",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -838,15 +838,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui-unit",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Unit",
             "description": "Compose classes for simple units",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -863,15 +863,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.compose.ui:ui-util",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Util",
             "description": "Internal Compose utilities used by other modules",
-            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.12.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -888,7 +888,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -910,15 +910,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.core:core",
-            "artifactVersion": "1.19.0",
+            "artifactVersion": "1.19.1",
             "name": "Core",
             "description": "Provides backward-compatible implementations of Android platform APIs and features.",
-            "website": "https://developer.android.com/jetpack/androidx/releases/core#1.19.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/core#1.19.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -935,15 +935,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.core:core-ktx",
-            "artifactVersion": "1.19.0",
+            "artifactVersion": "1.19.1",
             "name": "Core Kotlin Extensions",
             "description": "Kotlin extensions for 'core' artifact",
-            "website": "https://developer.android.com/jetpack/androidx/releases/core#1.19.0",
+            "website": "https://developer.android.com/jetpack/androidx/releases/core#1.19.1",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -960,7 +960,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -985,7 +985,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1007,7 +1007,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1029,7 +1029,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1051,15 +1051,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.datastore:datastore-core",
-            "artifactVersion": "1.3.0-alpha11",
+            "artifactVersion": "1.3.0-rc01",
             "name": "DataStore Core",
             "description": "Android DataStore Core - contains the underlying store used by each serialization method",
-            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-alpha11",
+            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-rc01",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1076,15 +1076,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.datastore:datastore-core-okio",
-            "artifactVersion": "1.3.0-alpha11",
+            "artifactVersion": "1.3.0-rc01",
             "name": "DataStore Core Okio",
             "description": "Android DataStore Core Okio- contains APIs to use datastore-core in multiplatform via okio",
-            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-alpha11",
+            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-rc01",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1101,15 +1101,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.datastore:datastore-preferences-core",
-            "artifactVersion": "1.3.0-alpha11",
+            "artifactVersion": "1.3.0-rc01",
             "name": "Preferences DataStore Core",
             "description": "Android Preferences DataStore without the Android Dependencies",
-            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-alpha11",
+            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-rc01",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1126,15 +1126,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.datastore:datastore-preferences-external-protobuf",
-            "artifactVersion": "1.3.0-alpha11",
+            "artifactVersion": "1.3.0-rc01",
             "name": "Preferences External Protobuf",
             "description": "Repackaged proto-lite dependency for use by datastore preferences",
-            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-alpha11",
+            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-rc01",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1151,15 +1151,15 @@
                 "BSD-3-Clause"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.datastore:datastore-preferences-proto",
-            "artifactVersion": "1.3.0-alpha11",
+            "artifactVersion": "1.3.0-rc01",
             "name": "Preferences DataStore Proto",
             "description": "Jarjar the generated proto for use by datastore-preferences.",
-            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-alpha11",
+            "website": "https://developer.android.com/jetpack/androidx/releases/datastore#1.3.0-rc01",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1176,7 +1176,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1201,7 +1201,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1223,7 +1223,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1245,7 +1245,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1267,7 +1267,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1292,7 +1292,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1317,7 +1317,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1342,7 +1342,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1367,7 +1367,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1392,7 +1392,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1414,7 +1414,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1439,7 +1439,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1464,7 +1464,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1489,7 +1489,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1514,7 +1514,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1539,7 +1539,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1564,7 +1564,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1589,7 +1589,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1614,7 +1614,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1639,7 +1639,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1664,7 +1664,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1689,7 +1689,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1714,7 +1714,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1739,7 +1739,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1764,7 +1764,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1786,15 +1786,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.navigation3:navigation3-runtime",
-            "artifactVersion": "1.2.0-beta01",
+            "artifactVersion": "1.2.0",
             "name": "Androidx Navigation 3 Runtime",
             "description": "Provides the building blocks for a Compose first Navigation solution that easily supports extensions.",
-            "website": "https://developer.android.com/jetpack/androidx/releases/navigation3#1.2.0-beta01",
+            "website": "https://developer.android.com/jetpack/androidx/releases/navigation3#1.2.0",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1811,15 +1811,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.navigation3:navigation3-ui",
-            "artifactVersion": "1.2.0-beta01",
+            "artifactVersion": "1.2.0",
             "name": "Androidx Navigation 3 UI",
             "description": "Provides a Navigation3 display that uses the building blocks from runtime to create a higher level solution.",
-            "website": "https://developer.android.com/jetpack/androidx/releases/navigation3#1.2.0-beta01",
+            "website": "https://developer.android.com/jetpack/androidx/releases/navigation3#1.2.0",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1836,7 +1836,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1861,7 +1861,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1886,15 +1886,15 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "androidx.paging:paging-common",
-            "artifactVersion": "3.5.1",
+            "artifactVersion": "3.5.3",
             "name": "Paging-Common",
             "description": "Android Paging-Common",
-            "website": "https://developer.android.com/jetpack/androidx/releases/paging#3.5.1",
+            "website": "https://developer.android.com/jetpack/androidx/releases/paging#3.5.3",
             "developers": [
                 {
                     "name": "The Android Open Source Project"
@@ -1911,7 +1911,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1936,7 +1936,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1958,7 +1958,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -1983,7 +1983,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2008,7 +2008,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2033,7 +2033,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2058,7 +2058,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2083,7 +2083,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2108,7 +2108,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2133,7 +2133,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2155,7 +2155,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2177,7 +2177,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2199,7 +2199,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2221,7 +2221,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2246,7 +2246,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2271,12 +2271,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:android-driver",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight Android Driver",
             "description": "Driver to support SQLDelight generated code on Android",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2294,12 +2294,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:androidx-paging3-extensions",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight AndroidX Paging3 Multiplatform Extension",
             "description": "An implementation of AndroidX Paging3 Multiplatform backed by SQLDelight Query",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2317,12 +2317,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:async-extensions",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight Async Driver Extensions",
             "description": "Kotlin extensions for working with Async drivers",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2340,12 +2340,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:coroutines-extensions",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight Coroutines Extensions",
             "description": "Kotlin extension functions to expose SQLDelight's Query as a Flow",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2363,12 +2363,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:jdbc-driver",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight JDBC Driver",
             "description": "JDBC driver for SQLDelight",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2386,12 +2386,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:primitive-adapters",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight Primitive Column Adapters",
             "description": "Primitive column adapters for SQLDelight",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2409,12 +2409,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:runtime",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight Multiplatform Runtime (Experimental)",
             "description": "Multiplatform runtime library to support generated code",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2432,12 +2432,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:sqlite-driver",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight SQLite Driver",
             "description": "JVM SQLite driver for SQLDelight",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2455,12 +2455,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "app.cash.sqldelight:web-worker-driver",
-            "artifactVersion": "2.4.0",
+            "artifactVersion": "2.4.1",
             "name": "SQLDelight JavaScript Web Worker Driver",
             "description": "JavaScript Web Worker driver for SQLDelight",
             "website": "https://github.com/sqldelight/sqldelight/",
@@ -2478,7 +2478,53 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
+            ]
+        },
+        {
+            "uniqueId": "cafe.adriel.lyricist:lyricist",
+            "artifactVersion": "1.9.0",
+            "name": "Lyricist",
+            "description": "The missing I18N/L10N library for Jetpack Compose!",
+            "website": "https://github.com/adrielcafe/lyricist",
+            "developers": [
+                {
+                    "name": "Adriel Cafe"
+                }
+            ],
+            "scm": {
+                "connection": "scm:git:ssh://git@github.com/adrielcafe/lyricist.git",
+                "developerConnection": "scm:git:ssh://git@github.com/adrielcafe/lyricist.git",
+                "url": "https://github.com/adrielcafe/lyricist"
+            },
+            "licenses": [
+                "MIT"
+            ],
+            "funding": [
+                
+            ]
+        },
+        {
+            "uniqueId": "cafe.adriel.lyricist:lyricist-core",
+            "artifactVersion": "1.9.0",
+            "name": "Lyricist Core",
+            "description": "The missing I18N/L10N library for Jetpack Compose!",
+            "website": "https://github.com/adrielcafe/lyricist",
+            "developers": [
+                {
+                    "name": "Adriel Cafe"
+                }
+            ],
+            "scm": {
+                "connection": "scm:git:ssh://git@github.com/adrielcafe/lyricist.git",
+                "developerConnection": "scm:git:ssh://git@github.com/adrielcafe/lyricist.git",
+                "url": "https://github.com/adrielcafe/lyricist"
+            },
+            "licenses": [
+                "MIT"
+            ],
+            "funding": [
+                
             ]
         },
         {
@@ -2501,7 +2547,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2524,7 +2570,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2547,7 +2593,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2570,7 +2616,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2593,7 +2639,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2616,7 +2662,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2639,7 +2685,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2663,12 +2709,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "com.materialkolor:material-color-utilities",
-            "artifactVersion": "4.1.1",
+            "artifactVersion": "5.0.1",
             "name": "MaterialKolor",
             "description": "Material You dynamic color for Compose Multiplatform",
             "website": "https://github.com/jordond/materialkolor",
@@ -2686,7 +2732,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2709,7 +2755,7 @@
                 "ISC"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2732,12 +2778,12 @@
                 "ISC"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "com.mikepenz:aboutlibraries-compose-core",
-            "artifactVersion": "15.2.0",
+            "artifactVersion": "15.3.0",
             "name": "AboutLibraries Compose UI Library",
             "description": "AboutLibraries automatically detects all dependencies of a project and collects their information including the license. Optionally visualising it via the provided ui components.",
             "website": "https://github.com/mikepenz/AboutLibraries",
@@ -2755,12 +2801,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "com.mikepenz:aboutlibraries-compose-m3",
-            "artifactVersion": "15.2.0",
+            "artifactVersion": "15.3.0",
             "name": "AboutLibraries Compose Material 3 Library",
             "description": "AboutLibraries automatically detects all dependencies of a project and collects their information including the license. Optionally visualising it via the provided ui components.",
             "website": "https://github.com/mikepenz/AboutLibraries",
@@ -2778,12 +2824,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "com.mikepenz:aboutlibraries-core",
-            "artifactVersion": "15.2.0",
+            "artifactVersion": "15.3.0",
             "name": "AboutLibraries Core Library",
             "description": "AboutLibraries automatically detects all dependencies of a project and collects their information including the license. Optionally visualising it via the provided ui components.",
             "website": "https://github.com/mikepenz/AboutLibraries",
@@ -2801,7 +2847,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2824,7 +2870,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2847,12 +2893,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "dev.drewhamilton.poko:poko-annotations",
-            "artifactVersion": "0.21.1",
+            "artifactVersion": "0.23.1",
             "name": "Poko Annotations",
             "description": "A Kotlin compiler plugin for generating equals, hashCode, and toString for plain old Kotlin objects.",
             "website": "https://github.com/drewhamilton/Poko",
@@ -2870,53 +2916,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
-            ]
-        },
-        {
-            "uniqueId": "dev.skaldebane:lyricist",
-            "artifactVersion": "1.8.0-compose-1.10",
-            "name": "Lyricist",
-            "description": "The missing I18N/L10N library for Jetpack Compose! (Compose 1.10+ fork)",
-            "website": "https://github.com/skaldebane/lyricist",
-            "developers": [
-                {
-                    "name": "Houssam"
-                }
-            ],
-            "scm": {
-                "connection": "scm:git:ssh://git@github.com/skaldebane/lyricist.git",
-                "developerConnection": "scm:git:ssh://git@github.com/skaldebane/lyricist.git",
-                "url": "https://github.com/skaldebane/lyricist"
-            },
-            "licenses": [
-                "MIT"
-            ],
-            "funding": [
-
-            ]
-        },
-        {
-            "uniqueId": "dev.skaldebane:lyricist-core",
-            "artifactVersion": "1.8.0-compose-1.10",
-            "name": "Lyricist Core",
-            "description": "The missing I18N/L10N library for Jetpack Compose! (Compose 1.10+ fork)",
-            "website": "https://github.com/skaldebane/lyricist",
-            "developers": [
-                {
-                    "name": "Houssam"
-                }
-            ],
-            "scm": {
-                "connection": "scm:git:ssh://git@github.com/skaldebane/lyricist.git",
-                "developerConnection": "scm:git:ssh://git@github.com/skaldebane/lyricist.git",
-                "url": "https://github.com/skaldebane/lyricist"
-            },
-            "licenses": [
-                "MIT"
-            ],
-            "funding": [
-
+                
             ]
         },
         {
@@ -2939,7 +2939,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2962,7 +2962,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -2985,7 +2985,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3008,7 +3008,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3031,7 +3031,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3054,7 +3054,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3078,7 +3078,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3101,7 +3101,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3124,7 +3124,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3147,7 +3147,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3169,7 +3169,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3191,7 +3191,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3213,7 +3213,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3235,7 +3235,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3257,7 +3257,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3279,7 +3279,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3301,7 +3301,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3323,7 +3323,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3345,7 +3345,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3367,7 +3367,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3389,7 +3389,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3411,7 +3411,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3433,7 +3433,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3455,7 +3455,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3477,7 +3477,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3499,7 +3499,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3521,7 +3521,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3543,7 +3543,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3565,7 +3565,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3587,7 +3587,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3609,7 +3609,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3631,7 +3631,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3653,7 +3653,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3675,7 +3675,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3697,7 +3697,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3719,7 +3719,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3741,7 +3741,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3763,7 +3763,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3785,7 +3785,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3807,7 +3807,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3829,7 +3829,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3851,7 +3851,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3862,7 +3862,7 @@
             "website": "https://github.com/krzema12/snakeyaml-engine-kmp/",
             "developers": [
                 {
-
+                    
                 },
                 {
                     "name": "Piotr Krzemi\u0144ski"
@@ -3877,7 +3877,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3904,7 +3904,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3931,7 +3931,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3960,7 +3960,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -3984,7 +3984,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4008,7 +4008,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4032,7 +4032,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4056,7 +4056,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4080,7 +4080,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4104,7 +4104,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4128,12 +4128,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.androidx.navigation3:navigation3-ui",
-            "artifactVersion": "1.2.0-beta01",
+            "artifactVersion": "1.2.0-rc01",
             "name": "Androidx Navigation 3 UI",
             "description": "Provides a Navigation3 display that uses the building blocks from runtime to create a higher level solution.",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4152,7 +4152,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4176,7 +4176,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4200,7 +4200,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4224,7 +4224,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4248,12 +4248,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.animation:animation",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Animation",
             "description": "Compose animation library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4272,12 +4272,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.animation:animation-core",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Animation Core",
             "description": "Animation engine and animation primitives that are the building blocks of the Compose animation library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4296,7 +4296,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4320,7 +4320,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4344,12 +4344,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.components:components-resources",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Resources for Compose JB",
             "description": "Resources for Compose JB",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4368,12 +4368,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.desktop:desktop",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Desktop",
             "description": "Compose Desktop",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4392,12 +4392,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.desktop:desktop-jvm-windows-x64",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Desktop",
             "description": "Compose Desktop",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4416,12 +4416,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.foundation:foundation",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Foundation",
             "description": "Higher level abstractions of the Compose UI primitives. This library is design system agnostic, providing the high-level building blocks for both application and design-system developers",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4440,12 +4440,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.foundation:foundation-layout",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Layouts",
             "description": "Compose layout implementations",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4464,7 +4464,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4486,7 +4486,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4508,7 +4508,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4530,7 +4530,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4552,7 +4552,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4574,7 +4574,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4596,12 +4596,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.material3.adaptive:adaptive",
-            "artifactVersion": "1.3.0-rc01",
+            "artifactVersion": "1.3.0",
             "name": "Material Adaptive",
             "description": "Compose Material Design Adaptive Library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4620,12 +4620,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.material3.adaptive:adaptive-layout",
-            "artifactVersion": "1.3.0-rc01",
+            "artifactVersion": "1.3.0",
             "name": "Material Adaptive",
             "description": "Compose Material Design Adaptive Library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4644,12 +4644,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.material3.adaptive:adaptive-navigation",
-            "artifactVersion": "1.3.0-rc01",
+            "artifactVersion": "1.3.0",
             "name": "Material Adaptive",
             "description": "Compose Material Design Adaptive Library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4668,12 +4668,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.material3.adaptive:adaptive-navigation3",
-            "artifactVersion": "1.3.0-rc01",
+            "artifactVersion": "1.3.0",
             "name": "Material Adaptive",
             "description": "Compose Material Design Adaptive Library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4692,7 +4692,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4716,7 +4716,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4740,12 +4740,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.material:material",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Material Components",
             "description": "Compose Material Design Components library",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4764,7 +4764,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4788,7 +4788,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4812,7 +4812,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -4836,12 +4836,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.runtime:runtime",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Runtime",
             "description": "Tree composition support for code generated by the Compose compiler plugin and corresponding public API",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4860,12 +4860,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.runtime:runtime-saveable",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Saveable",
             "description": "Compose components that allow saving and restoring the local ui state",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4884,12 +4884,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UI",
             "description": "Compose UI primitives. This library contains the primitives that form the Compose UI Toolkit, such as drawing, measurement and layout.",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4908,12 +4908,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-backhandler",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose BackHandler",
             "description": "Provides BackHandler in Compose Multiplatform projects",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4932,12 +4932,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-geometry",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Geometry",
             "description": "Compose classes related to dimensions without units",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4956,12 +4956,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-graphics",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Graphics",
             "description": "Compose graphics",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -4980,12 +4980,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-text",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UI Text",
             "description": "Compose Text primitives and utilities",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -5004,12 +5004,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-tooling-preview",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UI Preview Tooling",
             "description": "Compose tooling library API. This library provides the API required to declare @Preview composables in user apps.",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -5028,12 +5028,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-uikit",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose UIKit",
             "description": "Internal iOS UIKit utilities including Objective-C library.",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -5052,12 +5052,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-unit",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Unit",
             "description": "Compose classes for simple units",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -5076,12 +5076,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.compose.ui:ui-util",
-            "artifactVersion": "1.12.0",
+            "artifactVersion": "1.12.1",
             "name": "Compose Util",
             "description": "Internal Compose utilities used by other modules",
             "website": "https://github.com/JetBrains/compose-multiplatform",
@@ -5100,12 +5100,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.kotlin:kotlin-dom-api-compat",
-            "artifactVersion": "2.4.20",
+            "artifactVersion": "2.4.21",
             "name": "Kotlin Dom Api Compat",
             "description": "Kotlin DOM API compatibility library",
             "website": "https://kotlinlang.org/",
@@ -5124,12 +5124,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.kotlin:kotlin-stdlib",
-            "artifactVersion": "2.4.20",
+            "artifactVersion": "2.4.21",
             "name": "Kotlin Stdlib",
             "description": "Kotlin Standard Library",
             "website": "https://kotlinlang.org/",
@@ -5148,12 +5148,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "org.jetbrains.kotlin:kotlin-stdlib-common",
-            "artifactVersion": "2.4.20",
+            "artifactVersion": "2.4.21",
             "name": "Kotlin Stdlib Common",
             "description": "Kotlin Common Standard Library (legacy, use kotlin-stdlib instead)",
             "website": "https://kotlinlang.org/",
@@ -5172,7 +5172,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5196,7 +5196,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5218,7 +5218,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5240,7 +5240,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5262,7 +5262,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5284,7 +5284,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5306,7 +5306,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5328,7 +5328,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5350,7 +5350,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5372,7 +5372,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5394,7 +5394,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5416,7 +5416,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5438,7 +5438,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5460,7 +5460,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5482,7 +5482,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5504,7 +5504,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5526,7 +5526,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5549,7 +5549,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5573,7 +5573,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5597,7 +5597,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5621,7 +5621,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5645,7 +5645,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5668,7 +5668,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5694,7 +5694,7 @@
                 "MIT"
             ],
             "funding": [
-
+                
             ]
         },
         {
@@ -5717,12 +5717,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-core",
-            "artifactVersion": "0.9.3",
+            "artifactVersion": "0.9.4",
             "name": "miuix-core",
             "description": "Core utilities for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -5739,12 +5739,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-icons",
-            "artifactVersion": "0.9.3",
+            "artifactVersion": "0.9.4",
             "name": "miuix-icons",
             "description": "Extended icon library for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -5761,12 +5761,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-shader",
-            "artifactVersion": "0.9.3",
+            "artifactVersion": "0.9.4",
             "name": "miuix-shader",
             "description": "Runtime shader abstraction for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -5783,12 +5783,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-squircle",
-            "artifactVersion": "0.9.3",
+            "artifactVersion": "0.9.4",
             "name": "miuix-squircle",
             "description": "Squircle corner library for Miuix",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -5805,12 +5805,12 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         },
         {
             "uniqueId": "top.yukonga.miuix.kmp:miuix-ui",
-            "artifactVersion": "0.9.3",
+            "artifactVersion": "0.9.4",
             "name": "miuix-ui",
             "description": "A UI library for Compose Multiplatform",
             "website": "https://github.com/compose-miuix-ui/miuix",
@@ -5827,7 +5827,7 @@
                 "Apache-2.0"
             ],
             "funding": [
-
+                
             ]
         }
     ],
