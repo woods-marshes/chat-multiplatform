@@ -66,7 +66,6 @@ class RealtimeApiLifecycleTest {
             category = MessageCategory.NORMAL,
             createdAt = now,
             content = TextContent("hello"),
-            seq = 1L,
             clientRequestId = Uuid.parse(requestId),
         ),
         conversationId,
