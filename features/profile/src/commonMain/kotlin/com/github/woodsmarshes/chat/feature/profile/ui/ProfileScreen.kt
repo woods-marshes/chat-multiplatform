@@ -191,21 +191,11 @@ fun ProfileScreen(
                             ChatAppButton(
                                 onClick = onEditProfile,
                                 label = strings.editProfile,
-                                style = ButtonStyle.SECONDARY,
+                                style = ButtonStyle.PRIMARY,
                                 size = ButtonSize.MD,
                                 fullWidth = true,
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
                         }
-                        ChatAppButton(
-                            onClick = { viewModel.startChat(onChatReady = onOpenChat) },
-                            label = strings.sendMessage,
-                            style = ButtonStyle.PRIMARY,
-                            size = ButtonSize.MD,
-                            enabled = !uiState.isStartingChat,
-                            isLoading = uiState.isStartingChat,
-                            fullWidth = true,
-                        )
                     } else if (uiState.contactStatus == ContactStatus.BLOCKED) {
                         Text(
                             text = strings.blockedBanner,

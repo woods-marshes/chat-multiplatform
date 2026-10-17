@@ -1,11 +1,14 @@
 package com.github.woodsmarshes.chat.core.ui.components.bubble
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
@@ -49,55 +52,63 @@ fun MessageBubbleContent(
         return
     }
 
-    when (message.renderType) {
-        MessageRenderType.TEXT -> TextBubble(
-            content = message.content as? TextContent ?: TextContent(""),
-            isOwnMessage = isOwnMessage,
-            sendStatus = message.sendStatus,
-            modifier = modifier,
-            formatter = formatter,
-            onRetry = onRetry,
-        )
-        MessageRenderType.IMAGE -> ImageBubble(
-            content = message.content as? ImageContent,
-            isOwnMessage = isOwnMessage,
-            modifier = modifier,
-            onImageClick = onImageClick,
-        )
-        MessageRenderType.VIDEO -> VideoBubble(
-            content = message.content as? VideoContent,
-            isOwnMessage = isOwnMessage,
-            modifier = modifier,
-            isPlaying = videoIsPlaying,
-            onPlayClick = onVideoPlayClick,
-        )
-        MessageRenderType.AUDIO -> {
-            val audioContent = message.content as? AudioContent
-            AudioBubble(
-                content = audioContent,
-                isOwnMessage = isOwnMessage,
-                modifier = modifier,
-                state = audioState,
-                onPlayPauseToggle = if (audioContent == null) {
-                    null
-                } else {
-                    onAudioPlayPauseClick?.let { click -> { click(audioContent) } }
-                },
-                onSeek = if (audioContent == null) null else onAudioSeek?.let { seek -> { frac -> seek(audioContent, frac) } },
+    Column(modifier = modifier) {
+        message.replyTo?.let { reply ->
+            ReplyQuote(
+                reply = reply,
+                modifier = Modifier.padding(bottom = 2.dp),
             )
         }
-        MessageRenderType.FILE -> FileBubble(
-            content = message.content as? FileContent,
-            isOwnMessage = isOwnMessage,
-            modifier = modifier,
-            onFileClick = onFileClick,
-        )
-        MessageRenderType.OTHER -> TextBubble(
-            content = TextContent(strings.unsupportedMessage),
-            isOwnMessage = isOwnMessage,
-            sendStatus = message.sendStatus,
-            modifier = modifier,
-            onRetry = null,
-        )
+        when (message.renderType) {
+            MessageRenderType.TEXT -> TextBubble(
+                content = message.content as? TextContent ?: TextContent(""),
+                isOwnMessage = isOwnMessage,
+                sendStatus = message.sendStatus,
+                modifier = Modifier,
+                formatter = formatter,
+                onRetry = onRetry,
+            )
+            MessageRenderType.IMAGE -> ImageBubble(
+                content = message.content as? ImageContent,
+                isOwnMessage = isOwnMessage,
+                modifier = Modifier,
+                onImageClick = onImageClick,
+            )
+            MessageRenderType.VIDEO -> VideoBubble(
+                content = message.content as? VideoContent,
+                isOwnMessage = isOwnMessage,
+                modifier = Modifier,
+                isPlaying = videoIsPlaying,
+                onPlayClick = onVideoPlayClick,
+            )
+            MessageRenderType.AUDIO -> {
+                val audioContent = message.content as? AudioContent
+                AudioBubble(
+                    content = audioContent,
+                    isOwnMessage = isOwnMessage,
+                    modifier = Modifier,
+                    state = audioState,
+                    onPlayPauseToggle = if (audioContent == null) {
+                        null
+                    } else {
+                        onAudioPlayPauseClick?.let { click -> { click(audioContent) } }
+                    },
+                    onSeek = if (audioContent == null) null else onAudioSeek?.let { seek -> { frac -> seek(audioContent, frac) } },
+                )
+            }
+            MessageRenderType.FILE -> FileBubble(
+                content = message.content as? FileContent,
+                isOwnMessage = isOwnMessage,
+                modifier = Modifier,
+                onFileClick = onFileClick,
+            )
+            MessageRenderType.OTHER -> TextBubble(
+                content = TextContent(strings.unsupportedMessage),
+                isOwnMessage = isOwnMessage,
+                sendStatus = message.sendStatus,
+                modifier = Modifier,
+                onRetry = null,
+            )
+        }
     }
 }

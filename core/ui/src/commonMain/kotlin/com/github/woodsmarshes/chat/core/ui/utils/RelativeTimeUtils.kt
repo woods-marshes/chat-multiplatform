@@ -16,8 +16,10 @@ fun formatRelativeTime(instant: Instant?, strings: com.github.woodsmarshes.chat.
     if (instant == null) return ""
 
     val now = Clock.System.now()
-    val duration = now - instant  // 结果可能是负的（未来）
-    if (duration.isNegative()) return strings.future
+    val duration = now - instant
+    // Tolerates minor clock skew between client and server (up to 60s ahead) as "just now"
+    if (duration.inWholeSeconds < -60) return strings.future
+    if (duration.inWholeSeconds < 60) return strings.justNow
 
     val totalMilliseconds = duration.inWholeMilliseconds
     val diffMinutes = totalMilliseconds / (60 * 1000)

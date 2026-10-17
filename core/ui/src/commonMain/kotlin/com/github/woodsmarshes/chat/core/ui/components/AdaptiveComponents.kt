@@ -403,7 +403,13 @@ fun AppAlertDialog(
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (content != null) {
-                    content()
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .fillMaxWidth(),
+                    ) {
+                        content()
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
                 if (dismissLabel != null || confirmLabel != null) {
