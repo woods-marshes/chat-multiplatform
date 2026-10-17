@@ -50,7 +50,9 @@ suspend fun clearDatabaseData(database: Database) {
 fun connectToH2Database(): Database {
     // Connecting to H2 embedded database
     val hikariConfig = HikariConfig().apply {
-        jdbcUrl = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"
+        // MODE=MySQL: Exposed insertIgnore (sync stream init) is only supported
+        // on H2 in MySQL compatibility mode, which the test suite already runs.
+        jdbcUrl = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;MODE=MySQL"
         driverClassName = "org.h2.Driver"
         username = "root"
         password = ""
@@ -86,7 +88,7 @@ private fun connectThroughHikari(dataSource: HikariDataSource): Database {
     return database
 }
 
-fun connectToH2(): Connection = DriverManager.getConnection("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1", "root", "")
+fun connectToH2(): Connection = DriverManager.getConnection("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;MODE=MySQL", "root", "")
 
 fun connectToPostgres(config: DatabaseConfig): Connection {
     Class.forName("org.postgresql.Driver")
