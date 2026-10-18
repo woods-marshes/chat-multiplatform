@@ -437,9 +437,10 @@ class OfflineFirstMessageRepositoryImpl(
                             }
                             is ConversationEventResponse.ConversationDeleted -> {
                                 runCatching {
+                                    participantDao.removeAllParticipantsFromConversation(event.conversationId)
                                     conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                                     groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
-                                }
+                                }.onFailure { log.warn(it) { "[ws-consume] failed to process ConversationDeleted for ${event.conversationId}" } }
                             }
                             is ConversationEventResponse.UserLeftConversation -> {
                                 runCatching {
@@ -449,7 +450,7 @@ class OfflineFirstMessageRepositoryImpl(
                                         conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                                         groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                                     }
-                                }
+                                }.onFailure { log.warn(it) { "[ws-consume] failed to process UserLeftConversation for ${event.conversationId}" } }
                             }
                             is ConversationEventResponse.ConversationCreated -> {
                                 syncWakeups.tryEmit(Unit)
@@ -635,6 +636,7 @@ class OfflineFirstMessageRepositoryImpl(
                 // from a controlled snapshot — the authoritative current state
                 // replaces both the stale entry and anything after it — then
                 // continue delta pulls from the fresh cursor.
+                log.warn(reset) { "[sync] delta batch requires reset for $scope/$id; re-syncing from snapshot" }
                 syncSnapshot(session, scope, id)
                 syncDeltaAfterSnapshot(session, scope, id)
                 return
@@ -764,6 +766,7 @@ class OfflineFirstMessageRepositoryImpl(
                         event.conversationId, event.readerId, event.messageId,
                     )
                     is ConversationEventResponse.ConversationDeleted -> {
+                        participantDao.removeAllParticipantsFromConversation(event.conversationId)
                         conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                         groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                     }

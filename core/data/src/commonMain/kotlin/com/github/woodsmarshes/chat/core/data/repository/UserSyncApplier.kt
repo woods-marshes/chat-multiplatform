@@ -175,10 +175,15 @@ class UserSyncApplier(
                 // Membership is restored from the conversation detail: inserts
                 // only, so unrelated conversations and rows are never touched.
                 is ConversationEventResponse.UserJoinedConversation -> {
-                    val detail = requireNotNull(prepared.joinedDetails[event.conversationId]) {
-                        "Missing prepared detail for joined conversation ${event.conversationId}"
+                    val detail = prepared.joinedDetails[event.conversationId]
+                    if (detail != null) {
+                        applyJoinedConversationDetail(detail)
+                    } else {
+                        log.warn { "No joined detail available for conversation ${event.conversationId}; resetting USER stream" }
+                        throw UserSyncResetRequiredException(
+                            "Missing prepared detail for joined conversation ${event.conversationId}"
+                        )
                     }
-                    applyJoinedConversationDetail(detail)
                 }
                 is ConversationEventResponse.UserLeftConversation -> {
                     participantDao.removeParticipant(event.conversationId, event.userId)
@@ -186,6 +191,7 @@ class UserSyncApplier(
                     groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                 }
                 is ConversationEventResponse.ConversationDeleted -> {
+                    participantDao.removeAllParticipantsFromConversation(event.conversationId)
                     conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                     groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                 }
