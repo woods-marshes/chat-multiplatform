@@ -36,13 +36,18 @@ import org.koin.fileProperties
 import org.koin.ktor.ext.getKoin
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
+import com.github.woodsmarshes.chat.repository.SyncRepository
 import java.security.MessageDigest
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
 private const val DEFAULT_JWT_EXPIRY_MS = 1L * 60 * 60 * 1000 // 1 hour access token
 private const val EXPIRED_FILE_CLEANUP_MINUTES = 30L
 private const val SESSION_SWEEP_MINUTES = 60L
 private const val ARTIFACT_SWEEP_MINUTES = 60L
+private const val JOURNAL_SWEEP_MINUTES = 360L
+private const val JOURNAL_RETENTION_DAYS = 14L
 // A thumbnail/cover/avatar is only swept when this much older than the last
 // change AND unreferenced — keeps artifacts of in-flight uploads safe.
 private const val ORPHAN_FILE_MIN_AGE_MS = 60L * 60 * 1000
@@ -61,6 +66,7 @@ fun Application.configureFrameworks() {
     configureSessionCleanup()
     configureFileCleanup()
     configureArtifactSweep()
+    configureJournalSweep()
 }
 
 /**
@@ -283,6 +289,24 @@ private fun Application.configureArtifactSweep() {
                 log.error("Artifact sweep failed; retrying next cycle", e)
             }
             delay(ARTIFACT_SWEEP_MINUTES.minutes)
+        }
+    }
+}
+
+private fun Application.configureJournalSweep() {
+    launch(Dispatchers.IO) {
+        val syncRepository = getKoin().get<SyncRepository>()
+        while (isActive) {
+            try {
+                val cutoff = Clock.System.now().minus(JOURNAL_RETENTION_DAYS.days)
+                val swept = syncRepository.sweepExpiredChanges(cutoff)
+                if (swept > 0) log.info("Journal sweep pruned {} expired change(s)", swept)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log.error("Journal sweep failed; retrying next cycle", e)
+            }
+            delay(JOURNAL_SWEEP_MINUTES.minutes)
         }
     }
 }

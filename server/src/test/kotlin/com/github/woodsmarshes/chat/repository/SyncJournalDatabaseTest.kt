@@ -30,6 +30,7 @@ import com.github.woodsmarshes.chat.service.ConversationLifecycleService
 import com.github.woodsmarshes.chat.service.SyncService
 import com.github.woodsmarshes.chat.support.TestDb
 import com.github.woodsmarshes.chat.utils.inTransaction
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -285,14 +286,35 @@ class SyncJournalDatabaseTest {
             val notParticipant = userService.getChanges(outsiderId, SyncScope.CONVERSATION, conversationId, 0L)
             assertTrue(notParticipant.component2() is com.github.woodsmarshes.chat.core.model.error.ConversationError.NotParticipant)
 
-            val unauthorizedSnapshot = userService.getSnapshot(outsiderId, SyncScope.USER, senderId)
-            assertTrue(unauthorizedSnapshot.component2() is com.github.woodsmarshes.chat.core.model.error.ConversationError.PermissionDenied)
-            val snapshot = userService.getSnapshot(senderId, SyncScope.CONVERSATION, conversationId, limit = 10).getOrThrow()
-            assertEquals(SyncScope.CONVERSATION, snapshot.scope)
-            assertEquals(conversationId, snapshot.id)
-            assertEquals(0L, snapshot.revision)
-            assertTrue(snapshot.messages.isEmpty())
-            assertTrue(snapshot.conversations.isEmpty())
+        val unauthorizedSnapshot = userService.getSnapshot(outsiderId, SyncScope.USER, senderId)
+        assertTrue(unauthorizedSnapshot.component2() is com.github.woodsmarshes.chat.core.model.error.ConversationError.PermissionDenied)
+        val snapshot = userService.getSnapshot(senderId, SyncScope.CONVERSATION, conversationId, limit = 10).getOrThrow()
+        assertEquals(SyncScope.CONVERSATION, snapshot.scope)
+        assertEquals(conversationId, snapshot.id)
+        assertEquals(0L, snapshot.revision)
+        assertTrue(snapshot.messages.isEmpty())
+        assertTrue(snapshot.conversations.isEmpty())
+    }
+
+    @Test
+    fun sweepExpiredChangesDeletesOlderRowsAndAdvancesFloor() = runBlocking {
+        repeat(3) { index ->
+            syncRepository.appendChange(SyncScope.CONVERSATION, conversationId, testEvent("expired-$index"))
+        }
+        val cutoff = kotlin.time.Clock.System.now() + 1.seconds
+        kotlinx.coroutines.delay(1100)
+        syncRepository.appendChange(SyncScope.CONVERSATION, conversationId, testEvent("fresh"))
+
+        val swept = syncRepository.sweepExpiredChanges(cutoff)
+        assertEquals(3, swept)
+
+        val batch = syncRepository.getChanges(SyncScope.CONVERSATION, conversationId, 3L, 10)
+        assertFalse(batch.resetRequired)
+        assertEquals(1, batch.changes.size)
+        assertEquals(4L, batch.changes.first().revision)
+
+        val belowFloor = syncRepository.getChanges(SyncScope.CONVERSATION, conversationId, 2L, 10)
+        assertTrue(belowFloor.resetRequired)
     }
 
     private fun testEvent(text: String): RealtimeEvent = ContactEventResponse.ContactAdded(

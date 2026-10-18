@@ -19,6 +19,7 @@ import com.github.woodsmarshes.chat.repository.database.schema.SyncChanges
 import com.github.woodsmarshes.chat.repository.database.schema.SyncStreams
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
+import kotlin.time.Instant
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -104,6 +105,12 @@ interface SyncRepository {
         id: Uuid,
         newMinRetainedRevision: Long,
     ): Int
+
+    /**
+     * Deletes journal entries across all streams created strictly before [cutoff]
+     * and advances their stream retention floors, returning the total deleted row count.
+     */
+    suspend fun sweepExpiredChanges(cutoff: Instant): Int
 }
 
 class SyncDataSourceImpl : SyncRepository {
@@ -464,6 +471,26 @@ class SyncDataSourceImpl : SyncRepository {
                 (SyncChanges.scopeId eq id) and
                 (SyncChanges.revision less clampedFloor)
         }
+    }
+
+    override suspend fun sweepExpiredChanges(cutoff: Instant): Int = dbQuery {
+        val expiredRows = SyncChanges
+            .selectAll()
+            .where { SyncChanges.createdAt less cutoff }
+            .orderBy(SyncChanges.revision to SortOrder.DESC)
+            .toList()
+        if (expiredRows.isEmpty()) return@dbQuery 0
+
+        val maxExpiredByStream = expiredRows
+            .groupBy { it[SyncChanges.scope] to it[SyncChanges.scopeId] }
+            .mapValues { (_, rows) -> rows.first()[SyncChanges.revision] }
+
+        var totalDeleted = 0
+        for ((streamKey, maxExpiredRev) in maxExpiredByStream) {
+            val (scope, scopeId) = streamKey
+            totalDeleted += advanceFloor(scope, scopeId, maxExpiredRev + 1L)
+        }
+        totalDeleted
     }
 
     private fun loadHydratedMessages(messageIds: List<Uuid>): Map<Uuid, Message> {
