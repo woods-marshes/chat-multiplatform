@@ -47,6 +47,7 @@ private const val EXPIRED_FILE_CLEANUP_MINUTES = 30L
 private const val SESSION_SWEEP_MINUTES = 60L
 private const val ARTIFACT_SWEEP_MINUTES = 60L
 private const val JOURNAL_SWEEP_MINUTES = 360L
+private const val JOURNAL_SWEEP_INITIAL_DELAY_MINUTES = 5L
 private const val JOURNAL_RETENTION_DAYS = 14L
 // A thumbnail/cover/avatar is only swept when this much older than the last
 // change AND unreferenced — keeps artifacts of in-flight uploads safe.
@@ -183,6 +184,7 @@ private fun configureSchema(database: Database) {
         exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_request_id ON messages (user_id, conversation_id, client_request_id)"
         )
+        exec("CREATE INDEX IF NOT EXISTS idx_sync_changes_created_at ON sync_changes (created_at)")
     }
 }
 
@@ -296,6 +298,7 @@ private fun Application.configureArtifactSweep() {
 private fun Application.configureJournalSweep() {
     launch(Dispatchers.IO) {
         val syncRepository = getKoin().get<SyncRepository>()
+        delay(JOURNAL_SWEEP_INITIAL_DELAY_MINUTES.minutes)
         while (isActive) {
             try {
                 val cutoff = Clock.System.now().minus(JOURNAL_RETENTION_DAYS.days)

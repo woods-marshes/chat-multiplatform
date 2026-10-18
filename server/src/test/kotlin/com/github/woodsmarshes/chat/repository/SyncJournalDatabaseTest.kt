@@ -317,6 +317,74 @@ class SyncJournalDatabaseTest {
         assertTrue(belowFloor.resetRequired)
     }
 
+    @Test
+    fun sweepExpiredChangesWithBatchingHandlesMultipleStreamsAndAdvancesAllFloors() = runBlocking {
+        val streamA = conversationId
+        val streamB = Uuid.random()
+
+        repeat(3) { index ->
+            syncRepository.appendChange(SyncScope.CONVERSATION, streamA, testEvent("a-expired-$index"))
+            syncRepository.appendChange(SyncScope.CONVERSATION, streamB, testEvent("b-expired-$index"))
+        }
+
+        val cutoff = kotlin.time.Clock.System.now() + 1.seconds
+        kotlinx.coroutines.delay(1100)
+
+        syncRepository.appendChange(SyncScope.CONVERSATION, streamA, testEvent("a-fresh"))
+        syncRepository.appendChange(SyncScope.CONVERSATION, streamB, testEvent("b-fresh"))
+
+        // maxBatchSize = 2 exercises multi-page batch iteration across multiple streams
+        val swept = syncRepository.sweepExpiredChanges(cutoff, maxBatchSize = 2)
+        assertEquals(6, swept)
+
+        // Stream A verification
+        val batchA = syncRepository.getChanges(SyncScope.CONVERSATION, streamA, 3L, 10)
+        assertFalse(batchA.resetRequired)
+        assertEquals(1, batchA.changes.size)
+        assertEquals(4L, batchA.changes.first().revision)
+        assertTrue(syncRepository.getChanges(SyncScope.CONVERSATION, streamA, 2L, 10).resetRequired)
+
+        // Stream B verification
+        val batchB = syncRepository.getChanges(SyncScope.CONVERSATION, streamB, 3L, 10)
+        assertFalse(batchB.resetRequired)
+        assertEquals(1, batchB.changes.size)
+        assertEquals(4L, batchB.changes.first().revision)
+        assertTrue(syncRepository.getChanges(SyncScope.CONVERSATION, streamB, 2L, 10).resetRequired)
+
+        // Idempotency: subsequent sweep after cleanup must be a no-op
+        assertEquals(0, syncRepository.sweepExpiredChanges(cutoff, 2))
+    }
+
+    @Test
+    fun sweepExpiredChangesWithBatchSizeOnePrunesCorrectlyAcrossIterations() = runBlocking {
+        val stream = Uuid.random()
+        repeat(2) { index ->
+            syncRepository.appendChange(SyncScope.CONVERSATION, stream, testEvent("expired-$index"))
+        }
+        val cutoff = kotlin.time.Clock.System.now() + 1.seconds
+        kotlinx.coroutines.delay(1100)
+        syncRepository.appendChange(SyncScope.CONVERSATION, stream, testEvent("fresh"))
+
+        // maxBatchSize = 1 tests the smallest possible batch boundary
+        val swept = syncRepository.sweepExpiredChanges(cutoff, maxBatchSize = 1)
+        assertEquals(2, swept)
+
+        val batch = syncRepository.getChanges(SyncScope.CONVERSATION, stream, 2L, 10)
+        assertFalse(batch.resetRequired)
+        assertEquals(1, batch.changes.size)
+        assertEquals(3L, batch.changes.first().revision)
+        assertTrue(syncRepository.getChanges(SyncScope.CONVERSATION, stream, 1L, 10).resetRequired)
+
+        // Idempotency: subsequent sweep after cleanup must be a no-op
+        assertEquals(0, syncRepository.sweepExpiredChanges(cutoff, 1))
+
+        // Non-positive batch size must be rejected
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            syncRepository.sweepExpiredChanges(cutoff, 0)
+        }
+        Unit
+    }
+
     private fun testEvent(text: String): RealtimeEvent = ContactEventResponse.ContactAdded(
         userId = senderId,
         contactId = outsiderId,

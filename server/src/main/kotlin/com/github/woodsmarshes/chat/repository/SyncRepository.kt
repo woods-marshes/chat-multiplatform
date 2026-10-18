@@ -32,6 +32,7 @@ import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.SQLException
@@ -108,9 +109,11 @@ interface SyncRepository {
 
     /**
      * Deletes journal entries across all streams created strictly before [cutoff]
-     * and advances their stream retention floors, returning the total deleted row count.
+     * in bounded batches of [maxBatchSize]. Streams are processed in deterministic
+     * `(scope, id)` order with independent per-stream transactions, returning the
+     * total deleted row count.
      */
-    suspend fun sweepExpiredChanges(cutoff: Instant): Int
+    suspend fun sweepExpiredChanges(cutoff: Instant, maxBatchSize: Int = 1000): Int
 }
 
 class SyncDataSourceImpl : SyncRepository {
@@ -473,24 +476,36 @@ class SyncDataSourceImpl : SyncRepository {
         }
     }
 
-    override suspend fun sweepExpiredChanges(cutoff: Instant): Int = dbQuery {
-        val expiredRows = SyncChanges
-            .selectAll()
-            .where { SyncChanges.createdAt less cutoff }
-            .orderBy(SyncChanges.revision to SortOrder.DESC)
-            .toList()
-        if (expiredRows.isEmpty()) return@dbQuery 0
-
-        val maxExpiredByStream = expiredRows
-            .groupBy { it[SyncChanges.scope] to it[SyncChanges.scopeId] }
-            .mapValues { (_, rows) -> rows.first()[SyncChanges.revision] }
-
+    override suspend fun sweepExpiredChanges(cutoff: Instant, maxBatchSize: Int): Int {
+        require(maxBatchSize > 0) { "maxBatchSize must be positive, was $maxBatchSize" }
         var totalDeleted = 0
-        for ((streamKey, maxExpiredRev) in maxExpiredByStream) {
-            val (scope, scopeId) = streamKey
-            totalDeleted += advanceFloor(scope, scopeId, maxExpiredRev + 1L)
+        while (true) {
+            val expiredRows = dbQuery {
+                SyncChanges
+                    .select(SyncChanges.scope, SyncChanges.scopeId, SyncChanges.revision)
+                    .where { SyncChanges.createdAt less cutoff }
+                    .limit(maxBatchSize)
+                    .toList()
+            }
+            if (expiredRows.isEmpty()) break
+
+            // Deterministic ordering across distinct streams for predictable progress
+            // and diagnostics. Each stream's floor is advanced in its own short transaction
+            // via advanceFloor to avoid holding table/row locks across multiple streams.
+            val maxExpiredByStream = expiredRows
+                .groupBy { it[SyncChanges.scope] to it[SyncChanges.scopeId] }
+                .mapValues { (_, rows) -> rows.maxOf { it[SyncChanges.revision] } }
+                .toList()
+                .sortedWith(compareBy<Pair<Pair<SyncScope, Uuid>, Long>> { it.first.first.ordinal }.thenBy { it.first.second.toString() })
+
+            for ((streamKey, maxRev) in maxExpiredByStream) {
+                val (scope, scopeId) = streamKey
+                totalDeleted += advanceFloor(scope, scopeId, maxRev + 1L)
+            }
+
+            if (expiredRows.size < maxBatchSize) break
         }
-        totalDeleted
+        return totalDeleted
     }
 
     private fun loadHydratedMessages(messageIds: List<Uuid>): Map<Uuid, Message> {

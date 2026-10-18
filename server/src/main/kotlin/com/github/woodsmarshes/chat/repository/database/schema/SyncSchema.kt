@@ -47,5 +47,6 @@ object SyncChanges : Table("sync_changes") {
 
     init {
         index("idx_sync_changes_message_id", false, messageId)
+        index("idx_sync_changes_created_at", false, createdAt)
     }
 }
