@@ -27,6 +27,7 @@ import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
 import io.ktor.client.plugins.ResponseException
 import io.ktor.http.HttpStatusCode
@@ -184,6 +185,10 @@ class UserSyncApplier(
                     conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                     groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                 }
+                is ConversationEventResponse.ConversationDeleted -> {
+                    conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
+                    groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                }
                 // Personal preferences only: never overwrites the read cursor,
                 // role, or join date of the participant row.
                 is ConversationEventResponse.PersonalSettingsUpdated -> participantDao.updateSettings(
@@ -212,9 +217,14 @@ class UserSyncApplier(
             is ConversationEventResponse.GroupJoinRequestHandled,
             is ConversationEventResponse.UserJoinedConversation,
             is ConversationEventResponse.UserLeftConversation,
+            is ConversationEventResponse.ConversationDeleted,
             is ConversationEventResponse.PersonalSettingsUpdated -> Unit
             is MessageEventResponse.Read -> Unit
-            else -> error("Unsupported USER sync event: ${event::class.simpleName}")
+            else -> log.warn { "Skipping unsupported or unknown USER sync event: ${event::class.simpleName}" }
         }
+    }
+
+    companion object {
+        private val log = KotlinLogging.logger {}
     }
 }

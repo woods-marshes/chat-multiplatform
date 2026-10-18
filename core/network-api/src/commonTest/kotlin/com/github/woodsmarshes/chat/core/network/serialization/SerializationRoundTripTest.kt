@@ -123,6 +123,15 @@ class SerializationRoundTripTest {
     }
 
     @Test
+    fun `unknown polymorphic RealtimeEvent decodes to UnknownRealtimeEvent fallback`() {
+        val json = """{"type":"com.future.company.BrandNewEvent","id":"123","extraPayload":{"nested":true}}"""
+
+        val decoded = ProjectJson.decodeFromString(RealtimeEvent.serializer(), json)
+
+        assertEquals(com.github.woodsmarshes.chat.core.network.dto.events.UnknownRealtimeEvent, decoded)
+    }
+
+    @Test
     fun `reply chain round-trips recursively through JSON`() {
         val original = textMessage(senderName = "alice")
         val reply = Message(

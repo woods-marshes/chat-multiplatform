@@ -565,7 +565,13 @@ class OfflineFirstMessageRepositoryImpl(
     val userHead = heads.firstOrNull { it.scope == SyncScope.USER }
     if (userHead != null) {
         // User-scoped entities can seed foreign-key rows needed by conversation sync.
-        syncStream(session, userHead.scope, userHead.id)
+        try {
+            syncStream(session, userHead.scope, userHead.id)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            log.warn(failure) { "[sync] user stream failed for ${userHead.id}; continuing with conversation streams" }
+        }
     }
     heads.asSequence()
         .filter { it.scope == SyncScope.CONVERSATION }
@@ -770,9 +776,9 @@ class OfflineFirstMessageRepositoryImpl(
                     }
                     is ConversationEventResponse.GroupJoinRequest,
                     is ConversationEventResponse.GroupJoinRequestHandled,
-                    is ContactEventResponse -> error("Unexpected USER event in conversation scope")
+                    is ContactEventResponse -> log.warn { "Unexpected USER event in conversation scope at revision ${change.revision}: ${event::class.simpleName}" }
                     is ConversationEventResponse -> Unit // Metadata was refreshed successfully above.
-                    else -> error("Unsupported journal event at revision ${change.revision}: ${event::class.simpleName}")
+                    else -> log.warn { "Skipping unsupported conversation journal event at revision ${change.revision}: ${event::class.simpleName}" }
                     }
                 }
                 messageDao.setScopeCursor(scope.name, id, batch.nextRevision)

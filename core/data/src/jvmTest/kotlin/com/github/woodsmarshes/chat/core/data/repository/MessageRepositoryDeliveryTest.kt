@@ -1878,6 +1878,47 @@ class MessageRepositoryDeliveryTest {
         }
     }
 
+    @Test
+    fun conversationDeletedInUserSyncBatchSoftDeletesConversationAndAdvancesCursor() = runTest {
+        userSyncFixture { repo, dao, _, rest, contactApi, db ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, false, false,
+                listOf(
+                    SyncChange(2L, ConversationEventResponse.ConversationDeleted(conversationId, userId, now)),
+                ),
+            )
+            db.conversationsQueries.upsertConversation(ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId))
+            val conv = db.conversationsQueries.getConversationById(conversationId).executeAsOneOrNull()
+            assertNotNull(conv?.deleted_at, "conversation must be soft-deleted by ConversationDeleted in USER stream")
+        }
+    }
+
+    @Test
+    fun unknownEventInUserSyncBatchIsSkippedAndCursorAdvances() = runTest {
+        userSyncFixture { repo, dao, _, rest, contactApi, _ ->
+            dao.setScopeCursor(SyncScope.USER.name, userId, 1L)
+            coEvery { contactApi.getContacts() } returns emptyList()
+            coEvery { contactApi.getContactRequests() } returns emptyList()
+            coEvery { rest.getSyncHeads() } returns userHeads(2L)
+            coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
+                SyncScope.USER, userId, 1L, 2L, false, false,
+                listOf(
+                    SyncChange(2L, com.github.woodsmarshes.chat.core.network.dto.events.UnknownRealtimeEvent),
+                ),
+            )
+            repo.startSession(); runCurrent()
+
+            assertEquals(2L, dao.getScopeCursor(SyncScope.USER.name, userId), "unknown event must not crash sync or prevent cursor advance")
+        }
+    }
+
 
 
 

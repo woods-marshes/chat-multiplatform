@@ -18,6 +18,7 @@ import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.dto.events.SocketErrorResponse
 import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.network.dto.events.UnknownRealtimeEvent
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
@@ -58,6 +59,8 @@ val ProjectSerializersModule = SerializersModule {
         subclassesOfSealed<ConversationEventResponse>()
         subclassesOfSealed<SyncStateResponse>()
         subclass(SocketErrorResponse::class)
+        subclass(UnknownRealtimeEvent::class)
+        defaultDeserializer { UnknownRealtimeEvent.serializer() }
     }
     polymorphic(MessageEventResponse::class) {
         subclassesOfSealed<MessageEventResponse>()
