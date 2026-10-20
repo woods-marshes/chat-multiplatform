@@ -5,6 +5,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
 import androidx.paging.cachedIn
 
 import com.github.michaelbull.result.onErr
@@ -151,7 +153,7 @@ class ChatViewModel(
             log.info { "[ChatVM-messages] getMeFlow emitted userId=$userId" }
         }
         .flatMapLatest { ownUserId ->
-            val uid = ownUserId ?: return@flatMapLatest flowOf(PagingData.empty())
+            val uid = ownUserId ?: return@flatMapLatest flowOf(pendingMessagePage())
             log.info { "[ChatVM-messages] flatMapLatest calling getMessages(ownUserId=$uid)" }
             conversationUuid?.let { convId ->
                 messageRepository.getMessages(
@@ -457,3 +459,12 @@ class ChatViewModel(
         const val TYPING_TICK_MS = 1_000L
     }
 }
+
+/** Missing session identity is pending initialization, not an empty conversation. */
+internal fun pendingMessagePage(): PagingData<MessageUiModel> = PagingData.empty(
+    sourceLoadStates = LoadStates(
+        refresh = LoadState.Loading,
+        prepend = LoadState.NotLoading(false),
+        append = LoadState.NotLoading(false),
+    ),
+)

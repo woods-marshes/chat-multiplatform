@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.core.ui.components
 import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -107,21 +108,26 @@ fun ChatConversationTopBar(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (showAvatar) {
-                    UserAvatar(
-                        name = avatarName,
-                        avatarUrl = avatarUrl,
-                        modifier = Modifier.sharedConversationBounds(conversationId, "avatar"),
-                        size = 40.dp,
-                    )
+                        UserAvatar(
+                            name = avatarName,
+                            avatarUrl = avatarUrl,
+                            modifier = Modifier.sharedConversationBounds(conversationId, "avatar"),
+                            size = 40.dp,
+                        )
                     } else {
                         Spacer(Modifier.width(40.dp).height(40.dp))
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    // Move the subtitle with its title, not underneath the flying avatar.
+                    Column(
+                        modifier = Modifier
+                            .sharedConversationBounds(conversationId, "title")
+                            .height(40.dp),
+                        verticalArrangement = Arrangement.Center,
+                    ) {
                         if (isMiuix) {
                             MiuixText(
                                 text = title,
-                                modifier = Modifier.sharedConversationBounds(conversationId, "title"),
                                 style = MiuixTheme.textStyles.headline2,
                                 fontWeight = FontWeight.SemiBold,
                                 color = titleColor,
@@ -140,7 +146,6 @@ fun ChatConversationTopBar(
                         } else {
                             Text(
                                 text = title,
-                                modifier = Modifier.sharedConversationBounds(conversationId, "title"),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = titleColor,

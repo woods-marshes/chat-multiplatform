@@ -381,50 +381,37 @@ fun ChatScreen(
                 .fillMaxSize()
                 .consumeWindowInsets(padding)
         ) {
-            // Keep the previous frame's content visually present while a short
-            // open transition runs: a full-screen spinner that appears before
-            // Room's first page lands flashes on every chat open.
+            val initialContent = chatInitialContent(lazyMessages.itemCount, lazyMessages.loadState)
             var showInitialLoading by remember { mutableStateOf(false) }
-            val refreshState = lazyMessages.loadState.refresh
-            val awaitingFirstPage = refreshState is LoadState.Loading && lazyMessages.itemCount == 0
-            LaunchedEffect(awaitingFirstPage) {
-                if (awaitingFirstPage) {
+            LaunchedEffect(initialContent) {
+                showInitialLoading = false
+                if (initialContent == ChatInitialContent.Loading) {
                     delay(AppMotion.LoadingRevealDelayMillis)
-                    if (lazyMessages.loadState.refresh is LoadState.Loading &&
-                        lazyMessages.itemCount == 0
-                    ) {
-                        showInitialLoading = true
-                    }
-                } else {
-                    showInitialLoading = false
+                    showInitialLoading = true
                 }
             }
-            when {
-                awaitingFirstPage -> {
+            when (initialContent) {
+                ChatInitialContent.Loading -> {
                     if (showInitialLoading) {
                         LoadingContent(
                             modifier = Modifier.fillMaxSize().padding(padding),
                         )
                     }
                 }
-                refreshState is LoadState.Error && lazyMessages.itemCount == 0 -> {
+                ChatInitialContent.Error -> {
                     ErrorContent(
                         message = strings.loadFailed,
                         modifier = Modifier.fillMaxSize().padding(padding),
                         onRetry = { lazyMessages.retry() },
                     )
                 }
-                // During mediator-led refresh nothing is on screen yet; this is
-                // not the "conversation has no messages" empty state.
-                lazyMessages.itemCount == 0 &&
-                    refreshState is LoadState.NotLoading &&
-                    lazyMessages.loadState.mediator?.refresh !is LoadState.Loading -> {
+                ChatInitialContent.Empty -> {
                     EmptyContent(
                         message = strings.noMessages,
                         modifier = Modifier.fillMaxSize().padding(padding),
                     )
                 }
-                else -> {
+                ChatInitialContent.Messages -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
