@@ -47,6 +47,7 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedSettingsProfileBounds
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
@@ -93,7 +94,7 @@ fun SettingsScreen(
             ChatTopAppBar(
                 title = strings.settingsTitle,
                 showBackButton = false,
-                showAccountAffordance = true,
+                showAccountAffordance = inMultiPane,
             )
         }
     ) { padding ->
@@ -205,12 +206,14 @@ private fun PersonalProfileCard(
             UserAvatar(
                 name = displayTitle,
                 avatarUrl = uiState.avatarUrl,
+                modifier = Modifier.sharedSettingsProfileBounds("avatar"),
                 size = 56.dp,
             )
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = displayTitle,
+                    modifier = Modifier.sharedSettingsProfileBounds("title"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = contentColor,

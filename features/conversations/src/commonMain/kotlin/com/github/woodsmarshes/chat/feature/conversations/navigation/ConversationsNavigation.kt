@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 data object ConversationsNavKey : NavKey
 
 fun EntryProviderScope<NavKey>.conversationsEntry(
-    onNavigateToChat: (conversationId: String, isGroup: Boolean) -> Unit,
+    onNavigateToChat: (conversationId: String, isGroup: Boolean, title: String?, avatarUrl: String?) -> Unit,
     onGroupInfoClick: (conversationId: String) -> Unit,
     selectedConversationId: () -> String? = { null },
     onMenuClick: (() -> Unit)? = null,

@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.chat.ui
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -50,6 +51,9 @@ class ChatViewModel(
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
 
+    // Retain the keyed viewport with the conversation while a detail entry covers it.
+    val messageListState = LazyListState()
+
     val connectionState = messageRepository.connectionState
 
     private val log = KotlinLogging.logger {}
@@ -65,6 +69,8 @@ class ChatViewModel(
      * scopes reading [uiState] (the message list above all), so the input
      * bar collects this separately in its own recompose scope.
      */
+    private var draftRevision = 0L
+    private var replyRevision = 0L
     private val _input = MutableStateFlow(TextFieldValue())
     val input: StateFlow<TextFieldValue> = _input.asStateFlow()
 
@@ -140,6 +146,7 @@ class ChatViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val messages: Flow<PagingData<MessageUiModel>> = userRepository.getMeFlow()
         .map { it?.id }
+        .distinctUntilChanged()
         .onEach { userId ->
             log.info { "[ChatVM-messages] getMeFlow emitted userId=$userId" }
         }
@@ -182,8 +189,10 @@ class ChatViewModel(
     }
 
     fun onInputChanged(value: TextFieldValue) {
+        val contentChanged = _input.value.text != value.text
+        if (contentChanged) draftRevision++
         _input.value = value
-        onTextInputChanged(value.text)
+        if (contentChanged) onTextInputChanged(value.text)
     }
 
     fun insertEmoji(emoji: String) {
@@ -192,10 +201,11 @@ class ChatViewModel(
             emoji +
             input.text.substring(input.selection.end)
         val newCursor = input.selection.start + emoji.length
-        _input.value = input.copy(
+        onInputChanged(input.copy(
             text = newText,
             selection = androidx.compose.ui.text.TextRange(newCursor),
-        )
+            composition = null,
+        ))
     }
 
     fun sendMessage() {
@@ -205,7 +215,6 @@ class ChatViewModel(
         sendContent(
             text = text,
             replyToMessageId = _uiState.value.replyToMessage?.id,
-            clearInputOnSuccess = true,
         )
     }
 
@@ -232,12 +241,14 @@ class ChatViewModel(
         }
     }
 
-    private fun sendContent(text: String, replyToMessageId: Uuid?, clearInputOnSuccess: Boolean) {
+    private fun sendContent(text: String, replyToMessageId: Uuid?) {
         // A double tap must not create a second message: the repository mints a fresh
         // request id per call, so the duplicate would be a real second bubble.
         if (_uiState.value.isSending) return
         val conversationId = conversationUuid ?: return
 
+        val submittedDraftRevision = draftRevision
+        val submittedReplyRevision = replyRevision
         log.info { "[ChatVM] sendMessage triggered" }
 
         _uiState.update { it.copy(isSending = true) }
@@ -250,23 +261,24 @@ class ChatViewModel(
             )
             result.onOk {
                 log.info { "[ChatVM] sendMessage result OK" }
-                // Clear the input only after a confirmed send: on failure the
-                // user keeps their draft instead of losing it.
-                if (clearInputOnSuccess) {
-                    _input.value = TextFieldValue()
+                // Repository success accepts the local outbox submission, not server delivery.
+                if (draftRevision == submittedDraftRevision) {
+                    onInputChanged(TextFieldValue())
                 }
+                if (replyRevision == submittedReplyRevision) clearReplyTo()
                 _uiState.update { it.copy(isSending = false, error = null) }
-                clearReplyTo()
             }.onErr {
                 log.warn { "[ChatVM] sendMessage result ERR: ${it.message}" }
                 _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
-                clearReplyTo()
             }
-            stopTyping(conversationId)
+            if (draftRevision == submittedDraftRevision || _input.value.text.isBlank()) {
+                stopTyping(conversationId)
+            }
         }
     }
 
     fun setReplyTo(message: MessageUiModel) {
+        if (_uiState.value.replyToMessage?.id != message.id) replyRevision++
         _uiState.update { it.copy(replyToMessage = message) }
     }
 
@@ -276,6 +288,7 @@ class ChatViewModel(
     }
 
     fun clearReplyTo() {
+        if (_uiState.value.replyToMessage != null) replyRevision++
         _uiState.update { it.copy(replyToMessage = null) }
     }
 

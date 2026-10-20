@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.onConsumedWindowInsetsChanged
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -87,12 +86,14 @@ fun ChatInputBar(
     onFileClick: (() -> Unit)? = null,
     onVoiceClick: (() -> Unit)? = null,
     enabled: Boolean = true,
+    isSending: Boolean = false,
 ) {
     val bubbleColors = LocalBubbleColors.current
     val strings = LocalStrings.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val textFieldFocusRequester = remember { FocusRequester() }
+    var inputFocused by remember { mutableStateOf(false) }
     val localDensity = LocalDensity.current
     val ime = WindowInsets.ime
     val navigationBars = WindowInsets.navigationBars
@@ -122,8 +123,12 @@ fun ChatInputBar(
 
     LaunchedEffect(panelState, panelState.awaitingKeyboard) {
         if (panelState.awaitingKeyboard) {
-            textFieldFocusRequester.requestFocus()
-            keyboardController?.show()
+            // A text-field tap already starts the platform input session.
+            // Only panel-button handoff needs an explicit focus/show request.
+            if (!inputFocused) {
+                textFieldFocusRequester.requestFocus()
+                keyboardController?.show()
+            }
             // A hardware keyboard or floating IME never starts an inset animation. If nothing
             // has started shortly after the request, release the reservation right away.
             delay(KeyboardStartTimeout)
@@ -235,6 +240,7 @@ fun ChatInputBar(
                     .weight(1f)
                     .focusRequester(textFieldFocusRequester)
                     .onFocusChanged {
+                        inputFocused = it.isFocused
                         // Focus is already being gained here; calling switchToKeyboard would loop.
                         if (it.isFocused) panelState.requestKeyboard(animation.reportsImeInsets)
                     }
@@ -267,9 +273,11 @@ fun ChatInputBar(
             val hasText = value.text.isNotBlank()
             IconButton(
                 onClick = {
-                    if (value.text.isNotBlank()) onSend() else onVoiceClick?.invoke()
+                    if (!isSending) {
+                        if (value.text.isNotBlank()) onSend() else onVoiceClick?.invoke()
+                    }
                 },
-                enabled = enabled,
+                enabled = enabled && !isSending,
             ) {
                 Icon(
                     imageVector = if (hasText) MiuixIcons.Send else MiuixIcons.Mic,
@@ -330,22 +338,25 @@ private fun InputAreaHost(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    var consumedBottom by remember { mutableStateOf(0) }
     val density = LocalDensity.current
+    // Invalidate Scaffold's lookahead subcomposition when IME geometry changes.
+    // Keep the original single reservation and consumed-inset accounting.
+    val total = state.occupiedHeight(
+        current = ime.getBottom(density),
+        source = animation.source.getBottom(density),
+        target = animation.target.getBottom(density),
+        navigation = navigationBars.getBottom(density),
+    )
+    // The chat bottom bar owns its safe area; ancestor navigation-bar animations
+    // must not alter its reservation when returning from a detail entry.
+    val reservedHeight = total
+    val reservedNavigation = navigationBars.getBottom(density)
     Layout(
         content = content,
-        modifier = modifier.onConsumedWindowInsetsChanged {
-            consumedBottom = it.getBottom(density)
-        },
+        modifier = modifier,
     ) { measurables, constraints ->
-        val total = state.occupiedHeight(
-            current = ime.getBottom(this),
-            source = animation.source.getBottom(this),
-            target = animation.target.getBottom(this),
-            navigation = navigationBars.getBottom(this),
-        )
-        val height = constraints.constrainHeight((total - consumedBottom).coerceAtLeast(0))
-        val navigation = (navigationBars.getBottom(this) - consumedBottom).coerceAtLeast(0)
+        val height = constraints.constrainHeight(reservedHeight)
+        val navigation = reservedNavigation
         val contentHeight = (height - navigation).coerceAtLeast(0)
         val width = constraints.maxWidth
         val children = measurables.map {

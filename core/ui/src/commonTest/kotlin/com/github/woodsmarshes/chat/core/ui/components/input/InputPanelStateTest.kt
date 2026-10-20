@@ -7,6 +7,56 @@ import kotlin.test.assertTrue
 
 class InputPanelStateTest {
     @Test
+    fun repeatedKeyboardHandoffsIgnoreTransientOversizedTargets() {
+        val state = InputPanelState()
+        state.observeIme(1048, 1048, 1048)
+        repeat(6) {
+            state.openPanel(InputSelector.EMOJI, 1048, 742)
+            state.observeIme(0, 0, 0)
+            state.requestKeyboard()
+            for (current in listOf(0, 170, 718, 1044, 1107, 1134)) {
+                assertEquals(1048, state.occupiedHeight(current, 0, 1135, 66))
+            }
+            state.observeIme(1048, 1048, 1048)
+            assertEquals(1048, state.occupiedHeight(1048, 1048, 1048, 66))
+            assertFalse(state.awaitingKeyboard)
+        }
+    }
+
+    @Test
+    fun realKeyboardSizeChangeTakesOverWhenSettled() {
+        for (newHeight in listOf(800, 1200)) {
+            val state = InputPanelState()
+            state.observeIme(1048, 1048, 1048)
+            state.openPanel(InputSelector.IMAGE, 0, 742)
+            state.requestKeyboard()
+            assertEquals(1048, state.occupiedHeight(newHeight / 2, 0, newHeight, 66))
+            state.observeIme(newHeight, newHeight, newHeight)
+            assertEquals(newHeight, state.stableImeHeightPx)
+            assertEquals(newHeight, state.occupiedHeight(newHeight, newHeight, newHeight, 66))
+        }
+    }
+
+    @Test
+    fun fullKeyboardPanelCycleKeepsOneReservation() {
+        val state = InputPanelState()
+        state.observeIme(360, 360, 360)
+        state.openPanel(InputSelector.EMOJI, 360, 270)
+        for (ime in listOf(360, 270, 180, 90, 0)) {
+            assertEquals(360, state.occupiedHeight(ime, 360, 0, 24))
+        }
+        state.openPanel(InputSelector.IMAGE, 0, 270)
+        assertEquals(360, state.occupiedHeight(0, 0, 0, 24))
+        state.requestKeyboard()
+        for (ime in listOf(0, 90, 180, 270, 360)) {
+            assertEquals(360, state.occupiedHeight(ime, 0, 360, 24))
+        }
+        state.observeIme(360, 360, 360)
+        state.close()
+        assertEquals(24, state.occupiedHeight(0, 0, 0, 24))
+    }
+
+    @Test
     fun animationFramesDoNotOverwriteStableHeight() {
         val state = InputPanelState()
         state.observeIme(100, 0, 300)

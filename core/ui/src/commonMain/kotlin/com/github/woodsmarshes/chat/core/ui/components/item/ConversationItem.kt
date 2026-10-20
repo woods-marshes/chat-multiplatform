@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.chat.core.ui.components.item
-import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -84,12 +84,14 @@ fun ConversationItem(
                     participants = conversation.memberAvatars,
                     name = conversation.name,
                     avatarUrl = conversation.avatarUrl,
+                    modifier = Modifier.sharedConversationBounds(conversation.id.toString(), "avatar"),
                     size = 52.dp,
                 )
             } else {
                 UserAvatar(
                     name = conversation.name,
                     avatarUrl = conversation.avatarUrl,
+                    modifier = Modifier.sharedConversationBounds(conversation.id.toString(), "avatar"),
                     size = 52.dp,
                 )
             }
@@ -129,6 +131,7 @@ fun ConversationItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = convName,
+                modifier = Modifier.sharedConversationBounds(conversation.id.toString(), "title"),
                 color = if (selected) selectedTextColor else bubbleColors.onSurfaceColor,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,

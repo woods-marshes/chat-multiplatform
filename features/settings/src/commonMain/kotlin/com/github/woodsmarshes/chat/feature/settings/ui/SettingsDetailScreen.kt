@@ -98,6 +98,7 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedSettingsProfileBounds
 import com.github.woodsmarshes.chat.core.ui.components.item.SectionHeader
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItem
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItemWithSwitch
@@ -253,8 +254,11 @@ private fun ProfileEditContent(
             .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Centered avatar header (matches ProfileScreen & GroupInfoScreen)
-        Box(contentAlignment = Alignment.BottomEnd) {
+        // Keep the edit badge and upload indicator attached throughout the shared transition.
+        Box(
+            modifier = Modifier.sharedSettingsProfileBounds("avatar"),
+            contentAlignment = Alignment.BottomEnd,
+        ) {
             UserAvatar(
                 name = uiState.editDisplayName.ifEmpty {
                     uiState.displayName.ifEmpty { uiState.username }
@@ -303,6 +307,7 @@ private fun ProfileEditContent(
             text = uiState.displayName.ifEmpty {
                 uiState.username.ifEmpty { strings.settingsCategoryProfile }
             },
+            modifier = Modifier.sharedSettingsProfileBounds("title"),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,

@@ -52,6 +52,7 @@ import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItem
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedUserBounds
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
@@ -148,11 +149,13 @@ fun ProfileScreen(
                     UserAvatar(
                         name = primaryTitle,
                         avatarUrl = uiState.avatarUrl,
+                        modifier = Modifier.sharedUserBounds(userId, "avatar"),
                         size = 120.dp,
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                     Text(
                         text = primaryTitle,
+                        modifier = Modifier.sharedUserBounds(userId, "title"),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,

@@ -75,7 +75,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationsScreen(
-    onConversationClick: (conversationId: String, isGroup: Boolean) -> Unit,
+    onConversationClick: (conversationId: String, isGroup: Boolean, title: String?, avatarUrl: String?) -> Unit,
     onGroupInfoClick: (conversationId: String) -> Unit,
     modifier: Modifier = Modifier,
     selectedConversationId: String? = null,
@@ -184,7 +184,9 @@ fun ConversationsScreen(
                             onClick = {
                                 onConversationClick(
                                     conv.id.toString(),
-                                    conv.type == ConversationType.GROUP
+                                    conv.type == ConversationType.GROUP,
+                                    conv.name,
+                                    conv.avatarUrl,
                                 )
                             },
                         )
@@ -207,7 +209,7 @@ fun ConversationsScreen(
         confirmLabel = strings.create,
         onConfirm = {
             viewModel.createGroup { createdId ->
-                onConversationClick(createdId, true)
+                onConversationClick(createdId, true, null, null)
             }
         },
         confirmEnabled = canConfirmCreate,

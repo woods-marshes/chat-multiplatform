@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat.feature.chat.ui
 
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.paging.PagingData
+import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
@@ -62,6 +63,7 @@ class ChatViewModelTest {
     private val retriedMessageIds = mutableListOf<Uuid>()
     private val readReceipts = mutableListOf<Pair<Uuid, Uuid>>()
     private val lastMessageId = Uuid.parse("00000000-0000-0000-0000-000000000002")
+    private var sendError: MessageError? = null
     private var sendInvocations = 0
     private var sendGate: (suspend () -> Unit)? = null
 
@@ -76,6 +78,7 @@ class ChatViewModelTest {
             },
             onSendStarted = { sendInvocations++ },
             onSendGate = { sendGate?.invoke() },
+            sendError = { sendError },
             onTyping = { id, isTyping -> typingSignals += id to isTyping },
             onRetry = { messageId -> retriedMessageIds += messageId },
             onMarkAsRead = { id, messageId -> readReceipts += id to messageId },
@@ -341,6 +344,85 @@ class ChatViewModelTest {
         }
     }
 
+    @Test
+    fun successfulSubmissionClearsUnchangedDraftAndReply() = pendingSubmission { vm, gate ->
+        gate.complete(Unit)
+        assertEquals("", vm.input.value.text)
+        assertNull(vm.uiState.value.replyToMessage)
+        assertFalse(vm.uiState.value.isSending)
+    }
+
+    @Test
+    fun successfulSubmissionPreservesEditedDraftAndNewReply() = pendingSubmission { vm, gate ->
+        val nextReply = testMessage("next")
+        vm.onInputChanged(TextFieldValue("next draft"))
+        vm.setReplyTo(nextReply)
+        gate.complete(Unit)
+        assertEquals("next draft", vm.input.value.text)
+        assertEquals(nextReply.id, vm.uiState.value.replyToMessage?.id)
+        assertEquals(TextContent("original"), sentMessages.single().second)
+        assertEquals(testMessage("original reply").id, sentReplies.single().second)
+        assertEquals(true, typingSignals.last().second)
+    }
+
+    @Test
+    fun editingBackToOriginalTextStillPreservesDraft() = pendingSubmission { vm, gate ->
+        vm.onInputChanged(TextFieldValue("changed"))
+        vm.onInputChanged(TextFieldValue("original"))
+        gate.complete(Unit)
+        assertEquals("original", vm.input.value.text)
+    }
+
+    @Test
+    fun selectionChangeDoesNotPreventSubmittedDraftCleanup() = pendingSubmission { vm, gate ->
+        vm.onInputChanged(TextFieldValue("original", androidx.compose.ui.text.TextRange(3)))
+        gate.complete(Unit)
+        assertEquals("", vm.input.value.text)
+    }
+
+    @Test
+    fun reselectingOriginalReplyPreservesNewReplyIntent() = pendingSubmission { vm, gate ->
+        vm.clearReplyTo()
+        vm.setReplyTo(testMessage("original reply"))
+        gate.complete(Unit)
+        assertEquals(testMessage("original reply").id, vm.uiState.value.replyToMessage?.id)
+    }
+
+    @Test
+    fun failedSubmissionPreservesDraftAndReply() = pendingSubmission { vm, gate ->
+        sendError = MessageError.PermissionDenied
+        gate.complete(Unit)
+        assertEquals("original", vm.input.value.text)
+        assertEquals(testMessage("original reply").id, vm.uiState.value.replyToMessage?.id)
+        assertFalse(vm.uiState.value.isSending)
+        assertTrue(vm.uiState.value.error != null)
+    }
+
+    @Test
+    fun emojiInsertionDuringSubmissionPreservesDraft() = pendingSubmission { vm, gate ->
+        vm.insertEmoji("🙂")
+        val draft = vm.input.value
+        gate.complete(Unit)
+        assertEquals(draft, vm.input.value)
+    }
+
+    private fun pendingSubmission(block: (ChatViewModel, CompletableDeferred<Unit>) -> Unit) {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val gate = CompletableDeferred<Unit>()
+            sendGate = { gate.await() }
+            withViewModel { vm ->
+                vm.onInputChanged(TextFieldValue("original"))
+                vm.setReplyTo(testMessage("original reply"))
+                vm.sendMessage()
+                assertTrue(vm.uiState.value.isSending)
+                block(vm, gate)
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     private fun testMessage(seed: String): MessageUiModel {
         val hex = seed.hashCode().toUInt().toString(16).padStart(12, '0').take(12)
         val id = Uuid.parse("00000000-0000-0000-0000-$hex")
@@ -435,6 +517,7 @@ private class FakeMessageRepository(
     private val onSend: (Uuid, MessageContent, Uuid?) -> Unit = { _, _, _ -> },
     private val onSendStarted: () -> Unit = {},
     private val onSendGate: suspend () -> Unit = {},
+    private val sendError: () -> MessageError? = { null },
     private val onTyping: (Uuid, Boolean) -> Unit = { _, _ -> },
     private val onRetry: (Uuid) -> Unit = {},
     private val onMarkAsRead: (Uuid, Uuid) -> Unit = { _, _ -> },
@@ -461,6 +544,7 @@ private class FakeMessageRepository(
     ): com.github.michaelbull.result.Result<Unit, MessageError> {
         onSendStarted()
         onSendGate()
+        sendError()?.let { return Err(it) }
         onSend(conversationId, content, replyToMessageId)
         return Ok(Unit)
     }

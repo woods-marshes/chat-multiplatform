@@ -73,6 +73,11 @@ internal class InputPanelState {
     }
 
     fun occupiedHeight(current: Int, source: Int, target: Int, navigation: Int): Int {
+        // Some IMEs report a transient oversized animation target on repeated openings.
+        // Preserve the measured panel reservation until actual settled geometry takes over.
+        if (awaitingKeyboard && stableImeHeightPx > 0) {
+            return maxOf(panelHeightPx, navigation)
+        }
         val reserved = when {
             selector != InputSelector.NONE -> panelHeightPx
             awaitingKeyboard -> {

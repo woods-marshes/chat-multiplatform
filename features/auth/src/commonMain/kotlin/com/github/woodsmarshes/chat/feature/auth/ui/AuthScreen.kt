@@ -103,38 +103,32 @@ private fun AuthScreenContent(
 
     val brandingBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
         keyframes {
-            durationMillis = 600
+            durationMillis = 320
             initialBounds at 0 using ArcMode.ArcAbove using FastOutSlowInEasing
-            targetBounds at 600
+            targetBounds at 320
         }
     }
 
     val formBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
         keyframes {
-            durationMillis = 600
+            durationMillis = 320
             initialBounds at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
-            targetBounds at 600
+            targetBounds at 320
         }
     }
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .imePadding(),
+            .fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        if (!isDesktopOrTablet && uiState.screenState == AuthScreenState.Loading) {
-            ScreenEdgeGlow(
-                enabled = true,
-                cornerRadius = rememberScreenCornerRadius(),
-            )
-        }
         AnimatedContent(
+            modifier = Modifier.fillMaxSize().imePadding(),
             targetState = isDesktopOrTablet,
             label = "Auth-LayoutTransition",
             transitionSpec = {
-                fadeIn(animationSpec = tween(500)) togetherWith
-                        fadeOut(animationSpec = tween(500))
+                fadeIn(animationSpec = tween(220)) togetherWith
+                        fadeOut(animationSpec = tween(220))
             }
         ) { targetIsDesktopOrTablet ->
 
@@ -250,9 +244,14 @@ private fun AuthScreenContent(
                 }
             }
         }
+        // Keep the decorative overlay outside the form's IME-resized bounds.
+        ScreenEdgeGlow(
+            enabled = !isDesktopOrTablet && uiState.screenState == AuthScreenState.Loading,
+            cornerRadius = rememberScreenCornerRadius(),
+        )
         AppSnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.align(Alignment.BottomCenter).imePadding(),
         )
     }
 }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -276,101 +275,102 @@ fun ContactsScreen(
             onTabSelected = viewModel::onNewFriendsTabSelected,
         )
         Spacer(Modifier.height(12.dp))
-        val activeList = if (uiState.newFriendsTabIndex == 0) {
-            uiState.receivedRequests
-        } else {
-            uiState.sentRequests
-        }
-        if (activeList.isEmpty()) {
-            Text(
-                text = strings.contactsNoRequests,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 20.dp),
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                activeList.forEach { req ->
-                    val isReceived = uiState.newFriendsTabIndex == 0
-                    val targetId = if (isReceived) req.senderId else req.receiverId
-                    val user = uiState.requestUsers[targetId]
-                    val name = user?.displayName?.ifEmpty { null }
-                        ?: user?.username
-                        ?: targetId.toString().take(8)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable {
-                                viewModel.dismissNewFriends()
-                                onContactClick(targetId.toString())
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        UserAvatar(
-                            name = name,
-                            avatarUrl = user?.avatarUrl,
-                            size = 40.dp,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
-                            )
-                            if (!req.message.isNullOrBlank()) {
-                                Text(
-                                    text = req.message!!,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        when {
-                            isReceived && req.status == RequestStatus.PENDING -> {
-                                ChatAppButton(
-                                    onClick = { viewModel.handleFriendRequest(req.id, approve = false) },
-                                    label = strings.reject,
-                                    style = ButtonStyle.SECONDARY,
-                                    size = ButtonSize.SM,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                ChatAppButton(
-                                    onClick = { viewModel.handleFriendRequest(req.id, approve = true) },
-                                    label = strings.approve,
-                                    style = ButtonStyle.PRIMARY,
-                                    size = ButtonSize.SM,
-                                )
-                            }
-                            !isReceived && req.status == RequestStatus.PENDING -> {
-                                ChatAppButton(
-                                    onClick = { viewModel.cancelFriendRequest(req.id) },
-                                    label = strings.cancelRequest,
-                                    style = ButtonStyle.SECONDARY,
-                                    size = ButtonSize.SM,
-                                )
-                            }
-                            else -> {
-                                val statusLabel = when (req.status) {
-                                    RequestStatus.PENDING -> strings.requestStatusPending
-                                    RequestStatus.ACCEPTED -> strings.requestStatusAccepted
-                                    RequestStatus.REJECTED -> strings.requestStatusRejected
-                                    RequestStatus.CANCELED -> strings.requestStatusCanceled
+        Box(Modifier.fillMaxWidth().height(360.dp), contentAlignment = Alignment.Center) {
+            val activeList = if (uiState.newFriendsTabIndex == 0) {
+                uiState.receivedRequests
+            } else {
+                uiState.sentRequests
+            }
+            if (activeList.isEmpty()) {
+                Text(
+                    text = strings.contactsNoRequests,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 20.dp),
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    activeList.forEach { req ->
+                        val isReceived = uiState.newFriendsTabIndex == 0
+                        val targetId = if (isReceived) req.senderId else req.receiverId
+                        val user = uiState.requestUsers[targetId]
+                        val name = user?.displayName?.ifEmpty { null }
+                            ?: user?.username
+                            ?: targetId.toString().take(8)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable {
+                                    viewModel.dismissNewFriends()
+                                    onContactClick(targetId.toString())
                                 }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            UserAvatar(
+                                name = name,
+                                avatarUrl = user?.avatarUrl,
+                                size = 40.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = statusLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium,
                                 )
+                                if (!req.message.isNullOrBlank()) {
+                                    Text(
+                                        text = req.message!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            when {
+                                isReceived && req.status == RequestStatus.PENDING -> {
+                                    ChatAppButton(
+                                        onClick = { viewModel.handleFriendRequest(req.id, approve = false) },
+                                        label = strings.reject,
+                                        style = ButtonStyle.SECONDARY,
+                                        size = ButtonSize.SM,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    ChatAppButton(
+                                        onClick = { viewModel.handleFriendRequest(req.id, approve = true) },
+                                        label = strings.approve,
+                                        style = ButtonStyle.PRIMARY,
+                                        size = ButtonSize.SM,
+                                    )
+                                }
+                                !isReceived && req.status == RequestStatus.PENDING -> {
+                                    ChatAppButton(
+                                        onClick = { viewModel.cancelFriendRequest(req.id) },
+                                        label = strings.cancelRequest,
+                                        style = ButtonStyle.SECONDARY,
+                                        size = ButtonSize.SM,
+                                    )
+                                }
+                                else -> {
+                                    val statusLabel = when (req.status) {
+                                        RequestStatus.PENDING -> strings.requestStatusPending
+                                        RequestStatus.ACCEPTED -> strings.requestStatusAccepted
+                                        RequestStatus.REJECTED -> strings.requestStatusRejected
+                                        RequestStatus.CANCELED -> strings.requestStatusCanceled
+                                    }
+                                    Text(
+                                        text = statusLabel,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
@@ -391,114 +391,116 @@ fun ContactsScreen(
             onTabSelected = viewModel::onGroupNotificationsTabSelected,
         )
         Spacer(Modifier.height(12.dp))
-        if (uiState.isRefreshingGroupNotifications && uiState.incomingGroupRequests.isEmpty() && uiState.sentGroupRequests.isEmpty()) {
-            LoadingContent(modifier = Modifier.fillMaxWidth())
-            return@AppModalBottomSheet
-        }
-        if (uiState.groupNotificationsError != null && uiState.incomingGroupRequests.isEmpty() && uiState.sentGroupRequests.isEmpty()) {
-            ErrorContent(
-                message = uiState.groupNotificationsError!!,
-                modifier = Modifier.fillMaxWidth(),
-                onRetry = viewModel::refreshGroupNotifications,
-            )
-            return@AppModalBottomSheet
-        }
-        val isIncoming = uiState.groupNotificationsTabIndex == 0
-        val activeList = if (isIncoming) {
-            uiState.incomingGroupRequests
-        } else {
-            uiState.sentGroupRequests
-        }
-        if (activeList.isEmpty()) {
-            Text(
-                text = strings.contactsNoRequests,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 20.dp),
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                activeList.forEach { req ->
-                    val applicant = uiState.requestUsers[req.applicantId]
-                    val groupName = uiState.groupNames[req.conversationId]
-                        ?: req.conversationId.toString().take(8)
-                    val titleText = if (isIncoming) {
-                        val userName = applicant?.displayName?.ifEmpty { null }
-                            ?: applicant?.username
-                            ?: req.applicantId.toString().take(8)
-                        "$userName → $groupName"
-                    } else {
-                        groupName
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        UserAvatar(
-                            name = titleText,
-                            avatarUrl = if (isIncoming) applicant?.avatarUrl else null,
-                            size = 40.dp,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = titleText,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
+        // Keep sheet anchors stable across loading, error, empty and populated states.
+        Box(Modifier.fillMaxWidth().height(360.dp), contentAlignment = Alignment.Center) {
+            if (uiState.isRefreshingGroupNotifications && uiState.incomingGroupRequests.isEmpty() && uiState.sentGroupRequests.isEmpty()) {
+                LoadingContent(modifier = Modifier.fillMaxWidth())
+                return@Box
+            }
+            if (uiState.groupNotificationsError != null && uiState.incomingGroupRequests.isEmpty() && uiState.sentGroupRequests.isEmpty()) {
+                ErrorContent(
+                    message = uiState.groupNotificationsError!!,
+                    modifier = Modifier.fillMaxWidth(),
+                    onRetry = viewModel::refreshGroupNotifications,
+                )
+                return@Box
+            }
+            val isIncoming = uiState.groupNotificationsTabIndex == 0
+            val activeList = if (isIncoming) {
+                uiState.incomingGroupRequests
+            } else {
+                uiState.sentGroupRequests
+            }
+            if (activeList.isEmpty()) {
+                Text(
+                    text = strings.contactsNoRequests,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 20.dp),
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    activeList.forEach { req ->
+                        val applicant = uiState.requestUsers[req.applicantId]
+                        val groupName = uiState.groupNames[req.conversationId]
+                            ?: req.conversationId.toString().take(8)
+                        val titleText = if (isIncoming) {
+                            val userName = applicant?.displayName?.ifEmpty { null }
+                                ?: applicant?.username
+                                ?: req.applicantId.toString().take(8)
+                            "$userName → $groupName"
+                        } else {
+                            groupName
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            UserAvatar(
+                                name = titleText,
+                                avatarUrl = if (isIncoming) applicant?.avatarUrl else null,
+                                size = 40.dp,
                             )
-                            if (!req.message.isNullOrBlank()) {
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = req.message!!,
+                                    text = titleText,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                if (!req.message.isNullOrBlank()) {
+                                    Text(
+                                        text = req.message!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            if (isIncoming && req.status == RequestStatus.PENDING) {
+                                ChatAppButton(
+                                    onClick = {
+                                        viewModel.handleGroupJoinRequest(
+                                            req.conversationId,
+                                            req.id,
+                                            approve = false,
+                                        )
+                                    },
+                                    label = strings.reject,
+                                    style = ButtonStyle.SECONDARY,
+                                    size = ButtonSize.SM,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                ChatAppButton(
+                                    onClick = {
+                                        viewModel.handleGroupJoinRequest(
+                                            req.conversationId,
+                                            req.id,
+                                            approve = true,
+                                        )
+                                    },
+                                    label = strings.approve,
+                                    style = ButtonStyle.PRIMARY,
+                                    size = ButtonSize.SM,
+                                )
+                            } else {
+                                val statusLabel = when (req.status) {
+                                    RequestStatus.PENDING -> strings.requestStatusPending
+                                    RequestStatus.ACCEPTED -> strings.requestStatusAccepted
+                                    RequestStatus.REJECTED -> strings.requestStatusRejected
+                                    RequestStatus.CANCELED -> strings.requestStatusCanceled
+                                }
+                                Text(
+                                    text = statusLabel,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        if (isIncoming && req.status == RequestStatus.PENDING) {
-                            ChatAppButton(
-                                onClick = {
-                                    viewModel.handleGroupJoinRequest(
-                                        req.conversationId,
-                                        req.id,
-                                        approve = false,
-                                    )
-                                },
-                                label = strings.reject,
-                                style = ButtonStyle.SECONDARY,
-                                size = ButtonSize.SM,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            ChatAppButton(
-                                onClick = {
-                                    viewModel.handleGroupJoinRequest(
-                                        req.conversationId,
-                                        req.id,
-                                        approve = true,
-                                    )
-                                },
-                                label = strings.approve,
-                                style = ButtonStyle.PRIMARY,
-                                size = ButtonSize.SM,
-                            )
-                        } else {
-                            val statusLabel = when (req.status) {
-                                RequestStatus.PENDING -> strings.requestStatusPending
-                                RequestStatus.ACCEPTED -> strings.requestStatusAccepted
-                                RequestStatus.REJECTED -> strings.requestStatusRejected
-                                RequestStatus.CANCELED -> strings.requestStatusCanceled
-                            }
-                            Text(
-                                text = statusLabel,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }
@@ -512,52 +514,53 @@ fun ContactsScreen(
         onDismissRequest = viewModel::dismissBlockedUsers,
         title = strings.contactsBlockedUsers,
     ) {
-        if (uiState.blockedContacts.isEmpty()) {
-            Text(
-                text = strings.contactsNoBlocked,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 20.dp),
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                uiState.blockedContacts.forEach { blocked ->
-                    val name = blocked.displayName ?: blocked.username
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        UserAvatar(
-                            name = name,
-                            avatarUrl = blocked.avatarUrl,
-                            size = 40.dp,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
+        Box(Modifier.fillMaxWidth().height(360.dp), contentAlignment = Alignment.Center) {
+            if (uiState.blockedContacts.isEmpty()) {
+                Text(
+                    text = strings.contactsNoBlocked,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 20.dp),
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    uiState.blockedContacts.forEach { blocked ->
+                        val name = blocked.displayName ?: blocked.username
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            UserAvatar(
+                                name = name,
+                                avatarUrl = blocked.avatarUrl,
+                                size = 40.dp,
                             )
-                            Text(
-                                text = "@${blocked.username}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    text = "@${blocked.username}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            ChatAppButton(
+                                onClick = { viewModel.unblockUser(blocked.id) },
+                                label = strings.unblockUser,
+                                style = ButtonStyle.SECONDARY,
+                                size = ButtonSize.SM,
                             )
                         }
-                        Spacer(Modifier.width(8.dp))
-                        ChatAppButton(
-                            onClick = { viewModel.unblockUser(blocked.id) },
-                            label = strings.unblockUser,
-                            style = ButtonStyle.SECONDARY,
-                            size = ButtonSize.SM,
-                        )
                     }
                 }
             }

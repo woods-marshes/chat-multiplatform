@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Forward
@@ -84,6 +83,7 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatConversationTopBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
+import com.github.woodsmarshes.chat.core.ui.components.motion.AppMotion
 import com.github.woodsmarshes.chat.core.ui.components.bubble.messageItems
 import com.github.woodsmarshes.chat.core.ui.components.bubble.rememberFormatter
 import com.github.woodsmarshes.chat.core.ui.components.input.ChatInputBar
@@ -92,6 +92,7 @@ import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -106,10 +107,13 @@ fun ChatScreen(
     onGroupInfoClick: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    initialTitle: String? = null,
+    initialAvatarUrl: String? = null,
+    conversationId: String? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lazyMessages = viewModel.messages.collectAsLazyPagingItems()
-    val listState = rememberLazyListState()
+    val listState = viewModel.messageListState
     val formatter = rememberFormatter()
     val coroutineScope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -151,30 +155,31 @@ fun ChatScreen(
             .collect(viewModel::onMessagesVisible)
     }
 
-    // 记录最新一条消息的 ID
-    val latestMessage = if (lazyMessages.itemCount > 0) lazyMessages[0] else null
-    val latestMessageId = latestMessage?.id?.toString()
-
-    // 新消息未读计数
     val unreadCount = rememberSaveable { mutableStateOf(0) }
-    // 是否为初次进入页面
-    val isFirstLoad = rememberSaveable { mutableStateOf(true) }
 
-    LaunchedEffect(latestMessageId, uiState.ownUserId) {
-        if (latestMessageId != null) {
-            val isOwn = latestMessage.sender?.id == uiState.ownUserId
-            if (isFirstLoad.value) {
-                listState.scrollToItem(0)
-                isFirstLoad.value = false
-            } else {
-                if (listState.firstVisibleItemIndex < 5 || isOwn) {
-                    listState.animateScrollToItem(0)
-                    unreadCount.value = 0
-                } else {
-                    unreadCount.value += 1
+    // Entry restoration belongs to LazyListState; only arrivals observed while resumed may follow.
+    LaunchedEffect(lazyMessages, listState, lifecycleState) {
+        if (lifecycleState != Lifecycle.State.RESUMED) return@LaunchedEffect
+        var previousMessageId: String? = null
+        snapshotFlow { lazyMessages.itemSnapshotList.items.firstOrNull()?.id?.toString() }
+            .filter { it != null }
+            .distinctUntilChanged()
+            .collect { messageId ->
+                val previous = previousMessageId
+                previousMessageId = messageId
+                if (previous != null && previous != messageId) {
+                    if (shouldFollowChatArrival(
+                            firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                            firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                        )
+                    ) {
+                        listState.animateScrollToItem(0)
+                        unreadCount.value = 0
+                    } else {
+                        unreadCount.value += 1
+                    }
                 }
             }
-        }
     }
 
     val showScrollToBottomFab by remember {
@@ -274,9 +279,6 @@ fun ChatScreen(
                     strings.memberCountFmt(uiState.memberCount.toString())
                 else -> null
             }
-            // While someone types in a group chat, the header avatar swaps
-            // to that member (Telegram behaviour).
-            val typingUser = if (header?.isGroup == true) typing.firstOrNull() else null
             val openDetails: (() -> Unit)? = when {
                 header == null -> null
                 header.isGroup -> {
@@ -293,11 +295,12 @@ fun ChatScreen(
             }
             val inMultiPane = isInListDetailScene()
             ChatConversationTopBar(
-                title = header?.title ?: strings.chatTitle,
+                title = header?.title ?: initialTitle.orEmpty(),
                 subtitle = subtitle,
-                avatarName = typingUser?.let { it.displayName?.ifEmpty { null } ?: it.username }
-                    ?: (header?.title ?: strings.chatTitle),
-                avatarUrl = typingUser?.avatarUrl ?: header?.avatarUrl,
+                avatarName = header?.title ?: initialTitle.orEmpty(),
+                avatarUrl = if (header != null) header.avatarUrl else initialAvatarUrl,
+                conversationId = header?.conversationId?.toString() ?: conversationId,
+                showAvatar = header != null || initialTitle != null,
                 onBack = onBack,
                 showBackButton = !inMultiPane,
                 onHeaderClick = openDetails,
@@ -367,7 +370,7 @@ fun ChatScreen(
                         onImageClick = showComingSoonToast,
                         onFileClick = showComingSoonToast,
                         onVoiceClick = showComingSoonToast,
-                        enabled = !uiState.isSending,
+                        isSending = uiState.isSending,
                     )
                 }
             }
@@ -378,12 +381,31 @@ fun ChatScreen(
                 .fillMaxSize()
                 .consumeWindowInsets(padding)
         ) {
+            // Keep the previous frame's content visually present while a short
+            // open transition runs: a full-screen spinner that appears before
+            // Room's first page lands flashes on every chat open.
+            var showInitialLoading by remember { mutableStateOf(false) }
             val refreshState = lazyMessages.loadState.refresh
+            val awaitingFirstPage = refreshState is LoadState.Loading && lazyMessages.itemCount == 0
+            LaunchedEffect(awaitingFirstPage) {
+                if (awaitingFirstPage) {
+                    delay(AppMotion.LoadingRevealDelayMillis)
+                    if (lazyMessages.loadState.refresh is LoadState.Loading &&
+                        lazyMessages.itemCount == 0
+                    ) {
+                        showInitialLoading = true
+                    }
+                } else {
+                    showInitialLoading = false
+                }
+            }
             when {
-                refreshState is LoadState.Loading && lazyMessages.itemCount == 0 -> {
-                    LoadingContent(
-                        modifier = Modifier.fillMaxSize().padding(padding),
-                    )
+                awaitingFirstPage -> {
+                    if (showInitialLoading) {
+                        LoadingContent(
+                            modifier = Modifier.fillMaxSize().padding(padding),
+                        )
+                    }
                 }
                 refreshState is LoadState.Error && lazyMessages.itemCount == 0 -> {
                     ErrorContent(
@@ -392,7 +414,11 @@ fun ChatScreen(
                         onRetry = { lazyMessages.retry() },
                     )
                 }
-                lazyMessages.itemCount == 0 && refreshState is LoadState.NotLoading -> {
+                // During mediator-led refresh nothing is on screen yet; this is
+                // not the "conversation has no messages" empty state.
+                lazyMessages.itemCount == 0 &&
+                    refreshState is LoadState.NotLoading &&
+                    lazyMessages.loadState.mediator?.refresh !is LoadState.Loading -> {
                     EmptyContent(
                         message = strings.noMessages,
                         modifier = Modifier.fillMaxSize().padding(padding),
@@ -669,3 +695,9 @@ private fun ForwardDialog(
         }
     }
 }
+
+/** Reading history, even inside the first bubble, must never be interrupted by an arrival. */
+internal fun shouldFollowChatArrival(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+): Boolean = firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0

@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.core.ui.components
 
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +52,8 @@ fun ChatConversationTopBar(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     showBackButton: Boolean = true,
+    showAvatar: Boolean = true,
+    conversationId: String? = null,
     onHeaderClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -103,16 +106,22 @@ fun ChatConversationTopBar(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (showAvatar) {
                     UserAvatar(
                         name = avatarName,
                         avatarUrl = avatarUrl,
+                        modifier = Modifier.sharedConversationBounds(conversationId, "avatar"),
                         size = 40.dp,
                     )
+                    } else {
+                        Spacer(Modifier.width(40.dp).height(40.dp))
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         if (isMiuix) {
                             MiuixText(
                                 text = title,
+                                modifier = Modifier.sharedConversationBounds(conversationId, "title"),
                                 style = MiuixTheme.textStyles.headline2,
                                 fontWeight = FontWeight.SemiBold,
                                 color = titleColor,
@@ -131,6 +140,7 @@ fun ChatConversationTopBar(
                         } else {
                             Text(
                                 text = title,
+                                modifier = Modifier.sharedConversationBounds(conversationId, "title"),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = titleColor,

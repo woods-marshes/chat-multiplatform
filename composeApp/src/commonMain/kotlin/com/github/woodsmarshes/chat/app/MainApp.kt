@@ -1,5 +1,7 @@
 package com.github.woodsmarshes.chat.app
 
+import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +30,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -55,9 +59,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass
+import com.github.woodsmarshes.chat.app.navigation.AppTransitions
 import com.github.woodsmarshes.chat.app.navigation.navConfiguration
 import com.github.woodsmarshes.chat.app.navigation.topLevelNavigationItems
 import com.github.woodsmarshes.chat.app.session.SessionManager
@@ -108,7 +114,6 @@ import com.github.woodsmarshes.chat.feature.settings.navigation.OpenSourceLicens
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsDetailNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
-import com.github.woodsmarshes.chat.feature.settings.ui.SettingsDetailScreen
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, kotlin.uuid.ExperimentalUuidApi::class)
 @Composable
@@ -198,20 +203,7 @@ private fun MainContent(
     val listPaneMeta = remember {
         ListDetailSceneStrategy.listPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
     }
-    val settingsListPaneMeta = remember {
-        ListDetailSceneStrategy.listPane(
-            detailPlaceholder = {
-                SettingsDetailScreen(
-                    category = SettingsCategory.PROFILE,
-                    onBack = { navigator.goBack() },
-                    onLogout = { sessionManager.logout() },
-                    onOpenLicenses = {
-                        navigator.navigate(OpenSourceLicensesNavKey)
-                    },
-                )
-            }
-        ) + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
-    }
+    val settingsListPaneMeta = listPaneMeta
     val detailPaneMeta = remember { ListDetailSceneStrategy.detailPane() }
     val extraPaneMeta = remember {
         ListDetailSceneStrategy.extraPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
@@ -249,8 +241,8 @@ private fun MainContent(
 
     val entryProvider = entryProvider {
         conversationsEntry(
-            onNavigateToChat = { conversationId, isGroup ->
-                openDetailFromList(ChatNavKey(conversationId, isGroup))
+            onNavigateToChat = { conversationId, isGroup, title, avatarUrl ->
+                openDetailFromList(ChatNavKey(conversationId, isGroup, title, avatarUrl))
             },
             onGroupInfoClick = { conversationId ->
                 // Picking a group from the search bar is a list-level selection:
@@ -457,23 +449,7 @@ private fun MainContent(
                     )
                 )
             },
-            bottomBar = {
-                if (isMiuix && navigationSuiteLayout == NavigationSuiteType.NavigationBar && showNavigationSuite) {
-                    MiuixNavigationBar(
-                        color = MiuixTheme.colorScheme.surface,
-                    ) {
-                        topLevelNavigationItems.forEach { item ->
-                            val selected = item.navKey == navigationState.currentTopLevelKey
-                            MiuixNavigationBarItem(
-                                selected = selected,
-                                onClick = { selectTopLevelItem(item.navKey) },
-                                icon = if (selected) item.selectedIcon else item.unselectedIcon,
-                                label = item.label(strings),
-                            )
-                        }
-                    }
-                }
-            }
+
         ) { padding ->
             Column(
                 modifier = Modifier
@@ -503,17 +479,88 @@ private fun MainContent(
                         )
                     }
                     val strategy = rememberListDetailSceneStrategy<NavKey>(
-                        shouldHandleSinglePaneLayout = true,
+                        // Compact windows use NavDisplay's single-pane scene and back transition.
+                        shouldHandleSinglePaneLayout = false,
                         directive = directive,
                     )
-                    val currentEntries = navigationState.toEntries(entryProvider)
+                    // Compact bottom navigation belongs to each root entry, not the NavDisplay.
+                    // A detail therefore has full-height constraints from its very first frame.
+                    val currentEntries = navigationState.toEntries { key ->
+                        val entry = entryProvider(key)
+                        if (!isMediumOrLarger && key in navigationState.topLevelKeys) {
+                            NavEntry(navEntry = entry) {
+                                Scaffold(
+                                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                                    containerColor = Color.Transparent,
+                                    bottomBar = {
+                                        if (isMiuix) {
+                                            MiuixNavigationBar(color = MiuixTheme.colorScheme.surface) {
+                                                topLevelNavigationItems.forEach { item ->
+                                                    val selected = item.navKey == key
+                                                    MiuixNavigationBarItem(
+                                                        selected = selected,
+                                                        onClick = { selectTopLevelItem(item.navKey) },
+                                                        icon = if (selected) item.selectedIcon else item.unselectedIcon,
+                                                        label = item.label(strings),
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            NavigationBar {
+                                                topLevelNavigationItems.forEach { item ->
+                                                    val selected = item.navKey == key
+                                                    NavigationBarItem(
+                                                        selected = selected,
+                                                        onClick = { selectTopLevelItem(item.navKey) },
+                                                        icon = {
+                                                            Icon(
+                                                                imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                                                                contentDescription = item.label(strings),
+                                                            )
+                                                        },
+                                                        label = { Text(item.label(strings)) },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                ) { entryPadding ->
+                                    Box(Modifier.fillMaxSize().padding(entryPadding).consumeWindowInsets(entryPadding)) {
+                                        entry.Content()
+                                    }
+                                }
+                            }
+                        } else entry
+                    }
 
-                    NavDisplay(
-                        entries = currentEntries,
-                        sceneStrategies = listOf(strategy),
-                        onBack = { navigator.goBack() },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+                        CompositionLocalProvider(LocalAppSharedTransitionScope provides this) {
+                            NavDisplay(
+                                entries = currentEntries,
+                                sceneStrategies = listOf(strategy),
+                                onBack = { navigator.goBack() },
+                                transitionSpec = {
+                                    AppTransitions.transitionSpec(
+                                        initialState.key,
+                                        targetState.key,
+                                    )
+                                },
+                                popTransitionSpec = {
+                                    AppTransitions.popTransitionSpec(
+                                        initialState.key,
+                                        targetState.key,
+                                    )
+                                },
+                                predictivePopTransitionSpec = { _ ->
+                                    AppTransitions.predictivePopTransitionSpec(
+                                        initialState.key,
+                                        targetState.key,
+                                    )
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -521,7 +568,9 @@ private fun MainContent(
 
     Box(modifier = modifier) {
         CompositionLocalProvider(LocalAccountAffordance provides accountAffordance) {
-            if (isMiuix) {
+            if (!isMediumOrLarger) {
+                sceneContent(Modifier.fillMaxSize())
+            } else if (isMiuix) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     if (navigationSuiteLayout == NavigationSuiteType.NavigationRail && showNavigationSuite) {
                         MiuixNavigationRail(

@@ -12,6 +12,8 @@ import org.koin.core.parameter.parametersOf
 data class ChatNavKey(
     val conversationId: String,
     val isGroup: Boolean,
+    val initialTitle: String? = null,
+    val initialAvatarUrl: String? = null,
 ) : NavKey
 
 fun EntryProviderScope<NavKey>.chatEntry(
@@ -29,6 +31,9 @@ fun EntryProviderScope<NavKey>.chatEntry(
             onProfileClick = onNavigateToProfile,
             onGroupInfoClick = onNavigateToGroupInfo,
             onBack = onBack,
+            initialTitle = key.initialTitle,
+            initialAvatarUrl = key.initialAvatarUrl,
+            conversationId = key.conversationId,
         )
     }
 }

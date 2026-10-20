@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.core.ui.components.item
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedUserBounds
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,12 +64,14 @@ fun ContactItem(
         UserAvatar(
             name = contact.displayName ?: contact.username,
             avatarUrl = contact.avatarUrl,
+            modifier = Modifier.sharedUserBounds(contact.id.toString(), "avatar"),
             size = 48.dp,
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = contact.displayName ?: contact.username,
+                modifier = Modifier.sharedUserBounds(contact.id.toString(), "title"),
                 color = if (selected) selectedTextColor else bubbleColors.onSurfaceColor,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,

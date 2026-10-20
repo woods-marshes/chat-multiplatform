@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.conversations.ui
 
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -186,7 +187,11 @@ fun GroupInfoScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Box(contentAlignment = Alignment.BottomEnd) {
+                            // Keep the edit badge in the avatar's shared overlay and coordinate space.
+                            Box(
+                                modifier = Modifier.sharedConversationBounds(conversationId, "avatar"),
+                                contentAlignment = Alignment.BottomEnd,
+                            ) {
                                 UserAvatar(
                                     name = uiState.name,
                                     avatarUrl = uiState.avatarUrl,
@@ -213,6 +218,7 @@ fun GroupInfoScreen(
                             Spacer(modifier = Modifier.height(20.dp))
                             Text(
                                 text = uiState.name,
+                                modifier = Modifier.sharedConversationBounds(conversationId, "title"),
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
