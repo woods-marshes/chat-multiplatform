@@ -103,7 +103,9 @@ class DatabaseSessionOwnershipTest {
             generation++
             gate.start()
             staleFlow.collect { error("Old observation entered a new generation") }
-            assertTrue(source.load(PagingSource.LoadParams.Refresh(null, 20, false)) is PagingSource.LoadResult.Invalid)
+            val staleResult = source.load(PagingSource.LoadParams.Refresh(null, 20, false))
+            assertTrue(staleResult is PagingSource.LoadResult.Error)
+            assertTrue(staleResult.throwable is com.github.woodsmarshes.chat.core.common.session.SessionStoppedException)
             gate.stop()
         } finally {
             gate.stop()

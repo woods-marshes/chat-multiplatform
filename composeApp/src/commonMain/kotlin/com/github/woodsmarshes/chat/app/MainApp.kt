@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,6 +65,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass
 import com.github.woodsmarshes.chat.app.navigation.AppTransitions
+import com.github.woodsmarshes.chat.app.navigation.CompactNavigationLayout
 import com.github.woodsmarshes.chat.app.navigation.navConfiguration
 import com.github.woodsmarshes.chat.app.navigation.topLevelNavigationItems
 import com.github.woodsmarshes.chat.app.session.SessionManager
@@ -81,6 +83,7 @@ import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.feature.auth.ui.AuthScreen
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationRail as MiuixNavigationRail
@@ -244,11 +247,11 @@ private fun MainContent(
             onNavigateToChat = { conversationId, isGroup, title, avatarUrl ->
                 openDetailFromList(ChatNavKey(conversationId, isGroup, title, avatarUrl))
             },
-            onGroupInfoClick = { conversationId ->
+            onGroupInfoClick = { profile ->
                 // Picking a group from the search bar is a list-level selection:
                 // open it in the primary detailPane (replacing any previous chat)
                 // rather than in the trailing extraPane beside an unrelated chat.
-                openDetailFromList(GroupInfoNavKey(conversationId))
+                openDetailFromList(GroupInfoNavKey(profile.conversationId.toString(), profile))
             },
             selectedConversationId = {
                 val stack = navigationState.subStacks[ConversationsNavKey]
@@ -435,7 +438,7 @@ private fun MainContent(
         }
 
     val isMiuix = isMiuixTheme()
-    val sceneContent: @Composable (Modifier) -> Unit = { sceneModifier ->
+    val sceneContent: @Composable (Modifier, Dp) -> Unit = { sceneModifier, compactBarHeight ->
         Scaffold(
             modifier = sceneModifier,
             containerColor = Color.Transparent,
@@ -483,51 +486,15 @@ private fun MainContent(
                         shouldHandleSinglePaneLayout = false,
                         directive = directive,
                     )
-                    // Compact bottom navigation belongs to each root entry, not the NavDisplay.
-                    // A detail therefore has full-height constraints from its very first frame.
+                    // Only root entries reserve the persistent outer bar's measured height.
+                    // Details always retain full-height constraints, including during transitions.
                     val currentEntries = navigationState.toEntries { key ->
                         val entry = entryProvider(key)
                         if (!isMediumOrLarger && key in navigationState.topLevelKeys) {
                             NavEntry(navEntry = entry) {
-                                Scaffold(
-                                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                                    containerColor = Color.Transparent,
-                                    bottomBar = {
-                                        if (isMiuix) {
-                                            MiuixNavigationBar(color = MiuixTheme.colorScheme.surface) {
-                                                topLevelNavigationItems.forEach { item ->
-                                                    val selected = item.navKey == key
-                                                    MiuixNavigationBarItem(
-                                                        selected = selected,
-                                                        onClick = { selectTopLevelItem(item.navKey) },
-                                                        icon = if (selected) item.selectedIcon else item.unselectedIcon,
-                                                        label = item.label(strings),
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            NavigationBar {
-                                                topLevelNavigationItems.forEach { item ->
-                                                    val selected = item.navKey == key
-                                                    NavigationBarItem(
-                                                        selected = selected,
-                                                        onClick = { selectTopLevelItem(item.navKey) },
-                                                        icon = {
-                                                            Icon(
-                                                                imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                                                contentDescription = item.label(strings),
-                                                            )
-                                                        },
-                                                        label = { Text(item.label(strings)) },
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    },
-                                ) { entryPadding ->
-                                    Box(Modifier.fillMaxSize().padding(entryPadding).consumeWindowInsets(entryPadding)) {
-                                        entry.Content()
-                                    }
+                                val entryPadding = PaddingValues(bottom = compactBarHeight)
+                                Box(Modifier.fillMaxSize().padding(entryPadding).consumeWindowInsets(entryPadding)) {
+                                    entry.Content()
                                 }
                             }
                         } else entry
@@ -569,7 +536,43 @@ private fun MainContent(
     Box(modifier = modifier) {
         CompositionLocalProvider(LocalAccountAffordance provides accountAffordance) {
             if (!isMediumOrLarger) {
-                sceneContent(Modifier.fillMaxSize())
+                CompactNavigationLayout(
+                    showNavigation = showNavigationSuite,
+                    navigation = {
+                        if (isMiuix) {
+                            MiuixNavigationBar(color = MiuixTheme.colorScheme.surface) {
+                                topLevelNavigationItems.forEach { item ->
+                                    val selected = item.navKey == navigationState.currentTopLevelKey
+                                    MiuixNavigationBarItem(
+                                        selected = selected,
+                                        onClick = { selectTopLevelItem(item.navKey) },
+                                        icon = if (selected) item.selectedIcon else item.unselectedIcon,
+                                        label = item.label(strings),
+                                    )
+                                }
+                            }
+                        } else {
+                            NavigationBar {
+                                topLevelNavigationItems.forEach { item ->
+                                    val selected = item.navKey == navigationState.currentTopLevelKey
+                                    NavigationBarItem(
+                                        selected = selected,
+                                        onClick = { selectTopLevelItem(item.navKey) },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                                                contentDescription = item.label(strings),
+                                            )
+                                        },
+                                        label = { Text(item.label(strings)) },
+                                    )
+                                }
+                            }
+                        }
+                    },
+                ) { bottomBarHeight ->
+                    sceneContent(Modifier.fillMaxSize(), bottomBarHeight)
+                }
             } else if (isMiuix) {
                 Row(modifier = Modifier.fillMaxSize()) {
                     if (navigationSuiteLayout == NavigationSuiteType.NavigationRail && showNavigationSuite) {
@@ -587,7 +590,7 @@ private fun MainContent(
                             }
                         }
                     }
-                    sceneContent(Modifier.weight(1f).fillMaxSize())
+                    sceneContent(Modifier.weight(1f).fillMaxSize(), 0.dp)
                 }
             } else {
                 NavigationSuiteScaffold(
@@ -613,7 +616,7 @@ private fun MainContent(
                     layoutType = navigationSuiteLayout,
                     state = scaffoldState,
                 ) {
-                    sceneContent(Modifier.fillMaxSize())
+                    sceneContent(Modifier.fillMaxSize(), 0.dp)
                 }
             }
         }

@@ -136,8 +136,10 @@ fun ContactsScreen(
                                 ContactItem(
                                     contact = contact,
                                     onClick = {
-                                        scope.launch { searchBarState.animateToCollapsed() }
-                                        onContactClick(contact.id.toString())
+                                        scope.launch {
+                                            searchBarState.animateToCollapsed()
+                                            onContactClick(contact.id.toString())
+                                        }
                                     },
                                 )
                             }

@@ -41,6 +41,10 @@ kotlin {
             }
         }
 
+        jvmTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+        }
+
         jvmMain {
             dependencies {
                 implementation(libs.sqldelight.sqlite.driver)

@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.github.woodsmarshes.chat"
-version = "0.0.1"
+version = libs.versions.appVersion.get()
 
 application {
     mainClass = "io.ktor.server.netty.EngineMain"

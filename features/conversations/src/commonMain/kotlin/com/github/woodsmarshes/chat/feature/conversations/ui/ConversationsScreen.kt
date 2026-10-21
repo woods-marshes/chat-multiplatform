@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.conversations.ui
 
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -76,7 +77,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ConversationsScreen(
     onConversationClick: (conversationId: String, isGroup: Boolean, title: String?, avatarUrl: String?) -> Unit,
-    onGroupInfoClick: (conversationId: String) -> Unit,
+    onGroupInfoClick: (profile: GroupProfile) -> Unit,
     modifier: Modifier = Modifier,
     selectedConversationId: String? = null,
     onMenuClick: (() -> Unit)? = null,
@@ -135,8 +136,10 @@ fun ConversationsScreen(
                                 ConversationItem(
                                     conversation = conv,
                                     onClick = {
-                                        scope.launch { searchBarState.animateToCollapsed() }
-                                        onGroupInfoClick(conv.id.toString())
+                                        scope.launch {
+                                            searchBarState.animateToCollapsed()
+                                            uiState.searchProfiles[conv.id]?.let(onGroupInfoClick)
+                                        }
                                     },
                                 )
                             }

@@ -236,11 +236,11 @@ class ConversationRepositoryImpl(
         val snapshotIds = responses.mapTo(HashSet(responses.size)) { it.conversationId }
         if (softDeleteMissing) {
             val activeLocal = conversationDao.findAllActiveConversations()
-            for (local in activeLocal) {
-                if (local.id !in snapshotIds) {
-                    if (meId != null) participantDao.removeParticipant(local.id, meId)
-                    conversationDao.softDeleteConversation(local.id, now)
-                    groupJoinRequestDao.deleteGroupJoinRequestsForConversation(local.id)
+            for ((id) in activeLocal) {
+                if (id !in snapshotIds) {
+                    if (meId != null) participantDao.removeParticipant(id, meId)
+                    conversationDao.softDeleteConversation(id, now)
+                    groupJoinRequestDao.deleteGroupJoinRequestsForConversation(id)
                 }
             }
         }
@@ -305,6 +305,7 @@ class ConversationRepositoryImpl(
             conversationApi.getDetail(conversation.id)
         }.also { response ->
             conversationDao.insertConversation(response.toConversation().toEntity())
+            response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
             response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
             participantDao.insertParticipant(response.toParticipantEntity())
         }.toConversation().also {
@@ -496,7 +497,6 @@ class ConversationRepositoryImpl(
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeGroupJoinRequests(
         conversationId: Uuid,
         status: RequestStatus?,
@@ -565,6 +565,7 @@ class ConversationRepositoryImpl(
                 conversationApi.getDetail(conversationId)
             }.also { response ->
                 conversationDao.insertConversation(response.toConversation().toEntity())
+                response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
                 response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
             }.toConversation()
         }
@@ -603,10 +604,8 @@ class ConversationRepositoryImpl(
     override suspend fun searchGroups(keyword: String): Result<List<GroupProfile>, ConversationError> = sessionOperation { coroutineBinding {
             bindApi(ConversationError::Unknown) {
                 conversationApi.searchGroups(keyword.trim())
-            }.also { groups ->
-                // Cache hits so the group info page resolves from local storage later.
-                groupProfileDao.insertGroupProfiles(groups.map { it.toEntity() })
             }
+            // Public search results are not membership records and must not enter the relational cache.
         } }
 
     override fun getGroupProfileFlow(conversationId: Uuid): Flow<GroupProfile?> =
@@ -630,6 +629,7 @@ class ConversationRepositoryImpl(
             conversationApi.getDetail(conversationId)
         }.also { response ->
             conversationDao.insertConversation(response.toConversation().toEntity())
+            response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
             response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
             participantDao.insertParticipant(response.toParticipantEntity())
         }

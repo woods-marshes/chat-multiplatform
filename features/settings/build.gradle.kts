@@ -22,7 +22,7 @@ buildkonfig {
     packageName = "com.github.woodsmarshes.chat.feature.settings"
     objectName = "AppBuildInfo"
     defaultConfigs {
-        buildConfigField(FieldSpec.Type.STRING, "versionName", "1.1.1")
+        buildConfigField(FieldSpec.Type.STRING, "versionName", libs.versions.appVersion.get())
         buildConfigField(FieldSpec.Type.INT, "versionCode", gitCommitCount.get())
         buildConfigField(FieldSpec.Type.STRING, "gitRevision", gitCommitShort.get())
         buildConfigField(FieldSpec.Type.STRING, "kotlinVersion", libs.versions.kotlin.version.get())

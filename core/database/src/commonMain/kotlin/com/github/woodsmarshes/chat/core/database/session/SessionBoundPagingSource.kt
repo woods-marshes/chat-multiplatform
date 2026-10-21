@@ -21,7 +21,7 @@ import kotlinx.coroutines.ensureActive
  *  - If a stale `Pager` from an ended session attempts to [load] before or
  *    after a new session starts, its [boundGeneration] / [boundDatabase] no
  *    longer matches the active session and [load] returns
- *    [PagingSource.LoadResult.Invalid] without touching the database.
+ *    [PagingSource.LoadResult.Error] without touching the database or triggering a refresh loop.
  */
 internal class SessionBoundPagingSource<Key : Any, Value : Any>(
     private val gate: DatabaseSessionGate,
@@ -30,9 +30,15 @@ internal class SessionBoundPagingSource<Key : Any, Value : Any>(
     delegateFactory: (ChatDatabase) -> PagingSource<Key, Value>,
 ) : PagingSource<Key, Value>() {
 
+    private fun isSessionActive(): Boolean =
+        boundDatabase != null &&
+            boundGeneration > 0L &&
+            gate.isGenerationActive(boundGeneration) &&
+            gate.boundDatabase === boundDatabase
+
     private val delegate: PagingSource<Key, Value>? =
-        if (boundDatabase != null && boundGeneration > 0L && gate.isGenerationActive(boundGeneration)) {
-            delegateFactory(boundDatabase).also { source ->
+        if (isSessionActive()) {
+            delegateFactory(checkNotNull(boundDatabase)).also { source ->
                 registerInvalidatedCallback {
                     source.invalidate()
                 }
@@ -46,12 +52,13 @@ internal class SessionBoundPagingSource<Key : Any, Value : Any>(
             null
         }
 
-    private val removeStopListener = gate.registerStopListener { invalidate() }
-
     init {
-        registerInvalidatedCallback { removeStopListener() }
-        if (delegate == null) {
-            invalidate()
+        // Only an existing delegate needs teardown. Inactive replacements must not invalidate.
+        if (delegate != null) {
+            val removeStopListener = gate.registerStopListener { invalidate() }
+            registerInvalidatedCallback { removeStopListener() }
+            // The session may have stopped between delegate creation and registration.
+            if (!isSessionActive()) invalidate()
         }
     }
 
@@ -62,49 +69,39 @@ internal class SessionBoundPagingSource<Key : Any, Value : Any>(
         delegate?.getRefreshKey(state)
 
     override suspend fun load(params: LoadParams<Key>): LoadResult<Key, Value> {
+        currentCoroutineContext().ensureActive()
         val source = delegate
-        if (invalid ||
-            source == null ||
-            boundDatabase == null ||
-            boundGeneration <= 0L ||
-            !gate.isGenerationActive(boundGeneration)
-        ) {
-            invalidate()
-            return LoadResult.Invalid()
-        }
+        if (source == null || !isSessionActive()) return sessionEnded()
+        if (invalid) return LoadResult.Invalid()
         return try {
             gate.runInSession(
                 expectedGeneration = boundGeneration,
                 expectedDatabase = boundDatabase,
             ) { db ->
-                if (invalid || db !== boundDatabase || !gate.isGenerationActive(boundGeneration)) {
-                    invalidate()
-                    return@runInSession LoadResult.Invalid()
-                }
-                try {
-                    source.load(params)
-                } finally {
-                    if (!gate.isGenerationActive(boundGeneration)) {
-                        source.invalidate()
+                when {
+                    db !== boundDatabase || !isSessionActive() -> sessionEnded()
+                    invalid -> LoadResult.Invalid()
+                    else -> {
+                        val result = source.load(params)
+                        if (isSessionActive()) result else sessionEnded()
                     }
                 }
             }
-        } catch (_: SessionStoppedException) {
-            invalidate()
-            LoadResult.Invalid()
-        } catch (e: CancellationException) {
-            // If the session gate stopped while the Pager's own coroutine is
-            // still alive, invalidate this PagingSource and return Invalid so
-            // Paging stops reading the old generation; if the Pager itself was
-            // cancelled, propagate the cancellation untouched.
-            if (!gate.isGenerationActive(boundGeneration)) {
-                source.invalidate()
-                invalidate()
-            }
+        } catch (error: SessionStoppedException) {
             currentCoroutineContext().ensureActive()
-            LoadResult.Invalid()
-        } catch (e: Exception) {
-            LoadResult.Error(e)
+            LoadResult.Error(error)
+        } catch (error: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            if (!isSessionActive()) sessionEnded() else throw error
+        } catch (error: Exception) {
+            currentCoroutineContext().ensureActive()
+            LoadResult.Error(error)
+        } finally {
+            // Release SQLDelight listeners; the next inactive source will not trigger another refresh.
+            if (!isSessionActive()) source.invalidate()
         }
     }
+
+    private fun sessionEnded(): LoadResult<Key, Value> =
+        LoadResult.Error(SessionStoppedException("The database session for this paging source has ended"))
 }

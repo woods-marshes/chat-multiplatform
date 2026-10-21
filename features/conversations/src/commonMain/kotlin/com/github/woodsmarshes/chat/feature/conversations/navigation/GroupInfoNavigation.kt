@@ -1,12 +1,13 @@
 package com.github.woodsmarshes.chat.feature.conversations.navigation
 
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.github.woodsmarshes.chat.feature.conversations.ui.GroupInfoScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class GroupInfoNavKey(val conversationId: String) : NavKey
+data class GroupInfoNavKey(val conversationId: String, val searchProfile: GroupProfile? = null) : NavKey
 
 /**
  * Contextual group-info route opened from inside an active [ChatScreen];
@@ -28,6 +29,7 @@ fun EntryProviderScope<NavKey>.groupInfoEntry(
             onBack = onBack,
             onOpenChat = onOpenChat,
             isExtraPane = false,
+            searchProfile = key.searchProfile,
         )
     }
     entry<ChatGroupInfoNavKey>(metadata = extraMetadata) { key ->

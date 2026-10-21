@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.conversations.model
 
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
 import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
 import kotlin.uuid.Uuid
@@ -27,6 +28,7 @@ data class ConversationsUiState(
 
     // In-place search (AdaptiveSearchBar)
     val searchResults: List<ConversationUiModel> = emptyList(),
+    val searchProfiles: Map<Uuid, GroupProfile> = emptyMap(),
     val isSearching: Boolean = false,
     val searchError: String? = null,
 )

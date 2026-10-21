@@ -126,6 +126,7 @@ class ConversationsViewModel(
             _uiState.update {
                 it.copy(
                     searchResults = emptyList(),
+                    searchProfiles = emptyMap(),
                     isSearching = false,
                     searchError = null,
                 )
@@ -139,6 +140,7 @@ class ConversationsViewModel(
                 val existingById = _uiState.value.conversations.associateBy { it.id }
                 _uiState.update {
                     it.copy(
+                        searchProfiles = groups.associateBy { group -> group.conversationId },
                         searchResults = groups.map { group ->
                             val existing = existingById[group.conversationId]
                             ConversationUiModel(

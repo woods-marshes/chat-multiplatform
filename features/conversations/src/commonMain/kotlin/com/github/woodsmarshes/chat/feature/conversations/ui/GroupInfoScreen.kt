@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.feature.conversations.ui
 
 import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -93,7 +94,8 @@ fun GroupInfoScreen(
     onOpenChat: (conversationId: String) -> Unit,
     modifier: Modifier = Modifier,
     isExtraPane: Boolean = false,
-    viewModel: GroupInfoViewModel = koinViewModel(parameters = { parametersOf(conversationId) }),
+    searchProfile: GroupProfile? = null,
+    viewModel: GroupInfoViewModel = koinViewModel(parameters = { parametersOf(conversationId, searchProfile) }),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current

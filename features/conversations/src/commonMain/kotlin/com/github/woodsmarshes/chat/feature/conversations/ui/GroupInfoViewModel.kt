@@ -7,6 +7,7 @@ import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ContactRepository
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
@@ -32,6 +33,7 @@ class GroupInfoViewModel(
     private val conversationRepository: ConversationRepository,
     private val userRepository: UserRepository,
     private val contactRepository: ContactRepository,
+    searchProfile: GroupProfile? = null,
 ) : ViewModel() {
 
     private val strings
@@ -39,7 +41,20 @@ class GroupInfoViewModel(
 
     private val parsedId = runCatching { Uuid.parse(conversationId) }.getOrNull()
 
-    private val _uiState = MutableStateFlow(GroupInfoUiState())
+    // A saved navigation snapshot is display-only; it never grants membership or permissions.
+    private val _uiState = MutableStateFlow(
+        searchProfile?.takeIf { it.conversationId == parsedId }?.let { profile ->
+            GroupInfoUiState(
+                conversationId = profile.conversationId.toString(),
+                name = profile.name,
+                handle = profile.handle,
+                avatarUrl = profile.avatarUrl,
+                description = profile.description,
+                settings = profile.settings,
+                isLoading = false,
+            )
+        } ?: GroupInfoUiState()
+    )
     val uiState: StateFlow<GroupInfoUiState> = _uiState.asStateFlow()
 
     private var refreshJob: Job? = null
@@ -93,6 +108,7 @@ class GroupInfoViewModel(
                                 myNickname = participantSettings.nickname,
                                 invitableFriends = s.invitableFriends.filter { it.id !in memberIds },
                                 isLoading = false,
+                                notFound = false,
                                 error = null,
                             )
                         }

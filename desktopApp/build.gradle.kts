@@ -39,6 +39,10 @@ dependencies {
 nucleus.application {
     mainClass = "com.github.woodsmarshes.chat.MainKt"
 
+    buildTypes.release.proguard {
+        isEnabled.set(false)
+    }
+
     jvmArgs(
         "--enable-native-access=ALL-UNNAMED",
         "--add-exports=java.base/sun.misc=ALL-UNNAMED",
@@ -48,10 +52,11 @@ nucleus.application {
     nativeDistributions {
         targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
         appName = "Chat"
-        packageName = "com.github.woodsmarshes.chat"
-        packageVersion = "1.0.0"
+        packageName = "Chat"
+        packageVersion = libs.versions.appVersion.get()
 
         macOS {
+            bundleID = "com.github.woodsmarshes.chat"
             iconFile.set(project.file("icons/icon.icns"))
         }
         windows {

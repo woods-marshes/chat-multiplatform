@@ -8,5 +8,7 @@ import org.koin.dsl.module
 
 val conversationsModule = module {
     viewModelOf(::ConversationsViewModel)
-    viewModel { (conversationId: String) -> GroupInfoViewModel(conversationId, get(), get(), get()) }
+    viewModel { params ->
+        GroupInfoViewModel(params.get(), get(), get(), get(), params.getOrNull())
+    }
 }

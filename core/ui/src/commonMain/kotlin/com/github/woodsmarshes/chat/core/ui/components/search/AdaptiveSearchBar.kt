@@ -26,6 +26,8 @@ import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -266,17 +268,20 @@ fun AdaptiveSearchBar(
     // pane of a list-detail layout visible), full screen otherwise.
     val useDockedSearch = currentWindowAdaptiveInfoV2().windowSizeClass
         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
-    if (useDockedSearch) {
-        ExpandedDockedSearchBarWithGap(
-            state = state,
-            inputField = inputField,
-            content = searchViewContent,
-        )
-    } else {
-        ExpandedFullScreenSearchBar(
-            state = state,
-            inputField = inputField,
-            content = searchViewContent,
-        )
+    // Expanded search owns a Dialog/Popup layout tree, not the navigation overlay's tree.
+    CompositionLocalProvider(LocalAppSharedTransitionScope provides null) {
+        if (useDockedSearch) {
+            ExpandedDockedSearchBarWithGap(
+                state = state,
+                inputField = inputField,
+                content = searchViewContent,
+            )
+        } else {
+            ExpandedFullScreenSearchBar(
+                state = state,
+                inputField = inputField,
+                content = searchViewContent,
+            )
+        }
     }
 }
