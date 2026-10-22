@@ -15,6 +15,8 @@ config:
 graph TB
   subgraph :features
     direction TB
+    :features:article[article]:::compose-multiplatform
+    :features:article-editor[article-editor]:::compose-multiplatform
     :features:auth[auth]:::compose-multiplatform
     :features:chat[chat]:::compose-multiplatform
     :features:contacts[contacts]:::compose-multiplatform
@@ -33,9 +35,10 @@ graph TB
     :core:model[model]:::kotlin-multiplatform
     :core:navigation[navigation]:::compose-multiplatform
     :core:network[network]:::kotlin-multiplatform
+    :core:network-api[network-api]:::kotlin-multiplatform
     :core:ui[ui]:::compose-multiplatform
   end
-  :composeApp[composeApp]:::unknown
+  :composeApp[composeApp]:::compose-multiplatform
 
   :composeApp -.-> :core:common
   :composeApp -.-> :core:data
@@ -46,6 +49,8 @@ graph TB
   :composeApp -.-> :core:navigation
   :composeApp -.-> :core:network
   :composeApp -.-> :core:ui
+  :composeApp -.-> :features:article
+  :composeApp -.-> :features:article-editor
   :composeApp -.-> :features:auth
   :composeApp -.-> :features:chat
   :composeApp -.-> :features:contacts
@@ -64,13 +69,27 @@ graph TB
   :core:datastore -.-> :core:model
   :core:domain -.-> :core:common
   :core:domain -.-> :core:model
-  :core:model -.-> :core:common
-  :core:navigation -.-> :core:common
   :core:network -.-> :core:common
   :core:network -.-> :core:datastore
   :core:network -.-> :core:model
+  :core:network --> :core:network-api
+  :core:network-api --> :core:model
   :core:ui -.-> :core:common
   :core:ui --> :core:model
+  :features:article -.-> :core:common
+  :features:article -.-> :core:data
+  :features:article -.-> :core:domain
+  :features:article -.-> :core:model
+  :features:article -.-> :core:navigation
+  :features:article -.-> :core:network
+  :features:article -.-> :core:ui
+  :features:article-editor -.-> :core:common
+  :features:article-editor -.-> :core:data
+  :features:article-editor -.-> :core:domain
+  :features:article-editor -.-> :core:model
+  :features:article-editor -.-> :core:navigation
+  :features:article-editor -.-> :core:network
+  :features:article-editor -.-> :core:ui
   :features:auth -.-> :core:common
   :features:auth -.-> :core:data
   :features:auth -.-> :core:domain
@@ -116,7 +135,9 @@ graph TB
   :features:settings -.-> :core:ui
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
+classDef desktop-application fill:#BDB2FF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;
+classDef ktor-server fill:#FDFFB6,stroke:#000,stroke-width:2px,color:#000;
 classDef kotlin-multiplatform fill:#9BF6FF,stroke:#000,stroke-width:2px,color:#000;
 classDef unknown fill:#FFADAD,stroke:#000,stroke-width:2px,color:#000;
 ```
@@ -125,15 +146,19 @@ classDef unknown fill:#FFADAD,stroke:#000,stroke-width:2px,color:#000;
 
 ```mermaid
 graph TB
-  AndroidApp[Android App]:::android-application
-  ComposeUI[Compose UI]:::compose-multiplatform
-  SharedKMP[Shared KMP]:::kotlin-multiplatform
+  AndroidApplication[Android App]:::android-application
+  DesktopApplication[Desktop App]:::desktop-application
+  ComposeMultiplatform[Compose UI]:::compose-multiplatform
+  KtorServer[Ktor Server]:::ktor-server
+  KotlinMultiplatform[Kotlin Multiplatform]:::kotlin-multiplatform
 
-  AndroidApp -.-> SharedKMP
-  SharedKMP --> ComposeUI
+  AndroidApplication -.-> KotlinMultiplatform
+  KotlinMultiplatform --> ComposeMultiplatform
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
+classDef desktop-application fill:#BDB2FF,stroke:#000,stroke-width:2px,color:#000;
 classDef compose-multiplatform fill:#FFD6A5,stroke:#000,stroke-width:2px,color:#000;
+classDef ktor-server fill:#FDFFB6,stroke:#000,stroke-width:2px,color:#000;
 classDef kotlin-multiplatform fill:#9BF6FF,stroke:#000,stroke-width:2px,color:#000;
 classDef unknown fill:#FFADAD,stroke:#000,stroke-width:2px,color:#000;
 ```
