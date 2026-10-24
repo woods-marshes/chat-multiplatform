@@ -87,11 +87,12 @@ fun createHttpClient(
     authTokenDataSource: AuthTokenDataSource,
     tokenRefresher: TokenRefresher,
     httpEventBus: HttpEventBus,
+    requestTimeoutMillis: Long = 10_000,
 ) = HttpClient(httpClientEngine) {
     val log = KotlinLogging.logger {}
 
     install(HttpTimeout) {
-        requestTimeoutMillis = 10000
+        this.requestTimeoutMillis = requestTimeoutMillis
         connectTimeoutMillis = 5000
         socketTimeoutMillis = 15000
     }
