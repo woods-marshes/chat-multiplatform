@@ -61,6 +61,57 @@ jobs:
         if: matrix.enable-android == 'true'
         run: ./gradlew :androidApp:assembleDebug -PenableAndroid=true --no-daemon
 
+  client-tests:
+    name: Client JVM Tests (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [core, data-app, features]
+        include:
+          - shard: core
+            modules: >-
+              :core:common:jvmTest
+              :core:database:jvmTest
+              :core:navigation:jvmTest
+              :core:network:jvmTest
+              :core:network-api:jvmTest
+          - shard: data-app
+            modules: >-
+              :core:data:jvmTest
+              :core:ui:jvmTest
+              :composeApp:jvmTest
+          - shard: features
+            modules: >-
+              :features:article:jvmTest
+              :features:article-editor:jvmTest
+              :features:auth:jvmTest
+              :features:chat:jvmTest
+              :features:conversations:jvmTest
+              :features:profile:jvmTest
+              :features:settings:jvmTest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Run JVM tests
+        run: >-
+          ./gradlew ${{ matrix.modules }}
+          -PenableAndroid=false
+          --no-daemon
+
+      # webApp is an entry module with no dependents: nothing else in the
+      # graph compiles it, so it needs an explicit task here.
+      - name: Compile webApp (wasmJs)
+        if: matrix.shard == 'core'
+        run: ./gradlew :webApp:compileKotlinWasmJs -PenableAndroid=false --no-daemon
+
   collab-server-check:
     name: Collab Server Dependency Check
     runs-on: ubuntu-latest
