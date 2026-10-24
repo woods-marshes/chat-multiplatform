@@ -96,8 +96,6 @@ interface ConversationParticipantRepository {
         conversationId: Uuid
     ): Pair<ConversationParticipant, User>?
 
-    suspend fun getConversationParticipants(): List<ConversationParticipant>
-
     suspend fun getConversationParticipantByUserId(
         userId: Uuid,
         roles: List<ConversationRole> = emptyList()
