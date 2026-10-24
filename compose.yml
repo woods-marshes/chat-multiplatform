@@ -2,10 +2,10 @@
 # Chat Multiplatform — Docker Compose 部署配置
 # ============================================================
 #
-# 启动（.env 已内置 demo 默认值，可直接运行）：
+# 启动（首次使用请先复制模板：cp .env.example .env，内含 demo 默认值）：
 #   docker compose up -d
 #
-# 生产部署前请编辑 .env 修改密码和密钥：
+# 生产部署前请编辑 .env 修改密码和密钥（.env 已被 gitignore，不会入库）：
 #   vim .env
 #
 # 查看日志：

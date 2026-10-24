@@ -118,3 +118,6 @@ features/*/src/commonMain/composeResources/files/*.html
 !gradle/wrapper/gradle-wrapper.jar
 # ZCode agent workspace (must never be committed)
 .zcode/
+
+# Local compose environment (template: .env.example)
+/.env

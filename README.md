@@ -33,6 +33,7 @@ Other ways to run it:
 ./gradlew :androidApp:installDebug -PenableAndroid=true   # Android (emulator or device)
 ./gradlew :webApp:jsBrowserDevelopmentRun                 # Compose Web (JS)
 ./gradlew :web:jsBrowserDevelopmentRun                   # Web client (Kotlin/JS + React)
+cp .env.example .env                                     # one-time: compose env file
 docker compose up -d                                     # server + PostgreSQL + collaboration service
 ```
 
@@ -137,7 +138,7 @@ cd collab-server && npm install && \
 
 Open an article editor and the client connects to `ws://127.0.0.1:1234`. Concurrent edits sync as Yjs updates and are written to the `yjs_documents` table after a 2s debounce. Non-authors get a read-only room, and unpublished drafts are not readable at all.
 
-`docker compose up -d` brings up the server, PostgreSQL and the collaboration service together.
+`docker compose up -d` brings up the server, PostgreSQL and the collaboration service together (copy `.env.example` to `.env` first, and change its secrets before any real deployment).
 
 ## Development
 

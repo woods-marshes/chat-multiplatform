@@ -33,6 +33,7 @@
 ./gradlew :androidApp:installDebug -PenableAndroid=true   # Android（需模拟器/真机）
 ./gradlew :webApp:jsBrowserDevelopmentRun                 # Compose Web（JS）
 ./gradlew :web:jsBrowserDevelopmentRun                   # 网页版（Kotlin/JS + React）
+cp .env.example .env                                     # 首次使用：生成 Compose 变量文件
 docker compose up -d                                     # 服务端 + PostgreSQL + 协作服务
 ```
 
@@ -137,7 +138,7 @@ cd collab-server && npm install && \
 
 打开文章编辑器后，客户端连 `ws://127.0.0.1:1234`；多人同时编辑时 Yjs 增量实时同步，2 秒防抖后落库到 `yjs_documents` 表。非作者进入房间是只读的，未发布草稿则拒绝访问。
 
-`docker compose up -d` 会把服务端、PostgreSQL 和协作服务一起拉起，开箱即用。
+`docker compose up -d` 会把服务端、PostgreSQL 和协作服务一起拉起（首次需先 `cp .env.example .env`，生产部署前请修改其中密钥）。
 
 ## 开发
 
