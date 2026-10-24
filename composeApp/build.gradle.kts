@@ -14,6 +14,12 @@ if (project.extra["enableAndroid"] as Boolean) {
 }
 
 kotlin {
+    composeCompiler {
+        stabilityConfigurationFiles.add(
+            rootProject.layout.projectDirectory.file("stability_config.conf")
+        )
+    }
+
     if (project.extra["enableAndroid"] as Boolean) {
         targets.withType<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget>().configureEach {
             namespace = "com.github.woodsmarshes.chat.ui"
