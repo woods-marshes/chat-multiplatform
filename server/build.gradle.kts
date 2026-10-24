@@ -55,7 +55,10 @@ val stageWebAssets = tasks.register<Sync>("stageWebAssets") {
     into(layout.buildDirectory.dir("generated/web-assets"))
 }
 
-tasks.withType<ProcessResources> {
+// Ktor's fat jar is Shadow-based; assets live only in the shadow jar, so
+// the test classpath (classes/resources dirs) never contains the web build
+// and web failures surface in packaging, not as server test failures.
+tasks.named<Jar>("shadowJar") {
     from(stageWebAssets) {
         into("static")
     }

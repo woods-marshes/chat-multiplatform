@@ -136,7 +136,7 @@ fun Application.configureRouting() {
             }
         }
 
-        // Serve web module SPA from classpath resources (copied via processResources)
+        // Serve web module SPA from classpath resources (packaged into the shadow jar)
         singlePageApplication {
             useResources = true
             filesPath = "static"
