@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.project.kotlinMultiplatform)
     alias(libs.plugins.project.composeMultiplatform)
     alias(libs.plugins.kotlin.plugin.serialization)
+    alias(libs.plugins.project.tiptapWebview)
 }
 
 kotlin {
@@ -44,42 +45,11 @@ compose.resources {
     generateResClass = always
 }
 
-val buildTiptapEditorWebview = tasks.register<Exec>("buildTiptapEditorWebview") {
-    group = "build"
-    description = "执行 tiptap-bridge 的 npm 编译 (webview自包含单网页包)"
-
-    val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
-
-    workingDir = layout.projectDirectory.dir("../../tiptap-bridge").asFile
-
-    if (isWindows) {
-        commandLine("cmd", "/c", "npm run build:webview:editor")
-    } else {
-        commandLine("npm", "run", "build:webview:editor")
-    }
-
-    inputs.dir(layout.projectDirectory.dir("../../tiptap-bridge/src"))
-    inputs.file(layout.projectDirectory.file("../../tiptap-bridge/package.json"))
-    inputs.file(layout.projectDirectory.file("../../tiptap-bridge/vite.webview.editor.config.js"))
-    outputs.dir(layout.projectDirectory.dir("../../tiptap-bridge/dist-webview/editor"))
-}
-
-val copyTiptapWebviewToResources = tasks.register<Copy>("copyTiptapWebviewToResources") {
-    group = "build"
-    description = "分发自包含的 HTML 页面到本模块的 Compose Resources 目录"
-
-    dependsOn(buildTiptapEditorWebview)
-
-    from(layout.projectDirectory.dir("../../tiptap-bridge/dist-webview/editor")) {
-        include("editor.html")
-    }
-
-    into(layout.projectDirectory.dir("src/commonMain/composeResources/files"))
-}
-
-tasks.matching { it.name.startsWith("generateComposeResClass") }.configureEach {
-    dependsOn(copyTiptapWebviewToResources)
-}
-tasks.matching { it.name == "copyNonXmlValueResourcesForCommonMain" }.configureEach {
-    dependsOn(copyTiptapWebviewToResources)
+tiptapWebview {
+    npmScript = "build:webview:editor"
+    viteConfig = "vite.webview.editor.config.js"
+    outputDirName = "dist-webview/editor"
+    includeFiles = listOf("editor.html")
+    copyInto = "src/commonMain/composeResources/files"
+    hookTaskPrefixes = listOf("generateComposeResClass", "copyNonXmlValueResourcesForCommonMain")
 }

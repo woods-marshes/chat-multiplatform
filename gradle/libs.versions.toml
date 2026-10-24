@@ -342,3 +342,4 @@ project-kotlinMultiplatform = { id = "project.kotlin.multiplatform" }
 project-composeMultiplatform = { id = "project.kotlin.composeMultiplatform" }
 project-android-application = { id = "project.android.application" }
 project-root = { id = "project.root" }
+project-tiptapWebview = { id = "project.tiptap.webview" }

@@ -34,5 +34,9 @@ gradlePlugin {
             id = libs.plugins.project.root.get().pluginId
             implementationClass = "RootPlugin"
         }
+        register("tiptapWebview") {
+            id = libs.plugins.project.tiptapWebview.get().pluginId
+            implementationClass = "TiptapWebviewPlugin"
+        }
     }
 }

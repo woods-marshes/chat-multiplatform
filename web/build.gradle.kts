@@ -3,71 +3,21 @@ import org.gradle.kotlin.dsl.sourceSets
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.plugin.serialization)
+    alias(libs.plugins.project.tiptapWebview)
 }
 
-val buildTiptap = tasks.register<Exec>("buildTiptap") {
-    group = "build"
-    description = "执行 tiptap-bridge 的 npm 打包"
-
-    val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
-
-    workingDir = layout.projectDirectory.dir("../tiptap-bridge").asFile
-
-    if (isWindows) {
-        commandLine("cmd", "/c", "npm run build")
-    } else {
-        commandLine("npm", "run", "build")
-    }
-
-    inputs.dir(layout.projectDirectory.dir("../tiptap-bridge/src"))
-    inputs.file(layout.projectDirectory.file("../tiptap-bridge/package.json"))
-    outputs.dir(layout.projectDirectory.dir("../tiptap-bridge/dist"))
-}
-
-val copyTiptapJs = tasks.register<Copy>("copyTiptapJs") {
-    group = "build"
-    description = "分发打包好的 UMD.js 文件到静态资源层（供 webpack 打包）"
-
-    dependsOn(buildTiptap)
-
-    from(layout.projectDirectory.dir("../tiptap-bridge/dist")) {
-        include("tiptap-editor-bridge.umd.js")
-    }
-    into(layout.projectDirectory.dir("src/jsMain/resources"))
-}
-
-
-val copyTiptapCss = tasks.register<Copy>("copyTiptapCss") {
-    group = "build"
-    description = "分发打包好的 css 样式表到静态资源层"
-
-    dependsOn(buildTiptap)
-
-    from(layout.projectDirectory.dir("../tiptap-bridge/dist")) {
-        include("tiptap-bridge.css")
-    }
-    into(layout.projectDirectory.dir("src/jsMain/resources"))
-}
-
-tasks.register("buildAndCopyTiptap") {
-    group = "build"
-    description = "一键自动打包并分发 Tiptap 编辑器组件"
-
-    dependsOn(copyTiptapJs, copyTiptapCss)
-}
-
-tasks.matching { it.name.startsWith("jsProcessResources") }.configureEach {
-    dependsOn("buildAndCopyTiptap")
-}
-
-tasks.matching { it.name == "compileKotlinJs" }.configureEach {
-    dependsOn("copyTiptapJs")
+tiptapWebview {
+    npmScript = "build"
+    outputDirName = "dist"
+    includeFiles = listOf("tiptap-editor-bridge.umd.js", "tiptap-bridge.css")
+    copyInto = "src/jsMain/resources"
+    hookTaskPrefixes = listOf("jsProcessResources", "compileKotlinJs")
 }
 
 val copyTiptapJsToBuild = tasks.register<Copy>("copyTiptapJsToBuild") {
     group = "build"
     description = "Copy UMD bridge into webpack output dir"
-    dependsOn("copyTiptapJs", "copyTiptapCss", "compileKotlinJs")
+    dependsOn("copyTiptapBridgeAssets", "compileKotlinJs")
     from(layout.projectDirectory.dir("src/jsMain/resources")) {
         include("tiptap-editor-bridge.umd.js")
     }
