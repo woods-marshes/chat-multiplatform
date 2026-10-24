@@ -21,16 +21,20 @@ class DatabaseSessionOperationsMappingTest {
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         var generation = 1L
         val gate = ManagedDatabaseSessionGate(StandardTestDispatcher(testScheduler), { db }, { generation })
-        gate.start()
+        try {
+            gate.start()
 
-        generation = 2L
+            generation = 2L
 
-        val stale = gate.executeResult(
-            onStopped = { "stopped" },
-            onFailure = { "failed" },
-        ) { Ok(Unit) }
+            val stale = gate.executeResult(
+                onStopped = { "stopped" },
+                onFailure = { "failed" },
+            ) { Ok(Unit) }
 
-        assertEquals(Err("stopped"), stale)
+            assertEquals(Err("stopped"), stale)
+        } finally {
+            gate.stop()
+        }
     }
 
     @Test
@@ -38,13 +42,17 @@ class DatabaseSessionOperationsMappingTest {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         val db = createDatabase { schema -> schema.create(driver).await(); driver }
         val gate = ManagedDatabaseSessionGate(StandardTestDispatcher(testScheduler), { db }, { 1L })
-        gate.start()
+        try {
+            gate.start()
 
-        val failed: Result<Unit, String> = gate.executeResult(
-            onStopped = { "stopped" },
-            onFailure = { "failed" },
-        ) { throw IllegalStateException("boom") }
+            val failed: Result<Unit, String> = gate.executeResult(
+                onStopped = { "stopped" },
+                onFailure = { "failed" },
+            ) { throw IllegalStateException("boom") }
 
-        assertEquals(Err("failed"), failed)
+            assertEquals(Err("failed"), failed)
+        } finally {
+            gate.stop()
+        }
     }
 }
