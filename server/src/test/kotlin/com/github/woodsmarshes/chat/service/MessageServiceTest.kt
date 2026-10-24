@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.service
 
+import com.github.woodsmarshes.chat.repository.ReadCursorResult
 import com.github.woodsmarshes.chat.repository.ReadCursorUpdate
 import com.github.woodsmarshes.chat.events.MessageEvent
 import com.github.woodsmarshes.chat.events.EventBus
@@ -40,9 +41,8 @@ class MessageServiceTest {
         val conversationId = Uuid.random()
         val userId = Uuid.random()
         val messageId = Uuid.random()
-        coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorUpdate.ADVANCED
+        coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorResult(ReadCursorUpdate.ADVANCED, 3L)
 
-        coEvery { messageRepository.getUnreadCount(conversationId, userId) } returns 3L
         val result = service.markAsRead(conversationId, userId, messageId)
 
         assertTrue(result.isOk)
@@ -56,14 +56,14 @@ class MessageServiceTest {
 
     @Test
     fun unchangedReceiptSucceedsWithoutPublishingAnOlderCursor() = runBlocking {
-        coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorUpdate.UNCHANGED
+        coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorResult(ReadCursorUpdate.UNCHANGED, 0L)
         assertTrue(service.markAsRead(Uuid.random(), Uuid.random(), Uuid.random()).isOk)
         coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
     }
 
     @Test
     fun invalidReceiptFailsWithoutBroadcast() = runBlocking {
-        coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorUpdate.INVALID
+        coEvery { participantRepository.updateReadLastMessage(any(), any(), any()) } returns ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
         assertTrue(service.markAsRead(Uuid.random(), Uuid.random(), Uuid.random()).isErr)
         coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
     }

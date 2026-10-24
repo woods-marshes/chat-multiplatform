@@ -185,8 +185,10 @@ class MessageService(
             Err(MessageError.PermissionDenied).bind()
         }
 
-        val success = messageRepository.revokeMessage(messageId)
-        if (!success) {
+        val revoked = messageRepository.revokeMessage(messageId)
+        if (!revoked && message.revokedAt == null) {
+            // Failing on a live message is a real error; failing on an
+            // already-revoked one is a retried request and must succeed.
             Err(MessageError.RevokeFailed).bind()
         }
 
@@ -287,13 +289,13 @@ class MessageService(
 
     // 更新已读的消息
     suspend fun markAsRead(conversationId: Uuid, userId: Uuid, messageId: Uuid): Result<Unit, MessageError> = coroutineBinding {
-        val outcome = conversationParticipantRepository.updateReadLastMessage(
+        val result = conversationParticipantRepository.updateReadLastMessage(
             userId = userId, conversationId = conversationId, messageId = messageId
         )
-        if (outcome == ReadCursorUpdate.ADVANCED) {
-            // The broadcast carries the recomputed unread so every device of
-            // the reader converges even when the local window has holes.
-            val unreadCount = messageRepository.getUnreadCount(conversationId, userId).toInt()
+        if (result.outcome == ReadCursorUpdate.ADVANCED) {
+            // The unread comes from the same transaction as the cursor update,
+            // so the sync journal and this broadcast always carry one value.
+            val unreadCount = result.unreadCount.toInt()
             eventBus.publishMessageEvent(
                 MessageEvent.ReadMessage(
                     messageId = messageId,
@@ -303,7 +305,7 @@ class MessageService(
                     timestamp = Clock.System.now()
                 )
             )
-        } else if (outcome == ReadCursorUpdate.INVALID) {
+        } else if (result.outcome == ReadCursorUpdate.INVALID) {
             Err(MessageError.MessageNotFound).bind()
         }
     }

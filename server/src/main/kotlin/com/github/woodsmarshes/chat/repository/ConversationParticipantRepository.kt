@@ -41,6 +41,13 @@ import kotlin.uuid.Uuid
 /** Outcome of an atomic, monotonic read-cursor update. */
 enum class ReadCursorUpdate { ADVANCED, UNCHANGED, INVALID }
 
+/**
+ * [unreadCount] is the post-update unread total computed inside the same
+ * transaction, so callers never recount — it is meaningful only for
+ * [ReadCursorUpdate.ADVANCED] and is 0 otherwise.
+ */
+data class ReadCursorResult(val outcome: ReadCursorUpdate, val unreadCount: Long)
+
 interface ConversationParticipantRepository {
     suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant?
 
@@ -51,7 +58,7 @@ interface ConversationParticipantRepository {
     suspend fun updateParticipantSettings(userId: Uuid, conversationId: Uuid, settings: ParticipantSettings): Boolean
 
     /** Valid repeated or older receipts succeed without advancing or broadcasting. */
-    suspend fun updateReadLastMessage(userId: Uuid, conversationId: Uuid, messageId: Uuid): ReadCursorUpdate
+    suspend fun updateReadLastMessage(userId: Uuid, conversationId: Uuid, messageId: Uuid): ReadCursorResult
 
     /** Same contract as [updateParticipantSettings]. */
     suspend fun updateConversationParticipantRole(userId: Uuid, conversationId: Uuid, role: ConversationRole): Boolean
@@ -175,21 +182,21 @@ class ConversationParticipantDataSourceImpl(
         userId: Uuid,
         conversationId: Uuid,
         messageId: Uuid
-    ): ReadCursorUpdate = dbQuery {
+    ): ReadCursorResult = dbQuery {
         // The cursor column has no foreign key, so a read receipt could point
         // at a message from another conversation (or at nothing at all).
         Messages.selectAll()
             .where { Messages.id eq messageId }
             .singleOrNull()
             ?.takeIf { it[Messages.conversationId].value == conversationId }
-            ?: return@dbQuery ReadCursorUpdate.INVALID
+            ?: return@dbQuery ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
         ConversationParticipants.selectAll()
             .where {
                 (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId)
             }
             .singleOrNull()
-            ?: return@dbQuery ReadCursorUpdate.INVALID
+            ?: return@dbQuery ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
 
         // Message ids are UUIDv7, so "greater" is chronological. A receipt for
         // an already-covered message is a no-op rather than a failure: several
@@ -238,9 +245,9 @@ class ConversationParticipantDataSourceImpl(
                     unreadCount = unreadCount.toInt(),
                 ),
             )
-            ReadCursorUpdate.ADVANCED
+            ReadCursorResult(ReadCursorUpdate.ADVANCED, unreadCount)
         } else {
-            ReadCursorUpdate.UNCHANGED
+            ReadCursorResult(ReadCursorUpdate.UNCHANGED, 0L)
         }
     }
 

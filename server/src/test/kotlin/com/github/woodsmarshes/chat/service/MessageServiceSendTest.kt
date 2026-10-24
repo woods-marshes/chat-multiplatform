@@ -19,6 +19,7 @@ import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.michaelbull.result.get
 import com.github.michaelbull.result.getError
 import com.github.woodsmarshes.chat.events.EventBus
+import com.github.woodsmarshes.chat.events.MessageEvent
 import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
@@ -134,6 +135,28 @@ class MessageServiceSendTest {
         // Whether the file is actually deleted is decided inside the
         // lifecycle (covered by AttachmentLifecycleTest).
         coVerify(exactly = 1) { attachments.gcAfterWithdraw(fileMessage) }
+    }
+
+    @Test
+    fun retriedWithdrawOfAnAlreadyRevokedMessageSucceeds() = runBlocking {
+        val revokedMessage = message().copy(revokedAt = now)
+        coEvery { messageRepository.getMessageRevokeContext(userId, revokedMessage.id) } returns Triple(
+            Pair(userId, revokedMessage),
+            participantForRevocation(),
+            conversationForRevocation(),
+        )
+        // revokeMessage reports false because the row is already revoked.
+        coEvery { messageRepository.revokeMessage(revokedMessage.id) } returns false
+        coJustRun { attachments.gcAfterWithdraw(revokedMessage) }
+
+        val result = service.withdrawMessage(userId, revokedMessage.id)
+
+        assertTrue(result.isOk)
+        coVerify(exactly = 1) {
+            eventBus.publishMessageEvent(
+                match { it is MessageEvent.WithdrawMessage && it.messageId == revokedMessage.id }
+            )
+        }
     }
 
     private fun participantForRevocation() = ConversationParticipant(
