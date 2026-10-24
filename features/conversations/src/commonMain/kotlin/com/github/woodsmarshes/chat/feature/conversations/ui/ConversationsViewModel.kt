@@ -85,17 +85,7 @@ class ConversationsViewModel(
             contactRepository.getFriendsFlow()
                 .catch { e -> log.warn(e) { "[ConversationsViewModel] observing friends failed" } }
                 .collect { pairs ->
-                    val friends = pairs.map { (contact, user) ->
-                        ContactUiModel(
-                            id = user.id,
-                            username = user.username,
-                            displayName = contact.alias?.takeIf { it.isNotBlank() }
-                                ?: contact.nickname?.takeIf { it.isNotBlank() }
-                                ?: user.displayName,
-                            avatarUrl = user.avatarUrl,
-                            bio = user.bio,
-                        )
-                    }
+                    val friends = pairs.map { (contact, user) -> toContactUiModel(contact, user) }
                     _uiState.update { it.copy(availableFriends = friends) }
                 }
         }
@@ -216,23 +206,8 @@ class ConversationsViewModel(
         }
         handleCheckJob?.cancel()
         if (cleaned.isEmpty()) return
-        handleCheckJob = viewModelScope.launch {
-            delay(400)
-            conversationRepository.checkHandleExists(cleaned).onOk { exists ->
-                _uiState.update {
-                    it.copy(
-                        isCheckingHandle = false,
-                        isHandleAvailable = !exists,
-                    )
-                }
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isCheckingHandle = false,
-                        isHandleAvailable = null,
-                    )
-                }
-            }
+        handleCheckJob = viewModelScope.launchGroupHandleCheck(cleaned, conversationRepository) { checking, available ->
+            _uiState.update { it.copy(isCheckingHandle = checking, isHandleAvailable = available) }
         }
     }
 

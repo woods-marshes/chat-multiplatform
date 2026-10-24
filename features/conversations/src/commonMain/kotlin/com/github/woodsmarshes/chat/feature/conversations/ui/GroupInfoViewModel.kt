@@ -11,6 +11,7 @@ import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
 import com.github.woodsmarshes.chat.core.model.ui.SenderUser
@@ -132,17 +133,7 @@ class GroupInfoViewModel(
                     val memberIds = _uiState.value.members.map { it.id }.toSet()
                     val friends = pairs
                         .filter { (_, user) -> user.id !in memberIds }
-                        .map { (contact, user) ->
-                            ContactUiModel(
-                                id = user.id,
-                                username = user.username,
-                                displayName = contact.alias?.takeIf { it.isNotBlank() }
-                                    ?: contact.nickname?.takeIf { it.isNotBlank() }
-                                    ?: user.displayName,
-                                avatarUrl = user.avatarUrl,
-                                bio = user.bio,
-                            )
-                        }
+                        .map { (contact, user) -> toContactUiModel(contact, user) }
                     _uiState.update { it.copy(invitableFriends = friends) }
                 }
         }
@@ -267,49 +258,45 @@ class GroupInfoViewModel(
         }
     }
 
+    /**
+     * Optimistic participant-settings update: applies [transform] locally,
+     * persists the result, and rolls the mirrored state fields back on
+     * failure. [render] maps a settings value onto the fields that mirror it.
+     */
+    private fun applyParticipantSettings(
+        transform: (ParticipantSettings) -> ParticipantSettings,
+        render: (GroupInfoUiState, ParticipantSettings) -> GroupInfoUiState,
+        onSuccess: suspend () -> Unit = {},
+    ) {
+        val conversationId = parsedId ?: return
+        val oldSettings = _uiState.value.myParticipantSettings
+        val newSettings = transform(oldSettings)
+        _uiState.update { render(it, newSettings) }
+        viewModelScope.launch {
+            conversationRepository.updateMyParticipantSettings(
+                conversationId = conversationId,
+                settings = newSettings,
+            ).onOk {
+                onSuccess()
+            }.onErr {
+                _uiState.update { state ->
+                    render(state, oldSettings).copy(actionError = strings.authOperationFailed)
+                }
+            }
+        }
+    }
+
     // ---------------- Personal settings ----------------
 
-    fun togglePin(pinned: Boolean) {
-        val conversationId = parsedId ?: return
-        val oldSettings = _uiState.value.myParticipantSettings
-        val newSettings = oldSettings.copy(pinnedAt = if (pinned) Clock.System.now() else null)
-        _uiState.update { it.copy(isPinned = pinned, myParticipantSettings = newSettings) }
-        viewModelScope.launch {
-            conversationRepository.updateMyParticipantSettings(
-                conversationId = conversationId,
-                settings = newSettings,
-            ).onErr {
-                _uiState.update {
-                    it.copy(
-                        isPinned = !pinned,
-                        myParticipantSettings = oldSettings,
-                        actionError = strings.authOperationFailed,
-                    )
-                }
-            }
-        }
-    }
+    fun togglePin(pinned: Boolean) = applyParticipantSettings(
+        transform = { it.copy(pinnedAt = if (pinned) Clock.System.now() else null) },
+        render = { state, settings -> state.copy(isPinned = pinned, myParticipantSettings = settings) },
+    )
 
-    fun toggleMute(muted: Boolean) {
-        val conversationId = parsedId ?: return
-        val oldSettings = _uiState.value.myParticipantSettings
-        val newSettings = oldSettings.copy(enableNotification = !muted)
-        _uiState.update { it.copy(isMuted = muted, myParticipantSettings = newSettings) }
-        viewModelScope.launch {
-            conversationRepository.updateMyParticipantSettings(
-                conversationId = conversationId,
-                settings = newSettings,
-            ).onErr {
-                _uiState.update {
-                    it.copy(
-                        isMuted = !muted,
-                        myParticipantSettings = oldSettings,
-                        actionError = strings.authOperationFailed,
-                    )
-                }
-            }
-        }
-    }
+    fun toggleMute(muted: Boolean) = applyParticipantSettings(
+        transform = { it.copy(enableNotification = !muted) },
+        render = { state, settings -> state.copy(isMuted = muted, myParticipantSettings = settings) },
+    )
 
     fun showEditNickname() {
         _uiState.update {
@@ -329,33 +316,18 @@ class GroupInfoViewModel(
     }
 
     fun saveMyNickname() {
-        val conversationId = parsedId ?: return
         val newNickname = _uiState.value.editNicknameValue.trim().ifEmpty { null }
-        val oldSettings = _uiState.value.myParticipantSettings
-        val newSettings = oldSettings.copy(nickname = newNickname)
-        _uiState.update {
-            it.copy(
-                showEditNicknameDialog = false,
-                myNickname = newNickname,
-                myParticipantSettings = newSettings,
-            )
-        }
-        viewModelScope.launch {
-            conversationRepository.updateMyParticipantSettings(
-                conversationId = conversationId,
-                settings = newSettings,
-            ).onOk {
-                refresh()
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        myNickname = oldSettings.nickname,
-                        myParticipantSettings = oldSettings,
-                        actionError = strings.authOperationFailed,
-                    )
-                }
-            }
-        }
+        applyParticipantSettings(
+            transform = { it.copy(nickname = newNickname) },
+            render = { state, settings ->
+                state.copy(
+                    showEditNicknameDialog = false,
+                    myNickname = settings.nickname,
+                    myParticipantSettings = settings,
+                )
+            },
+            onSuccess = { refresh() },
+        )
     }
 
     // ---------------- OWNER: Group Profile & Settings ----------------
@@ -416,23 +388,8 @@ class GroupInfoViewModel(
                 isHandleAvailable = null,
             )
         }
-        handleCheckJob = viewModelScope.launch {
-            delay(400)
-            conversationRepository.checkHandleExists(cleaned).onOk { exists ->
-                _uiState.update {
-                    it.copy(
-                        isCheckingHandle = false,
-                        isHandleAvailable = !exists,
-                    )
-                }
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isCheckingHandle = false,
-                        isHandleAvailable = null,
-                    )
-                }
-            }
+        handleCheckJob = viewModelScope.launchGroupHandleCheck(cleaned, conversationRepository) { checking, available ->
+            _uiState.update { it.copy(isCheckingHandle = checking, isHandleAvailable = available) }
         }
     }
 
