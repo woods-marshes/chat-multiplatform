@@ -261,7 +261,8 @@ class GroupInfoViewModel(
     /**
      * Optimistic participant-settings update: applies [transform] locally,
      * persists the result, and rolls the mirrored state fields back on
-     * failure. [render] maps a settings value onto the fields that mirror it.
+     * failure. [render] must derive mirrored fields from the settings value —
+     * never from call-site state — so the rollback reverts them too.
      */
     private fun applyParticipantSettings(
         transform: (ParticipantSettings) -> ParticipantSettings,
@@ -290,12 +291,16 @@ class GroupInfoViewModel(
 
     fun togglePin(pinned: Boolean) = applyParticipantSettings(
         transform = { it.copy(pinnedAt = if (pinned) Clock.System.now() else null) },
-        render = { state, settings -> state.copy(isPinned = pinned, myParticipantSettings = settings) },
+        render = { state, settings ->
+            state.copy(isPinned = settings.pinnedAt != null, myParticipantSettings = settings)
+        },
     )
 
     fun toggleMute(muted: Boolean) = applyParticipantSettings(
         transform = { it.copy(enableNotification = !muted) },
-        render = { state, settings -> state.copy(isMuted = muted, myParticipantSettings = settings) },
+        render = { state, settings ->
+            state.copy(isMuted = !settings.enableNotification, myParticipantSettings = settings)
+        },
     )
 
     fun showEditNickname() {
