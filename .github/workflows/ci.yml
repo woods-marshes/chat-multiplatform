@@ -93,6 +93,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # jvmTest of article/article-editor/composeApp (and webApp compile)
+      # pulls the tiptap webview Exec tasks into the graph, so Node and the
+      # tiptap-bridge node_modules must exist even on a "pure JVM" test run.
+      - uses: actions/setup-node@v7
+        with:
+          # Keep in sync with the other jobs (Node 24).
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'tiptap-bridge/package-lock.json'
+
+      - name: Install tiptap-bridge dependencies
+        run: |
+          cd tiptap-bridge
+          npm ci --legacy-peer-deps
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
