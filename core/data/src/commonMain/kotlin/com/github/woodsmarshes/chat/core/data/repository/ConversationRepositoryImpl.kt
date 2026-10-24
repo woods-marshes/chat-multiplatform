@@ -84,7 +84,11 @@ class ConversationRepositoryImpl(
 ) : ConversationRepository {
 
     private suspend fun <T> sessionOperation(block: suspend () -> Result<T, ConversationError>): Result<T, ConversationError> =
-        databaseHolder.sessionGate.executeResult({ ConversationError.Unknown(it.message) }, block)
+        databaseHolder.sessionGate.executeResult(
+            onStopped = { ConversationError.PermissionDenied },
+            onFailure = { ConversationError.Unknown(it.message) },
+            block,
+        )
 
     private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> =
         databaseHolder.sessionGate.observeSession(factory)

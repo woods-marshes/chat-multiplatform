@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 
 /** Domain mapping only; lifecycle ownership remains in the database session. */
 internal suspend fun <T, E> DatabaseSessionGate.executeResult(
+    onStopped: () -> E,
     onFailure: (Exception) -> E,
     block: suspend () -> Result<T, E>,
 ): Result<T, E> {
@@ -25,6 +26,11 @@ internal suspend fun <T, E> DatabaseSessionGate.executeResult(
         }
     } catch (cancelled: CancellationException) {
         throw cancelled
+    } catch (_: SessionStoppedException) {
+        // Session teardown is an account-switch condition, not an operation
+        // failure; repositories map it to PermissionDenied so callers never
+        // see it mislabeled as Unknown.
+        Err(onStopped())
     } catch (failure: Exception) {
         Err(onFailure(failure))
     }

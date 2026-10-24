@@ -437,19 +437,12 @@ class OfflineFirstMessageRepositoryImpl(
                             }
                             is ConversationEventResponse.ConversationDeleted -> {
                                 runCatching {
-                                    participantDao.removeAllParticipantsFromConversation(event.conversationId)
-                                    conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
-                                    groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                                    applyConversationDeleted(event.conversationId, event.timestamp, conversationDao, participantDao, groupJoinRequestDao)
                                 }.onFailure { log.warn(it) { "[ws-consume] failed to process ConversationDeleted for ${event.conversationId}" } }
                             }
                             is ConversationEventResponse.UserLeftConversation -> {
                                 runCatching {
-                                    val meId = ownUser.firstOrNull()?.id
-                                    participantDao.removeParticipant(event.conversationId, event.userId)
-                                    if (meId != null && event.userId == meId) {
-                                        conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
-                                        groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
-                                    }
+                                    applyUserLeftConversation(event.conversationId, event.userId, ownUser.firstOrNull()?.id, event.timestamp, conversationDao, participantDao, groupJoinRequestDao)
                                 }.onFailure { log.warn(it) { "[ws-consume] failed to process UserLeftConversation for ${event.conversationId}" } }
                             }
                             is ConversationEventResponse.ConversationCreated -> {
@@ -766,16 +759,10 @@ class OfflineFirstMessageRepositoryImpl(
                         event.conversationId, event.readerId, event.messageId,
                     )
                     is ConversationEventResponse.ConversationDeleted -> {
-                        participantDao.removeAllParticipantsFromConversation(event.conversationId)
-                        conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
-                        groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
+                        applyConversationDeleted(event.conversationId, event.timestamp, conversationDao, participantDao, groupJoinRequestDao)
                     }
                     is ConversationEventResponse.UserLeftConversation -> {
-                        participantDao.removeParticipant(event.conversationId, event.userId)
-                        if (event.userId == me) {
-                            conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
-                            groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
-                        }
+                        applyUserLeftConversation(event.conversationId, event.userId, me, event.timestamp, conversationDao, participantDao, groupJoinRequestDao)
                     }
                     is ConversationEventResponse.GroupJoinRequest,
                     is ConversationEventResponse.GroupJoinRequestHandled,

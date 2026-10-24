@@ -47,7 +47,11 @@ class OfflineFirstArticleRepositoryImpl(
     private val mediatorFactory: ArticleMediatorFactory
 ) : ArticleRepository {
     private suspend fun <T> sessionOperation(block: suspend () -> Result<T, ArticleError>): Result<T, ArticleError> =
-        databaseHolder.sessionGate.executeResult({ ArticleError.Unknown(it.message) }, block)
+        databaseHolder.sessionGate.executeResult(
+            onStopped = { ArticleError.PermissionDenied },
+            onFailure = { ArticleError.Unknown(it.message) },
+            block,
+        )
 
     private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> =
         databaseHolder.sessionGate.observeSession(factory)
