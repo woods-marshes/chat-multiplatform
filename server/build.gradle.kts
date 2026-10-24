@@ -39,26 +39,25 @@ ktor {
     }
 }
 
-tasks.withType<ProcessResources> {
+val stageWebAssets = tasks.register<Sync>("stageWebAssets") {
+    group = "build"
+    description = "Stages the web client production bundle for packaging"
+
+    // Keep the explicit edge: the fat jar embeds the web client, so packaging
+    // must wait for the web build — but failures now surface here, on the
+    // staging task, instead of masquerading as a server test failure.
     dependsOn(":web:jsBrowserDistribution")
 
-    val jsOutput = file("../web/build/dist/js/productionExecutable")
-    if (jsOutput.exists()) {
-        inputs.dir(jsOutput)
-    }
-
-//    from(jsOutput.resolve("public")) {
-//        into("web")
-//    }
-//
-//    from(jsOutput.resolve("markdown")) {
-//        into("web")
-//    }
-
-    from(jsOutput) {
-        into("static")
+    from(rootProject.layout.projectDirectory.dir("web/build/dist/js/productionExecutable")) {
         include("*.html", "*.css", "*.js", "*.js.LICENSE.txt", "*.wasm")
         exclude("*.js.map", "kobweb/**", "markdown/**", "public/**")
+    }
+    into(layout.buildDirectory.dir("generated/web-assets"))
+}
+
+tasks.withType<ProcessResources> {
+    from(stageWebAssets) {
+        into("static")
     }
 
     duplicatesStrategy = DuplicatesStrategy.WARN
