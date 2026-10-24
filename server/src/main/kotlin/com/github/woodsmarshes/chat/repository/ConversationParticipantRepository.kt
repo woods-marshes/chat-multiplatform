@@ -422,12 +422,6 @@ class ConversationParticipantDataSourceImpl(
             }
     }
 
-    override suspend fun getConversationParticipants(): List<ConversationParticipant> = dbQuery {
-        ConversationParticipants
-            .selectAll()
-            .map { it.toConversationParticipant() }
-    }
-
     override suspend fun getConversationParticipantByUserId(userId: Uuid, roles: List<ConversationRole>): List<ConversationParticipant> = dbQuery {
         val query = ConversationParticipants.selectAll()
             .where { ConversationParticipants.userId eq userId }

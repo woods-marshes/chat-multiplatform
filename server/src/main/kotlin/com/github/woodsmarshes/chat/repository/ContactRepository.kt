@@ -95,11 +95,7 @@ interface ContactRepository {
 
     suspend fun getContactsByUserId(userId: Uuid): List<Contact>
 
-    suspend fun getContactStatus(userId: Uuid, contactId: Uuid): ContactStatus?
-
     suspend fun areFriends(userId1: Uuid, userId2: Uuid): Boolean
-
-    suspend fun getNonFriendIds(userId: Uuid, targetIds: List<Uuid>): List<Uuid>
 
     suspend fun getFriendIds(userId: Uuid): List<Uuid>
 }
@@ -447,16 +443,6 @@ class ContactSourceImpl(
             .map { it.toContact() }
     }
 
-    override suspend fun getContactStatus(userId: Uuid, contactId: Uuid): ContactStatus? = dbQuery {
-        Contacts
-            .selectAll()
-            .where {
-                (Contacts.userId eq userId) and (Contacts.contactId eq contactId)
-            }
-            .singleOrNull()
-            ?.let { it[Contacts.status] }
-    }
-
     override suspend fun areFriends(userId1: Uuid, userId2: Uuid): Boolean = dbQuery {
         Contacts
             .selectAll()
@@ -465,21 +451,6 @@ class ContactSourceImpl(
                         (Contacts.status eq ContactStatus.FRIEND)
             }
             .count() > 0
-    }
-
-    override suspend fun getNonFriendIds(
-        userId: Uuid,
-        targetIds: List<Uuid>
-    ): List<Uuid> = dbQuery {
-        val friendIds = Contacts
-            .selectAll()
-            .where {
-                (Contacts.userId eq userId) and
-                (Contacts.status eq ContactStatus.FRIEND)
-            }
-            .map { it[Contacts.contactId].value }
-
-        targetIds - friendIds.toSet()
     }
 
     override suspend fun getFriendIds(userId: Uuid): List<Uuid> = dbQuery {

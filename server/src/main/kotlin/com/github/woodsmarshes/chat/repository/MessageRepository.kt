@@ -95,8 +95,6 @@ interface MessageRepository {
 
     suspend fun getMessageById(messageId: Uuid): Message?
 
-    suspend fun getLastMessage(conversationId: Uuid): Message?
-
     suspend fun getMessageRevokeContext(
         userId: Uuid,
         messageId: Uuid,
@@ -469,41 +467,6 @@ class MessageDataSourceImpl(
             }
 
         messageRows?.toFilteredUser(replyToMessage)
-    }
-
-    override suspend fun getLastMessage(conversationId: Uuid): Message? = dbQuery {
-        val messageRow = Messages
-            .innerJoin(Users)
-            .leftJoin(
-                otherTable = ConversationParticipants,
-                onColumn = { Users.id },
-                otherColumn = { ConversationParticipants.userId },
-                additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
-            )
-            .selectAll()
-            .where { Messages.conversationId eq conversationId }
-            .orderBy(Messages.id to SortOrder.DESC)
-            .limit(1)
-            .singleOrNull()
-
-        val replyToMessage = messageRow
-            ?.getOrNull(Messages.replyToMessageId)
-            ?.let { replyId ->
-                Messages
-                    .innerJoin(Users)
-                    .leftJoin(
-                        otherTable = ConversationParticipants,
-                        onColumn = { Users.id },
-                        otherColumn = { ConversationParticipants.userId },
-                        additionalConstraint = { ConversationParticipants.conversationId eq Messages.conversationId }
-                    )
-                    .selectAll()
-                    .where { Messages.id eq replyId }
-                    .singleOrNull()
-                    ?.toFilteredUser()
-            }
-
-        messageRow?.toFilteredUser(replyToMessage)
     }
 
     override suspend fun getMessageRevokeContext(

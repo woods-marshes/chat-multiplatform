@@ -222,42 +222,6 @@ class MessageService(
         message
     }
 
-    /**
-     * 获取会话的最后一条消息
-     */
-    suspend fun getLastMessage(conversationId: Uuid, userId: Uuid): Result<Message?, MessageError> = coroutineBinding {
-        checkIfUserInConversation(conversationId = conversationId, userId = userId).bind()
-        messageRepository.getLastMessage(conversationId)
-    }
-
-    /**
-     * 获取消息的已读用户列表
-     */
-    suspend fun getReadMessageUsers(userId: Uuid, messageId: Uuid): Result<List<User>, MessageError> = coroutineBinding {
-        // 1. 获取消息和已读用户
-        val (message, readUsers) = messageRepository.getReadMessageUsers(messageId)
-            // Missing message -> typed 404 instead of an escaping 500.
-            ?: Err(MessageError.MessageNotFound).bind()
-
-        // 2. 检查用户是否在会话中
-        checkIfUserInConversation(conversationId = message.conversationId, userId = userId).bind()
-
-        // 3. 返回已读用户列表
-        readUsers
-    }
-
-    /**
-     * 检查特定用户是否已读该消息
-     */
-    suspend fun isMessageReadByUser(userId: Uuid, messageId: Uuid): Result<Boolean, MessageError> = coroutineBinding {
-        val (message, readUsers) = messageRepository.getReadMessageUsers(messageId)
-            ?: Err(MessageError.MessageNotFound).bind()
-
-        checkIfUserInConversation(conversationId = message.conversationId, userId = userId).bind()
-
-        readUsers.any { it.id == userId }
-    }
-
     suspend fun getHistory(
         userId: Uuid,
         conversationId: Uuid,
