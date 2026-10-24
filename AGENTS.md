@@ -82,7 +82,7 @@ tiptap-bridge (React/Vite)
 
 Windows PowerShell 使用 `./gradlew.bat` 替代 `./gradlew`。旧分支没有 desktopApp 时，先确认 `:composeApp:jvmMainClasses` 和 `:composeApp:run` 是否存在，不直接套用主分支命令。
 
-**注意**：配置缓存已启用，遇到异常行为用 `--no-configuration-cache`。JVM daemon: `-Xmx3072M`。代理: `127.0.0.1:10808`（`gradle.properties`）。更多命令和测试详情见 `notes/testing.md`。
+**注意**：配置缓存已启用，遇到异常行为用 `--no-configuration-cache`。JVM daemon: `-Xmx3072M`。本机代理 `127.0.0.1:10808`（gradle.properties 未配置，需要时以 `-Dhttp(s).proxyHost/Port` 传入）。更多命令和测试详情见 `notes/testing.md`。
 
 ## 约定
 
@@ -90,7 +90,7 @@ Windows PowerShell 使用 `./gradlew.bat` 替代 `./gradlew`。旧分支没有 d
 - **代码风格**：Kotlin official style，4 空格缩进，显式 import（不用通配符），英文标识符和注释
 - **Compose**：参数顺序 → required callbacks, `Modifier`, flags, visual params, content lambda 最后。颜色用 `MiuixTheme.colorScheme.*`。不确定 API 用法时用当前环境可用的网页检索或浏览工具 查官方文档，禁止猜测
 - **失败策略**：server 是数据权威方，跨多表写入 → 单事务 + `Err(...).bind()` 整体回滚，不用 runCatching 吞错；client 往本地缓存应用服务端批量数据 → 逐行隔离（坏行跳过、好行入库，一条坏数据不得中止整批同步），`runCatching` 只允许包住单行插入，不许包转换逻辑或整段流程
-- **JVM 目标**：composeApp/Android → JVM 17，desktopApp → JVM 25，server → JVM 25
+- **JVM 目标**：core/features（约定插件固定）与 composeApp/Android → JVM 17，desktopApp → JVM 25，server → JVM 25
 - **JS 目标**：web 模块 → ES2015，browser 平台
 - **API 基址**：`http://127.0.0.1:9051/v1/`。复制 `network-config.properties.template` → `network-config.properties` 自定义（该文件已 gitignore）
 - **Web 模块特殊规则**：

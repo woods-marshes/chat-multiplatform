@@ -3,9 +3,12 @@ import com.github.woodsmarshes.chat.getAndroidSdkVersions
 import com.github.woodsmarshes.chat.libs
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.extra
+import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 class KotlinMultiplatformConventionPlugin : Plugin<Project> {
@@ -39,7 +42,13 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
                     }
                 }
 
-                jvm()
+                // Pin to the lowest consumer (Android, JVM 17) so the shared
+                // bytecode level no longer floats with the build machine's JDK.
+                jvm {
+                    compilerOptions {
+                        jvmTarget.set(JvmTarget.JVM_17)
+                    }
+                }
 
                 js {
                     browser()
@@ -52,6 +61,11 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
                 wasmJs {
                     browser()
                 }
+            }
+
+            // Keep any Java sources consistent with the Kotlin target above.
+            tasks.withType<JavaCompile>().configureEach {
+                options.release.set(17)
             }
         }
     }
