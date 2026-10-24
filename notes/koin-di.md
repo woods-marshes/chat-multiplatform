@@ -68,7 +68,6 @@ daosModule          → 6 个 DAO（依赖 DatabaseHolder + AppDispatchers）
 serializersModule   → ProjectJson, ProjectProtobuf
 networkModule       → HttpClient, NetworkConfig, 6 个 API 对象
 dataModule          → 5 个 Repository 实现 + MessageRemoteMediator
-domainModule        → （空，预留）
 authModule → conversationsModule → contactsModule → chatModule → profileModule → settingsModule → searchModule
 ```
 

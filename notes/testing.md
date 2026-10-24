@@ -31,7 +31,6 @@
 | `core:network` | `kotlin.test` |
 | `core:database` | `kotlin.test` |
 | `core:datastore` | `kotlin.test` |
-| `core:domain` | `kotlin.test` |
 | `core:ui` | `kotlin.test` |
 | `composeApp` | `kotlin.test` |
 
