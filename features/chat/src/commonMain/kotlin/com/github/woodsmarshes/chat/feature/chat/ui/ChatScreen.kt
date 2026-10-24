@@ -84,9 +84,9 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.motion.AppMotion
-import com.github.woodsmarshes.chat.core.ui.components.bubble.messageItems
-import com.github.woodsmarshes.chat.core.ui.components.bubble.rememberFormatter
-import com.github.woodsmarshes.chat.core.ui.components.input.ChatInputBar
+import com.github.woodsmarshes.chat.feature.chat.ui.bubble.messageItems
+import com.github.woodsmarshes.chat.feature.chat.ui.bubble.rememberFormatter
+import com.github.woodsmarshes.chat.feature.chat.ui.input.ChatInputBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent

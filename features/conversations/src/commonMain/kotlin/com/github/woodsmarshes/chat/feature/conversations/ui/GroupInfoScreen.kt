@@ -68,7 +68,7 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatAppButton
 import com.github.woodsmarshes.chat.core.ui.components.ChatAppCard
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
-import com.github.woodsmarshes.chat.core.ui.components.bubble.RoleMicroBadge
+import com.github.woodsmarshes.chat.core.ui.components.RoleMicroBadge
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.item.SectionHeader
