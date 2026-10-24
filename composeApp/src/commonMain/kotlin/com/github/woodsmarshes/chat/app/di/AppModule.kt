@@ -17,7 +17,7 @@ import com.github.woodsmarshes.chat.feature.conversations.di.conversationsModule
 import com.github.woodsmarshes.chat.feature.profile.di.profileModule
 import com.github.woodsmarshes.chat.feature.search.di.searchModule
 import com.github.woodsmarshes.chat.feature.settings.di.settingsModule
-import com.github.woodsmarshes.chat.app.session.sessionModule
+import com.github.woodsmarshes.chat.app.di.sessionModule
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module

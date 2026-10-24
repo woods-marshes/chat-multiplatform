@@ -1,16 +1,17 @@
-# React + Vite
+# tiptap-bridge
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React component library wrapping the Tiptap 3 editor for every client of this repo:
 
-Currently, two official plugins are available:
+- **UMD bundle** (`npm run build` -> `dist/tiptap-editor-bridge.umd.js`): consumed by
+  the Kotlin/JS `web` client, which loads it as a JS module and renders articles.
+- **Self-contained webview pages** (`npm run build:webview:editor|viewer` ->
+  `dist-webview/{editor,viewer}/*.html`): loaded by `ComposeNativeWebView` in
+  `features/article` (viewer) and `features/article-editor` (editor) on
+  Android/Desktop/wasmJs.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Gradle wires these builds automatically via the `project.tiptap.webview`
+convention plugin (see `build-logic/convention/src/main/kotlin/TiptapWebviewPlugin.kt`),
+so a normal Gradle build regenerates the artifacts; run npm here only when
+iterating on the editor itself.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+See AGENTS.md ("文章系统概览") for the full data flow.

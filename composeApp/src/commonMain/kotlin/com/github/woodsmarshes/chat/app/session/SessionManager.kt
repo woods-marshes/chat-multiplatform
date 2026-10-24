@@ -43,14 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.koin.dsl.module
 import kotlin.uuid.Uuid
-
-val sessionModule = module {
-    single(createdAtStart = true) {
-        SessionManager(get(), get(), get(), get(), get(), get(), get())
-    }
-}
 
 /**
  * Explicit lifecycle state of the authenticated application session.

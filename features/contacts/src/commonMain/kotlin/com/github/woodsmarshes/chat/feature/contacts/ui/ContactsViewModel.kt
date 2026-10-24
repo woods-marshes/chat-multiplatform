@@ -28,7 +28,7 @@ import kotlin.uuid.Uuid
 class ContactsViewModel(
     private val contactRepository: ContactRepository,
     private val userRepository: UserRepository,
-    private val conversationRepository: ConversationRepository? = null,
+    private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
 
     private val strings
@@ -177,7 +177,7 @@ class ContactsViewModel(
      * ledger.
      */
     private fun observeGroupNotifications() {
-        val convRepo = conversationRepository ?: return
+        val convRepo = conversationRepository
         viewModelScope.launch {
             convRepo.observeIncomingGroupRequests().collect { incoming ->
                 _uiState.update { state ->
@@ -230,7 +230,7 @@ class ContactsViewModel(
     }
 
     fun refreshGroupNotifications() {
-        val convRepo = conversationRepository ?: return
+        val convRepo = conversationRepository
         if (_uiState.value.isRefreshingGroupNotifications) return
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshingGroupNotifications = true, groupNotificationsError = null) }
@@ -310,7 +310,7 @@ class ContactsViewModel(
     }
 
     fun handleGroupJoinRequest(conversationId: Uuid, requestId: Uuid, approve: Boolean) {
-        val convRepo = conversationRepository ?: return
+        val convRepo = conversationRepository
         viewModelScope.launch {
             convRepo.handleGroupJoinRequest(conversationId, requestId, approve).onOk {
                 refreshGroupNotifications()

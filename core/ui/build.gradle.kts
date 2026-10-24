@@ -144,10 +144,3 @@ afterEvaluate {
     }
 }
 
-kotlin {
-    composeCompiler {
-        stabilityConfigurationFiles.add(
-            rootProject.layout.projectDirectory.file("stability_config.conf")
-        )
-    }
-}

@@ -7,6 +7,7 @@ group = "com.github.woodsmarshes.chat.buildlogic"
 dependencies {
     compileOnly(libs.android.gradlePlugin)
     compileOnly(libs.kotlin.gradlePlugin)
+    compileOnly(libs.composeCompiler.gradlePlugin)
 }
 
 tasks {
