@@ -180,6 +180,10 @@ class HttpClientAuthGenerationTest {
             authTokenDataSource = authTokenDataSource,
             tokenRefresher = tokenRefresher,
             httpEventBus = HttpEventBusImpl(),
+            // The scripted engine parks concurrent requests across a full
+            // refresh cycle; cold CI runners can exceed the 10s production
+            // budget while that cycle is held open.
+            requestTimeoutMillis = 60_000,
         )
         return Harness(
             storeScope = storeScope,
