@@ -188,3 +188,14 @@ jobs:
 
       - name: Run server and protocol tests
         run: ./gradlew :server:test :core:network-api:jvmTest -PenableAndroid=true --no-daemon
+
+      # The SPA is packaged into the shadow jar only — a test fixture serves
+      # "/" in route tests — so assert the real packaging here, where a
+      # misplaced `from(stageWebAssets)` cannot hide behind a green suite.
+      - name: Assert the fat jar embeds the web SPA
+        run: |
+          ./gradlew :server:buildFatJar -PenableAndroid=true --no-daemon
+          unzip -l server/build/libs/fat.jar | grep -q "static/index.html" || {
+            echo "fat.jar is missing static/index.html — SPA packaging broke"
+            exit 1
+          }

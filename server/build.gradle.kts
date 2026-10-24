@@ -52,7 +52,9 @@ val stageWebAssets = tasks.register<Sync>("stageWebAssets") {
         include("*.html", "*.css", "*.js", "*.js.LICENSE.txt", "*.wasm")
         exclude("*.js.map", "kobweb/**", "markdown/**", "public/**")
     }
-    into(layout.buildDirectory.dir("generated/web-assets"))
+    // Staged under a `static/` prefix so the staging root can go straight
+    // onto a classpath — the SPA route reads `static/…` from the classpath.
+    into(layout.buildDirectory.dir("generated/web-assets/static"))
 }
 
 // Ktor's fat jar is Shadow-based; assets live only in the shadow jar, so
@@ -64,6 +66,14 @@ tasks.named<Jar>("shadowJar") {
     }
 
     duplicatesStrategy = DuplicatesStrategy.WARN
+}
+
+// :server:run serves the SPA locally too: the staging root joins the run
+// classpath directly (never sourceSets.main.output, which would leak the
+// web build back into the test classpath).
+tasks.named<JavaExec>("run") {
+    dependsOn(stageWebAssets)
+    classpath(layout.buildDirectory.dir("generated/web-assets"))
 }
 
 dependencies {

@@ -79,6 +79,7 @@ tiptap-bridge (React/Vite)
 | Web 生产构建 | `./gradlew :web:jsBrowserDistribution` |
 | Tiptap WebView 构建 | `npm run build:webview`（在 tiptap-bridge/ 下） |
 | 列出所有任务 | `./gradlew tasks` |
+| 更新 yarn lock（改动 Kotlin/JS npm 依赖后必跑，构建已设 FAIL） | `./gradlew kotlinUpgradeYarnLock` |
 
 Windows PowerShell 使用 `./gradlew.bat` 替代 `./gradlew`。旧分支没有 desktopApp 时，先确认 `:composeApp:jvmMainClasses` 和 `:composeApp:run` 是否存在，不直接套用主分支命令。
 
