@@ -395,47 +395,18 @@ class SyncDataSourceImpl : SyncRepository {
 
         when (scope) {
             SyncScope.CONVERSATION -> {
-                val messageRows = Messages
-                    .innerJoin(Users)
-                    .leftJoin(
-                        otherTable = ConversationParticipants,
-                        onColumn = { Users.id },
-                        otherColumn = { ConversationParticipants.userId },
-                        additionalConstraint = { ConversationParticipants.conversationId eq id }
-                    )
+                val messageRows = messagesWithSenderContext(id)
                     .selectAll()
                     .where { Messages.conversationId eq id }
                     .orderBy(Messages.id to SortOrder.DESC)
                     .limit(coercedLimit)
                     .toList()
 
-                val replyIds = messageRows.mapNotNull { it[Messages.replyToMessageId]?.value }.distinct()
-                val replyMap = if (replyIds.isNotEmpty()) {
-                    Messages
-                        .innerJoin(Users)
-                        .leftJoin(
-                            otherTable = ConversationParticipants,
-                            onColumn = { Users.id },
-                            otherColumn = { ConversationParticipants.userId },
-                            additionalConstraint = { ConversationParticipants.conversationId eq id }
-                        )
-                        .selectAll()
-                        .where { (Messages.id inList replyIds) and (Messages.conversationId eq id) }
-                        .associate { it[Messages.id].value to it.toFilteredUser() }
-                } else {
-                    emptyMap()
-                }
-
-                val messages = messageRows.map { row ->
-                    val reply = row[Messages.replyToMessageId]?.let { replyMap[it.value] }
-                    row.toFilteredUser(reply)
-                }
-
                 SyncSnapshot(
                     scope = SyncScope.CONVERSATION,
                     id = id,
                     revision = revision,
-                    messages = messages,
+                    messages = hydrateReplies(messageRows, id),
                     events = emptyList(),
                     conversations = emptyList(),
                 )
@@ -509,39 +480,10 @@ class SyncDataSourceImpl : SyncRepository {
     }
 
     private fun loadHydratedMessages(messageIds: List<Uuid>): Map<Uuid, Message> {
-        val rows = Messages
-            .innerJoin(Users)
-            .leftJoin(
-                otherTable = ConversationParticipants,
-                onColumn = { Users.id },
-                otherColumn = { ConversationParticipants.userId },
-                additionalConstraint = { ConversationParticipants.conversationId eq Messages.conversationId }
-            )
+        val rows = messagesWithSenderContext(Messages.conversationId)
             .selectAll()
             .where { Messages.id inList messageIds }
             .toList()
-
-        val replyIds = rows.mapNotNull { it[Messages.replyToMessageId]?.value }.distinct()
-        val replyMap = if (replyIds.isNotEmpty()) {
-            Messages
-                .innerJoin(Users)
-                .leftJoin(
-                    otherTable = ConversationParticipants,
-                    onColumn = { Users.id },
-                    otherColumn = { ConversationParticipants.userId },
-                    additionalConstraint = { ConversationParticipants.conversationId eq Messages.conversationId }
-                )
-                .selectAll()
-                .where { Messages.id inList replyIds }
-                .associate { it[Messages.id].value to it.toFilteredUser() }
-        } else {
-            emptyMap()
-        }
-
-        return rows.associate { row ->
-            val reply = row[Messages.replyToMessageId]?.let { replyMap[it.value] }
-            val msg = row.toFilteredUser(reply)
-            msg.id to msg
-        }
+        return hydrateReplies(rows, Messages.conversationId)
     }
 }

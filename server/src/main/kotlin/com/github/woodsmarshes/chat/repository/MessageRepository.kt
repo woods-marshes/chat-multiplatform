@@ -187,20 +187,7 @@ class MessageDataSourceImpl(
             throw AppException(MessageError.ConversationNotFound)
         }
 
-        val replyTo = replyToMessageId?.let {
-            Messages
-                .innerJoin(Users)
-                .leftJoin(
-                    otherTable = ConversationParticipants,
-                    onColumn = { Users.id },
-                    otherColumn = { ConversationParticipants.userId },
-                    additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
-                )
-                .selectAll()
-                .where { (Messages.id eq it) and (Messages.conversationId eq conversationId) }
-                .singleOrNull()
-                ?.toFilteredUser()
-        }
+        val replyTo = replyToMessageId?.let { loadReplyMessage(it, conversationId) }
 
         if (requestId != null) {
             val existing = Messages
@@ -332,20 +319,7 @@ class MessageDataSourceImpl(
                     (Messages.senderId eq senderId)
             }
             .singleOrNull() ?: return@dbQuery null
-        val replyTo = row[Messages.replyToMessageId]?.value?.let { replyId ->
-            Messages
-                .innerJoin(Users)
-                .leftJoin(
-                    otherTable = ConversationParticipants,
-                    onColumn = { Users.id },
-                    otherColumn = { ConversationParticipants.userId },
-                    additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
-                )
-                .selectAll()
-                .where { (Messages.id eq replyId) and (Messages.conversationId eq conversationId) }
-                .singleOrNull()
-                ?.toFilteredUser()
-        }
+        val replyTo = row[Messages.replyToMessageId]?.value?.let { loadReplyMessage(it, conversationId) }
         row.toMessage(replyTo = replyTo)
     }
 
@@ -376,14 +350,7 @@ class MessageDataSourceImpl(
         limit: Int,
         beforeId: Uuid?,
     ): List<Message> = dbQuery {
-        val query = Messages
-            .innerJoin(Users)
-            .leftJoin(
-                otherTable = ConversationParticipants,
-                onColumn = { Users.id },
-                otherColumn = { ConversationParticipants.userId },
-                additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
-            )
+        val query = messagesWithSenderContext(conversationId)
             .selectAll()
             .where { Messages.conversationId eq conversationId }
 
@@ -396,7 +363,7 @@ class MessageDataSourceImpl(
             .limit(limit)
             .toList()
 
-        buildMessagesWithReplies(messageRows, conversationId)
+        hydrateReplies(messageRows, conversationId)
     }
 
     override suspend fun searchMessages(
@@ -410,14 +377,7 @@ class MessageDataSourceImpl(
         }
         val searchPattern = "%${searchTerm.escapeLike()}%"
 
-        val messageRows = Messages
-            .innerJoin(Users)
-            .leftJoin(
-                otherTable = ConversationParticipants,
-                onColumn = { Users.id },
-                otherColumn = { ConversationParticipants.userId },
-                additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
-            )
+        val messageRows = messagesWithSenderContext(conversationId)
             .selectAll()
             .where {
                 (Messages.conversationId eq conversationId) and
@@ -431,42 +391,23 @@ class MessageDataSourceImpl(
             .limit(limit)
             .toList()
 
-        buildMessagesWithReplies(messageRows, conversationId)
+        hydrateReplies(messageRows, conversationId)
     }
 
     override suspend fun getMessageById(messageId: Uuid): Message? = dbQuery {
-        val messageRows = Messages
-            .innerJoin(Users)
-            .leftJoin(
-                otherTable = ConversationParticipants,
-                onColumn = { Users.id },
-                otherColumn = { ConversationParticipants.userId },
-                additionalConstraint = { ConversationParticipants.conversationId eq Messages.conversationId }
-            )
+        val messageRow = messagesWithSenderContext(Messages.conversationId)
             .selectAll()
             .where {
                 Messages.id eq messageId
             }
             .singleOrNull()
 
-        val replyToMessage = messageRows
+        val replyToMessage = messageRow
             ?.getOrNull(Messages.replyToMessageId)
-            ?.let {
-                Messages
-                    .innerJoin(Users)
-                    .leftJoin(
-                        otherTable = ConversationParticipants,
-                        onColumn = { Users.id },
-                        otherColumn = { ConversationParticipants.userId },
-                        additionalConstraint = { ConversationParticipants.conversationId eq Messages.conversationId }
-                    )
-                    .selectAll()
-                    .where { Messages.id eq it }
-                    .singleOrNull()
-                    ?.toFilteredUser()
-            }
+            ?.value
+            ?.let { loadReplyMessage(it, Messages.conversationId) }
 
-        messageRows?.toFilteredUser(replyToMessage)
+        messageRow?.toFilteredUser(replyToMessage)
     }
 
     override suspend fun getMessageRevokeContext(
@@ -489,9 +430,7 @@ class MessageDataSourceImpl(
                 .singleOrNull()
                 ?.let {
                     val replyId = it[Messages.replyToMessageId]?.value
-                    val replyTo = replyId?.let { rid ->
-                        Messages.selectAll().where { Messages.id eq rid }.singleOrNull()?.toMessage()
-                    }
+                    val replyTo = replyId?.let { rid -> loadReplyMessage(rid, Messages.conversationId) }
                     Triple(
                         Pair(it[Messages.senderId].value, it.toMessage(replyTo = replyTo)),
                         it.toConversationParticipant(),
@@ -586,41 +525,6 @@ class MessageDataSourceImpl(
             .map { it.toUser() }
 
         Pair(message, readUsers)
-    }
-
-    private fun buildMessagesWithReplies(
-        messageRows: List<ResultRow>,
-        conversationId: Uuid
-    ): List<Message> {
-        val replyToIds = messageRows
-            .mapNotNull { it[Messages.replyToMessageId] }
-            .distinct()
-
-        val replyToMessages = if (replyToIds.isNotEmpty()) {
-            Messages
-                .innerJoin(Users)
-                .leftJoin(
-                    otherTable = ConversationParticipants,
-                    onColumn = { Users.id },
-                    otherColumn = { ConversationParticipants.userId },
-                    additionalConstraint = { ConversationParticipants.conversationId eq conversationId }
-                )
-                .selectAll()
-                .where {
-                    (Messages.id inList replyToIds) and
-                        (Messages.conversationId eq conversationId)
-                }
-                .associateBy { it[Messages.id].value }
-        } else {
-            emptyMap()
-        }
-
-        return messageRows.map { row ->
-            val replyTo = row[Messages.replyToMessageId]?.let { replyId ->
-                replyToMessages[replyId.value]?.toFilteredUser()
-            }
-            row.toFilteredUser(replyTo)
-        }
     }
 
     override suspend fun getUnreadCounts(userId: Uuid): Map<Uuid, Long> = dbQuery {
