@@ -70,10 +70,8 @@ ENTRYPOINT ["sh", "-c", "exec java $JDK_JAVA_OPTIONS -jar /app/app.jar"]
 # COPY core/network/build.gradle.kts /home/gradle/src/core/network/
 # COPY core/common/build.gradle.kts /home/gradle/src/core/common/
 # COPY core/data/build.gradle.kts /home/gradle/src/core/data/
-# COPY core/domain/build.gradle.kts /home/gradle/src/core/domain/
 # COPY core/database/build.gradle.kts /home/gradle/src/core/database/
 # COPY core/datastore/build.gradle.kts /home/gradle/src/core/datastore/
-# COPY core/database-room/build.gradle.kts /home/gradle/src/core/database-room/
 # COPY core/ui/build.gradle.kts /home/gradle/src/core/ui/
 # COPY core/navigation/build.gradle.kts /home/gradle/src/core/navigation/
 # COPY features/auth/build.gradle.kts /home/gradle/src/features/auth/

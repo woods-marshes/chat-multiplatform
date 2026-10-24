@@ -31,10 +31,9 @@
 |---|---|---|
 | Common | `core:common` | AppDispatchers, Koin commonModule, PlatformContext |
 | Model | `core:model` | 领域模型、Error 密封类、UiState、Article/ArticleStatus（纯数据，仅依赖 kotlinx-serialization） |
-| Domain | `core:domain` | 预留：未来有真实业务逻辑的 UseCase（当前 module{} 空壳） |
 | Data | `core:data` | 仓库接口 + 实现，编排 network ↔ database ↔ datastore，ArticleRepository（离线优先），RemoteMediator |
 | Network | `core:network` | Ktor HttpClient, REST API (ArticleApi), WebSocket, DTOs (ArticleListResponse 等), Ktor Resources 路由 (V1) |
-| Database | `core:database` | SQLDelight（含 Article；表数量以当前 schema 为准）+ DAO + QueryPagingSource；`core:database-room` 为 Room 3.0 替代 |
+| Database | `core:database` | SQLDelight（含 Article；表数量以当前 schema 为准）+ DAO + QueryPagingSource |
 | Datastore | `core:datastore` | Key-value 存储（token、偏好设置） |
 | UI | `core:ui` | Compose Multiplatform 组件, Material 3 (Miuix), i18n (Lyricist), ArticleCardItem |
 | Navigation | `core:navigation` | Navigation3 路由 |
@@ -43,7 +42,7 @@
 | Web 前端 | `web/` | Kotlin/JS (ES2015) + React + Tiptap，通过 Koin 注入 core 模块 |
 | Tiptap 桥接 | `tiptap-bridge/` | React 组件库：UMD 打包供 web 调用 + Vite 自包含 HTML 供 ComposeNativeWebView 加载 |
 
-**DI 注册顺序**：`commonModule → dataStoreModule → databaseModule → daosModule → serializersModule → networkModule → dataModule → domainModule → sessionModule → feature ViewModel modules`
+**DI 注册顺序**：`commonModule → dataStoreModule → databaseModule → daosModule → serializersModule → networkModule → dataModule → sessionModule → feature ViewModel modules`
 
 ## 文章系统概览
 

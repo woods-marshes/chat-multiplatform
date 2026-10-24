@@ -5,7 +5,6 @@ import com.github.woodsmarshes.chat.core.data.di.dataModule
 import com.github.woodsmarshes.chat.core.database.di.daosModule
 import com.github.woodsmarshes.chat.core.database.di.databaseModule
 import com.github.woodsmarshes.chat.core.datastore.di.dataStoreModule
-import com.github.woodsmarshes.chat.core.domain.di.domainModule
 import com.github.woodsmarshes.chat.core.network.di.networkConfig
 import com.github.woodsmarshes.chat.core.network.di.networkModule
 import com.github.woodsmarshes.chat.core.network.di.serializersModule
@@ -40,7 +39,6 @@ fun initKoin(
             networkConfig,
             networkModule,
             dataModule,
-            domainModule,
             sessionModule,
             articleModule,
             articleEditorModule,

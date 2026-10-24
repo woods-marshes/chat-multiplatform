@@ -60,8 +60,6 @@ lifecycleRuntimeKtx = "2.10.0"
 composeBom = "2026.01.00"
 
 ksp = "2.3.12"
-room = "2.8.5"
-room3 = "3.0.3"
 runner = "1.7.0"
 core = "1.7.0"
 
@@ -246,10 +244,6 @@ sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", versi
 sqldelight-web-driver = { module = "app.cash.sqldelight:web-worker-driver", version.ref = "sqlDelight" }
 
 # Room 3.0 (KMP)
-room3-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room3" }
-room3-paging = { module = "androidx.room3:room3-paging", version.ref = "room3" }
-room3-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room3" }
-room3-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version = "2.7.1" }
 # Android
 android-desugarJdkLibs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "androidDesugarJdkLibs" }
 # AndroidX
@@ -340,8 +334,6 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 nucleus = { id = "dev.nucleusframework", version.ref = "nucleus" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-room = { id = "androidx.room", version.ref = "room" }
-room3 = { id = "androidx.room3", version.ref = "room3" }
 android-lint = { id = "com.android.lint", version.ref = "agp" }
 buildkonfig = { id = "com.codingfeline.buildkonfig", version.ref = "buildkonfig" }
 aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutLibraries" }

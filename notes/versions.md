@@ -57,7 +57,6 @@
 |---|---|
 | SQLDelight | 2.3.2 |
 | SQL.js (Web) | 1.8.0 |
-| Room 3.0 KMP | 3.0.0-alpha06 |
 
 ## 序列化 & 协程
 
