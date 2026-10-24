@@ -115,13 +115,6 @@ kotlin {
             implementation(kotlinWrappers.react)
             implementation(kotlinWrappers.reactUse)
             implementation(kotlinWrappers.reactDom)
-            implementation(npm("@tiptap/core", "3.27.1"))
-            implementation(npm("@tiptap/pm", "3.27.1"))
-            implementation(npm("@tiptap/react", "3.27.1"))
-            implementation(npm("@tiptap/starter-kit", "3.27.1"))
-            implementation(npm("@tiptap/extension-placeholder", "3.27.1"))
-            implementation(npm("@tiptap/static-renderer", "3.27.1"))
-            implementation(npm("@floating-ui/dom", "1.7.6"))
         }
     }
 }
