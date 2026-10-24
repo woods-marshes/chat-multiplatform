@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.feature.conversations.ui
 
 import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Ok
 import com.github.woodsmarshes.chat.core.data.repository.ContactRepository
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
@@ -79,7 +80,7 @@ class GroupInfoViewModelSettingsTest {
     @Test
     fun successfulPinToggleKeepsTheSwitchOn() = runTest(dispatcher) {
         coEvery { conversationRepository.updateMyParticipantSettings(any(), any()) } returns
-            mockk(relaxed = true)
+            Ok(Unit)
         val vm = viewModel()
 
         vm.togglePin(true)
