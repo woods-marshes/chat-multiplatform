@@ -130,17 +130,30 @@ class OfflineFirstMessageRepositoryImpl(
         /** Give up on unacked messages older than this. */
         val MESSAGE_TTL = 24.hours
 
-        const val SYNC_WINDOW_MESSAGES = 100
 
-        const val SYNC_PAGE_SIZE = 100
-        const val MAX_SYNC_PAGES = 40
-        val SYNC_POLL_INTERVAL = 30.seconds
     }
     val ownUser = userSettingDataSource.user
 
     private val sendMutex = Mutex()
     private val syncMutex = Mutex()
     private val syncWakeups = MutableSharedFlow<Unit>(replay = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+    private val syncEngine = MessageSyncEngine(
+        messageApi = messageApi,
+        conversationApi = conversationApi,
+        messageDao = messageDao,
+        userDao = userDao,
+        participantDao = participantDao,
+        conversationDao = conversationDao,
+        groupJoinRequestDao = groupJoinRequestDao,
+        groupProfileDao = groupProfileDao,
+        conversationRepository = conversationRepository,
+        ownUser = ownUser,
+        syncWakeups = syncWakeups,
+        syncMutex = syncMutex,
+        userSyncApplier = userSyncApplier,
+        unreadRefreshCoordinator = unreadRefreshCoordinator,
+        isActiveSession = ::isActiveSession,
+    )
     private val lifecycle = ResourceSession(
         dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher
             ?: Dispatchers.Default,
@@ -152,7 +165,7 @@ class OfflineFirstMessageRepositoryImpl(
         prepare = { session ->
             startMessageConsumption(session)
             startOutboxRetryLoop(session)
-            startSyncWorker(session)
+            syncEngine.startSyncWorker(session)
         },
         beforeStop = { it.job.cancel() },
         dispose = { session ->
@@ -175,7 +188,7 @@ class OfflineFirstMessageRepositoryImpl(
      * callback on [scope] that would neither propagate cancellation immediately
      * nor wait for session cleanup to finish.
      */
-    private class RunningSession(
+    internal class RunningSession(
         repository: OfflineFirstMessageRepositoryImpl,
         dispatcher: CoroutineContext,
     ) {
@@ -509,295 +522,6 @@ class OfflineFirstMessageRepositoryImpl(
             }
         }
         subscriptionReady.await()
-    }
-
-    private fun startSyncWorker(session: RunningSession) {
-        session.scope.launch {
-        messageApi.connectionState.collectLatest { state ->
-            if (state !is ConnectionState.Connected) return@collectLatest
-            syncWakeups.tryEmit(Unit)
-            // Crash-safe badge recovery: a committed cursor whose refresh died
-            // with the previous process left a persisted pending marker (same
-            // transaction as the cursor). Re-schedule those refreshes; the
-            // marker is cleared once the authoritative value applies.
-            try {
-                messageDao.getUnreadRefreshPendingConversations().forEach { conversationId ->
-                    requestUnreadRefresh(session, conversationId)
-                }
-            } catch (e: Exception) {
-                log.warn(e) { "[sync] failed to restore pending unread refreshes; they stay persisted" }
-            }
-            val poll = session.scope.launch {
-                while (true) {
-                    delay(SYNC_POLL_INTERVAL)
-                    syncWakeups.emit(Unit)
-                }
-            }
-            try {
-                syncWakeups.collect {
-                    try {
-                        syncHeads(session)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        log.warn(e) { "[sync] pull failed; waiting for next wakeup" }
-                    }
-                }
-            } finally {
-                poll.cancel()
-            }
-        }
-    }
-}
-
-    private suspend fun syncHeads(session: RunningSession) = syncMutex.withLock {
-    val me = ownUser.firstOrNull()?.id ?: return@withLock
-    val heads = conversationApi.getSyncHeads().entries
-        .filter { it.scope != SyncScope.USER || it.id == me }
-        .filter { head -> messageDao.getScopeCursor(head.scope.name, head.id) != head.revision }
-        .sortedBy { if (it.scope == SyncScope.USER) 0 else 1 }
-    val userHead = heads.firstOrNull { it.scope == SyncScope.USER }
-    if (userHead != null) {
-        // User-scoped entities can seed foreign-key rows needed by conversation sync.
-        try {
-            syncStream(session, userHead.scope, userHead.id)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            log.warn(failure) { "[sync] user stream failed for ${userHead.id}; continuing with conversation streams" }
-        }
-    }
-    heads.asSequence()
-        .filter { it.scope == SyncScope.CONVERSATION }
-        .forEach { head ->
-            try {
-                syncStream(session, head.scope, head.id)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                log.warn(failure) { "[sync] conversation stream failed for ${head.id}; continuing" }
-            }
-        }
-}
-
-    private suspend fun syncStream(session: RunningSession, scope: SyncScope, id: Uuid) {
-        val storedRevision = messageDao.getScopeCursor(scope.name, id)
-        if (storedRevision == null) {
-            syncSnapshot(session, scope, id)
-            if (scope == SyncScope.USER) syncDeltaAfterSnapshot(session, scope, id)
-            return
-        }
-        syncDeltaAfterSnapshot(session, scope, id, storedRevision)
-    }
-
-    private suspend fun syncDeltaAfterSnapshot(
-        session: RunningSession,
-        scope: SyncScope,
-        id: Uuid,
-        initialRevision: Long? = null,
-    ) {
-        var revision = initialRevision ?: messageDao.getScopeCursor(scope.name, id)
-            ?: error("Snapshot did not persist a cursor for $scope/$id")
-        repeat(MAX_SYNC_PAGES) {
-            val batch = conversationApi.getSyncChanges(scope, id, revision, SYNC_PAGE_SIZE)
-            check(batch.scope == scope && batch.id == id && batch.fromRevision == revision) {
-                "Sync batch identity/fromRevision mismatch for $scope/$id"
-            }
-            if (batch.resetRequired) {
-                syncSnapshot(session, scope, id)
-                if (scope == SyncScope.USER) {
-                    revision = messageDao.getScopeCursor(scope.name, id)
-                        ?: error("Snapshot did not persist a cursor for $scope/$id")
-                    return@repeat
-                }
-                return
-            }
-            if (batch.changes.isEmpty()) {
-                check(batch.nextRevision == revision) { "Empty sync batch advanced its revision" }
-                return
-            }
-            var expected = revision + 1L
-            batch.changes.forEach { change ->
-                check(change.revision == expected++) { "Non-contiguous sync journal for $scope/$id" }
-            }
-            check(batch.nextRevision == batch.changes.last().revision) { "Sync nextRevision mismatch" }
-            try {
-                applySyncBatch(session, scope, id, batch)
-            } catch (reset: UserSyncResetRequiredException) {
-                // A historical journal entry has become unapplicable (e.g. an
-                // offline join whose membership has lapsed). Re-sync the stream
-                // from a controlled snapshot — the authoritative current state
-                // replaces both the stale entry and anything after it — then
-                // continue delta pulls from the fresh cursor.
-                log.warn(reset) { "[sync] delta batch requires reset for $scope/$id; re-syncing from snapshot" }
-                syncSnapshot(session, scope, id)
-                syncDeltaAfterSnapshot(session, scope, id)
-                return
-            }
-            revision = batch.nextRevision
-            if (!batch.hasMore) return
-        }
-        error("Sync page budget exhausted for $scope/$id")
-    }
-
-    private suspend fun syncSnapshot(session: RunningSession, scope: SyncScope, id: Uuid) {
-        val snapshot = conversationApi.getSyncSnapshot(scope, id, SYNC_WINDOW_MESSAGES)
-        check(snapshot.scope == scope && snapshot.id == id) { "Sync snapshot identity mismatch" }
-        when (scope) {
-            SyncScope.USER -> {
-                // Prepare REST state before the transaction; never issue HTTP while holding a DB lock.
-                val prepared = userSyncApplier.prepareSnapshot(snapshot.events)
-                messageDao.transaction {
-                    val applied = conversationRepository.applyUserSnapshotConversations(snapshot.conversations)
-                    if (applied.isErr) error("Failed to apply USER conversation snapshot: $applied")
-                    userSyncApplier.apply(prepared)
-                    messageDao.setScopeCursor(scope.name, id, snapshot.revision)
-                    // Persist the badge-recovery markers in the SAME commit:
-                    // a process death before the scheduled refreshes run must
-                    // leave a recoverable state.
-                    snapshot.conversations.forEach { response ->
-                        messageDao.markUnreadRefreshPending(response.conversationId)
-                    }
-                }
-                // Unread refreshes are scheduled AFTER the commit, never inside
-                // the transaction: the coordinator lock must not be taken while
-                // a database transaction is held (the detail worker takes them
-                // in the opposite order), and in-memory generations must only
-                // advance for committed state.
-                snapshot.conversations.forEach { response ->
-                    requestUnreadRefresh(session, response.conversationId)
-                }
-            }
-                SyncScope.CONVERSATION -> {
-                    val me = ownUser.firstOrNull()?.id
-                    messageDao.transaction {
-                        if (snapshot.messages.isEmpty()) {
-                            messageDao.demoteAllTimelineMessages(id)
-                        } else {
-                            messageDao.demoteTimelineBefore(id, snapshot.messages.minOf { it.id })
-                            snapshot.messages.forEach { message ->
-                                check(message.toMessageEntity() != null) { "Snapshot contains a message without sender" }
-                                persistServerMessage(messageDao, userDao, participantDao, conversationDao, message, null, me)
-                            }
-                        }
-                        messageDao.setScopeCursor(scope.name, id, snapshot.revision)
-                        // Committed with the cursor: a process death before the
-                        // scheduled refresh runs leaves a recoverable marker.
-                        if (snapshot.messages.isNotEmpty()) messageDao.markUnreadRefreshPending(id)
-                    }
-                    // Journal recovery applied messages without realtime events:
-                    // without this refresh the unread badge would keep its
-                    // pre-offline value (or a fresh device's default) forever.
-                    if (snapshot.messages.isNotEmpty()) requestUnreadRefresh(session, id)
-                }
-            }
-        }
-
-    /** Schedules a coalesced authoritative unread refresh bound to the live session. */
-    private suspend fun requestUnreadRefresh(session: RunningSession, conversationId: Uuid) {
-        if (session.job.isActive && isActiveSession(session)) {
-            unreadRefreshCoordinator.requestRefresh(
-                sessionScope = session.scope,
-                conversationId = conversationId,
-                conversationApi = conversationApi,
-                conversationDao = conversationDao,
-            )
-        }
-    }
-
-    private suspend fun applySyncBatch(session: RunningSession, scope: SyncScope, id: Uuid, batch: SyncBatch) {
-        if (scope == SyncScope.USER) {
-            val prepared = userSyncApplier.prepareBatch(batch.changes.map { it.event })
-            messageDao.transaction {
-                userSyncApplier.apply(prepared)
-                messageDao.setScopeCursor(scope.name, id, batch.nextRevision)
-                // A restored Read moved this account's read cursor inside the
-                // same transaction; persist the badge-recovery marker with it.
-                batch.changes.mapNotNull { (it.event as? MessageEventResponse.Read)?.conversationId }
-                    .distinct()
-                    .forEach { conversationId -> messageDao.markUnreadRefreshPending(conversationId) }
-            }
-            // Multi-device read sync (journal recovery path): a restored Read
-            // moved this account's last-read cursor without any realtime
-            // fan-out, so the badge needs the same coalesced authoritative
-            // refresh the live Read handler performs.
-            batch.changes.mapNotNull { (it.event as? MessageEventResponse.Read)?.conversationId }
-                .distinct()
-                .forEach { conversationId -> requestUnreadRefresh(session, conversationId) }
-            return
-        }
-        val me = ownUser.firstOrNull()?.id
-        val metadataRefreshes = linkedSetOf<Uuid>()
-        // Fetch metadata before checkpointing. Any failed refresh leaves the cursor behind.
-        batch.changes.forEach { change ->
-            when (val event = change.event) {
-                is ConversationEventResponse.ConversationDeleted -> Unit
-                is ConversationEventResponse.UserLeftConversation -> if (event.userId == me) Unit
-                is ConversationEventResponse.ConversationCreated -> metadataRefreshes += event.conversationId
-                is ConversationEventResponse.UserJoinedConversation -> metadataRefreshes += event.conversationId
-                is ConversationEventResponse.GroupProfileUpdated -> metadataRefreshes += event.conversationId
-                is ConversationEventResponse.PersonalSettingsUpdated -> metadataRefreshes += event.conversationId
-                else -> Unit
-            }
-        }
-        metadataRefreshes.forEach { conversationId ->
-            val current = conversationDao.findConversationById(conversationId)
-            if (current?.deleted_at == null) {
-                val existingGroup = groupProfileDao?.getGroupProfile(conversationId)?.firstOrNull()
-                if (current != null || existingGroup != null) refreshConversation(conversationId)
-            }
-        }
-        messageDao.transaction {
-            batch.changes.forEach { change ->
-                when (val event = change.event) {
-                    is MessageEventResponse.Received -> {
-                        check(event.message.toMessageEntity() != null) { "Received event has no sender" }
-                        persistServerMessage(messageDao, userDao, participantDao, conversationDao, event.message, event.requestId.takeIf { event.senderId == me }, me)
-                    }
-                    is MessageEventResponse.Withdrawn -> messageDao.revokeMessage(event.messageId, event.timestamp)
-                    is MessageEventResponse.Read -> participantDao.updateLastReadMessage(
-                        event.conversationId, event.readerId, event.messageId,
-                    )
-                    is ConversationEventResponse.ConversationDeleted -> {
-                        applyConversationDeleted(event.conversationId, event.timestamp, conversationDao, participantDao, groupJoinRequestDao)
-                    }
-                    is ConversationEventResponse.UserLeftConversation -> {
-                        applyUserLeftConversation(event.conversationId, event.userId, me, event.timestamp, conversationDao, participantDao, groupJoinRequestDao)
-                    }
-                    is ConversationEventResponse.GroupJoinRequest,
-                    is ConversationEventResponse.GroupJoinRequestHandled,
-                    is ContactEventResponse -> log.warn { "Unexpected USER event in conversation scope at revision ${change.revision}: ${event::class.simpleName}" }
-                    is ConversationEventResponse -> Unit // Metadata was refreshed successfully above.
-                    else -> log.warn { "Skipping unsupported conversation journal event at revision ${change.revision}: ${event::class.simpleName}" }
-                    }
-                }
-                messageDao.setScopeCursor(scope.name, id, batch.nextRevision)
-                // Persist the badge-recovery marker in the SAME transaction as
-                // the cursor: a crash before the post-commit refresh scheduling
-                // must still leave a recoverable state.
-                if (batch.changes.any { it.event is MessageEventResponse.Received || it.event is MessageEventResponse.Withdrawn || it.event is MessageEventResponse.Read }) {
-                    messageDao.markUnreadRefreshPending(id)
-                }
-            }
-        // The batch restored unread-affecting events without realtime fan-out;
-        // coalesce one authoritative detail refresh so the badge converges even
-        // when no live Received/Read event follows.
-        if (batch.changes.any { it.event is MessageEventResponse.Received || it.event is MessageEventResponse.Withdrawn || it.event is MessageEventResponse.Read }) {
-            requestUnreadRefresh(session, id)
-        }
-        }
-
-
-
-    private suspend fun refreshConversation(id: Uuid) {
-        val detail = conversationApi.getDetail(id)
-        detail.toUserEntity()?.let { userDao.insertUser(it) }
-        detail.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
-        detail.lastMessage?.sender?.toUserEntity()?.let { userDao.insertUser(it) }
-        conversationDao.insertConversation(detail.toConversation().toEntity())
-        detail.toGroupProfileEntity()?.let { groupProfileDao?.insertGroupProfile(it) }
-        participantDao.insertParticipant(detail.toParticipantEntity())
-        detail.toPeerParticipantEntity()?.let { participantDao.insertParticipantIfAbsent(it) }
     }
 
     private suspend fun handleReceivedMessage(session: RunningSession, event: MessageEventResponse.Received) {
