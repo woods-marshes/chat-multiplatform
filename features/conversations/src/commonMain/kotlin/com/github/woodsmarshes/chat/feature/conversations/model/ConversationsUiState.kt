@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.feature.conversations.model
 
 import com.github.woodsmarshes.chat.core.model.GroupProfile
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import kotlin.uuid.Uuid
 
 data class ConversationsUiState(

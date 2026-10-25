@@ -3,7 +3,7 @@ package com.github.woodsmarshes.chat.feature.contacts.model
 import com.github.woodsmarshes.chat.core.model.ContactRequest
 import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
 import kotlin.uuid.Uuid
 
 data class ContactsUiState(

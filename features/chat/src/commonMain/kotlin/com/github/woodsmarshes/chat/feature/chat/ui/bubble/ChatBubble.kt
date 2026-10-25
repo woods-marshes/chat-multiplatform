@@ -17,8 +17,8 @@ import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 /**
  * Dispatches the correct bubble composable based on [MessageRenderType].

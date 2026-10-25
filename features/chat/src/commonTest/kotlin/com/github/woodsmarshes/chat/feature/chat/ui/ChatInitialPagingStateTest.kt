@@ -5,7 +5,7 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest

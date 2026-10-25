@@ -15,9 +15,9 @@ import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.TextContent
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.chat.model.ChatUiState
 import io.github.oshai.kotlinlogging.KotlinLogging

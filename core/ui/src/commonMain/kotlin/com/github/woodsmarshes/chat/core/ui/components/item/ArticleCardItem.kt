@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard

@@ -29,8 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
-import com.github.woodsmarshes.chat.core.model.ui.LastMessageInfo
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.LastMessageInfo
 import com.github.woodsmarshes.chat.core.ui.components.avatar.ConversationAvatar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings

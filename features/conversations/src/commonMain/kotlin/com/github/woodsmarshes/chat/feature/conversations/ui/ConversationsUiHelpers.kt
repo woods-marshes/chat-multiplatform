@@ -5,7 +5,7 @@ import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.model.Contact
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

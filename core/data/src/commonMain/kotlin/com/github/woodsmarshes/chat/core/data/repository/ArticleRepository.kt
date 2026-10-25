@@ -5,7 +5,7 @@ import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
 import kotlin.uuid.Uuid

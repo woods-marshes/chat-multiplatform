@@ -31,7 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.PagingData
 import androidx.paging.compose.collectAsLazyPagingItems
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.components.AppFloatingActionButton
 import com.github.woodsmarshes.chat.core.ui.components.AppModalBottomSheet
 import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator

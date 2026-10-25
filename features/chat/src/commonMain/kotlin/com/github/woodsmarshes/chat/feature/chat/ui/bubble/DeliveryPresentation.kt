@@ -2,7 +2,7 @@ package com.github.woodsmarshes.chat.feature.chat.ui.bubble
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.github.woodsmarshes.chat.core.model.ConnectionState
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 
 /** Presentation only: reconnecting must not rewrite durable outbox state. */
 internal val LocalMessageConnection = staticCompositionLocalOf<ConnectionState> { ConnectionState.Idle }

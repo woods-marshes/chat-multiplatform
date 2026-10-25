@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.feature.chat.ui.bubble
 
 import com.github.woodsmarshes.chat.core.model.ConnectionState
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

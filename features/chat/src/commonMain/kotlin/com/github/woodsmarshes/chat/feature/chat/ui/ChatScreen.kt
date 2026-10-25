@@ -72,9 +72,9 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.github.woodsmarshes.chat.core.model.TextContent
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
 import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenu
 import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenuItem

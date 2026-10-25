@@ -7,8 +7,8 @@ import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.ConversationType
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.search.model.SearchResultUiModel
 import com.github.woodsmarshes.chat.feature.search.model.SearchUiState

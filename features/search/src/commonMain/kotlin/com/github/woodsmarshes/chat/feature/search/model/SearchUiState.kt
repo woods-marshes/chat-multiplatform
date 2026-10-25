@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.feature.search.model
 
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 
 /** A rendered row of the search result list, keyed by search type. */
 sealed interface SearchResultUiModel {

@@ -14,7 +14,7 @@ import com.github.woodsmarshes.chat.core.model.UserPreference
 import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
 import com.github.woodsmarshes.chat.core.model.error.UserError
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

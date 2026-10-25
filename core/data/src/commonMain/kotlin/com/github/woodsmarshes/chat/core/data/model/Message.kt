@@ -9,9 +9,9 @@ import com.github.woodsmarshes.chat.core.model.MessageStatus
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import io.github.woodsmarshes.chat.db.GetLatestMessage
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations

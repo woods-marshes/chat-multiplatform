@@ -6,7 +6,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.github.woodsmarshes.chat.core.data.repository.ArticleRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.feature.article.model.ArticleListUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.ExperimentalCoroutinesApi

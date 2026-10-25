@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.model.FormattingEntity
 import com.github.woodsmarshes.chat.core.model.TextContent
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleShapes
 

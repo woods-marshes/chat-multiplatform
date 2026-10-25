@@ -1,4 +1,4 @@
-package com.github.woodsmarshes.chat.core.model.ui
+package com.github.woodsmarshes.chat.core.model.presentation
 
 import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.MessageContent

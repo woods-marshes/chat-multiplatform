@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.resources.Res
 import org.jetbrains.compose.resources.painterResource

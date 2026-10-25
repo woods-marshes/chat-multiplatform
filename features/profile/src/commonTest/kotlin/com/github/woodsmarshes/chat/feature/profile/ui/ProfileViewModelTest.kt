@@ -18,8 +18,8 @@ import com.github.woodsmarshes.chat.core.model.UserPreference
 import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.error.UserError
-import com.github.woodsmarshes.chat.core.model.ui.ConversationHeader
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -178,7 +178,7 @@ private class FakeUserRepository(
 private class FakeConversationRepository(
     private val created: Flow<Conversation?>,
 ) : ConversationRepository {
-    override suspend fun getConversationListFlow() = emptyFlow<List<com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel>>()
+    override suspend fun getConversationListFlow() = emptyFlow<List<com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel>>()
     override suspend fun syncConversations() = Ok(Unit)
     override suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError> {
         return created.firstOrNull()?.let { Ok(it) } ?: Err(ConversationError.OperationFailed)

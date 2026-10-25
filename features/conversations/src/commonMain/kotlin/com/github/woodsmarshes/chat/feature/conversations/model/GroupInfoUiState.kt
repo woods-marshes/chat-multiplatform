@@ -5,8 +5,8 @@ import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import kotlin.uuid.Uuid
 
 data class GroupInfoUiState(

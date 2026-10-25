@@ -9,7 +9,7 @@ import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.contacts.model.ContactsUiState
 import io.github.oshai.kotlinlogging.KotlinLogging

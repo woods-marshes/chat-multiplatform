@@ -17,7 +17,7 @@ import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
 import com.github.woodsmarshes.chat.core.network.dto.article.UpdateArticleRequest
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi

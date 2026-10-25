@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.core.data.model
 
-import com.github.woodsmarshes.chat.core.model.ui.ArticleAuthorUi
-import com.github.woodsmarshes.chat.core.model.ui.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleAuthorUi
+import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.model.Article as baseArticle
 import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
 import io.github.woodsmarshes.chat.db.Article

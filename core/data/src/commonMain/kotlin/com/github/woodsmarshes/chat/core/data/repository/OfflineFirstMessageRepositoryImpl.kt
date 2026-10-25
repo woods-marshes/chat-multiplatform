@@ -44,7 +44,7 @@ import com.github.woodsmarshes.chat.core.model.System
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse

@@ -13,8 +13,8 @@ import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.conversations.model.GroupInfoUiState
 import kotlinx.coroutines.Job

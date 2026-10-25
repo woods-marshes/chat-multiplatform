@@ -11,7 +11,7 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
-import com.github.woodsmarshes.chat.core.model.ui.MessageState
+import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.network.dto.conversation.GroupInfo
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.network.dto.conversation.SimpleMessage

@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.woodsmarshes.chat.core.model.ui.ContactUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme

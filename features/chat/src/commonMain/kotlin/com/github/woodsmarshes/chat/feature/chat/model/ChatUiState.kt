@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.feature.chat.model
 
-import com.github.woodsmarshes.chat.core.model.ui.ConversationHeader
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 
 import kotlin.uuid.Uuid
 

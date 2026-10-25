@@ -12,9 +12,9 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
-import com.github.woodsmarshes.chat.core.model.ui.ConversationHeader
-import com.github.woodsmarshes.chat.core.model.ui.ConversationUiModel
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow

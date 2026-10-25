@@ -4,7 +4,7 @@ import androidx.paging.PagingData
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
-import com.github.woodsmarshes.chat.core.model.ui.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import kotlinx.coroutines.flow.Flow
 import kotlin.uuid.Uuid
 

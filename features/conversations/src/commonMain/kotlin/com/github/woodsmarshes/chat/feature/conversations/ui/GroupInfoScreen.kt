@@ -57,7 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.model.ConversationRole
-import com.github.woodsmarshes.chat.core.model.ui.SenderUser
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
 import com.github.woodsmarshes.chat.core.ui.components.AppHorizontalDivider
 import com.github.woodsmarshes.chat.core.ui.components.AppModalBottomSheet
