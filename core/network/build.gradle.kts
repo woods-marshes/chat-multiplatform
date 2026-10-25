@@ -106,3 +106,9 @@ kotlin {
         }
     }
 }
+// The scripted-engine auth tests park concurrent requests across a full
+// token-refresh cycle; parallel fork JVMs on 2-vCPU CI runners starve that
+// cycle until the request timeout fires. Run them one fork at a time.
+tasks.withType<Test>().configureEach {
+    maxParallelForks = 1
+}

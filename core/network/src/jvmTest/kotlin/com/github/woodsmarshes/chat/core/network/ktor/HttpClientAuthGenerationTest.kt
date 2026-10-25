@@ -181,11 +181,9 @@ class HttpClientAuthGenerationTest {
             tokenRefresher = tokenRefresher,
             httpEventBus = HttpEventBusImpl(),
             // The scripted engine parks concurrent requests across a full
-            // refresh cycle; CI runners with 2 vCPUs can starve that cycle
-            // for over a minute while Gradle runs sibling test JVMs, so the
-            // budget is deliberately generous — the production 10s stays the
-            // default for real clients.
-            requestTimeoutMillis = 180_000,
+            // refresh cycle; this module pins maxParallelForks=1 so the budget
+            // only needs to cover the cycle itself, not CPU contention.
+            requestTimeoutMillis = 60_000,
         )
         return Harness(
             storeScope = storeScope,
