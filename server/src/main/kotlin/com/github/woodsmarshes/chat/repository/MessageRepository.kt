@@ -30,7 +30,9 @@ import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.TextColumnType
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.castTo
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -484,7 +486,12 @@ class MessageDataSourceImpl(
             .select(Messages.content)
             .where {
                 (Messages.renderType eq MessageRenderType.FILE) and
-                    Messages.revokedAt.isNull()
+                    Messages.revokedAt.isNull() and
+                    // SQL-side prefilter: a live reference's serialized content
+                    // must contain the file name, so all other rows are never
+                    // fetched or decoded. Rows that still fail to decode after
+                    // this filter count as references — never delete on doubt.
+                    (Messages.content.castTo(TextColumnType()) like "%$fileName%")
             }
             .forEach { row ->
                 val matchesOrUnreadable = try {

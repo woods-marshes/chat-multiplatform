@@ -143,4 +143,47 @@ class MessageRepositoryAttachmentMappingTest {
         assertEquals(0, transaction(database) { PrivateFiles.selectAll().count() }.toInt())
         }
     }
+
+    @Test
+    fun liveReferenceCountPrefiltersInSqlButStaysFailClosed() {
+        runBlocking {
+        val targetUrl = "/v1/files/content/target-${Uuid.random()}.pdf"
+        val targetFile = targetUrl.substringAfterLast('/')
+        val otherUrl = "/v1/files/content/other-${Uuid.random()}.pdf"
+
+        // Note: fileContent() pins fileName="report.pdf" while the URL varies,
+        // so the JSON text — not the search-text mirror — is the only reliable
+        // prefilter key; this test would catch a regression to that idea.
+        repository.insertMessage(
+            conversationId = conversationA, senderId = senderId,
+            content = fileContent(targetUrl), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
+        )
+        repository.insertMessage(
+            conversationId = conversationB, senderId = senderId,
+            content = fileContent(targetUrl), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
+        )
+        repository.insertMessage(
+            conversationId = conversationA, senderId = senderId,
+            content = fileContent(otherUrl), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
+        )
+
+        // A legacy row whose JSON is undecodable but mentions the target: it
+        // must still count — deleting a physical file on a decode failure is
+        // forbidden (fail closed).
+        val corruptId = Uuid.random()
+        transaction(database) {
+            exec(
+                """
+                INSERT INTO messages (id, conversation_id, user_id, content, category, render_type, search_text, created_at)
+                VALUES ('$corruptId', '$conversationA', '$senderId',
+                        '{"broken": "still mentions $targetFile', 'NORMAL', 'FILE', '$targetFile', CURRENT_TIMESTAMP)
+                """.trimIndent(),
+            )
+        }
+
+        // 2 decodable references + 1 undecodable-but-matching row; the
+        // unrelated file's row is skipped entirely by the SQL prefilter.
+        assertEquals(3L, repository.countLiveFileReferences(targetFile))
+        }
+    }
 }
