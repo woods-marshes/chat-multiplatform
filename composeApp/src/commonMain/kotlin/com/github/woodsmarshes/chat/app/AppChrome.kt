@@ -232,28 +232,28 @@ internal fun AccountRailFooter(
     modifier: Modifier = Modifier,
 ) {
     Column(
-                modifier = modifier
-                    .navigationBarsPadding()
-                    .padding(start = 10.dp, bottom = 12.dp)
-                    .width(60.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = openProfile)
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                UserAvatar(
-                    name = currentUser?.displayName?.ifEmpty { null } ?: currentUser?.username,
-                    avatarUrl = currentUser?.avatarUrl,
-                    size = 36.dp,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = currentUser?.displayName?.ifEmpty { null }
-                        ?: currentUser?.username ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(start = 10.dp, bottom = 12.dp)
+            .width(60.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = openProfile)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        UserAvatar(
+            name = currentUser?.displayName?.ifEmpty { null } ?: currentUser?.username,
+            avatarUrl = currentUser?.avatarUrl,
+            size = 36.dp,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = currentUser?.displayName?.ifEmpty { null }
+                ?: currentUser?.username ?: "",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
