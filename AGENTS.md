@@ -32,7 +32,8 @@
 | Common | `core:common` | AppDispatchers, Koin commonModule, PlatformContext |
 | Model | `core:model` | 领域模型、Error 密封类、UiState、Article/ArticleStatus（纯数据，仅依赖 kotlinx-serialization） |
 | Data | `core:data` | 仓库接口 + 实现，编排 network ↔ database ↔ datastore，ArticleRepository（离线优先），RemoteMediator |
-| Network | `core:network` | Ktor HttpClient, REST API (ArticleApi), WebSocket, DTOs (ArticleListResponse 等), Ktor Resources 路由 (V1) |
+| Network | `core:network` | Ktor HttpClient, REST API (ArticleApi), WebSocket, BuildKonfig, TokenRefresher |
+| Contract | `core:contract` | 两端共享的线协议契约：DTO、Ktor Resources 路由 (V1)、JSON/Protobuf 配置（server 与 client 共用同一份声明） |
 | Database | `core:database` | SQLDelight（含 Article；表数量以当前 schema 为准）+ DAO + QueryPagingSource |
 | Datastore | `core:datastore` | Key-value 存储（token、偏好设置） |
 | UI | `core:ui` | Compose Multiplatform 组件, Material 3 (Miuix), i18n (Lyricist), ArticleCardItem |

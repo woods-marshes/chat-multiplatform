@@ -18,17 +18,17 @@ graph TB
   subgraph :core
     direction TB
     :core:common[common]:::kotlin-multiplatform
+    :core:contract[contract]:::kotlin-multiplatform
     :core:data[data]:::kotlin-multiplatform
     :core:database[database]:::kotlin-multiplatform
     :core:datastore[datastore]:::kotlin-multiplatform
-    :core:domain[domain]:::kotlin-multiplatform
     :core:model[model]:::kotlin-multiplatform
     :core:navigation[navigation]:::compose-multiplatform
     :core:network[network]:::kotlin-multiplatform
-    :core:network-api[network-api]:::kotlin-multiplatform
     :core:ui[ui]:::compose-multiplatform
   end
 
+  :core:contract --> :core:model
   :core:data -.-> :core:common
   :core:data -.-> :core:database
   :core:data -.-> :core:datastore
@@ -38,18 +38,14 @@ graph TB
   :core:database -.-> :core:model
   :core:datastore -.-> :core:common
   :core:datastore -.-> :core:model
-  :core:domain -.-> :core:common
-  :core:domain -.-> :core:model
   :core:network -.-> :core:common
+  :core:network --> :core:contract
   :core:network -.-> :core:datastore
   :core:network -.-> :core:model
-  :core:network --> :core:network-api
-  :core:network-api --> :core:model
   :core:ui -.-> :core:common
   :core:ui --> :core:model
   :features:auth -.-> :core:common
   :features:auth -.-> :core:data
-  :features:auth -.-> :core:domain
   :features:auth -.-> :core:model
   :features:auth -.-> :core:navigation
   :features:auth -.-> :core:ui

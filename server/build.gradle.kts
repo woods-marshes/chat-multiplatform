@@ -78,7 +78,7 @@ tasks.named<JavaExec>("run") {
 
 dependencies {
     implementation(projects.core.model)
-    implementation(projects.core.networkApi)
+    implementation(projects.core.contract)
 
     implementation(libs.kotlinx.html)
     implementation(libs.kotlinx.coroutines.core)

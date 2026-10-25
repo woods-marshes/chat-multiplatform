@@ -75,7 +75,7 @@ jobs:
               :core:database:jvmTest
               :core:navigation:jvmTest
               :core:network:jvmTest
-              :core:network-api:jvmTest
+              :core:contract:jvmTest
           - shard: data-app
             modules: >-
               :core:data:jvmTest
@@ -187,7 +187,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       - name: Run server and protocol tests
-        run: ./gradlew :server:test :core:network-api:jvmTest -PenableAndroid=true --no-daemon
+        run: ./gradlew :server:test :core:contract:jvmTest -PenableAndroid=true --no-daemon
 
       # The SPA is packaged into the shadow jar only — a test fixture serves
       # "/" in route tests — so assert the real packaging here, where a

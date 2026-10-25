@@ -1,4 +1,4 @@
-# `:core:network-api`
+# `:core:contract`
 
 ## Module dependency graph
 
@@ -13,11 +13,11 @@ config:
 graph TB
   subgraph :core
     direction TB
+    :core:contract[contract]:::kotlin-multiplatform
     :core:model[model]:::kotlin-multiplatform
-    :core:network-api[network-api]:::kotlin-multiplatform
   end
 
-  :core:network-api --> :core:model
+  :core:contract --> :core:model
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef desktop-application fill:#BDB2FF,stroke:#000,stroke-width:2px,color:#000;

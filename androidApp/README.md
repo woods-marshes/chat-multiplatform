@@ -26,14 +26,13 @@ graph TB
   subgraph :core
     direction TB
     :core:common[common]:::kotlin-multiplatform
+    :core:contract[contract]:::kotlin-multiplatform
     :core:data[data]:::kotlin-multiplatform
     :core:database[database]:::kotlin-multiplatform
     :core:datastore[datastore]:::kotlin-multiplatform
-    :core:domain[domain]:::kotlin-multiplatform
     :core:model[model]:::kotlin-multiplatform
     :core:navigation[navigation]:::compose-multiplatform
     :core:network[network]:::kotlin-multiplatform
-    :core:network-api[network-api]:::kotlin-multiplatform
     :core:ui[ui]:::compose-multiplatform
   end
   :composeApp[composeApp]:::compose-multiplatform
@@ -46,7 +45,6 @@ graph TB
   :composeApp -.-> :core:data
   :composeApp -.-> :core:database
   :composeApp -.-> :core:datastore
-  :composeApp -.-> :core:domain
   :composeApp -.-> :core:model
   :composeApp -.-> :core:navigation
   :composeApp -.-> :core:network
@@ -60,6 +58,7 @@ graph TB
   :composeApp -.-> :features:profile
   :composeApp -.-> :features:search
   :composeApp -.-> :features:settings
+  :core:contract --> :core:model
   :core:data -.-> :core:common
   :core:data -.-> :core:database
   :core:data -.-> :core:datastore
@@ -69,69 +68,57 @@ graph TB
   :core:database -.-> :core:model
   :core:datastore -.-> :core:common
   :core:datastore -.-> :core:model
-  :core:domain -.-> :core:common
-  :core:domain -.-> :core:model
   :core:network -.-> :core:common
+  :core:network --> :core:contract
   :core:network -.-> :core:datastore
   :core:network -.-> :core:model
-  :core:network --> :core:network-api
-  :core:network-api --> :core:model
   :core:ui -.-> :core:common
   :core:ui --> :core:model
   :features:article -.-> :core:common
   :features:article -.-> :core:data
-  :features:article -.-> :core:domain
   :features:article -.-> :core:model
   :features:article -.-> :core:navigation
   :features:article -.-> :core:network
   :features:article -.-> :core:ui
   :features:article-editor -.-> :core:common
   :features:article-editor -.-> :core:data
-  :features:article-editor -.-> :core:domain
   :features:article-editor -.-> :core:model
   :features:article-editor -.-> :core:navigation
   :features:article-editor -.-> :core:network
   :features:article-editor -.-> :core:ui
   :features:auth -.-> :core:common
   :features:auth -.-> :core:data
-  :features:auth -.-> :core:domain
   :features:auth -.-> :core:model
   :features:auth -.-> :core:navigation
   :features:auth -.-> :core:ui
   :features:chat -.-> :core:common
   :features:chat -.-> :core:data
-  :features:chat -.-> :core:domain
   :features:chat -.-> :core:model
   :features:chat -.-> :core:navigation
   :features:chat -.-> :core:ui
   :features:contacts -.-> :core:common
   :features:contacts -.-> :core:data
-  :features:contacts -.-> :core:domain
   :features:contacts -.-> :core:model
   :features:contacts -.-> :core:navigation
   :features:contacts -.-> :core:ui
   :features:conversations -.-> :core:common
   :features:conversations -.-> :core:data
-  :features:conversations -.-> :core:domain
   :features:conversations -.-> :core:model
   :features:conversations -.-> :core:navigation
   :features:conversations -.-> :core:ui
   :features:profile -.-> :core:common
   :features:profile -.-> :core:data
-  :features:profile -.-> :core:domain
   :features:profile -.-> :core:model
   :features:profile -.-> :core:navigation
   :features:profile -.-> :core:ui
   :features:search -.-> :core:common
   :features:search -.-> :core:data
-  :features:search -.-> :core:domain
   :features:search -.-> :core:model
   :features:search -.-> :core:navigation
   :features:search -.-> :core:ui
   :features:settings -.-> :core:common
   :features:settings -.-> :core:data
   :features:settings -.-> :core:datastore
-  :features:settings -.-> :core:domain
   :features:settings -.-> :core:model
   :features:settings -.-> :core:navigation
   :features:settings -.-> :core:ui

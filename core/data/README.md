@@ -14,14 +14,15 @@ graph TB
   subgraph :core
     direction TB
     :core:common[common]:::kotlin-multiplatform
+    :core:contract[contract]:::kotlin-multiplatform
     :core:data[data]:::kotlin-multiplatform
     :core:database[database]:::kotlin-multiplatform
     :core:datastore[datastore]:::kotlin-multiplatform
     :core:model[model]:::kotlin-multiplatform
     :core:network[network]:::kotlin-multiplatform
-    :core:network-api[network-api]:::kotlin-multiplatform
   end
 
+  :core:contract --> :core:model
   :core:data -.-> :core:common
   :core:data -.-> :core:database
   :core:data -.-> :core:datastore
@@ -32,10 +33,9 @@ graph TB
   :core:datastore -.-> :core:common
   :core:datastore -.-> :core:model
   :core:network -.-> :core:common
+  :core:network --> :core:contract
   :core:network -.-> :core:datastore
   :core:network -.-> :core:model
-  :core:network --> :core:network-api
-  :core:network-api --> :core:model
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef desktop-application fill:#BDB2FF,stroke:#000,stroke-width:2px,color:#000;

@@ -13,14 +13,14 @@ config:
 graph TB
   subgraph :core
     direction TB
+    :core:contract[contract]:::kotlin-multiplatform
     :core:model[model]:::kotlin-multiplatform
-    :core:network-api[network-api]:::kotlin-multiplatform
   end
   :server[server]:::ktor-server
 
-  :core:network-api --> :core:model
+  :core:contract --> :core:model
+  :server -.-> :core:contract
   :server -.-> :core:model
-  :server -.-> :core:network-api
 
 classDef android-application fill:#CAFFBF,stroke:#000,stroke-width:2px,color:#000;
 classDef desktop-application fill:#BDB2FF,stroke:#000,stroke-width:2px,color:#000;

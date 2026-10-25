@@ -45,7 +45,7 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                api(projects.core.networkApi)
+                api(projects.core.contract)
 
                 implementation(projects.core.common)
                 implementation(projects.core.model)

@@ -80,7 +80,7 @@ androidApp / desktopApp / webApp   <- platform entry points, bootstrap only
 | Module | Contents |
 |---|---|
 | `core/model` | Domain models, sealed `DomainError` hierarchy, UI models (shared by client and server) |
-| `core/network`, `core/network-api` | Ktor client, WebSocket, DTOs, Ktor Resources route definitions (one declaration used by both sides) |
+| `core/network`, `core/contract` | Ktor client, WebSocket, DTOs, Ktor Resources route definitions (one declaration used by both sides) |
 | `core/data` | Repository interfaces and implementations, offline-first orchestration, RemoteMediator, outbox retries |
 | `core/database` | SQLDelight (7 tables), DAOs, `QueryPagingSource` cursor paging |
 | `core/ui`, `core/navigation` | Shared Compose components, Material 3 Adaptive, Navigation 3 routes |
@@ -110,7 +110,7 @@ Versions are not maintained in this file: `gradle/libs.versions.toml` is the sin
 
 ## API
 
-The server listens on `9051` by default. Routes are declared in `core/network-api/.../api/V1.kt` and shared with the client:
+The server listens on `9051` by default. Routes are declared in `core/contract/.../api/V1.kt` and shared with the client:
 
 ```bash
 TOKEN=$(curl -s -X POST http://127.0.0.1:9051/v1/auth/register \

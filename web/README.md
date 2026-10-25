@@ -14,20 +14,20 @@ graph TB
   subgraph :core
     direction TB
     :core:common[common]:::kotlin-multiplatform
+    :core:contract[contract]:::kotlin-multiplatform
     :core:datastore[datastore]:::kotlin-multiplatform
     :core:model[model]:::kotlin-multiplatform
     :core:network[network]:::kotlin-multiplatform
-    :core:network-api[network-api]:::kotlin-multiplatform
   end
   :web[web]:::kotlin-multiplatform
 
+  :core:contract --> :core:model
   :core:datastore -.-> :core:common
   :core:datastore -.-> :core:model
   :core:network -.-> :core:common
+  :core:network --> :core:contract
   :core:network -.-> :core:datastore
   :core:network -.-> :core:model
-  :core:network --> :core:network-api
-  :core:network-api --> :core:model
   :web -.-> :core:common
   :web -.-> :core:datastore
   :web -.-> :core:model

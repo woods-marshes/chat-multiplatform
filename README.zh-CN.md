@@ -80,7 +80,7 @@ androidApp / desktopApp / webApp   ← 平台入口，只写启动代码
 | 模块 | 内容 |
 |---|---|
 | `core/model` | 领域模型、`DomainError` 密封类、UI 模型（客户端与服务端共享） |
-| `core/network` `core/network-api` | Ktor Client、WebSocket、DTO、Ktor Resources 路由定义（两端共用同一份声明） |
+| `core/network` `core/contract` | Ktor Client、WebSocket、DTO、Ktor Resources 路由定义（两端共用同一份声明） |
 | `core/data` | Repository 接口与实现，离线优先编排、RemoteMediator、outbox 重发 |
 | `core/database` | SQLDelight（7 表）、DAO、`QueryPagingSource` 游标分页 |
 | `core/ui` `core/navigation` | Compose 共享组件、Material 3 Adaptive、Navigation 3 路由 |
@@ -110,7 +110,7 @@ androidApp / desktopApp / webApp   ← 平台入口，只写启动代码
 
 ## API
 
-服务端默认监听 `9051`，路由定义在 `core/network-api/.../api/V1.kt`，客户端和服务端共用：
+服务端默认监听 `9051`，路由定义在 `core/contract/.../api/V1.kt`，客户端和服务端共用：
 
 ```bash
 TOKEN=$(curl -s -X POST http://127.0.0.1:9051/v1/auth/register \

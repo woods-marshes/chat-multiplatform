@@ -86,7 +86,7 @@ include(":core:database")
 include(":core:datastore")
 include(":core:model")
 include(":core:network")
-include(":core:network-api")
+include(":core:contract")
 include(":core:ui")
 include(":core:navigation")
 
