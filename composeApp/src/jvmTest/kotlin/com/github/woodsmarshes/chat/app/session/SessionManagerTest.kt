@@ -299,6 +299,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = trackedRepo,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -426,6 +428,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = trackedRepo,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -528,6 +532,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -623,6 +629,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = databaseHolder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -726,6 +734,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -801,6 +811,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             val stateCollector = launch {
@@ -917,6 +929,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = repo,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1035,6 +1049,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = repo,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1128,6 +1144,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1276,6 +1294,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = databaseHolder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1392,6 +1412,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1528,6 +1550,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = databaseHolder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1648,6 +1672,8 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = dbStub.holder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1786,6 +1812,7 @@ class SessionManagerTest {
                 databaseHolder = databaseHolder,
                 messageRepository = messageRepository,
                 userRepository = userRepository,
+                contactRepository = InertContactRepository,
                 scope = managerScope,
             )
             runCurrent()
@@ -1963,6 +1990,7 @@ class SessionManagerTest {
                 realtimeApi = realtimeApi,
                 databaseHolder = databaseHolder,
                 messageRepository = messageRepository,
+                userRepository = InertUserRepository,
                 contactRepository = contactRepository,
                 scope = managerScope,
             )

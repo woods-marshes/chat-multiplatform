@@ -127,8 +127,8 @@ class SessionManager(
     private val realtimeApi: RealtimeApi,
     private val databaseHolder: DatabaseHolder,
     private val messageRepository: MessageRepository,
-    private val userRepository: UserRepository = InertUserRepository,
-    private val contactRepository: ContactRepository = InertContactRepository,
+    private val userRepository: UserRepository,
+    private val contactRepository: ContactRepository,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val log = KotlinLogging.logger {}
