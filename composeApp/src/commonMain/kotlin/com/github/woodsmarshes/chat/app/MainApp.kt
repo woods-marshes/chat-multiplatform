@@ -373,12 +373,18 @@ private fun MainContent(
     // Keep Settings in two-pane mode on medium/expanded windows by seeding
     // the default PROFILE detail entry whenever the Settings sub-stack has
     // only its root list entry.
+    // Seeds the default PROFILE detail entry so Settings stays two-pane on
+    // medium+ windows; shared by the tab landing effect and the top-level switch.
+    fun ensureSettingsDetailSeeded() {
+        val settingsStack = navigationState.subStacks[SettingsNavKey]
+        if (settingsStack != null && settingsStack.size == 1) {
+            settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
+        }
+    }
+
     LaunchedEffect(navigationState.currentTopLevelKey, isMediumOrLarger) {
         if (isMediumOrLarger && navigationState.currentTopLevelKey == SettingsNavKey) {
-            val settingsStack = navigationState.subStacks[SettingsNavKey]
-            if (settingsStack != null && settingsStack.size == 1) {
-                settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
-            }
+            ensureSettingsDetailSeeded()
         }
     }
 
@@ -409,10 +415,7 @@ private fun MainContent(
     val selectTopLevelItem: (NavKey) -> Unit = { navKey ->
         navigator.navigate(navKey)
         if (isMediumOrLarger && navKey == SettingsNavKey) {
-            val settingsStack = navigationState.subStacks[SettingsNavKey]
-            if (settingsStack != null && settingsStack.size == 1) {
-                settingsStack.add(SettingsDetailNavKey(SettingsCategory.PROFILE))
-            }
+            ensureSettingsDetailSeeded()
         }
     }
 
@@ -534,123 +537,23 @@ private fun MainContent(
     }
 
     Box(modifier = modifier) {
-        CompositionLocalProvider(LocalAccountAffordance provides accountAffordance) {
-            if (!isMediumOrLarger) {
-                CompactNavigationLayout(
-                    showNavigation = showNavigationSuite,
-                    navigation = {
-                        if (isMiuix) {
-                            MiuixNavigationBar(color = MiuixTheme.colorScheme.surface) {
-                                topLevelNavigationItems.forEach { item ->
-                                    val selected = item.navKey == navigationState.currentTopLevelKey
-                                    MiuixNavigationBarItem(
-                                        selected = selected,
-                                        onClick = { selectTopLevelItem(item.navKey) },
-                                        icon = if (selected) item.selectedIcon else item.unselectedIcon,
-                                        label = item.label(strings),
-                                    )
-                                }
-                            }
-                        } else {
-                            NavigationBar {
-                                topLevelNavigationItems.forEach { item ->
-                                    val selected = item.navKey == navigationState.currentTopLevelKey
-                                    NavigationBarItem(
-                                        selected = selected,
-                                        onClick = { selectTopLevelItem(item.navKey) },
-                                        icon = {
-                                            Icon(
-                                                imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                                contentDescription = item.label(strings),
-                                            )
-                                        },
-                                        label = { Text(item.label(strings)) },
-                                    )
-                                }
-                            }
-                        }
-                    },
-                ) { bottomBarHeight ->
-                    sceneContent(Modifier.fillMaxSize(), bottomBarHeight)
-                }
-            } else if (isMiuix) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    if (navigationSuiteLayout == NavigationSuiteType.NavigationRail && showNavigationSuite) {
-                        MiuixNavigationRail(
-                            color = MiuixTheme.colorScheme.surface,
-                        ) {
-                            topLevelNavigationItems.forEach { item ->
-                                val selected = item.navKey == navigationState.currentTopLevelKey
-                                MiuixNavigationRailItem(
-                                    selected = selected,
-                                    onClick = { selectTopLevelItem(item.navKey) },
-                                    icon = if (selected) item.selectedIcon else item.unselectedIcon,
-                                    label = item.label(strings),
-                                )
-                            }
-                        }
-                    }
-                    sceneContent(Modifier.weight(1f).fillMaxSize(), 0.dp)
-                }
-            } else {
-                NavigationSuiteScaffold(
-                    navigationSuiteItems = {
-                        topLevelNavigationItems.forEach { item ->
-                            val selected = item.navKey == navigationState.currentTopLevelKey
-                            item(
-                                selected = selected,
-                                onClick = { selectTopLevelItem(item.navKey) },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (selected) item.selectedIcon
-                                        else item.unselectedIcon,
-                                        contentDescription = item.label(strings),
-                                    )
-                                },
-                                label = { Text(item.label(strings)) },
-                            )
-                        }
-                    },
-                    containerColor = Color.Transparent,
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                    layoutType = navigationSuiteLayout,
-                    state = scaffoldState,
-                ) {
-                    sceneContent(Modifier.fillMaxSize(), 0.dp)
-                }
-            }
-        }
-
-        // Account affordance pinned to the rail bottom on medium+ layouts
-        // (reference design). The rail items are top-arranged, so the bottom
-        // area is always free; the rail is 80dp wide.
+        AppNavigationChrome(
+            isMediumOrLarger = isMediumOrLarger,
+            isMiuix = isMiuix,
+            navigationSuiteLayout = navigationSuiteLayout,
+            showNavigationSuite = showNavigationSuite,
+            scaffoldState = scaffoldState,
+            currentTopLevelKey = navigationState.currentTopLevelKey,
+            selectTopLevelItem = selectTopLevelItem,
+            sceneContent = sceneContent,
+            accountAffordance = accountAffordance,
+        )
         if (navigationSuiteLayout == NavigationSuiteType.NavigationRail) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .navigationBarsPadding()
-                    .padding(start = 10.dp, bottom = 12.dp)
-                    .width(60.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = openProfile)
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                UserAvatar(
-                    name = currentUser?.displayName?.ifEmpty { null } ?: currentUser?.username,
-                    avatarUrl = currentUser?.avatarUrl,
-                    size = 36.dp,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = currentUser?.displayName?.ifEmpty { null }
-                        ?: currentUser?.username ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            AccountRailFooter(
+                currentUser = currentUser,
+                openProfile = openProfile,
+                modifier = Modifier.align(Alignment.BottomStart),
+            )
         }
     }
 }
