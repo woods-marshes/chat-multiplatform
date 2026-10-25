@@ -831,45 +831,4 @@ class SessionManager(
         }
         return primary
     }
-
-    private object InertUserRepository : UserRepository {
-        override fun getMeFlow(): Flow<User?> = emptyFlow()
-        override suspend fun syncMe(): Result<User, UserError> = Err(UserError.PermissionDenied)
-        override suspend fun updateMyProfile(
-            displayName: String?,
-            avatarUrl: String?,
-            bio: String?,
-        ): Result<User, UserError> = Err(UserError.PermissionDenied)
-        override fun getGlobalSettingsFlow(): Flow<UserSetting?> = emptyFlow()
-        override suspend fun syncGlobalSettings(): Result<UserSetting, UserError> = Err(UserError.PermissionDenied)
-        override suspend fun updateGlobalSettings(
-            privacy: PrivacySetting?,
-            preferences: UserPreference?,
-        ): Result<Boolean, UserError> = Err(UserError.PermissionDenied)
-        override suspend fun fetchUserDetail(userId: Uuid): Result<User, UserError> = Err(UserError.PermissionDenied)
-        override fun getUserFlow(userId: Uuid): Flow<User?> = emptyFlow()
-        override suspend fun searchUsers(keyword: String): Result<List<User>, UserError> = Err(UserError.PermissionDenied)
-    }
-
-    private object InertContactRepository : ContactRepository {
-        override fun getFriendsFlow(): Flow<List<Pair<Contact, User>>> = emptyFlow()
-        override suspend fun syncFriends(): Result<Unit, ContactError> = Err(ContactError.PermissionDenied)
-        override suspend fun searchContacts(query: String): Result<List<Pair<Contact, User>>, ContactError> =
-            Err(ContactError.PermissionDenied)
-        override suspend fun sendFriendRequest(targetId: Uuid, message: String?): Result<Boolean, ContactError> =
-            Err(ContactError.PermissionDenied)
-        override fun observeIncomingRequests(): Flow<List<ContactRequest>> = emptyFlow()
-        override suspend fun syncContactRequests(): Result<List<ContactRequest>, ContactError> =
-            Err(ContactError.PermissionDenied)
-        override suspend fun handleFriendRequest(
-            requestId: Uuid,
-            accept: Boolean,
-            remark: String?,
-        ): Result<Boolean, ContactError> = Err(ContactError.PermissionDenied)
-        override suspend fun blockUser(userId: Uuid): Result<Boolean, ContactError> = Err(ContactError.PermissionDenied)
-        override suspend fun unblockUser(userId: Uuid): Result<Boolean, ContactError> = Err(ContactError.PermissionDenied)
-        override suspend fun removeFriend(userId: Uuid): Result<Boolean, ContactError> = Err(ContactError.PermissionDenied)
-    }
-
-
 }
