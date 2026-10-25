@@ -130,9 +130,8 @@ internal class MessageSyncEngine(
     }
 
     fun startSyncWorker(session: OfflineFirstMessageRepositoryImpl.RunningSession) {
-
         session.scope.launch {
-        messageApi.connectionState.collectLatest { state ->
+            messageApi.connectionState.collectLatest { state ->
             if (state !is ConnectionState.Connected) return@collectLatest
             syncWakeups.tryEmit(Unit)
             // Crash-safe badge recovery: a committed cursor whose refresh died
