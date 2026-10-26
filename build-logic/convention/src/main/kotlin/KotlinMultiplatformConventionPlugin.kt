@@ -42,11 +42,13 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
                     }
                 }
 
-                // Pin to the lowest consumer (Android, JVM 17) so the shared
-                // bytecode level no longer floats with the build machine's JDK.
+                // Pin the shared JVM bytecode level so it no longer floats
+                // with the build machine's JDK. Every JVM consumer in this
+                // repo (desktopApp, server, jvmTest) runs JDK 25; Android
+                // compiles via its own androidTarget and is unaffected.
                 jvm {
                     compilerOptions {
-                        jvmTarget.set(JvmTarget.JVM_17)
+                        jvmTarget.set(JvmTarget.JVM_25)
                     }
                 }
 
@@ -65,7 +67,7 @@ class KotlinMultiplatformConventionPlugin : Plugin<Project> {
 
             // Keep any Java sources consistent with the Kotlin target above.
             tasks.withType<JavaCompile>().configureEach {
-                options.release.set(17)
+                options.release.set(25)
             }
         }
     }
