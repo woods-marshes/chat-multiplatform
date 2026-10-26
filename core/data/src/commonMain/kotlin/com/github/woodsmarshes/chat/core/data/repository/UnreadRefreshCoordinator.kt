@@ -237,6 +237,13 @@ class UnreadRefreshCoordinator(
                 return
             }
 
+            // The session may have been stopped while this iteration was
+            // fetching: without this check the loop would still write to a
+            // database that teardown is closing (SQLITE_BUSY in a cancelled
+            // coroutine — an uncaught exception that surfaces in whatever
+            // runs next).
+            currentCoroutineContext().ensureActive()
+
             val (fetchedGen, taskGenBeforeFetch, response) = detail
             val done = mutex.withLock {
                 if (sessionEpoch != targetSession) {
@@ -246,17 +253,23 @@ class UnreadRefreshCoordinator(
                 val currentReqGen = requestedGenerations[conversationId] ?: sessionFloorEpoch
                 var confirmed = false
                 if (currentReqGen == fetchedGen && conversationId in dirtyConversations) {
-                    messageDao.transaction {
-                        val currentDbTaskGen = messageDao.getUnreadRefreshPendingGeneration(conversationId)
-                        // If generation changed in DB while fetch was in flight (e.g. newer journal commit),
-                        // this response is stale: do not apply unread count and do not confirm.
-                        if (taskGenBeforeFetch == currentDbTaskGen) {
-                            conversationDao.setUnreadCount(conversationId, response.unreadCount.toLong())
-                            taskGenBeforeFetch?.let { expected ->
-                                messageDao.confirmUnreadRefreshPending(conversationId, expected)
+                    try {
+                        messageDao.transaction {
+                            val currentDbTaskGen = messageDao.getUnreadRefreshPendingGeneration(conversationId)
+                            // If generation changed in DB while fetch was in flight (e.g. newer journal commit),
+                            // this response is stale: do not apply unread count and do not confirm.
+                            if (taskGenBeforeFetch == currentDbTaskGen) {
+                                conversationDao.setUnreadCount(conversationId, response.unreadCount.toLong())
+                                taskGenBeforeFetch?.let { expected ->
+                                    messageDao.confirmUnreadRefreshPending(conversationId, expected)
+                                }
+                                confirmed = true
                             }
-                            confirmed = true
                         }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        log.warn(e) { "[unread-refresh] failed to persist unread update for $conversationId" }
                     }
                 }
                 if (confirmed) {
