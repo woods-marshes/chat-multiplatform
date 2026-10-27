@@ -35,8 +35,7 @@ kotlinx-browser-version = "0.5.0"
 kotlinx-serialization-version = "1.12.0"
 micrometer-version = "1.17.1"
 kotlinx-html-version = "0.12.0"
-ktor-version = "3.6.0"
-logback-version = "1.6.5"
+logback-version = "1.6.6"
 slf4j-version = "2.0.20"
 postgres-version = "42.7.14"
 commons-version = "1.23.0"
@@ -86,45 +85,11 @@ aboutLibraries = "15.3.0"
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin-version" }
 kotlin-css = { module = "org.jetbrains.kotlin-wrappers:kotlin-css-jvm", version.ref = "kotlin-css-version" }
-# ktor-server
-ktor-server-core = { module = "io.ktor:ktor-server-core-jvm", version.ref = "ktor-version" }
-ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor-version" }
-ktor-serialization-kotlinx-protobuf = { module = "io.ktor:ktor-serialization-kotlinx-protobuf", version.ref = "ktor-version" }
-ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation-jvm", version.ref = "ktor-version" }
-ktor-server-metrics-micrometer = { module = "io.ktor:ktor-server-metrics-micrometer-jvm", version.ref = "ktor-version" }
-ktor-server-call-id = { module = "io.ktor:ktor-server-call-id-jvm", version.ref = "ktor-version" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer-version" }
 h2 = { module = "com.h2database:h2", version.ref = "h2-version" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgres-version" }
-ktor-server-websockets = { module = "io.ktor:ktor-server-websockets-jvm", version.ref = "ktor-version" }
-ktor-server-html-builder = { module = "io.ktor:ktor-server-html-builder-jvm", version.ref = "ktor-version" }
-ktor-server-auth = { module = "io.ktor:ktor-server-auth-jvm", version.ref = "ktor-version" }
-ktor-server-swagger = { module = "io.ktor:ktor-server-swagger-jvm", version.ref = "ktor-version" }
-ktor-server-partial-content = { module = "io.ktor:ktor-server-partial-content-jvm", version.ref = "ktor-version" }
-ktor-server-openapi = { module = "io.ktor:ktor-server-openapi", version.ref = "ktor-version" }
-ktor-server-forwarded-header = { module = "io.ktor:ktor-server-forwarded-header-jvm", version.ref = "ktor-version" }
-ktor-server-default-headers = { module = "io.ktor:ktor-server-default-headers-jvm", version.ref = "ktor-version" }
-ktor-server-caching-headers = { module = "io.ktor:ktor-server-caching-headers-jvm", version.ref = "ktor-version" }
-ktor-server-compression = { module = "io.ktor:ktor-server-compression-jvm", version.ref = "ktor-version" }
-ktor-server-double-receive = { module = "io.ktor:ktor-server-double-receive-jvm", version.ref = "ktor-version" }
-ktor-server-auto-head-response = { module = "io.ktor:ktor-server-auto-head-response-jvm", version.ref = "ktor-version" }
-ktor-server-host-common = { module = "io.ktor:ktor-server-host-common-jvm", version.ref = "ktor-version" }
-ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages-jvm", version.ref = "ktor-version" }
-ktor-server-rate-limit = { module = "io.ktor:ktor-server-rate-limit", version.ref = "ktor-version" }
-ktor-server-request-validation = { module = "io.ktor:ktor-server-request-validation", version.ref = "ktor-version" }
-ktor-server-resources = { module = "io.ktor:ktor-server-resources-jvm", version.ref = "ktor-version" }
-ktor-server-sessions = { module = "io.ktor:ktor-server-sessions-jvm", version.ref = "ktor-version" }
-ktor-server-auth-jwt = { module = "io.ktor:ktor-server-auth-jwt-jvm", version.ref = "ktor-version" }
-ktor-server-netty = { module = "io.ktor:ktor-server-netty-jvm", version.ref = "ktor-version" }
-ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor-version" }
-ktor-server-method-override = { module = "io.ktor:ktor-server-method-override", version.ref = "ktor-version" }
-ktor-server-routing-openapi = { module = "io.ktor:ktor-server-routing-openapi", version.ref = "ktor-version"}
-ktor-server-di = { module = "io.ktor:ktor-server-di", version.ref = "ktor-version"}
-ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", version.ref = "ktor-version" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback-version" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j-version" }
-ktor-server-config-yaml = { module = "io.ktor:ktor-server-config-yaml-jvm", version.ref = "ktor-version" }
-ktor-server-test-host = { module = "io.ktor:ktor-server-test-host-jvm", version.ref = "ktor-version" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin-version" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 # compose
@@ -194,19 +159,6 @@ kobwebx-serialization-kotlinx = { module = "com.varabyte.kobwebx:kobwebx-seriali
 silk-foundation = { module = "com.varabyte.kobweb:silk-foundation", version.ref = "kobweb" }
 silk-icons-fa = { module = "com.varabyte.kobwebx:silk-icons-fa", version.ref = "kobweb" }
 silk-icons-mdi = { module = "com.varabyte.kobwebx:silk-icons-mdi", version.ref = "kobweb" }
-# ktor-client
-ktor-resources = { module = "io.ktor:ktor-resources", version.ref = "ktor-version" }
-ktor-client-core = {module = "io.ktor:ktor-client-core", version.ref = "ktor-version"}
-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor-version" }
-ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor-version" }
-ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor-version" }
-ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor-version" }
-ktor-client-logging = { group = "io.ktor", name = "ktor-client-logging", version.ref = "ktor-version" }
-ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor-version" }
-ktor-client-encoding = { group = "io.ktor", name = "ktor-client-encoding", version.ref = "ktor-version" }
-ktor-client-bom-remover = { group = "io.ktor", name = "ktor-client-bom-remover", version.ref = "ktor-version" }
-ktor-client-auth = { group = "io.ktor", name = "ktor-client-auth", version.ref = "ktor-version" }
-ktor-client-resources = { group = "io.ktor", name = "ktor-client-resources", version.ref = "ktor-version" }
 # koin
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin-version" }
 koin-logger-slf4j = { module = "io.insert-koin:koin-logger-slf4j", version.ref = "koin-version" }
@@ -319,7 +271,6 @@ androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin-version" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin-version" }
-ktor = { id = "io.ktor.plugin", version.ref = "ktor-version" }
 kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin-version" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin-version" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

@@ -59,16 +59,16 @@ kotlin {
                 implementation(libs.kotlinx.io.bytestring)
                 implementation(libs.kotlinx.io.okio)
 
-                implementation(libs.ktor.client.core)
-                implementation(libs.ktor.client.content.negotiation)
-                implementation(libs.ktor.serialization.kotlinx.json)
-                implementation(libs.ktor.serialization.kotlinx.protobuf)
-                implementation(libs.ktor.client.logging)
-                implementation(libs.ktor.client.websockets)
-                implementation(libs.ktor.client.encoding)
-                implementation(libs.ktor.client.bom.remover)
-                implementation(libs.ktor.client.auth)
-                implementation(libs.ktor.client.resources)
+                implementation(ktorLibs.client.core)
+                implementation(ktorLibs.client.contentNegotiation)
+                implementation(ktorLibs.serialization.kotlinx.json)
+                implementation(ktorLibs.serialization.kotlinx.protobuf)
+                implementation(ktorLibs.client.logging)
+                implementation(ktorLibs.client.websockets)
+                implementation(ktorLibs.client.encoding)
+                implementation(ktorLibs.client.bomRemover)
+                implementation(ktorLibs.client.auth)
+                implementation(ktorLibs.client.resources)
             }
         }
 
@@ -88,20 +88,20 @@ kotlin {
 
         matching { it.name == "androidMain" }.configureEach {
             dependencies {
-                implementation(libs.ktor.client.okhttp)
+                implementation(ktorLibs.client.okhttp)
             }
         }
 
         jvmMain {
             dependencies {
-                implementation(libs.ktor.client.cio)
-                implementation(libs.ktor.client.okhttp)
+                implementation(ktorLibs.client.cio)
+                implementation(ktorLibs.client.okhttp)
             }
         }
 
         webMain {
             dependencies {
-                implementation(libs.ktor.client.js)
+                implementation(ktorLibs.client.js)
             }
         }
     }

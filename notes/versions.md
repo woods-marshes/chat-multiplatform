@@ -34,12 +34,12 @@
 
 | 依赖 | 版本 |
 |---|---|
-| Ktor | 3.5.0 |
+| Ktor | 3.6.0 |
 | Exposed ORM | 1.3.0 |
 | H2 | 2.4.240 |
 | PostgreSQL JDBC | 42.7.11 |
 | HikariCP | 7.0.2 |
-| Logback | 1.5.34 |
+| Logback | 1.6.6 |
 | kotlin-logging | 8.0.4 |
 | Commons Codec | 1.22.0 |
 | BCrypt | 0.10.2 |

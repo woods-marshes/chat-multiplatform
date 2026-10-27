@@ -16,7 +16,7 @@ kotlin {
                 api(projects.core.model)
                 api(libs.kotlinx.serialization.json)
                 api(libs.kotlinx.serialization.protobuf)
-                api(libs.ktor.resources)
+                api(ktorLibs.resources)
             }
         }
 

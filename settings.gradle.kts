@@ -34,6 +34,9 @@ dependencyResolutionManagement {
                 val wrappersVersion = "2026.9.2"
                 from("org.jetbrains.kotlin-wrappers:kotlin-wrappers-catalog:$wrappersVersion")
             }
+            create("ktorLibs") {
+                from("io.ktor:ktor-version-catalog:3.6.0")
+            }
         }
 
         mavenCentral()
