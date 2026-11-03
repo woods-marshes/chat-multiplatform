@@ -33,6 +33,28 @@ val prometheusRegistry = PrometheusMeterRegistry(io.micrometer.prometheusmetrics
 
 private const val METRICS_ROUTE = "/metrics"
 
+/** Healthchecks poll every few seconds; caching keeps probes off the connection pool. */
+private const val HEALTH_CACHE_NANOS = 2_000_000_000L
+
+/**
+ * Liveness probe for the database, cached for [HEALTH_CACHE_NANOS]. A failure is
+ * cached as well, so an outage surfaces within one TTL instead of flickering
+ * between probe results.
+ */
+private class HealthProbe {
+    @Volatile private var checkedAtNanos = 0L
+    @Volatile private var dbUp = false
+
+    suspend fun isDbUp(): Boolean {
+        val now = System.nanoTime()
+        if (checkedAtNanos != 0L && now - checkedAtNanos < HEALTH_CACHE_NANOS) return dbUp
+        val up = runCatching { dbQuery { AuthSessions.selectAll().limit(1).count() } }.isSuccess
+        dbUp = up
+        checkedAtNanos = System.nanoTime()
+        return up
+    }
+}
+
 /**
  * Observability: a Prometheus registry (HTTP request timers, JVM, WS
  * sessions, EventBus drops), a per-request CallId surfaced in the
@@ -96,10 +118,9 @@ fun Application.configureObservability() {
             }
         }
 
+        val healthProbe = HealthProbe()
         get("/health") {
-            val dbUp = runCatching {
-                dbQuery { AuthSessions.selectAll().limit(1).count() }
-            }.isSuccess
+            val dbUp = healthProbe.isDbUp()
             if (dbUp) {
                 call.respondText("""{"status":"ok"}""", ContentType.Application.Json)
             } else {
