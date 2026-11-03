@@ -37,6 +37,7 @@ import org.koin.ktor.ext.getKoin
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import com.github.woodsmarshes.chat.repository.SyncRepository
+import com.github.woodsmarshes.chat.service.RealtimeService
 import java.security.MessageDigest
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -213,6 +214,16 @@ private fun Application.configureDependencyInjection(
         bridge { koinToKtor() }
         modules(MainModule, repositoryModule, serviceModule)
         createEagerInstances()
+    }
+
+    // Koin resolves the Application-provided definitions (Logger, Database,
+    // ApplicationConfig, CoroutineScope) through the Ktor DI bridge, which is only
+    // wired once the plugin has started — so neither createdAtStart nor a plain
+    // single can be created from install(Koin) itself. Resolve the realtime
+    // consumers here: they subscribe to the EventBus in their constructor, and
+    // events published before the first websocket connection would be dropped.
+    monitor.subscribe(ApplicationStarted) {
+        it.getKoin().get<RealtimeService>()
     }
 
     monitor.subscribe(ApplicationStopping) { app ->
