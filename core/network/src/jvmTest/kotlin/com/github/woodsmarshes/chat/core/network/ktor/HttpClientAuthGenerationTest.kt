@@ -17,6 +17,7 @@ import io.ktor.client.plugins.HttpTimeoutCapability
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
@@ -292,7 +293,11 @@ class HttpClientAuthGenerationTest {
                         if (callIndex == 2) {
                             bothInitialSent.complete(Unit)
                         }
-                        if (callIndex == 1) {
+                        // Gate by request identity instead of arrival index: the two
+                        // concurrent calls reach the engine in either order, and gating
+                        // by count let the second one wait for a release that the test
+                        // only performs after the first one finishes (deadlock).
+                        if (req.headers["X-Test-Request"] == "first") {
                             releaseFirst401.await()
                         } else {
                             releaseSecond401.await()
@@ -324,8 +329,12 @@ class HttpClientAuthGenerationTest {
         try {
             h.commitLogin(user1, aliceJwt1, "refresh-alice-1")
 
-            val req1 = async(dispatcher) { h.client.get("/v1/protected-resource") }
-            val req2 = async(dispatcher) { h.client.get("/v1/protected-resource") }
+            val req1 = async(dispatcher) {
+                h.client.get("/v1/protected-resource") { header("X-Test-Request", "first") }
+            }
+            val req2 = async(dispatcher) {
+                h.client.get("/v1/protected-resource") { header("X-Test-Request", "second") }
+            }
             bothInitialSent.await()
 
             // First request gets 401 -> refreshes token to aliceJwt2 and replays req1.
