@@ -16,6 +16,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.uuid.Uuid
 
@@ -45,6 +46,13 @@ interface RealtimeDelivery {
     suspend fun sendToConversation(conversationId: Uuid, data: RealtimeEvent)
 
     /**
+     * Drops the cached member set of [conversationId] so the next broadcast reads
+     * the database again. Membership writes call this; the TTL is only a backstop
+     * for a change that never announced itself.
+     */
+    fun invalidateConversation(conversationId: Uuid)
+
+    /**
      * Closes the session's writer and unregisters it from the delivery service and session index.
      * Idempotent: safe to invoke repeatedly from disconnect/cleanup hooks.
      */
@@ -64,6 +72,10 @@ class WebSocketRealtimeDelivery(
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 64
         private const val SOCKET_CLOSE_TIMEOUT_MS = 2000L
+
+        /** How long a member set may be reused before it is re-read. */
+        private const val PARTICIPANT_CACHE_TTL_NANOS = 5_000_000_000L
+        private const val PARTICIPANT_CACHE_MAX_ENTRIES = 1_024
     }
 
     init {
@@ -75,6 +87,10 @@ class WebSocketRealtimeDelivery(
     private val lock = Any()
     private var isClosed = false
     private val writers = HashMap<WebSocketServerSession, ConnectionWriter>()
+
+    private class CachedParticipants(val members: List<Uuid>, val expiresAtNanos: Long)
+
+    private val participantCache = ConcurrentHashMap<Uuid, CachedParticipants>()
 
     private class CloseWorkItem(
         val session: WebSocketServerSession,
@@ -247,13 +263,34 @@ class WebSocketRealtimeDelivery(
     }
 
     override suspend fun sendToConversation(conversationId: Uuid, data: RealtimeEvent) {
-        val members = participants.getConversationParticipants(conversationId)
-        members.forEach { member ->
-            val userSessions = sessions.getSessions(member.userId)
-            userSessions.forEach { session ->
+        conversationMembers(conversationId).forEach { userId ->
+            sessions.getSessions(userId).forEach { session ->
                 sendToSession(session, data)
             }
         }
+    }
+
+    override fun invalidateConversation(conversationId: Uuid) {
+        participantCache.remove(conversationId)
+    }
+
+    /**
+     * Member ids of [conversationId], memoized for [PARTICIPANT_CACHE_TTL_NANOS].
+     * Every broadcast used to run this lookup, so a busy conversation paid one query
+     * per event; the TTL bounds how long a missed invalidation can route to somebody
+     * who has already left.
+     */
+    private suspend fun conversationMembers(conversationId: Uuid): List<Uuid> {
+        val now = System.nanoTime()
+        participantCache[conversationId]?.let { cached ->
+            if (cached.expiresAtNanos > now) return cached.members
+        }
+        val members = participants.getConversationParticipants(conversationId).map { it.userId }
+        if (participantCache.size >= PARTICIPANT_CACHE_MAX_ENTRIES) {
+            participantCache.values.removeIf { it.expiresAtNanos <= now }
+        }
+        participantCache[conversationId] = CachedParticipants(members, now + PARTICIPANT_CACHE_TTL_NANOS)
+        return members
     }
 
     override fun close() {

@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
+import com.github.woodsmarshes.chat.events.getConversationId
 import com.github.woodsmarshes.chat.events.MessageEvent
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
@@ -54,6 +55,9 @@ class RealtimeService(
 
         scope.launch {
             eventBus.conversationEvents.collect { event ->
+                // Membership decides who receives the next broadcast: drop the cached
+                // member set before delivering the event that announced the change.
+                delivery.invalidateConversation(event.getConversationId())
                 safeExecute { handleConversationEvent(event) }
             }
         }

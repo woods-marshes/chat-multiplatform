@@ -15,6 +15,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketExtension
 import io.ktor.websocket.readReason
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -146,6 +147,26 @@ class WebSocketRealtimeDeliveryTest {
             sent.map { it.first }.toSet(),
         )
         assertEquals(listOf(payload, payload, payload), sent.map { it.second })
+    }
+
+    @Test
+    fun conversationMembersAreCachedUntilInvalidated() = runBlocking {
+        val conversationId = Uuid.random()
+        val userId = Uuid.random()
+        val session = FakeSession(Uuid.random(), live = true)
+        sessions.add(userId, session)
+        delivery.registerSession(session)
+        coEvery { participants.getConversationParticipants(conversationId) } returns listOf(
+            participant(userId, conversationId)
+        )
+
+        delivery.sendToConversation(conversationId, event())
+        delivery.sendToConversation(conversationId, event())
+        coVerify(exactly = 1) { participants.getConversationParticipants(conversationId) }
+
+        delivery.invalidateConversation(conversationId)
+        delivery.sendToConversation(conversationId, event())
+        coVerify(exactly = 2) { participants.getConversationParticipants(conversationId) }
     }
 
     @Test
