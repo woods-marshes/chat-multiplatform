@@ -20,11 +20,13 @@ import com.github.woodsmarshes.chat.repository.ContactRepository
 import com.github.woodsmarshes.chat.repository.ContactRequestRepository
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.ConversationRepository
+import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -47,6 +49,12 @@ class ContactServiceTest {
     private val conversationRepository = mockk<ConversationRepository>()
     private val participantRepository = mockk<ConversationParticipantRepository>()
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
+    private val userSettingRepository = mockk<UserSettingRepository>()
+
+    @BeforeTest
+    fun stubUserSettings() {
+        coEvery { userSettingRepository.getSettings(any()) } returns null
+    }
 
     private val service = ContactService(
         contactRepository = contactRepository,
@@ -54,6 +62,7 @@ class ContactServiceTest {
         conversationRepository = conversationRepository,
         conversationParticipantRepository = participantRepository,
         eventBus = eventBus,
+        userSettingRepository = userSettingRepository,
     )
 
     private val userId = Uuid.random()

@@ -35,7 +35,7 @@ class ContactService(
     private val conversationRepository: ConversationRepository,
     private val conversationParticipantRepository: ConversationParticipantRepository,
     private val eventBus: EventBus,
-    private val userSettingRepository: UserSettingRepository? = null,
+    private val userSettingRepository: UserSettingRepository,
 ) {
 
     suspend fun getContacts(userId: Uuid): Result<List<Pair<Contact, User>>, ContactError> = coroutineBinding {
@@ -54,7 +54,7 @@ class ContactService(
         if (existingContact1?.status == ContactStatus.FRIEND || existingContact2?.status == ContactStatus.FRIEND) {
             Err(ContactError.AlreadyFriends).bind()
         }
-        val targetPolicy = userSettingRepository?.getSettings(req.targetId)?.privacy?.friendRequestPolicy
+        val targetPolicy = userSettingRepository.getSettings(req.targetId)?.privacy?.friendRequestPolicy
             ?: FriendRequestPolicy.NEED_APPROVAL
         if (targetPolicy == FriendRequestPolicy.DENY_ANY) {
             Err(ContactError.PermissionDenied).bind()

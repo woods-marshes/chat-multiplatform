@@ -12,6 +12,7 @@ import com.github.woodsmarshes.chat.repository.ContactRequestSourceImpl
 import com.github.woodsmarshes.chat.repository.ContactSourceImpl
 import com.github.woodsmarshes.chat.repository.ConversationDataSourceImpl
 import com.github.woodsmarshes.chat.repository.ConversationParticipantDataSourceImpl
+import com.github.woodsmarshes.chat.repository.UserSettingDataSourceImpl
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.support.TestDb
 import io.mockk.coVerify
@@ -47,6 +48,7 @@ class ContactFlowDatabaseTest {
         conversationRepository = conversationRepository,
         conversationParticipantRepository = participantRepository,
         eventBus = eventBus,
+        userSettingRepository = UserSettingDataSourceImpl(),
     )
 
     @BeforeTest
