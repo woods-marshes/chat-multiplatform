@@ -7,6 +7,9 @@ CLAUDE.local.md
 # Gradle files
 .gradle/
 build/
+# Skill reference trees may contain directories named build/
+!/.claude/skills/**/build/
+!/.agents/skills/**/build/
 
 ### STS ###
 .apt_generated
