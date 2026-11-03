@@ -201,8 +201,13 @@ class MessageDataSourceImpl(
                 }
                 .singleOrNull()
             if (existing != null) {
-                val existingMsg = existing.toMessage(replyTo = replyTo)
-                validateIdempotentPayload(existingMsg, content, category, replyTo?.id)
+                // Compare against the reply target stored on the row: reusing the
+                // request's replyTo would make the reply check always pass.
+                val storedReplyId = existing[Messages.replyToMessageId]?.value
+                val existingMsg = existing.toMessage(
+                    replyTo = storedReplyId?.let { loadReplyMessage(it, conversationId) },
+                )
+                validateIdempotentPayload(existingMsg, content, category, replyToMessageId)
                 return@dbQuery Pair(existingMsg, false)
             }
         }
@@ -301,8 +306,7 @@ class MessageDataSourceImpl(
                     (existing.content as MediaContent).url == requestedContent.url &&
                     (existing.content as MediaContent).fileName == requestedContent.fileName)
         }
-        val replyMatches = existingReplyId == requestedReplyToId ||
-            (existing.replyTo == null && requestedReplyToId != null && existingReplyId == null)
+        val replyMatches = existingReplyId == requestedReplyToId
         if (!contentMatches || existing.category != requestedCategory || !replyMatches) {
             throw AppException(MessageError.InvalidContent)
         }
