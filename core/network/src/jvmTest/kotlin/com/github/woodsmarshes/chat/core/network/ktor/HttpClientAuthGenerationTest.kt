@@ -181,9 +181,7 @@ class HttpClientAuthGenerationTest {
             authTokenDataSource = authTokenDataSource,
             tokenRefresher = tokenRefresher,
             httpEventBus = HttpEventBusImpl(),
-            // The scripted engine parks concurrent requests across a full
-            // refresh cycle; this module pins maxParallelForks=1 so the budget
-            // only needs to cover the cycle itself, not CPU contention.
+            // Scripted handlers park requests for a whole refresh cycle; 10s is too tight.
             requestTimeoutMillis = 60_000,
         )
         return Harness(
