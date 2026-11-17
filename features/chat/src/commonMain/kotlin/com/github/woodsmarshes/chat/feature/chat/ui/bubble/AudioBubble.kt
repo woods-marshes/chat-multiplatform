@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.chat.ui.bubble
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.style.TextOverflow
@@ -173,24 +177,30 @@ private fun WaveformBar(
     inactiveColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val maxValue = waveform.maxOrNull()?.toFloat()?.takeIf { it > 0f } ?: 1f
+    // Hoisted out of the draw lambda: `maxOrNull()` is O(n) and would otherwise
+    // run on every frame while the track is playing.
+    val maxValue = remember(waveform) {
+        waveform.maxOrNull()?.toFloat()?.takeIf { it > 0f } ?: 1f
+    }
+    // One canvas instead of one Box per sample: a waveform with 40+ entries
+    // used to cost the same number of layout nodes per audio bubble.
+    Canvas(modifier) {
         val playedIndex = (progress * waveform.size).toInt().coerceIn(0, waveform.size)
+        val slotWidth = size.width / waveform.size
+        val gap = 1.dp.toPx()
+        val barWidth = (slotWidth - gap * 2).coerceAtLeast(1f)
+        val corner = 1.dp.toPx()
 
         waveform.forEachIndexed { index, value ->
             val heightFraction = (value.toFloat() / maxValue).coerceIn(0.05f, 1f)
-            val barColor = if (index <= playedIndex) activeColor else inactiveColor
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(32.dp * heightFraction)
-                    .padding(horizontal = 1.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(barColor),
+            val barHeight = size.height * heightFraction
+            val left = index * slotWidth + gap
+            val top = (size.height - barHeight) / 2f
+            drawRoundRect(
+                color = if (index <= playedIndex) activeColor else inactiveColor,
+                topLeft = Offset(left, top),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(corner, corner),
             )
         }
     }
