@@ -109,7 +109,7 @@ class ChatViewModelTest {
                     userRepository = FakeUserRepository(MutableStateFlow(null)),
                     conversationRepository = FakeConversationRepository(),
                 )
-                assertNull(vm.uiState.value.header)
+                assertNull(vm.chatHeader.value)
             } finally {
                 Dispatchers.resetMain()
             }

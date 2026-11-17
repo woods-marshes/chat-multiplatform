@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -59,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -84,8 +86,8 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.motion.AppMotion
+import com.github.woodsmarshes.chat.feature.chat.ui.bubble.MessageFormatter
 import com.github.woodsmarshes.chat.feature.chat.ui.bubble.messageItems
-import com.github.woodsmarshes.chat.feature.chat.ui.bubble.rememberFormatter
 import com.github.woodsmarshes.chat.feature.chat.ui.input.ChatInputBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
@@ -93,6 +95,7 @@ import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -114,7 +117,17 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lazyMessages = viewModel.messages.collectAsLazyPagingItems()
     val listState = viewModel.messageListState
-    val formatter = rememberFormatter()
+    val uriHandler = LocalUriHandler.current
+    // onProfileClick is supplied by the navigation layer and is a new lambda
+    // instance on every host recomposition; keying remember on it would rebuild
+    // the formatter (and restart every bubble's pointerInput) each time.
+    val currentOnProfileClick by rememberUpdatedState(onProfileClick)
+    val formatter = remember(uriHandler) {
+        MessageFormatter(
+            onUrlClicked = { runCatching { uriHandler.openUri(it) } },
+            onMentionClicked = { userId -> currentOnProfileClick(userId) },
+        )
+    }
     val coroutineScope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -157,6 +170,14 @@ fun ChatScreen(
 
     val unreadCount = rememberSaveable { mutableStateOf(0) }
 
+    // Rapid arrivals and the FAB race the same animation: cancel the previous
+    // scrollToItem instead of letting two runs fight over the scroll position.
+    var scrollToTopJob by remember { mutableStateOf<Job?>(null) }
+    fun animateScrollToLatest() {
+        scrollToTopJob?.cancel()
+        scrollToTopJob = coroutineScope.launch { listState.animateScrollToItem(0) }
+    }
+
     // Entry restoration belongs to LazyListState; only arrivals observed while resumed may follow.
     LaunchedEffect(lazyMessages, listState, lifecycleState) {
         if (lifecycleState != Lifecycle.State.RESUMED) return@LaunchedEffect
@@ -173,7 +194,7 @@ fun ChatScreen(
                             firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
                         )
                     ) {
-                        listState.animateScrollToItem(0)
+                        animateScrollToLatest()
                         unreadCount.value = 0
                     } else {
                         unreadCount.value += 1
@@ -266,17 +287,22 @@ fun ChatScreen(
                     onBackClick = viewModel::clearSelection,
                 )
             } else {
+                // Subscribed HERE, not in the screen body: the 1s typing ticker
+                // then recomposes only this top-bar scope, never the message list.
+                val chatHeader by viewModel.chatHeader.collectAsStateWithLifecycle()
+                val typingUsers by viewModel.typingUsers.collectAsStateWithLifecycle()
+                val memberCount by viewModel.memberCount.collectAsStateWithLifecycle()
                 val strings = LocalStrings.current
-                val header = uiState.header
-            val typing = uiState.typingUsers
+                val header = chatHeader
+            val typing = typingUsers
             // Subtitle: typing indicator wins over the member count.
             val subtitle = when {
                 typing.isNotEmpty() && header?.isGroup == true ->
                     typing.map { it.displayName?.ifEmpty { null } ?: it.username }
                         .joinToString("、") + " " + strings.typingLabel
                 typing.isNotEmpty() -> strings.typingLabel
-                header?.isGroup == true && uiState.memberCount != null ->
-                    strings.memberCountFmt(uiState.memberCount.toString())
+                header?.isGroup == true && memberCount != null ->
+                    strings.memberCountFmt(memberCount.toString())
                 else -> null
             }
             val openDetails: (() -> Unit)? = when {
@@ -486,9 +512,7 @@ fun ChatScreen(
             ) {
                 Surface(
                     onClick = {
-                        coroutineScope.launch {
-                            listState.animateScrollToItem(0)
-                        }
+                        animateScrollToLatest()
                     },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,

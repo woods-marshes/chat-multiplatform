@@ -15,9 +15,11 @@ import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.chat.model.ChatUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -66,6 +68,18 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    // Conversation top bar streams live OUTSIDE uiState for the same reason as
+    // the draft input: the 1s typing ticker must not invalidate every scope
+    // reading uiState (most importantly the message list).
+    private val _chatHeader = MutableStateFlow<ConversationHeader?>(null)
+    val chatHeader: StateFlow<ConversationHeader?> = _chatHeader.asStateFlow()
+
+    private val _typingUsers = MutableStateFlow<List<SenderUser>>(emptyList())
+    val typingUsers: StateFlow<List<SenderUser>> = _typingUsers.asStateFlow()
+
+    private val _memberCount = MutableStateFlow<Int?>(null)
+    val memberCount: StateFlow<Int?> = _memberCount.asStateFlow()
+
     /**
      * Draft input as its own stream: keystrokes must not invalidate the
      * scopes reading [uiState] (the message list above all), so the input
@@ -103,14 +117,15 @@ class ChatViewModel(
             // Chat header: live title/avatar from Room (group profile or peer user).
             viewModelScope.launch {
                 conversationRepository.getConversationHeaderFlow(convId).collect { header ->
-                    _uiState.update { it.copy(header = header) }
+                    _chatHeader.value = header
                 }
             }
 
             // Members + typing indicator, combined with a 1s ticker so stale
             // typing entries (lost "stopped" event) age out on screen.
             // distinctUntilChanged keeps the ticker from re-emitting identical
-            // state every second, which would churn every reader of uiState.
+            // state every second, and the dedicated streams above confine each
+            // update to the top bar scopes only.
             viewModelScope.launch {
                 combine(
                     conversationRepository.getGroupMembersFlow(convId),
@@ -128,18 +143,10 @@ class ChatViewModel(
                         .let { ids -> members.filter { it.id in ids } }
                     members to activeTypingUsers
                 }
-                    .map { (members, activeTypingUsers) ->
-                        Triple(members, activeTypingUsers, members.size)
-                    }
                     .distinctUntilChanged()
-                    .collectLatest { (members, activeTypingUsers, count) ->
-                        _uiState.update {
-                            it.copy(
-                                members = members,
-                                typingUsers = activeTypingUsers,
-                                memberCount = if (isGroup) count else null,
-                            )
-                        }
+                    .collectLatest { (members, activeTypingUsers) ->
+                        _typingUsers.value = activeTypingUsers
+                        _memberCount.value = if (isGroup) members.size else null
                     }
             }
         }
