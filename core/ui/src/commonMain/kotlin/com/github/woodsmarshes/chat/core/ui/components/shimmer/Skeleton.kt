@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +32,7 @@ fun SkeletonLine(
             .height(height)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .shimmer(cornerRadius = 4.dp),
+            .shimmer(cornerRadius = 4.dp, clock = LocalShimmerClock.current),
     )
 }
 
@@ -45,7 +46,7 @@ fun SkeletonCircle(
             .size(size)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .shimmer(cornerRadius = size / 2),
+            .shimmer(cornerRadius = size / 2, clock = LocalShimmerClock.current),
     )
 }
 
@@ -60,7 +61,7 @@ fun SkeletonRect(
             .size(width, height)
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .shimmer(cornerRadius = 8.dp),
+            .shimmer(cornerRadius = 8.dp, clock = LocalShimmerClock.current),
     )
 }
 
@@ -111,15 +112,23 @@ fun ContactSkeleton(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * One shared [ShimmerClock] is provided to every skeleton bar in the list,
+ * so a full-screen skeleton animates on a single timeline with a single
+ * animation clock instead of one per bar.
+ */
 @Composable
 fun ListSkeleton(
     modifier: Modifier = Modifier,
     count: Int = 8,
     skeleton: @Composable () -> Unit = { ConversationSkeleton() },
 ) {
-    Column(modifier = modifier) {
-        repeat(count) {
-            skeleton()
+    val clock = rememberShimmerClock()
+    CompositionLocalProvider(LocalShimmerClock provides clock) {
+        Column(modifier = modifier) {
+            repeat(count) {
+                skeleton()
+            }
         }
     }
 }
