@@ -66,12 +66,15 @@ import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ListScreenScaffold
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+
+private val log = KotlinLogging.logger {}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,6 +101,7 @@ fun ConversationsScreen(
                 scope.launch {
                     runCatching { file.readBytes() }
                         .onSuccess { bytes -> viewModel.onGroupAvatarSelected(bytes) }
+                        .onFailure { e -> log.warn(e) { "failed to read picked group avatar" } }
                 }
             }
         },

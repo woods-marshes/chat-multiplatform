@@ -17,6 +17,7 @@ import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.conversations.model.GroupInfoUiState
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,8 @@ class GroupInfoViewModel(
     private val contactRepository: ContactRepository,
     searchProfile: GroupProfile? = null,
 ) : ViewModel() {
+
+    private val log = KotlinLogging.logger {}
 
     private val strings
         get() = getLocaleStrings()
@@ -128,7 +131,7 @@ class GroupInfoViewModel(
     private fun observeFriendsForInvite() {
         viewModelScope.launch {
             contactRepository.getFriendsFlow()
-                .catch { }
+                .catch { e -> log.warn(e) { "friends flow failed" } }
                 .collect { pairs ->
                     val memberIds = _uiState.value.members.map { it.id }.toSet()
                     val friends = pairs
