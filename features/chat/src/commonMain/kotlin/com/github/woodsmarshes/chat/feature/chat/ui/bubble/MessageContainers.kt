@@ -33,6 +33,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -99,19 +100,20 @@ private fun calculateDampedSwipeOffset(rawDragX: Float, thresholdPx: Float): Flo
 /**
  * Telegram-style reply indicator anchored to the right edge of the message row.
  *
- * Uses [graphicsLayer] for scale, alpha, and slide-in translation so it never
- * enters/leaves composition or alters sibling layout bounds during a swipe.
+ * Reads the swipe offset through [offsetXProvider] inside [graphicsLayer] so
+ * swipe frames only re-draw this indicator — the owning container never
+ * recomposes during a drag. [active] is a low-frequency derived flag and only
+ * drives the static colors.
  */
 @Composable
 private fun SwipeReplyIndicator(
-    progress: Float,
+    offsetXProvider: () -> Float,
+    thresholdPx: Float,
     active: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val slideOffsetPx = with(density) { 16.dp.toPx() }
-    val clamped = progress.coerceIn(0f, 1f)
-    val scale = if (clamped <= 0.01f) 0f else (0.4f + 0.6f * clamped)
     val isMiuix = isMiuixTheme()
 
     val bgColor = when {
@@ -131,6 +133,8 @@ private fun SwipeReplyIndicator(
         modifier = modifier
             .size(34.dp)
             .graphicsLayer {
+                val clamped = (-offsetXProvider() / thresholdPx).coerceIn(0f, 1f)
+                val scale = if (clamped <= 0.01f) 0f else (0.4f + 0.6f * clamped)
                 scaleX = scale
                 scaleY = scale
                 alpha = clamped
@@ -271,8 +275,11 @@ fun OwnMessageContainer(
         )
         .padding(horizontal = 12.dp, vertical = 4.dp)
 
-    val progress = (-offsetX.value / thresholdPx).coerceIn(0f, 1f)
-    val reachedThreshold = -offsetX.value >= thresholdPx
+    // Low-frequency boolean: only crosses the threshold twice per swipe, so the
+    // container recomposes twice at most — the per-frame work stays in graphicsLayer.
+    val reachedThreshold by remember(thresholdPx) {
+        derivedStateOf { offsetX.value <= -thresholdPx }
+    }
 
     Box(
         modifier = rowModifier,
@@ -293,7 +300,8 @@ fun OwnMessageContainer(
         // Background layer: Reply indicator anchored to the right edge of the row
         if (onReply != null && !selectionActive) {
             SwipeReplyIndicator(
-                progress = progress,
+                offsetXProvider = { offsetX.value },
+                thresholdPx = thresholdPx,
                 active = reachedThreshold,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -356,7 +364,9 @@ fun OwnMessageContainer(
             )
         }
 
-        if (menuContent != null) {
+        // Mount the menu subtree only while open: a closed M3 DropdownMenu still
+        // composes its items, which would otherwise cost one menu tree per row.
+        if (menuContent != null && menuExpanded) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -504,8 +514,11 @@ fun OtherMessageContainer(
         )
         .padding(horizontal = 12.dp, vertical = 4.dp)
 
-    val progress = (-offsetX.value / thresholdPx).coerceIn(0f, 1f)
-    val reachedThreshold = -offsetX.value >= thresholdPx
+    // Low-frequency boolean: only crosses the threshold twice per swipe, so the
+    // container recomposes twice at most — the per-frame work stays in graphicsLayer.
+    val reachedThreshold by remember(thresholdPx) {
+        derivedStateOf { offsetX.value <= -thresholdPx }
+    }
 
     Box(
         modifier = rowModifier,
@@ -513,7 +526,8 @@ fun OtherMessageContainer(
         // Background layer: Reply indicator anchored to the right edge of the row
         if (onReply != null && !selectionActive) {
             SwipeReplyIndicator(
-                progress = progress,
+                offsetXProvider = { offsetX.value },
+                thresholdPx = thresholdPx,
                 active = reachedThreshold,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -621,7 +635,9 @@ fun OtherMessageContainer(
             }
         }
 
-        if (menuContent != null) {
+        // Mount the menu subtree only while open: a closed M3 DropdownMenu still
+        // composes its items, which would otherwise cost one menu tree per row.
+        if (menuContent != null && menuExpanded) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
