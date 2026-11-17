@@ -52,7 +52,9 @@ fun LazyListScope.messageItems(
 ) {
     items(
         count = itemCount,
-        key = { index -> itemProvider(index)?.id?.toString() ?: index },
+        // KT-audit: peek() returns null for not-yet-loaded Paging pages; a bare index key
+        // would reuse the item slot for different messages once the page loads.
+        key = { index -> itemProvider(index)?.id?.toString() ?: "pending_$index" },
         contentType = { index ->
             val msg = itemProvider(index)
             val prefix = if (ownUserId != null && msg?.sender?.id == ownUserId) "own" else "other"
