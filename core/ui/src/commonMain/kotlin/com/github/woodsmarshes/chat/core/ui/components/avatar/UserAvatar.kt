@@ -5,9 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Text
-import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 
@@ -74,40 +80,35 @@ fun UserAvatar(
         contentAlignment = Alignment.Center,
     ) {
         if (resolvedAvatarUrl != null) {
-            SubcomposeAsyncImage(
-                model = resolvedAvatarUrl,
-                contentDescription = name ?: strings.avatarCd,
+            // State-driven AsyncImage: same visuals as the former SubcomposeAsyncImage
+            // loading/error slots, without the per-avatar subcomposition cost in list rows.
+            // Keyed on the URL: a recycled row whose avatar changed must not
+            // keep showing the previous image's Success state.
+            var imageState by remember(resolvedAvatarUrl) {
+                mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
+            }
+            Box(
                 modifier = Modifier
                     .size(size)
                     .clip(CircleShape)
+                    .background(bgColor)
                     .then(
                         if (showBorder) Modifier.border(2.dp, bubbleColors.inputFieldBackground, CircleShape)
                         else Modifier
                     ),
-                contentScale = ContentScale.Crop,
-                loading = {
-                    Box(
-                        modifier = Modifier
-                            .size(size)
-                            .clip(CircleShape)
-                            .background(bgColor),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        placeholderImage(size)
-                    }
-                },
-                error = {
-                    Box(
-                        modifier = Modifier
-                            .size(size)
-                            .clip(CircleShape)
-                            .background(bgColor),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        placeholderImage(size)
-                    }
-                },
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = resolvedAvatarUrl,
+                    contentDescription = name ?: strings.avatarCd,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    onState = { imageState = it },
+                )
+                if (imageState !is AsyncImagePainter.State.Success) {
+                    placeholderImage(size)
+                }
+            }
         } else {
             Box(
                 modifier = Modifier
