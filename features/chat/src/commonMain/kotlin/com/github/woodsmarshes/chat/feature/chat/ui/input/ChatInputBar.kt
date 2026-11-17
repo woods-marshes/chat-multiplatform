@@ -68,8 +68,11 @@ import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import kotlin.time.Duration.Companion.milliseconds
 
-/** Time allowed for the soft keyboard inset animation to begin after a request. */
-private val KeyboardStartTimeout = 400.milliseconds
+/** Total window allowed for the platform IME to *start* after a handoff request. */
+private val KeyboardStartTimeout = 1200.milliseconds
+
+/** Probe interval while waiting for the IME animation to begin. */
+private val KeyboardProbeInterval = 60.milliseconds
 
 /** Additional time allowed for a started keyboard animation to settle. */
 private val KeyboardFinishTimeout = 1100.milliseconds
@@ -124,17 +127,30 @@ fun ChatInputBar(
     LaunchedEffect(panelState, panelState.awaitingKeyboard) {
         if (panelState.awaitingKeyboard) {
             // A text-field tap already starts the platform input session.
-            // Only panel-button handoff needs an explicit focus/show request.
+            // Only panel-button handoff needs an explicit focus request; show()
+            // is idempotent, so always issue it — a stale inputFocused flag must
+            // not silently skip the request and leave the handoff hanging.
             if (!inputFocused) {
                 textFieldFocusRequester.requestFocus()
-                keyboardController?.show()
             }
-            // A hardware keyboard or floating IME never starts an inset animation. If nothing
-            // has started shortly after the request, release the reservation right away.
-            delay(KeyboardStartTimeout)
-            val started = ime.getBottom(localDensity) > 0 ||
-                animation.target.getBottom(localDensity) > 0
+            keyboardController?.show()
+            // Probe repeatedly instead of once: show() races the hide() issued
+            // moments earlier by openPanel, so some IMEs start well after a
+            // single fixed probe. A false "no keyboard" here releases the
+            // reservation, and the bar collapses before the arriving keyboard
+            // pushes it back up — visible as a bounce down, then up.
+            var started = false
+            var waitedMillis = 0L
+            while (!started && waitedMillis < KeyboardStartTimeout.inWholeMilliseconds) {
+                delay(KeyboardProbeInterval)
+                waitedMillis += KeyboardProbeInterval.inWholeMilliseconds
+                started = ime.getBottom(localDensity) > 0 ||
+                    animation.source.getBottom(localDensity) > 0 ||
+                    animation.target.getBottom(localDensity) > 0
+            }
             if (!started) {
+                // No IME is coming (hardware keyboard / floating IME): release
+                // the reservation right away so no phantom gap remains.
                 panelState.abandonKeyboardRequest()
                 return@LaunchedEffect
             }
@@ -339,24 +355,24 @@ private fun InputAreaHost(
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
-    // Invalidate Scaffold's lookahead subcomposition when IME geometry changes.
-    // Keep the original single reservation and consumed-inset accounting.
-    val total = state.occupiedHeight(
-        current = ime.getBottom(density),
-        source = animation.source.getBottom(density),
-        target = animation.target.getBottom(density),
-        navigation = navigationBars.getBottom(density),
-    )
-    // The chat bottom bar owns its safe area; ancestor navigation-bar animations
-    // must not alter its reservation when returning from a detail entry.
-    val reservedHeight = total
-    val reservedNavigation = navigationBars.getBottom(density)
+    // IME geometry and panel state are read INSIDE the measure lambda: IME
+    // animation frames then invalidate measurement only, never the composition
+    // of the input bar or its panel content. Keep the original single
+    // reservation and consumed-inset accounting.
     Layout(
         content = content,
         modifier = modifier,
     ) { measurables, constraints ->
-        val height = constraints.constrainHeight(reservedHeight)
-        val navigation = reservedNavigation
+        val total = state.occupiedHeight(
+            current = ime.getBottom(density),
+            source = animation.source.getBottom(density),
+            target = animation.target.getBottom(density),
+            navigation = navigationBars.getBottom(density),
+        )
+        // The chat bottom bar owns its safe area; ancestor navigation-bar animations
+        // must not alter its reservation when returning from a detail entry.
+        val navigation = navigationBars.getBottom(density)
+        val height = constraints.constrainHeight(total)
         val contentHeight = (height - navigation).coerceAtLeast(0)
         val width = constraints.maxWidth
         val children = measurables.map {

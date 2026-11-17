@@ -98,6 +98,29 @@ class InputPanelStateTest {
         assertFalse(state.awaitingKeyboard)
     }
 
+    /**
+     * A slow IME (third-party keyboards can take ~1s to start after a
+     * hide/show race) must keep the reservation for the whole probe window.
+     * If the caller releases it on a false "no keyboard" verdict, the bar
+     * collapses and the arriving keyboard pushes it back up.
+     */
+    @Test
+    fun handoffReservationHoldsWhileImeIsSlowToStart() {
+        val state = InputPanelState()
+        state.observeIme(1048, 1048, 1048)
+        state.openPanel(InputSelector.EMOJI, 1048, 742)
+        state.observeIme(0, 0, 0)
+        state.requestKeyboard()
+        // Frames before the IME reports anything at all.
+        repeat(20) {
+            assertEquals(1048, state.occupiedHeight(0, 0, 0, 66))
+            assertTrue(state.awaitingKeyboard)
+        }
+        state.observeIme(1048, 1048, 1048)
+        assertEquals(1048, state.occupiedHeight(1048, 1048, 1048, 66))
+        assertFalse(state.awaitingKeyboard)
+    }
+
     @Test
     fun smallerKeyboardReconcilesDuringSystemAnimation() {
         val state = InputPanelState()
