@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.feature.chat.ui.bubble
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -10,6 +11,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,7 +22,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.ui.components.avatar.LocalServerBaseUrl
 import com.github.woodsmarshes.chat.core.ui.components.avatar.resolveMediaUrl
@@ -73,30 +79,28 @@ fun ImageBubble(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        SubcomposeAsyncImage(
-            model = resolvedUrl,
-            contentDescription = content.fileName,
+        // State-driven AsyncImage instead of SubcomposeAsyncImage: same loading/error
+        // visuals without subcomposition cost in the chat list.
+        // Keyed on the URL so a recycled row does not keep the previous image's state.
+        var imageState by remember(resolvedUrl) {
+            mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
+        }
+        Box(
             modifier = Modifier
                 .widthIn(max = imageWidth)
                 .height(imageHeight),
-            contentScale = ContentScale.Crop,
-            loading = {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(imageHeight),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = bubbleColors.iconTint,
-                        strokeWidth = 2.dp,
-                    )
-                }
-            },
-            error = {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(imageHeight),
-                    contentAlignment = Alignment.Center,
-                ) {
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = resolvedUrl,
+                contentDescription = content.fileName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onState = { imageState = it },
+            )
+            when {
+                // Empty and Loading both need feedback; only Success draws clean.
+                imageState is AsyncImagePainter.State.Error -> {
                     Text(
                         text = LocalStrings.current.imageLoadFailed,
                         color = bubbleColors.errorColor,
@@ -104,7 +108,14 @@ fun ImageBubble(
                         textAlign = TextAlign.Center,
                     )
                 }
-            },
-        )
+                imageState !is AsyncImagePainter.State.Success -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = bubbleColors.iconTint,
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+        }
     }
 }
