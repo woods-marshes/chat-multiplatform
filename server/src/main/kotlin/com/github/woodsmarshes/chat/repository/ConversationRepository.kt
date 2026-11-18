@@ -230,14 +230,14 @@ class ConversationDataSourceImpl(
         PagedConversations(items = items, total = total)
     }
 
-    override suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats = dbQuery {
-        val participantCount = ConversationParticipants.selectAll()
-            .where { ConversationParticipants.conversationId eq conversationId }
-            .count()
-        val messageCount = Messages.selectAll()
-            .where { Messages.conversationId eq conversationId }
-            .count()
-        ConversationAdminStats(participantCount = participantCount, messageCount = messageCount)
+    override suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats = dbQuery {
+        val participantCount = ConversationParticipants.selectAll()
+            .where { ConversationParticipants.conversationId eq conversationId }
+            .count()
+        val messageCount = Messages.selectAll()
+            .where { Messages.conversationId eq conversationId }
+            .count()
+        ConversationAdminStats(participantCount = participantCount, messageCount = messageCount)
     }
     override suspend fun getConversationAdminStatsBatch(conversationIds: List<Uuid>): Map<Uuid, ConversationAdminStats> = dbQuery {
         if (conversationIds.isEmpty()) return@dbQuery emptyMap()
