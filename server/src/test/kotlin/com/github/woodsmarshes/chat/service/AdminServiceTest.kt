@@ -97,16 +97,18 @@ class AdminServiceTest {
     }
 
     @Test
-    fun setBannedRejectsBanningLastAdmin() = runBlocking {
+    fun setBannedRejectsAdminTargetEvenIfSoleAdmin() = runBlocking {
         val adminId = Uuid.random()
         val targetId = Uuid.random()
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
         coEvery { userRepository.getUserById(targetId) } returns user(UserRole.ADMIN)
-        coEvery { userRepository.countAdmins() } returns 1L
+        // countAdmins is deliberately left unstubbed: a strict mock throws if the
+        // (now unreachable) last-admin guard is ever consulted.
 
         val result = service.setBanned(adminId, targetId, banned = true)
 
         assertEquals(UserError.PermissionDenied, result.getError())
+        coVerify(exactly = 0) { userRepository.setBannedAt(any(), any()) }
     }
 
     @Test
@@ -126,16 +128,18 @@ class AdminServiceTest {
     }
 
     @Test
-    fun changeRoleRejectsDemotingLastAdmin() = runBlocking {
+    fun changeRoleRejectsDemotingSoleAdmin() = runBlocking {
         val adminId = Uuid.random()
         val targetId = Uuid.random()
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
         coEvery { userRepository.getUserById(targetId) } returns user(UserRole.ADMIN)
-        coEvery { userRepository.countAdmins() } returns 1L
+        // countAdmins is deliberately left unstubbed: a strict mock throws if the
+        // (now unreachable) last-admin guard is ever consulted.
 
         val result = service.changeRole(adminId, targetId, UserRole.MEMBER)
 
         assertEquals(UserError.PermissionDenied, result.getError())
+        coVerify(exactly = 0) { userRepository.changeUserRole(any(), any()) }
     }
 
     @Test
@@ -525,27 +529,26 @@ class AdminServiceTest {
     }
 
     @Test
-    fun changeRoleAllowsPromotingMemberToAdmin() = runBlocking {
+    fun changeRoleRejectsPromotingMemberToAdmin() = runBlocking {
         val adminId = Uuid.random()
         val targetId = Uuid.random()
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
         coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
-        coEvery { userRepository.changeUserRole(targetId, UserRole.ADMIN) } returns true
 
         val result = service.changeRole(adminId, targetId, UserRole.ADMIN)
 
-        assertTrue(result.isOk)
+        assertEquals(UserError.PermissionDenied, result.getError())
+        coVerify(exactly = 0) { userRepository.changeUserRole(any(), any()) }
     }
 
     @Test
-    fun changeRoleAllowsSelfDemotionWhenNotLastAdmin() = runBlocking {
+    fun changeRoleRejectsSelfDemotion() = runBlocking {
         val adminId = Uuid.random()
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN, id = adminId)
-        coEvery { userRepository.countAdmins() } returns 2
-        coEvery { userRepository.changeUserRole(adminId, UserRole.MEMBER) } returns true
 
         val result = service.changeRole(adminId, adminId, UserRole.MEMBER)
 
-        assertTrue(result.isOk)
+        assertEquals(UserError.PermissionDenied, result.getError())
+        coVerify(exactly = 0) { userRepository.changeUserRole(any(), any()) }
     }
 }

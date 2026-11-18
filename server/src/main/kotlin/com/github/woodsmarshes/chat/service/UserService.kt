@@ -54,6 +54,12 @@ class UserService(
             Err(UserError.PermissionDenied).bind()
         }
 
+        // Same policy as AdminService.changeRole: admin accounts are immutable
+        // and ADMIN is never granted through the API.
+        val target = userRepository.getUserById(id) ?: Err(UserError.NotFound).bind()
+        requireMutableTarget(target).bind()
+        requireRoleGrant(newRole).bind()
+
         val success = userRepository.changeUserRole(id, newRole)
         if (!success) {
             Err(UserError.UpdateFailed).bind()

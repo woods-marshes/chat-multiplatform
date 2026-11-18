@@ -42,14 +42,16 @@ class UserServiceTest {
 
     @Test
     fun changeUserRoleSucceedsForAdminRequester() = runBlocking {
-        val target = Uuid.random()
-        coEvery { userRepository.getUserById(any()) } returns user(ADMIN)
-        coEvery { userRepository.changeUserRole(target, MEMBER) } returns true
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(MEMBER)
+        coEvery { userRepository.changeUserRole(targetId, MEMBER) } returns true
 
-        val result = service.changeUserRole(Uuid.random(), target, MEMBER)
+        val result = service.changeUserRole(adminId, targetId, MEMBER)
 
         assertTrue(result.isOk)
-        coVerify(exactly = 1) { userRepository.changeUserRole(target, MEMBER) }
+        coVerify(exactly = 1) { userRepository.changeUserRole(targetId, MEMBER) }
     }
 
     @Test
@@ -74,12 +76,41 @@ class UserServiceTest {
 
     @Test
     fun changeUserRoleMapsRepositoryFailureToUpdateFailed() = runBlocking {
-        coEvery { userRepository.getUserById(any()) } returns user(ADMIN)
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(MEMBER)
         coEvery { userRepository.changeUserRole(any(), any()) } returns false
 
-        val result = service.changeUserRole(Uuid.random(), Uuid.random(), MEMBER)
+        val result = service.changeUserRole(adminId, targetId, MEMBER)
 
         assertEquals(UserError.UpdateFailed, result.getError())
+    }
+
+    @Test
+    fun changeUserRoleRejectsAdminTarget() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(ADMIN)
+
+        val result = service.changeUserRole(adminId, targetId, MEMBER)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+        coVerify(exactly = 0) { userRepository.changeUserRole(any(), any()) }
+    }
+
+    @Test
+    fun changeUserRoleRejectsGrantingAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(MEMBER)
+
+        val result = service.changeUserRole(adminId, targetId, ADMIN)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+        coVerify(exactly = 0) { userRepository.changeUserRole(any(), any()) }
     }
 
     @Test
