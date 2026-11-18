@@ -118,5 +118,12 @@ fun Route.adminRoutes() {
             val result = adminService.listLogs(adminId, params.level, params.limit).getOrThrow()
             call.respond(result)
         }
+
+        get<V1.Admin.AuditLogs> { params ->
+            val adminId = call.extractUserId()
+            val result = adminService.listAuditLogs(adminId, params.limit).getOrThrow()
+            call.respond(result)
+        }
+
     }
 }

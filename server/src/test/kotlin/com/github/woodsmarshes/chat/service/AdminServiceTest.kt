@@ -28,6 +28,7 @@ import com.github.woodsmarshes.chat.repository.UserAdminStats
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserStats
 import com.github.woodsmarshes.chat.utils.connectToH2Database
+import com.github.woodsmarshes.chat.logging.AuditLogBuffer
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.SessionIndex
 import io.ktor.server.websocket.WebSocketServerSession
@@ -458,5 +459,20 @@ class AdminServiceTest {
         assertTrue(result.isOk)
         assertEquals(3, result.get()!!.items.single().activeSessionCount)
         assertEquals(1, result.get()!!.total)
+    }
+
+    @Test
+    fun listAuditLogsReturnsAuditChannelEntries() = runBlocking {
+        AuditLogBuffer.clear()
+        AuditLogBuffer.add("INFO", "admin.audit", "action=ban admin=x target=y banned=true")
+        val adminId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+
+        val result = service.listAuditLogs(adminId, 10)
+
+        assertTrue(result.isOk)
+        assertEquals(1, result.get()!!.items.size)
+        assertEquals("admin.audit", result.get()!!.items.single().logger)
+        AuditLogBuffer.clear()
     }
 }

@@ -6,20 +6,29 @@ import ch.qos.logback.classic.spi.ThrowableProxyUtil
 import ch.qos.logback.core.AppenderBase
 
 /**
- * Logback appender that mirrors events into [AdminLogBuffer]. The
- * ThresholdFilter in logback.xml keeps only WARN+ events, so INFO chatter
- * never reaches the admin log endpoint. Throwable events keep a short
- * stack-trace excerpt in [AdminLogBuffer.Entry.detail] — the full trace
- * stays in the console log.
+ * Logback appender that mirrors events into an [AdminLogBuffer]. The
+ * target is selected by [bufferName] from logback.xml: "app" (default)
+ * feeds the WARN+ application tail, "audit" feeds the dedicated
+ * `admin.audit` channel. Throwable events keep a short stack-trace
+ * excerpt in [AdminLogBuffer.Entry.detail] — the full trace stays in
+ * the console log.
  */
 class AdminLogAppender : AppenderBase<ILoggingEvent>() {
+    /** Buffer selector set from logback.xml: "app" or "audit". */
+    var bufferName: String = "app"
+
     override fun append(event: ILoggingEvent) {
-        AdminLogBuffer.add(
+        buffer().add(
             level = event.level.levelStr,
             logger = event.loggerName,
             message = event.formattedMessage,
             detail = event.throwableProxy?.let { throwableDetail(it) },
         )
+    }
+
+    private fun buffer(): AdminLogBuffer = when (bufferName) {
+        "audit" -> AuditLogBuffer
+        else -> AppLogBuffer
     }
 
     private fun throwableDetail(proxy: IThrowableProxy): String =

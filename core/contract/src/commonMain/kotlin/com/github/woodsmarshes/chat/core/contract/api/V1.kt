@@ -325,6 +325,9 @@ class V1 {
         @Resource("/stats")
         class Stats(val parent: Admin = Admin())
 
+        // GET /v1/admin/audit-logs?limit= — admin.audit channel (dedicated buffer)
+        @Resource("/audit-logs")
+        class AuditLogs(val parent: Admin = Admin(), val limit: Int = 100)
         // GET /v1/admin/logs?level=&limit= — recent WARN+ log entries (in-memory ring buffer)
         @Resource("/logs")
         class Logs(val parent: Admin = Admin(), val level: String? = null, val limit: Int = 100)

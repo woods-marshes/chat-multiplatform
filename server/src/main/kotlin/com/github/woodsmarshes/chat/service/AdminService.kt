@@ -21,7 +21,8 @@ import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthSessionListRespon
 import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.UserError
-import com.github.woodsmarshes.chat.logging.AdminLogBuffer
+import com.github.woodsmarshes.chat.logging.AppLogBuffer
+import com.github.woodsmarshes.chat.logging.AuditLogBuffer
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.ConversationAdminStats
 import com.github.woodsmarshes.chat.repository.ConversationRepository
@@ -313,7 +314,7 @@ class AdminService(
         }
         val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
         AdminLogListResponse(
-            items = AdminLogBuffer.list(normalizedLevel, safeLimit).map {
+            items = AppLogBuffer.list(normalizedLevel, safeLimit).map {
                 AdminLogEntry(
                     timestamp = it.timestamp,
                     level = it.level,
@@ -325,6 +326,22 @@ class AdminService(
         )
     }
 
+    /** Admin audit channel: every mutating admin action, newest first. */
+    suspend fun listAuditLogs(adminId: Uuid, limit: Int): Result<AdminLogListResponse, UserError> = coroutineBinding {
+        requireAdmin(adminId).bind()
+        val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
+        AdminLogListResponse(
+            items = AuditLogBuffer.list(level = null, limit = safeLimit).map {
+                AdminLogEntry(
+                    timestamp = it.timestamp,
+                    level = it.level,
+                    logger = it.logger,
+                    message = it.message,
+                    detail = it.detail,
+                )
+            }
+        )
+    }
     /** 16 chars from an unambiguous alphabet — shown once, never stored. */
     private fun generateTemporaryPassword(): String {
         val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
