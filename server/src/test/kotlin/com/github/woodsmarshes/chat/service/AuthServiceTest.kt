@@ -112,7 +112,7 @@ class AuthServiceTest {
         coEvery { userRepository.checkExists("alice@test.local", "alice") } returns false
         coEvery { userRepository.insertUser("alice", "alice@test.local", any(), any(), UserRole.MEMBER) } returns user()
         coEvery { userSettingRepository.initSettings(userId) } returns mockk()
-        coEvery { authSessionRepository.createSession(eq(userId), any(), any()) } returns true
+        coEvery { authSessionRepository.createSession(eq(userId), any(), any(), any(), any(), any()) } returns Uuid.random()
 
         val result = service.register(RegisterRequest("alice", "alice@test.local", "longenough1"))
 
@@ -137,7 +137,7 @@ class AuthServiceTest {
         coEvery { userRepository.checkExists("alice@test.local", "alice") } returns false
         coEvery { userRepository.insertUser(any(), any(), any(), any(), any()) } returns user()
         coEvery { userSettingRepository.initSettings(userId) } returns mockk()
-        coEvery { authSessionRepository.createSession(eq(userId), any(), any()) } returns false
+        coEvery { authSessionRepository.createSession(eq(userId), any(), any(), any(), any(), any()) } returns null
 
         assertEquals(AuthError.InsertionFailed, service.register(RegisterRequest("alice", "alice@test.local", "longenough1")).getError())
     }
@@ -178,8 +178,8 @@ class AuthServiceTest {
         )
 
         coEvery {
-            authSessionRepository.createSession(eq(userId), any(), any())
-        } returns true
+            authSessionRepository.createSession(eq(userId), any(), any(), any(), any(), any())
+        } returns Uuid.random()
 
         val result = service.login(LoginRequest("alice@test.local", password))
 
@@ -198,11 +198,11 @@ class AuthServiceTest {
     @Test
     fun refreshRotatesTheSessionAndIssuesANewAccessToken() = runBlocking {
         coEvery { authSessionRepository.findActiveSession(any()) } returns
-            com.github.woodsmarshes.chat.repository.AuthSession(userId = userId, expiresAt = now + 30.days)
+            com.github.woodsmarshes.chat.repository.AuthSession(id = Uuid.random(), userId = userId, expiresAt = now + 30.days, deviceName = null, userAgent = null, ipAddress = null)
         coEvery { authSessionRepository.revokeSession(any()) } returns true
         coEvery {
-            authSessionRepository.createSession(eq(userId), any(), any())
-        } returns true
+            authSessionRepository.createSession(eq(userId), any(), any(), any(), any(), any())
+        } returns Uuid.random()
         coEvery { userRepository.getUserById(userId) } returns user()
 
         val result = service.refreshSession("live-refresh-token")

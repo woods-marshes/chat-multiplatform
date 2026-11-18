@@ -9,6 +9,7 @@ import com.github.woodsmarshes.chat.routes.contactRoutes
 import com.github.woodsmarshes.chat.routes.conversationRoutes
 import com.github.woodsmarshes.chat.routes.fileRoutes
 import com.github.woodsmarshes.chat.routes.realtimeRoutes
+import com.github.woodsmarshes.chat.routes.sessionRoutes
 import com.github.woodsmarshes.chat.routes.syncRoutes
 import com.github.woodsmarshes.chat.routes.userRoutes
 import com.github.woodsmarshes.chat.utils.toHttpStatusCode
@@ -90,6 +91,7 @@ fun Application.configureRouting() {
             contactRoutes()
             fileRoutes()
             realtimeRoutes()
+            sessionRoutes()
         }
         staticFiles("/uploads", File("uploads")) {
             cacheControl { file ->

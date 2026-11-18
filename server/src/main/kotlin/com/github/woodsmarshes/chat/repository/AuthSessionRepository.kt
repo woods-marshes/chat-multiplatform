@@ -8,6 +8,8 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -22,8 +24,12 @@ import kotlin.uuid.Uuid
 
 /** Server-side view of one issued refresh token. */
 data class AuthSession(
+    val id: Uuid,
     val userId: Uuid,
     val expiresAt: Instant,
+    val deviceName: String?,
+    val userAgent: String?,
+    val ipAddress: String?,
 )
 
 /** Full row view for admin/user session listings. */
@@ -47,7 +53,7 @@ interface AuthSessionRepository {
         deviceName: String? = null,
         userAgent: String? = null,
         ipAddress: String? = null,
-    ): Boolean
+    ): Uuid?
 
     /** The live session for [tokenHash] — revoked and expired rows never match. */
     suspend fun findActiveSession(tokenHash: String): AuthSession?
@@ -59,8 +65,8 @@ interface AuthSessionRepository {
     /** All sessions (active and revoked) for [userId], newest first. */
     suspend fun listByUser(userId: Uuid): List<AuthSessionRecord>
 
-    /** Revokes every live session of [userId]; returns rows revoked. */
-    suspend fun revokeAllByUser(userId: Uuid): Int
+    /** Revokes every live session of [userId], optionally sparing [exceptSessionId]; returns rows revoked. */
+    suspend fun revokeAllByUser(userId: Uuid, exceptSessionId: Uuid? = null): Int
 
     /** Revokes one session owned by [userId]; false when not found/already revoked. */
     suspend fun revokeById(sessionId: Uuid, userId: Uuid): Boolean
@@ -81,9 +87,10 @@ class AuthSessionSourceImpl : AuthSessionRepository {
         deviceName: String?,
         userAgent: String?,
         ipAddress: String?,
-    ): Boolean = dbQuery {
-        AuthSessions.insert {
-            it[id] = Uuid.random()
+    ): Uuid? = dbQuery {
+        val sessionId = Uuid.random()
+        val inserted = AuthSessions.insert {
+            it[id] = sessionId
             it[this.userId] = userId
             it[this.tokenHash] = tokenHash
             it[this.expiresAt] = expiresAt
@@ -92,6 +99,7 @@ class AuthSessionSourceImpl : AuthSessionRepository {
             it[this.ipAddress] = ipAddress
             it[lastUsedAt] = Clock.System.now()
         }.resultedValues?.isNotEmpty() == true
+        sessionId.takeIf { inserted }
     }
 
     override suspend fun findActiveSession(tokenHash: String): AuthSession? = dbQuery {
@@ -104,8 +112,12 @@ class AuthSessionSourceImpl : AuthSessionRepository {
             .singleOrNull()
             ?.let {
                 AuthSession(
+                    id = it[AuthSessions.id],
                     userId = it[AuthSessions.userId].value,
                     expiresAt = it[AuthSessions.expiresAt],
+                    deviceName = it[AuthSessions.deviceName],
+                    userAgent = it[AuthSessions.userAgent],
+                    ipAddress = it[AuthSessions.ipAddress],
                 )
         }
     }
@@ -129,10 +141,10 @@ class AuthSessionSourceImpl : AuthSessionRepository {
             .map { it.toAuthSessionRecord() }
     }
 
-    override suspend fun revokeAllByUser(userId: Uuid): Int = dbQuery {
-        AuthSessions.update({
-            (AuthSessions.userId eq userId) and AuthSessions.revokedAt.isNull()
-        }) {
+    override suspend fun revokeAllByUser(userId: Uuid, exceptSessionId: Uuid?): Int = dbQuery {
+        var condition: Op<Boolean> = (AuthSessions.userId eq userId) and AuthSessions.revokedAt.isNull()
+        exceptSessionId?.let { condition = condition and (AuthSessions.id neq it) }
+        AuthSessions.update({ condition }) {
             it[revokedAt] = Clock.System.now()
         }
     }

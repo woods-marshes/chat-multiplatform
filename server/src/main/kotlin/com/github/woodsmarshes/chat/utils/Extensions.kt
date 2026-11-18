@@ -45,5 +45,13 @@ fun ApplicationCall.extractUserIdFromWebSocket(): Uuid? {
     val idString = principal?.getClaim(Keys.USER_ID, String::class).toString()
     return Uuid.parseOrNull(idString)
 }
-
-
+/**
+ * The auth_sessions id carried by the access token's session claim, used to
+ * mark "this device" in session listings. Null for tokens issued before the
+ * claim existed.
+ */
+fun ApplicationCall.extractSessionId(): Uuid? {
+    val principal = this.principal<JWTPrincipal>()
+    val claim = principal?.getClaim(Keys.SESSION_ID, String::class)
+    return claim?.let { Uuid.parseOrNull(it) }
+}

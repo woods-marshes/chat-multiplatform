@@ -8,4 +8,5 @@ data class RegisterRequest(
     @ProtoNumber(1) val username: String,
     @ProtoNumber(2) val email: String,
     @ProtoNumber(3) val password: String,
+    @ProtoNumber(4) val deviceName: String? = null,
 )

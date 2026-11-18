@@ -81,6 +81,18 @@ class V1 {
                     val parent: GroupRequests = GroupRequests()
                 )
             }
+
+            // GET /v1/users/me/sessions — my login sessions (devices)
+            // DELETE /v1/users/me/sessions/{sessionId} — revoke one
+            // POST /v1/users/me/sessions/revoke-others — revoke all except current
+            @Resource("/sessions")
+            class Sessions(val parent: Me = Me()) {
+                @Resource("/{sessionId}")
+                class SessionId(val parent: Sessions, val sessionId: Uuid)
+
+                @Resource("/revoke-others")
+                class RevokeOthers(val parent: Sessions)
+            }
         }
     }
 

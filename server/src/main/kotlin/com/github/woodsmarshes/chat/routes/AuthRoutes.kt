@@ -5,10 +5,13 @@ import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
 import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.AuthService
+import com.github.woodsmarshes.chat.service.DeviceInfo
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
+import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.header
@@ -28,13 +31,13 @@ fun Route.authRoutes() {
     rateLimit(RateLimitName("auth")) {
         post<V1.Auth.Register> {
             val req = call.receive<RegisterRequest>()
-            val res = authService.register(req).getOrThrow()
+            val res = authService.register(req, call.deviceInfo(req.deviceName)).getOrThrow()
             call.respond(res)
         }
 
         post<V1.Auth.Login> {
             val req = call.receive<LoginRequest>()
-            val res = authService.login(req).getOrThrow()
+            val res = authService.login(req, call.deviceInfo(req.deviceName)).getOrThrow()
             call.respond(res)
         }
 
@@ -70,3 +73,14 @@ fun Route.authRoutes() {
         }
     }
 }
+/**
+ * Device metadata for the session row: the client's own device name when it
+ * sends one, plus connection-derived User-Agent and remote host. The UA is
+ * truncated to the column width; the IP comes from request.origin, which
+ * already honors forwarded-header plugins when a reverse proxy is present.
+ */
+private fun ApplicationCall.deviceInfo(deviceName: String?): DeviceInfo = DeviceInfo(
+    deviceName = deviceName?.take(100),
+    userAgent = request.header(HttpHeaders.UserAgent)?.take(500),
+    ipAddress = request.origin.remoteHost.take(64),
+)

@@ -29,6 +29,13 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.uuid.Uuid
 
+/** Client-supplied and connection-derived metadata stored on the session row. */
+data class DeviceInfo(
+    val deviceName: String? = null,
+    val userAgent: String? = null,
+    val ipAddress: String? = null,
+)
+
 class AuthService(
     private val userRepository: UserRepository,
     private val userSettingRepository: UserSettingRepository,
@@ -40,7 +47,7 @@ class AuthService(
     private val tokenConfig get() = appConfig.tokenConfig
     private val secureRandom = SecureRandom()
 
-    suspend fun register(request: RegisterRequest): Result<AuthResponse, AuthError> = coroutineBinding {
+    suspend fun register(request: RegisterRequest, deviceInfo: DeviceInfo = DeviceInfo()): Result<AuthResponse, AuthError> = coroutineBinding {
         if (request.password.length < MIN_PASSWORD_LENGTH) {
             Err(AuthError.WeakPassword).bind()
         }
@@ -68,9 +75,9 @@ class AuthService(
                 ) ?: Err(AuthError.InsertionFailed).bind()
                 userSettingRepository.initSettings(user.id)
                     ?: Err(AuthError.InsertionFailed).bind()
-                val refreshToken = issueRefreshToken(user.id)
+                val (refreshToken, sessionId) = issueRefreshToken(user.id, deviceInfo)
                     ?: Err(AuthError.InsertionFailed).bind()
-                user to refreshToken
+                Triple(user, refreshToken, sessionId)
             }
         } catch (e: Exception) {
             // A concurrent registration with the same identity lost the race
@@ -82,12 +89,12 @@ class AuthService(
 
         AuthResponse(
             user = registered.first,
-            accessToken = issueAccessToken(registered.first.id),
+            accessToken = issueAccessToken(registered.first.id, registered.third),
             refreshToken = registered.second,
         )
     }
 
-    suspend fun login(request: LoginRequest): Result<AuthResponse, AuthError> = coroutineBinding {
+    suspend fun login(request: LoginRequest, deviceInfo: DeviceInfo = DeviceInfo()): Result<AuthResponse, AuthError> = coroutineBinding {
         val authInfo = userRepository.findAuthInfoByEmail(request.email)
             ?: Err(AuthError.InvalidCredentials).bind()
         val isValidPassword = hashingService.verify(
@@ -105,11 +112,12 @@ class AuthService(
         if (authInfo.domainUser.bannedAt != null) {
             Err(AuthError.AccountBanned).bind()
         }
+        val (refreshToken, sessionId) = issueRefreshToken(authInfo.userId, deviceInfo)
+            ?: Err(AuthError.InsertionFailed).bind()
         AuthResponse(
             user = authInfo.domainUser,
-            accessToken = issueAccessToken(authInfo.userId),
-            refreshToken = issueRefreshToken(authInfo.userId)
-                ?: Err(AuthError.InsertionFailed).bind(),
+            accessToken = issueAccessToken(authInfo.userId, sessionId),
+            refreshToken = refreshToken,
         )
     }
 
@@ -128,19 +136,24 @@ class AuthService(
         val rotated = inTransaction {
             val revoked = authSessionRepository.revokeSession(tokenHash)
             val newRefreshToken = newOpaqueToken()
-            val created = revoked && authSessionRepository.createSession(
+            // Rotation keeps the same device identity: the new session row
+            // inherits the metadata of the one it replaces.
+            val newSessionId = authSessionRepository.createSession(
                 userId = session.userId,
                 tokenHash = sha256(newRefreshToken),
                 expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
+                deviceName = session.deviceName,
+                userAgent = session.userAgent,
+                ipAddress = session.ipAddress,
             )
-            if (!created) throw AppException(AuthError.InsertionFailed)
-            newRefreshToken
+            if (!revoked || newSessionId == null) throw AppException(AuthError.InsertionFailed)
+            newRefreshToken to newSessionId
         }
 
         AuthResponse(
             user = user,
-            accessToken = issueAccessToken(session.userId),
-            refreshToken = rotated,
+            accessToken = issueAccessToken(session.userId, rotated.second),
+            refreshToken = rotated.first,
         )
     }
 
@@ -154,19 +167,28 @@ class AuthService(
      * session row could not be stored — callers translate that into the
      * appropriate error inside their own result context.
      */
-    private suspend fun issueRefreshToken(userId: Uuid): String? {
+    /**
+     * Mints an opaque refresh token and persists only its hash. Returns the
+     * raw token together with the new session id (needed for the access
+     * token's session claim); null when the session row could not be stored.
+     */
+    private suspend fun issueRefreshToken(userId: Uuid, deviceInfo: DeviceInfo): Pair<String, Uuid>? {
         val raw = newOpaqueToken()
-        val stored = authSessionRepository.createSession(
+        val sessionId = authSessionRepository.createSession(
             userId = userId,
             tokenHash = sha256(raw),
             expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
-        )
-        return raw.takeIf { stored }
+            deviceName = deviceInfo.deviceName,
+            userAgent = deviceInfo.userAgent,
+            ipAddress = deviceInfo.ipAddress,
+        ) ?: return null
+        return raw to sessionId
     }
 
-    private fun issueAccessToken(userId: Uuid): String = tokenService.generateToken(
+    private fun issueAccessToken(userId: Uuid, sessionId: Uuid): String = tokenService.generateToken(
         config = tokenConfig,
         TokenClaim(name = Keys.USER_ID, value = userId.toString()),
+        TokenClaim(name = Keys.SESSION_ID, value = sessionId.toString()),
     )
 
     private fun newOpaqueToken(): String =
