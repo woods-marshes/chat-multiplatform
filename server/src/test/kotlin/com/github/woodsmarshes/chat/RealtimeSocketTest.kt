@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat
 
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.User
+import com.github.woodsmarshes.chat.core.contract.dto.admin.UpdateBanRequest
 import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateConversationRequest
@@ -12,8 +13,12 @@ import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.connectToH2Database
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import io.ktor.client.*
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -25,6 +30,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.serialization.kotlinx.protobuf.protobuf
 import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.testing.*
+import io.ktor.websocket.CloseReason
 import kotlinx.coroutines.*
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
@@ -152,6 +158,62 @@ class RealtimeSocketTest {
             assertTrue(typing.isTyping)
 
             bobJob.cancel()
+        }
+    }
+
+    @Test
+    fun bannedUserLosesSocketAndCannotReconnect() = testApplication {
+        environment {
+            config = ApplicationConfig("application-test.conf")
+        }
+        val client = wsClient()
+        val (tokenA, userA) = registerUser(client, "ban-a")
+        val (tokenB, userB) = registerUser(client, "ban-b")
+
+        // Promote B through the shared test DB: the admin role is read fresh
+        // from the repository on every admin call, so no cache needs busting.
+        transaction(connectToH2Database()) {
+            Users.update({ Users.id eq userB.id }) { it[role] = UserRole.ADMIN }
+        }
+
+        val aRegistered = CompletableDeferred<Unit>()
+        val aClosed = CompletableDeferred<CloseReason?>()
+        coroutineScope {
+            val aJob = launch {
+                client.webSocket("/ws?access_token=$tokenA") {
+                    // The first server frame is sent after the session is
+                    // indexed — the deterministic registration signal.
+                    withTimeoutOrNull(15.seconds) { receiveDeserialized<RealtimeEvent>() }
+                    aRegistered.complete(Unit)
+                    aClosed.complete(closeReason.await())
+                }
+            }
+            aRegistered.await()
+
+            val banResponse = client.put("/v1/admin/users/${userA.id}/ban") {
+                bearerAuth(tokenB)
+                contentType(ContentType.Application.Json)
+                setBody(UpdateBanRequest(banned = true))
+            }
+            assertEquals(HttpStatusCode.OK, banResponse.status)
+
+            // The ban must drop the live socket, not just future handshakes.
+            val reason = withTimeoutOrNull(10.seconds) { aClosed.await() }
+            assertNotNull(reason, "banned user's websocket was not closed")
+
+            // Reconnect must be rejected: the JWT validate hook re-checks the
+            // ban state on every handshake.
+            val reconnectRejected = try {
+                client.webSocket("/ws?access_token=$tokenA") {
+                    withTimeoutOrNull(5.seconds) { closeReason.await() }
+                    false
+                }
+            } catch (e: Exception) {
+                true
+            }
+            assertEquals(true, reconnectRejected, "banned user reconnected to /ws")
+
+            aJob.cancel()
         }
     }
 

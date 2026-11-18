@@ -27,8 +27,8 @@ fun Route.adminRoutes() {
     authenticate {
         get<V1.Admin.Users> { params ->
             val adminId = call.extractUserId()
-            adminService.requireAdmin(adminId).getOrThrow()
             val result = adminService.listUsers(
+                adminId = adminId,
                 keyword = params.keyword,
                 role = params.role,
                 banned = params.banned,
@@ -40,8 +40,7 @@ fun Route.adminRoutes() {
 
         get<V1.Admin.Users.Id> { params ->
             val adminId = call.extractUserId()
-            adminService.requireAdmin(adminId).getOrThrow()
-            val result = adminService.getUserDetail(params.id).getOrThrow()
+            val result = adminService.getUserDetail(adminId, params.id).getOrThrow()
             call.respond(result)
         }
 

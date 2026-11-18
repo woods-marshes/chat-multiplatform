@@ -28,15 +28,20 @@ import com.github.woodsmarshes.chat.repository.UserAdminStats
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserStats
 import com.github.woodsmarshes.chat.utils.connectToH2Database
+import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
+import com.github.woodsmarshes.chat.websocket.SessionIndex
+import io.ktor.server.websocket.WebSocketServerSession
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.uuid.Uuid
 
 class AdminServiceTest {
@@ -47,11 +52,16 @@ class AdminServiceTest {
     private val userAccessCache = mockk<UserAccessCache>(relaxed = true)
     private val conversationRepository = mockk<ConversationRepository>()
     private val messageRepository = mockk<MessageRepository>()
+    private val sessionIndex = SessionIndex()
+    private val realtimeDelivery = mockk<RealtimeDelivery>(relaxed = true)
 
     // Real H2 connection so inTransaction blocks have a transaction context.
     private val database = connectToH2Database()
 
-    private val service = AdminService(userRepository, authSessionRepository, hashingService, userAccessCache, conversationRepository, messageRepository)
+    private val service = AdminService(
+        userRepository, authSessionRepository, hashingService, userAccessCache,
+        conversationRepository, messageRepository, sessionIndex, realtimeDelivery,
+    )
 
     private fun user(role: UserRole) = User(
         id = Uuid.random(),
@@ -334,27 +344,82 @@ class AdminServiceTest {
     }
 
     @Test
-    fun listUserSessionsFiltersRevoked() = runBlocking {
+    fun listUserSessionsFiltersRevokedAndExpired() = runBlocking {
         val adminId = Uuid.random()
         val targetId = Uuid.random()
         val now = Clock.System.now()
         val active = AuthSessionRecord(
-            id = Uuid.random(), userId = targetId, createdAt = now, expiresAt = now,
+            id = Uuid.random(), userId = targetId, createdAt = now, expiresAt = now + 1.hours,
             revokedAt = null, deviceName = "phone", userAgent = null, ipAddress = null, lastUsedAt = null,
         )
         val revoked = AuthSessionRecord(
-            id = Uuid.random(), userId = targetId, createdAt = now, expiresAt = now,
+            id = Uuid.random(), userId = targetId, createdAt = now, expiresAt = now + 1.hours,
             revokedAt = now, deviceName = "old", userAgent = null, ipAddress = null, lastUsedAt = null,
+        )
+        val expired = AuthSessionRecord(
+            id = Uuid.random(), userId = targetId, createdAt = now - 2.hours, expiresAt = now - 1.hours,
+            revokedAt = null, deviceName = "stale", userAgent = null, ipAddress = null, lastUsedAt = null,
         )
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
         coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
-        coEvery { authSessionRepository.listByUser(targetId) } returns listOf(active, revoked)
+        coEvery { authSessionRepository.listByUser(targetId) } returns listOf(active, revoked, expired)
 
         val result = service.listUserSessions(adminId, targetId)
 
         assertTrue(result.isOk)
         assertEquals(1, result.get()!!.items.size)
         assertEquals("phone", result.get()!!.items.single().deviceName)
+    }
+
+    @Test
+    fun setBannedDisconnectsLiveWebSocketSessions() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        val session = mockk<WebSocketServerSession>()
+        sessionIndex.add(targetId, session)
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
+        coEvery { userRepository.setBannedAt(targetId, any()) } returns true
+        coEvery { authSessionRepository.revokeAllByUser(targetId) } returns 1
+
+        val result = service.setBanned(adminId, targetId, banned = true)
+
+        assertTrue(result.isOk)
+        verify(exactly = 1) { realtimeDelivery.closeSession(session) }
+    }
+
+    @Test
+    fun setBannedUnbanKeepsWebSocketSessions() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        val session = mockk<WebSocketServerSession>()
+        sessionIndex.add(targetId, session)
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
+        coEvery { userRepository.setBannedAt(targetId, any()) } returns true
+
+        val result = service.setBanned(adminId, targetId, banned = false)
+
+        assertTrue(result.isOk)
+        verify(exactly = 0) { realtimeDelivery.closeSession(any()) }
+    }
+
+    @Test
+    fun listUsersRejectsNonAdmin() = runBlocking {
+        coEvery { userRepository.getUserById(any()) } returns user(UserRole.MEMBER)
+
+        val result = service.listUsers(Uuid.random(), null, null, null, 1, 20)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+    }
+
+    @Test
+    fun getUserDetailRejectsNonAdmin() = runBlocking {
+        coEvery { userRepository.getUserById(any()) } returns user(UserRole.MEMBER)
+
+        val result = service.getUserDetail(Uuid.random(), Uuid.random())
+
+        assertEquals(UserError.PermissionDenied, result.getError())
     }
 
     @Test
@@ -388,7 +453,7 @@ class AdminServiceTest {
         } returns PagedUsers(items = listOf(member), total = 1)
         coEvery { authSessionRepository.countActiveByUsers(listOf(member.id)) } returns mapOf(member.id to 3)
 
-        val result = service.listUsers(null, null, null, 1, 20)
+        val result = service.listUsers(adminId, null, null, null, 1, 20)
 
         assertTrue(result.isOk)
         assertEquals(3, result.get()!!.items.single().activeSessionCount)

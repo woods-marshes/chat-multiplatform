@@ -30,6 +30,8 @@ import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.toAuthSessionInfo
 import com.github.woodsmarshes.chat.utils.MAX_PAGE_SIZE
 import com.github.woodsmarshes.chat.utils.inTransaction
+import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
+import com.github.woodsmarshes.chat.websocket.SessionIndex
 import java.security.SecureRandom
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -49,9 +51,12 @@ class AdminService(
     private val userAccessCache: UserAccessCache,
     private val conversationRepository: ConversationRepository,
     private val messageRepository: MessageRepository,
+    private val sessionIndex: SessionIndex,
+    private val realtimeDelivery: RealtimeDelivery,
 ) {
     private val secureRandom = SecureRandom()
 
+    private val logger = LoggerFactory.getLogger(AdminService::class.java)
     private val auditLogger = LoggerFactory.getLogger("admin.audit")
 
     suspend fun requireAdmin(adminId: Uuid): Result<Unit, UserError> = coroutineBinding {
@@ -60,12 +65,14 @@ class AdminService(
     }
 
     suspend fun listUsers(
+        adminId: Uuid,
         keyword: String?,
         role: UserRole?,
         banned: Boolean?,
         page: Int,
         limit: Int,
     ): Result<AdminUserListResponse, UserError> = coroutineBinding {
+        requireAdmin(adminId).bind()
         val safePage = page.coerceAtLeast(1)
         val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
         val paged = userRepository.listUsersPaged(keyword, role, banned, safePage, safeLimit)
@@ -78,7 +85,8 @@ class AdminService(
         )
     }
 
-    suspend fun getUserDetail(id: Uuid): Result<AdminUserDetailResponse, UserError> = coroutineBinding {
+    suspend fun getUserDetail(adminId: Uuid, id: Uuid): Result<AdminUserDetailResponse, UserError> = coroutineBinding {
+        requireAdmin(adminId).bind()
         val user = userRepository.getUserById(id) ?: Err(UserError.NotFound).bind()
         val stats = userRepository.getUserAdminStats(id)
         val sessionCount = authSessionRepository.countActiveByUsers(listOf(id))[id] ?: 0
@@ -97,7 +105,26 @@ class AdminService(
         inTransaction {
             setBannedTx(adminId, targetId, banned)
         }.bind()
+        if (banned) disconnectLiveSessions(targetId)
         auditLogger.info("action={} admin={} target={} banned={}", if (banned) "ban" else "unban", adminId, targetId, banned)
+    }
+
+    /**
+     * A ban must also drop already-established WebSocket connections: the JWT
+     * validate hook only runs at handshake time, so without this a banned user
+     * keeps sending and receiving until the access token expires. Reconnect is
+     * impossible — the transaction above invalidated the access cache, so the
+     * next handshake fails the banned check. A close failure must not turn the
+     * ban itself into a 500.
+     */
+    private fun disconnectLiveSessions(userId: Uuid) {
+        sessionIndex.getSessions(userId).forEach { session ->
+            try {
+                realtimeDelivery.closeSession(session)
+            } catch (e: Exception) {
+                logger.warn("Failed to close websocket session of banned user {}", userId, e)
+            }
+        }
     }
 
     private suspend fun setBannedTx(adminId: Uuid, targetId: Uuid, banned: Boolean): Result<Unit, UserError> = coroutineBinding {
@@ -133,8 +160,11 @@ class AdminService(
         requireAdmin(adminId).bind()
         userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
         // Only live sessions: refresh rotation leaves one revoked row per
-        // refresh, so the unfiltered history grows without bound.
-        val sessions = authSessionRepository.listByUser(targetId).filter { it.revokedAt == null }
+        // refresh, so the unfiltered history grows without bound. Expired
+        // rows are excluded too, matching countActiveByUsers/findActiveSession.
+        val now = Clock.System.now()
+        val sessions = authSessionRepository.listByUser(targetId)
+            .filter { it.revokedAt == null && it.expiresAt > now }
         AuthSessionListResponse(items = sessions.map { it.toAuthSessionInfo() })
     }
 
