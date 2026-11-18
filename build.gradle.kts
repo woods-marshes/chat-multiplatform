@@ -17,6 +17,18 @@ plugins {
 }
 
 buildscript {
+    // AGP pulls commons-compress -> commons-lang3:3.16.0, while a platform
+    // constraint requires commons-lang3 >= 3.18.0. Resolving that conflict
+    // retargets the edge to 3.22.0 and hits a Gradle bug ("edge has no target
+    // nodes" while writing the resolution result to the binary store), which
+    // fails fresh-cache builds such as the Docker image build. Forcing a single
+    // commons-lang3 version removes the conflict and avoids the retargeting.
+    // See https://github.com/gradle/gradle/issues/37192
+    configurations.named("classpath") {
+        resolutionStrategy {
+            force("org.apache.commons:commons-lang3:3.22.0")
+        }
+    }
     dependencies {
         // For KGP
         classpath(libs.kotlin.gradlePlugin)
