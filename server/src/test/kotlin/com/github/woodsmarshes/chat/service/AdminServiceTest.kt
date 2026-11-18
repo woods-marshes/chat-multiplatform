@@ -64,8 +64,8 @@ class AdminServiceTest {
         conversationRepository, messageRepository, sessionIndex, realtimeDelivery,
     )
 
-    private fun user(role: UserRole) = User(
-        id = Uuid.random(),
+    private fun user(role: UserRole, id: Uuid = Uuid.random()) = User(
+        id = id,
         username = "alice",
         email = null,
         displayName = "Alice",
@@ -474,5 +474,78 @@ class AdminServiceTest {
         assertEquals(1, result.get()!!.items.size)
         assertEquals("admin.audit", result.get()!!.items.single().logger)
         AuditLogBuffer.clear()
+    }
+
+    @Test
+    fun setBannedRejectsPeerAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.ADMIN)
+
+        val result = service.setBanned(adminId, targetId, banned = true)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+    }
+
+    @Test
+    fun changeRoleRejectsPeerAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.ADMIN)
+
+        val result = service.changeRole(adminId, targetId, UserRole.MEMBER)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+    }
+
+    @Test
+    fun resetPasswordRejectsPeerAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.ADMIN)
+
+        val result = service.resetPassword(adminId, targetId)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+    }
+
+    @Test
+    fun revokeAllUserSessionsRejectsPeerAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.ADMIN)
+
+        val result = service.revokeAllUserSessions(adminId, targetId)
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+    }
+
+    @Test
+    fun changeRoleAllowsPromotingMemberToAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
+        coEvery { userRepository.changeUserRole(targetId, UserRole.ADMIN) } returns true
+
+        val result = service.changeRole(adminId, targetId, UserRole.ADMIN)
+
+        assertTrue(result.isOk)
+    }
+
+    @Test
+    fun changeRoleAllowsSelfDemotionWhenNotLastAdmin() = runBlocking {
+        val adminId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN, id = adminId)
+        coEvery { userRepository.countAdmins() } returns 2
+        coEvery { userRepository.changeUserRole(adminId, UserRole.MEMBER) } returns true
+
+        val result = service.changeRole(adminId, adminId, UserRole.MEMBER)
+
+        assertTrue(result.isOk)
     }
 }

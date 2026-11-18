@@ -19,6 +19,7 @@ import com.github.woodsmarshes.chat.core.contract.dto.admin.AdminUserListRespons
 import com.github.woodsmarshes.chat.core.contract.dto.admin.ResetPasswordResponse
 import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthSessionListResponse
 import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.logging.AppLogBuffer
@@ -63,6 +64,16 @@ class AdminService(
     suspend fun requireAdmin(adminId: Uuid): Result<Unit, UserError> = coroutineBinding {
         val admin = userRepository.getUserById(adminId) ?: Err(UserError.NotFound).bind()
         if (admin.role != UserRole.ADMIN) Err(UserError.PermissionDenied).bind()
+    }
+
+    /**
+     * Peer admins are immutable to each other: an admin may not ban, demote,
+     * reset the password of, or revoke the sessions of another admin. The only
+     * ways out of the admin pool are self-demotion and direct DB surgery —
+     * intentional, so a compromised or rogue admin cannot lock out peers.
+     */
+    private suspend fun requireMutableTarget(adminId: Uuid, target: User): Result<Unit, UserError> = coroutineBinding {
+        if (target.id != adminId && target.role == UserRole.ADMIN) Err(UserError.PermissionDenied).bind()
     }
 
     suspend fun listUsers(
@@ -131,6 +142,7 @@ class AdminService(
     private suspend fun setBannedTx(adminId: Uuid, targetId: Uuid, banned: Boolean): Result<Unit, UserError> = coroutineBinding {
         if (banned && targetId == adminId) Err(UserError.InvalidRequest).bind()
         val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+        requireMutableTarget(adminId, target).bind()
         // Demoting the last admin out of the admin pool by ban would lock
         // everyone out of administration; refuse while at least one remains.
         if (banned && target.role == UserRole.ADMIN && userRepository.countAdmins() <= 1) {
@@ -150,6 +162,7 @@ class AdminService(
     suspend fun changeRole(adminId: Uuid, targetId: Uuid, newRole: UserRole): Result<Unit, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
         val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+        requireMutableTarget(adminId, target).bind()
         if (target.role == UserRole.ADMIN && newRole != UserRole.ADMIN && userRepository.countAdmins() <= 1) {
             Err(UserError.PermissionDenied).bind()
         }
@@ -171,7 +184,8 @@ class AdminService(
 
     suspend fun revokeAllUserSessions(adminId: Uuid, targetId: Uuid): Result<Int, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
-        userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+        val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+        requireMutableTarget(adminId, target).bind()
         val revoked = authSessionRepository.revokeAllByUser(targetId)
         userAccessCache.invalidate(targetId)
         auditLogger.info("action=revoke-all-sessions admin={} target={} revoked={}", adminId, targetId, revoked)
@@ -181,14 +195,15 @@ class AdminService(
     suspend fun resetPassword(adminId: Uuid, targetId: Uuid): Result<ResetPasswordResponse, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
         val response = inTransaction {
-            resetPasswordTx(targetId)
+            resetPasswordTx(adminId, targetId)
         }.bind()
         auditLogger.info("action=reset-password admin={} target={}", adminId, targetId)
         response
     }
 
-    private suspend fun resetPasswordTx(targetId: Uuid): Result<ResetPasswordResponse, UserError> = coroutineBinding {
-        userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+    private suspend fun resetPasswordTx(adminId: Uuid, targetId: Uuid): Result<ResetPasswordResponse, UserError> = coroutineBinding {
+        val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+        requireMutableTarget(adminId, target).bind()
         val temporaryPassword = generateTemporaryPassword()
         val salted = hashingService.generateSaltedHash(temporaryPassword)
         if (!userRepository.updatePassword(targetId, salted.hash, salted.salt)) {
