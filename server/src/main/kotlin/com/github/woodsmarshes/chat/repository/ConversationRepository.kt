@@ -52,7 +52,7 @@ interface ConversationRepository {
 
     suspend fun getExistingPrivateConversation(userId1: Uuid, userId2: Uuid): Conversation?
 
-    suspend fun softDeleteConversation(conversationId: Uuid): Boolean
+    suspend fun softDeleteConversation(conversationId: Uuid, deleterId: Uuid): Boolean
 
     suspend fun getConversationIncludeDeleted(conversationId: Uuid): Conversation?
 
@@ -177,7 +177,7 @@ class ConversationDataSourceImpl(
             .firstOrNull()
     }
 
-    override suspend fun softDeleteConversation(conversationId: Uuid): Boolean = dbQuery {
+    override suspend fun softDeleteConversation(conversationId: Uuid, deleterId: Uuid): Boolean = dbQuery {
         val now = Clock.System.now()
         val updated = Conversations.update({ Conversations.id eq conversationId }) {
             it[deletedAt] = now
@@ -189,7 +189,7 @@ class ConversationDataSourceImpl(
                 .map { it[ConversationParticipants.userId].value }
             val event = ConversationEventResponse.ConversationDeleted(
                 conversationId = conversationId,
-                deleterId = memberIds.firstOrNull() ?: conversationId,
+                deleterId = deleterId,
                 timestamp = now,
             )
             val targets = buildList {

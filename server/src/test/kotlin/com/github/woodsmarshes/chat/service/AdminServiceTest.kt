@@ -323,12 +323,12 @@ class AdminServiceTest {
         )
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
         coEvery { conversationRepository.getConversationIncludeDeleted(conversation.id) } returns conversation
-        coEvery { conversationRepository.softDeleteConversation(conversation.id) } returns true
+        coEvery { conversationRepository.softDeleteConversation(conversation.id, adminId) } returns true
 
         val result = service.deleteConversation(adminId, conversation.id)
 
         assertTrue(result.isOk)
-        coVerify(exactly = 1) { conversationRepository.softDeleteConversation(conversation.id) }
+        coVerify(exactly = 1) { conversationRepository.softDeleteConversation(conversation.id, adminId) }
     }
 
     @Test

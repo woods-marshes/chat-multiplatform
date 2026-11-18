@@ -253,7 +253,7 @@ class ConversationLifecycleService(
                 if (participant.role !in listOf(ConversationRole.OWNER, ConversationRole.ADMIN)) {
                     Err(ConversationError.PermissionDenied).bind()
                 }
-                val deleted = conversationRepository.softDeleteConversation(conversationId)
+                val deleted = conversationRepository.softDeleteConversation(conversationId, userId)
                 if (deleted) {
                     eventBus.publishConversationEvent(
                         ConversationEvent.ConversationDeleted(

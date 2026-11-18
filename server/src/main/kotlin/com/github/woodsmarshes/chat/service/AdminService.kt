@@ -272,7 +272,7 @@ class AdminService(
     suspend fun deleteConversation(adminId: Uuid, conversationId: Uuid): Result<Unit, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
         conversationRepository.getConversationIncludeDeleted(conversationId) ?: Err(UserError.NotFound).bind()
-        if (!conversationRepository.softDeleteConversation(conversationId)) Err(UserError.UpdateFailed).bind()
+        if (!conversationRepository.softDeleteConversation(conversationId, adminId)) Err(UserError.UpdateFailed).bind()
         auditLogger.info("action=delete-conversation admin={} conversation={}", adminId, conversationId)
     }
 

@@ -194,7 +194,7 @@ class ContactServiceTest {
             contactRepository.updateContact(eq(senderId), eq(userId), any(), any(), eq(ContactStatus.DELETED))
         } returns true
         coEvery { conversationRepository.getExistingPrivateConversation(userId, senderId) } returns conversation()
-        coEvery { conversationRepository.softDeleteConversation(conversationId) } returns true
+        coEvery { conversationRepository.softDeleteConversation(conversationId, userId) } returns true
 
         val result = service.deleteContact(userId, senderId)
 
@@ -214,14 +214,14 @@ class ContactServiceTest {
         } returns false
 
         assertEquals(ContactError.OperationFailed, service.deleteContact(userId, senderId).getError())
-        coVerify(exactly = 0) { conversationRepository.softDeleteConversation(any()) }
+        coVerify(exactly = 0) { conversationRepository.softDeleteConversation(any(), any()) }
     }
 
     @Test
     fun deleteContactFailsWhenTheConversationCannotBeSoftDeleted() = runBlocking {
         coEvery { contactRepository.updateContact(any(), any(), any(), any(), any()) } returns true
         coEvery { conversationRepository.getExistingPrivateConversation(userId, senderId) } returns conversation()
-        coEvery { conversationRepository.softDeleteConversation(conversationId) } returns false
+        coEvery { conversationRepository.softDeleteConversation(conversationId, userId) } returns false
 
         assertEquals(ContactError.OperationFailed, service.deleteContact(userId, senderId).getError())
         coVerify(exactly = 0) { eventBus.publishContactEvent(any()) }

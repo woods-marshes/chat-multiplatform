@@ -248,7 +248,7 @@ class ContactService(
                 Err(ContactError.OperationFailed).bind()
             }
             val existingConversation = conversationRepository.getExistingPrivateConversation(userId, id)
-            if (existingConversation != null && !conversationRepository.softDeleteConversation(existingConversation.id)) {
+            if (existingConversation != null && !conversationRepository.softDeleteConversation(existingConversation.id, userId)) {
                 Err(ContactError.OperationFailed).bind()
             }
         }
