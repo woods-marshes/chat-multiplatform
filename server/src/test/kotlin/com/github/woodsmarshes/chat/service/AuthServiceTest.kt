@@ -196,6 +196,17 @@ class AuthServiceTest {
     }
 
     @Test
+    fun refreshRejectsBannedUser() = runBlocking {
+        coEvery { authSessionRepository.findActiveSession(any()) } returns
+            com.github.woodsmarshes.chat.repository.AuthSession(id = Uuid.random(), userId = userId, expiresAt = now + 30.days, deviceName = null, userAgent = null, ipAddress = null)
+        coEvery { userRepository.getUserById(userId) } returns user().copy(bannedAt = now)
+
+        val result = service.refreshSession("live-refresh-token")
+
+        assertEquals(AuthError.AccountBanned, result.getError())
+        coVerify(exactly = 0) { authSessionRepository.revokeSession(any()) }
+    }
+    @Test
     fun refreshRotatesTheSessionAndIssuesANewAccessToken() = runBlocking {
         coEvery { authSessionRepository.findActiveSession(any()) } returns
             com.github.woodsmarshes.chat.repository.AuthSession(id = Uuid.random(), userId = userId, expiresAt = now + 30.days, deviceName = null, userAgent = null, ipAddress = null)

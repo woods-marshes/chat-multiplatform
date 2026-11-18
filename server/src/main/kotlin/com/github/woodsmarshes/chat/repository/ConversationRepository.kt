@@ -62,6 +62,9 @@ interface ConversationRepository {
     /** Admin: participant and message counts for one conversation. */
     suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats
 
+    /** Admin: participant and message counts for many conversations in two queries. */
+    suspend fun getConversationAdminStatsBatch(conversationIds: List<Uuid>): Map<Uuid, ConversationAdminStats>
+
     /** Admin: participants of one conversation with their user profiles. */
     suspend fun listConversationParticipants(conversationId: Uuid): List<ConversationParticipantInfo>
 
@@ -227,14 +230,33 @@ class ConversationDataSourceImpl(
         PagedConversations(items = items, total = total)
     }
 
-    override suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats = dbQuery {
-        val participantCount = ConversationParticipants.selectAll()
-            .where { ConversationParticipants.conversationId eq conversationId }
-            .count()
-        val messageCount = Messages.selectAll()
-            .where { Messages.conversationId eq conversationId }
-            .count()
-        ConversationAdminStats(participantCount = participantCount, messageCount = messageCount)
+    override suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats = dbQuery {
+        val participantCount = ConversationParticipants.selectAll()
+            .where { ConversationParticipants.conversationId eq conversationId }
+            .count()
+        val messageCount = Messages.selectAll()
+            .where { Messages.conversationId eq conversationId }
+            .count()
+        ConversationAdminStats(participantCount = participantCount, messageCount = messageCount)
+    }
+    override suspend fun getConversationAdminStatsBatch(conversationIds: List<Uuid>): Map<Uuid, ConversationAdminStats> = dbQuery {
+        if (conversationIds.isEmpty()) return@dbQuery emptyMap()
+        val participantCounts = ConversationParticipants
+            .select(ConversationParticipants.conversationId, ConversationParticipants.userId.count())
+            .where { ConversationParticipants.conversationId inList conversationIds }
+            .groupBy(ConversationParticipants.conversationId)
+            .associate { it[ConversationParticipants.conversationId].value to it[ConversationParticipants.userId.count()] }
+        val messageCounts = Messages
+            .select(Messages.conversationId, Messages.id.count())
+            .where { Messages.conversationId inList conversationIds }
+            .groupBy(Messages.conversationId)
+            .associate { it[Messages.conversationId].value to it[Messages.id.count()] }
+        conversationIds.associateWith { id ->
+            ConversationAdminStats(
+                participantCount = participantCounts[id] ?: 0,
+                messageCount = messageCounts[id] ?: 0,
+            )
+        }
     }
 
     override suspend fun listConversationParticipants(conversationId: Uuid): List<ConversationParticipantInfo> = dbQuery {

@@ -19,14 +19,16 @@ object AdminLogBuffer {
         val level: String,
         val logger: String,
         val message: String,
+        /** First stack-trace lines when the event carried a throwable; null otherwise. */
+        val detail: String? = null,
     )
 
     private const val CAPACITY = 500
 
     private val entries = ConcurrentLinkedDeque<Entry>()
 
-    fun add(level: String, logger: String, message: String) {
-        entries.addLast(Entry(timestamp = Clock.System.now(), level = level, logger = logger, message = message))
+    fun add(level: String, logger: String, message: String, detail: String? = null) {
+        entries.addLast(Entry(timestamp = Clock.System.now(), level = level, logger = logger, message = message, detail = detail))
         while (entries.size > CAPACITY) {
             entries.pollFirst()
         }

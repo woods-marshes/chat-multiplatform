@@ -8,6 +8,7 @@ import com.github.woodsmarshes.chat.service.AdminService
 import com.github.woodsmarshes.chat.utils.extractUserId
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
+import io.ktor.server.resources.delete
 import io.ktor.server.resources.get
 import io.ktor.server.resources.post
 import io.ktor.server.resources.put
@@ -89,9 +90,15 @@ fun Route.adminRoutes() {
             call.respond(result)
         }
 
+        delete<V1.Admin.Conversations.Id> { params ->
+            val adminId = call.extractUserId()
+            adminService.deleteConversation(adminId, params.id).getOrThrow()
+            call.respond(mapOf("success" to true))
+        }
+
         get<V1.Admin.Conversations.Id.Messages> { params ->
             val adminId = call.extractUserId()
-            val result = adminService.listConversationMessages(adminId, params.parent.id, params.page, params.limit).getOrThrow()
+            val result = adminService.listConversationMessages(adminId, params.parent.id, params.beforeId, params.limit).getOrThrow()
             call.respond(result)
         }
 

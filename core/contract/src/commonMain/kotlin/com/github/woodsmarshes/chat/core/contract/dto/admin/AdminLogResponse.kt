@@ -11,6 +11,8 @@ data class AdminLogEntry(
     @ProtoNumber(2) val level: String,
     @ProtoNumber(3) val logger: String,
     @ProtoNumber(4) val message: String,
+    /** Short stack-trace excerpt when the event carried a throwable. */
+    @ProtoNumber(5) val detail: String? = null,
 )
 
 @Serializable

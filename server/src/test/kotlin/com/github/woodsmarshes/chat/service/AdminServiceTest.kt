@@ -5,18 +5,29 @@ import com.github.michaelbull.result.getError
 import com.github.woodsmarshes.chat.base.UserAccessCache
 import com.github.woodsmarshes.chat.base.hashing.HashingService
 import com.github.woodsmarshes.chat.base.hashing.SaltedHash
+import com.github.woodsmarshes.chat.core.model.Conversation
+import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.GroupMetadata
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageCategory
+import com.github.woodsmarshes.chat.core.model.PrivateMetadata
+import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
+import com.github.woodsmarshes.chat.repository.AdminConversationRow
+import com.github.woodsmarshes.chat.repository.AuthSessionRecord
+import com.github.woodsmarshes.chat.repository.ConversationAdminStats
 import com.github.woodsmarshes.chat.repository.ConversationCounts
+import com.github.woodsmarshes.chat.repository.PagedConversations
 import com.github.woodsmarshes.chat.repository.ConversationRepository
-import com.github.woodsmarshes.chat.repository.PagedMessages
 import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.PagedUsers
 import com.github.woodsmarshes.chat.repository.UserAdminStats
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserStats
+import com.github.woodsmarshes.chat.utils.connectToH2Database
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,6 +47,10 @@ class AdminServiceTest {
     private val userAccessCache = mockk<UserAccessCache>(relaxed = true)
     private val conversationRepository = mockk<ConversationRepository>()
     private val messageRepository = mockk<MessageRepository>()
+
+    // Real H2 connection so inTransaction blocks have a transaction context.
+    private val database = connectToH2Database()
+
     private val service = AdminService(userRepository, authSessionRepository, hashingService, userAccessCache, conversationRepository, messageRepository)
 
     private fun user(role: UserRole) = User(
@@ -171,6 +186,197 @@ class AdminServiceTest {
         assertEquals(2, stats.privateConversationCount)
         assertEquals(100, stats.messageCount)
         assertEquals(7, stats.activeSessionCount)
+    }
+    @Test
+    fun listConversationsBatchesStats() = runBlocking {
+        val adminId = Uuid.random()
+        val conversation = Conversation(
+            id = Uuid.random(),
+            type = ConversationType.GROUP,
+            metadata = GroupMetadata(),
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now(),
+            deletedAt = null,
+            lastMessageId = null,
+        )
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { conversationRepository.listConversationsPaged(null, 1, 20) } returns
+            PagedConversations(items = listOf(AdminConversationRow(conversation, "team-alpha")), total = 1)
+        coEvery { conversationRepository.getConversationAdminStatsBatch(listOf(conversation.id)) } returns
+            mapOf(conversation.id to ConversationAdminStats(participantCount = 3, messageCount = 42))
+
+        val result = service.listConversations(adminId, null, 1, 20)
+
+        assertTrue(result.isOk)
+        val item = result.get()!!.items.single()
+        assertEquals(3, item.participantCount)
+        assertEquals(42, item.messageCount)
+        assertEquals("team-alpha", item.groupName)
+        assertEquals(1, result.get()!!.total)
+    }
+
+    @Test
+    fun getConversationDetailReturnsParticipants() = runBlocking {
+        val adminId = Uuid.random()
+        val conversation = Conversation(
+            id = Uuid.random(),
+            type = ConversationType.PRIVATE,
+            metadata = PrivateMetadata(),
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now(),
+            deletedAt = null,
+            lastMessageId = null,
+        )
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { conversationRepository.getConversationIncludeDeleted(conversation.id) } returns conversation
+        coEvery { conversationRepository.getConversationAdminStats(conversation.id) } returns
+            ConversationAdminStats(participantCount = 2, messageCount = 7)
+        coEvery { conversationRepository.listConversationParticipants(conversation.id) } returns emptyList()
+
+        val result = service.getConversationDetail(adminId, conversation.id)
+
+        assertTrue(result.isOk)
+        val detail = result.get()!!
+        assertEquals(2, detail.participantCount)
+        assertEquals(7, detail.messageCount)
+        assertEquals(null, detail.groupName)
+    }
+
+    @Test
+    fun listConversationMessagesComputesHasMore() = runBlocking {
+        val adminId = Uuid.random()
+        val conversation = Conversation(
+            id = Uuid.random(),
+            type = ConversationType.PRIVATE,
+            metadata = PrivateMetadata(),
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now(),
+            deletedAt = null,
+            lastMessageId = null,
+        )
+        val messages = (1..3).map { index ->
+            Message(
+                id = Uuid.random(),
+                conversationId = conversation.id,
+                category = MessageCategory.NORMAL,
+                createdAt = Clock.System.now(),
+                content = TextContent("msg-$index"),
+            )
+        }
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { conversationRepository.getConversationIncludeDeleted(conversation.id) } returns conversation
+        // limit = 2 -> service fetches 3 rows; 3 > 2 means another page exists.
+        coEvery { messageRepository.getHistory(conversation.id, 3, null) } returns messages
+
+        val result = service.listConversationMessages(adminId, conversation.id, beforeId = null, limit = 2)
+
+        assertTrue(result.isOk)
+        val page = result.get()!!
+        assertEquals(2, page.items.size)
+        assertTrue(page.hasMore)
+    }
+
+    @Test
+    fun listConversationMessagesReturnsEmptyWhenNoMore() = runBlocking {
+        val adminId = Uuid.random()
+        val conversation = Conversation(
+            id = Uuid.random(),
+            type = ConversationType.PRIVATE,
+            metadata = PrivateMetadata(),
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now(),
+            deletedAt = null,
+            lastMessageId = null,
+        )
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { conversationRepository.getConversationIncludeDeleted(conversation.id) } returns conversation
+        coEvery { messageRepository.getHistory(conversation.id, 51, null) } returns emptyList()
+
+        val result = service.listConversationMessages(adminId, conversation.id, beforeId = null, limit = 50)
+
+        assertTrue(result.isOk)
+        assertEquals(false, result.get()!!.hasMore)
+        assertTrue(result.get()!!.items.isEmpty())
+    }
+
+    @Test
+    fun deleteConversationSoftDeletes() = runBlocking {
+        val adminId = Uuid.random()
+        val conversation = Conversation(
+            id = Uuid.random(),
+            type = ConversationType.PRIVATE,
+            metadata = PrivateMetadata(),
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now(),
+            deletedAt = null,
+            lastMessageId = null,
+        )
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { conversationRepository.getConversationIncludeDeleted(conversation.id) } returns conversation
+        coEvery { conversationRepository.softDeleteConversation(conversation.id) } returns true
+
+        val result = service.deleteConversation(adminId, conversation.id)
+
+        assertTrue(result.isOk)
+        coVerify(exactly = 1) { conversationRepository.softDeleteConversation(conversation.id) }
+    }
+
+    @Test
+    fun deleteConversationReturnsNotFound() = runBlocking {
+        val adminId = Uuid.random()
+        val conversationId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { conversationRepository.getConversationIncludeDeleted(conversationId) } returns null
+
+        val result = service.deleteConversation(adminId, conversationId)
+
+        assertEquals(UserError.NotFound, result.getError())
+    }
+
+    @Test
+    fun listUserSessionsFiltersRevoked() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        val now = Clock.System.now()
+        val active = AuthSessionRecord(
+            id = Uuid.random(), userId = targetId, createdAt = now, expiresAt = now,
+            revokedAt = null, deviceName = "phone", userAgent = null, ipAddress = null, lastUsedAt = null,
+        )
+        val revoked = AuthSessionRecord(
+            id = Uuid.random(), userId = targetId, createdAt = now, expiresAt = now,
+            revokedAt = now, deviceName = "old", userAgent = null, ipAddress = null, lastUsedAt = null,
+        )
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
+        coEvery { authSessionRepository.listByUser(targetId) } returns listOf(active, revoked)
+
+        val result = service.listUserSessions(adminId, targetId)
+
+        assertTrue(result.isOk)
+        assertEquals(1, result.get()!!.items.size)
+        assertEquals("phone", result.get()!!.items.single().deviceName)
+    }
+
+    @Test
+    fun listLogsRejectsUnknownLevel() = runBlocking {
+        val adminId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+
+        val result = service.listLogs(adminId, "DEBUG", 10)
+
+        assertEquals(UserError.InvalidRequest, result.getError())
+    }
+
+    @Test
+    fun listLogsAcceptsWarnAndError() = runBlocking {
+        val adminId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+
+        val warn = service.listLogs(adminId, "warn", 10)
+        val error = service.listLogs(adminId, "ERROR", 10)
+
+        assertTrue(warn.isOk)
+        assertTrue(error.isOk)
     }
     @Test
     fun listUsersBatchesSessionCounts() = runBlocking {

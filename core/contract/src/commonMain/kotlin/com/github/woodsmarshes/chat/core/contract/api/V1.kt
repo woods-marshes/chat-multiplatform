@@ -296,7 +296,7 @@ class V1 {
 
         // GET /v1/admin/conversations?type=&page=&limit= — all conversations incl. deleted
         // GET /v1/admin/conversations/{id} — detail with participants
-        // GET /v1/admin/conversations/{id}/messages?page=&limit= — message history (incl. revoked)
+        // GET /v1/admin/conversations/{id}/messages?beforeId=&limit= — cursor-paged history (incl. revoked)
         @Resource("/conversations")
         class Conversations(
             val parent: Admin = Admin(),
@@ -307,7 +307,7 @@ class V1 {
             @Resource("/{id}")
             class Id(val parent: Conversations, val id: Uuid) {
                 @Resource("/messages")
-                class Messages(val parent: Id, val page: Int = 1, val limit: Int = 20)
+                class Messages(val parent: Id, val beforeId: Uuid? = null, val limit: Int = 50)
             }
         }
 

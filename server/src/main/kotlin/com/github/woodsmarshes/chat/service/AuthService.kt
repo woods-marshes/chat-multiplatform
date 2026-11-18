@@ -132,6 +132,9 @@ class AuthService(
             ?: Err(AuthError.InvalidCredentials).bind()
         val user = userRepository.getUserById(session.userId)
             ?: Err(AuthError.InvalidCredentials).bind()
+        // A banned account must not mint new access tokens even if a refresh
+        // session survived (e.g. the ban-time revocation raced a rotation).
+        if (user.bannedAt != null) Err(AuthError.AccountBanned).bind()
 
         val rotated = inTransaction {
             val revoked = authSessionRepository.revokeSession(tokenHash)
@@ -162,11 +165,6 @@ class AuthService(
         authSessionRepository.revokeSession(sha256(refreshToken))
     }
 
-    /**
-     * Mints an opaque refresh token and persists only its hash. Null when the
-     * session row could not be stored — callers translate that into the
-     * appropriate error inside their own result context.
-     */
     /**
      * Mints an opaque refresh token and persists only its hash. Returns the
      * raw token together with the new session id (needed for the access
