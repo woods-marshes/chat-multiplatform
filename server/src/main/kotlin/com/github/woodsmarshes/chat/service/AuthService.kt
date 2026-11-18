@@ -12,9 +12,9 @@ import com.github.woodsmarshes.chat.base.jwt.TokenClaim
 import com.github.woodsmarshes.chat.base.jwt.TokenService
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.AuthError
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
-import com.github.woodsmarshes.chat.core.network.dto.auth.LoginRequest
-import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.UserRepository

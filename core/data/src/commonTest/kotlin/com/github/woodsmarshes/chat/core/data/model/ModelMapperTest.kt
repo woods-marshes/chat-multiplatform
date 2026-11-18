@@ -12,9 +12,9 @@ import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
-import com.github.woodsmarshes.chat.core.network.dto.conversation.GroupInfo
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupInfo
 import com.github.woodsmarshes.chat.core.model.GroupSettings
-import com.github.woodsmarshes.chat.core.network.dto.conversation.SimpleMessage
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.SimpleMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -249,7 +249,7 @@ class ModelMapperTest {
             content = TextContent("last message"),
             senderContext = null,
         ),
-    ) = com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse(
+    ) = com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse(
         conversationId = Uuid.parse("018f0000-0000-7000-8000-000000000200"),
         type = com.github.woodsmarshes.chat.core.model.ConversationType.GROUP,
         lastMessage = lastMessage,
@@ -273,7 +273,7 @@ class ModelMapperTest {
             createdAt = t0,
             updatedAt = t0,
             deletedAt = null,
-            userInfo = com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo(
+            userInfo = com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo(
                 id = sender().id,
                 username = "alice",
                 email = null,

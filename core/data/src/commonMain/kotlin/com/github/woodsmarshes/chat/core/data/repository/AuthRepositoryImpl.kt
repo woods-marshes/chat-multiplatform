@@ -11,7 +11,7 @@ import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import com.github.woodsmarshes.chat.core.network.ktor.jwtExpiryEpochMs
 import io.github.oshai.kotlinlogging.KotlinLogging

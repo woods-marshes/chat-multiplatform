@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.web.pages
 
-import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
+import com.github.woodsmarshes.chat.core.contract.dto.article.ArticleListResponse
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.components.ArticleCard
 import com.github.woodsmarshes.web.components.Sidebar

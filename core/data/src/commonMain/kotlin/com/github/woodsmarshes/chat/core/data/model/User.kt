@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.core.data.model
 
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo
 import io.github.woodsmarshes.chat.db.UserEntity
 
 fun User.toUserEntity() = UserEntity(

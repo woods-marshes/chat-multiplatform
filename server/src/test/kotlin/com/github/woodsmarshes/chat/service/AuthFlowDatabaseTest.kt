@@ -11,8 +11,8 @@ import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.UserPreference
 import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.AuthError
-import com.github.woodsmarshes.chat.core.network.dto.auth.LoginRequest
-import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.AuthSessionSourceImpl
 import com.github.woodsmarshes.chat.repository.UserDataSourceImpl

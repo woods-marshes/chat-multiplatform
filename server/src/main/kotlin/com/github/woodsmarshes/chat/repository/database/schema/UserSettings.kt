@@ -3,7 +3,7 @@ package com.github.woodsmarshes.chat.repository.database.schema
 import com.github.woodsmarshes.chat.core.model.FriendRequestPolicy
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.UserPreference
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp

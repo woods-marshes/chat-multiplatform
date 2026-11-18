@@ -4,10 +4,10 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.TextContent
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncHead
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncHead
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus

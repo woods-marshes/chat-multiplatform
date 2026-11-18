@@ -2,16 +2,16 @@ package com.github.woodsmarshes.chat
 
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
-import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.CreateConversationRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.CreatePrivateRequest
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateConversationRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreatePrivateRequest
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import io.ktor.client.*

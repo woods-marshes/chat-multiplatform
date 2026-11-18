@@ -6,7 +6,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.ConversationParticipantDataSourceImpl

@@ -3,10 +3,10 @@ package com.github.woodsmarshes.chat.websocket
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SocketErrorResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.SocketErrorResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.websocket.WebSocketServerSession

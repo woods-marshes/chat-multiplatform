@@ -3,10 +3,10 @@ package com.github.woodsmarshes.chat.routes
 import com.github.michaelbull.result.mapBoth
 import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.error.MessageError
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SocketErrorResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.SocketErrorResponse
 import com.github.woodsmarshes.chat.service.MessageService
 import com.github.woodsmarshes.chat.service.RealtimeService
 import com.github.woodsmarshes.chat.utils.extractUserIdFromWebSocket

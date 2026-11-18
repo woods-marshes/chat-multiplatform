@@ -4,11 +4,11 @@ import com.github.woodsmarshes.chat.core.model.Contact
 import com.github.woodsmarshes.chat.core.model.ContactRequest
 import com.github.woodsmarshes.chat.core.model.RequestType
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.contact.AddContactRequest
-import com.github.woodsmarshes.chat.core.network.dto.contact.ContactRequestAction
-import com.github.woodsmarshes.chat.core.network.dto.contact.HandleContactRequest
-import com.github.woodsmarshes.chat.core.network.dto.contact.UpdateContactRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.contact.AddContactRequest
+import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.contact.HandleContactRequest
+import com.github.woodsmarshes.chat.core.contract.dto.contact.UpdateContactRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.resources.delete

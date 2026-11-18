@@ -6,11 +6,11 @@ import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.datastore.di.createPreferenceDataSources
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.ktor.BearerTokensResult
 import com.github.woodsmarshes.chat.core.network.ktor.RefreshUnauthorizedException
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred

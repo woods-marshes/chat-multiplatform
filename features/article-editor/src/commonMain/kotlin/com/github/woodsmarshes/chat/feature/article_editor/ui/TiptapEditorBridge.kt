@@ -2,7 +2,7 @@ package com.github.woodsmarshes.chat.feature.article_editor.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.feature.article_editor.model.CollabConfig
 import com.github.woodsmarshes.chat.feature.article_editor.model.CollabUserInfo
 import kotlin.io.encoding.Base64

@@ -1,9 +1,9 @@
 package com.github.woodsmarshes.chat.core.network.api.rest
 
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
-import com.github.woodsmarshes.chat.core.network.dto.auth.LoginRequest
-import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.auth.AuthCircuitBreaker

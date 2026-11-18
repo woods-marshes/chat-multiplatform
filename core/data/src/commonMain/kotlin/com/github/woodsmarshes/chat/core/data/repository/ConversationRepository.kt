@@ -15,7 +15,7 @@ import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
-import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlin.uuid.Uuid
@@ -27,7 +27,7 @@ interface ConversationRepository {
 
     /**
      * Applies an authoritative conversation list snapshot (such as a `USER`
-     * stream [com.github.woodsmarshes.chat.core.network.dto.events.SyncSnapshot]),
+     * stream [com.github.woodsmarshes.chat.core.contract.dto.events.SyncSnapshot]),
      * soft-deleting any previously active local conversations omitted from
      * [responses]. Must be invoked inside the caller's active database
      * transaction (the USER snapshot cursor commits in that same transaction);

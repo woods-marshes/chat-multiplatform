@@ -1,9 +1,9 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.user.ChangeRoleRequest
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateProfileRequest
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateUserSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.user.ChangeRoleRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateProfileRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateUserSettingsRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ConversationLifecycleService
 import com.github.woodsmarshes.chat.service.GroupMembershipService

@@ -11,8 +11,8 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
-import com.github.woodsmarshes.chat.core.network.dto.conversation.GroupJoinRequestAction
-import com.github.woodsmarshes.chat.core.network.dto.conversation.HandleGroupRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupJoinRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.HandleGroupRequest
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.repository.ContactRepository

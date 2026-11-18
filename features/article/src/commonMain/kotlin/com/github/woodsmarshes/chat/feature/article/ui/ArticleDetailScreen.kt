@@ -12,7 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent

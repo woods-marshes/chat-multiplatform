@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.serialization
 
-import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -33,7 +33,7 @@ class RealtimeEventWireFormatTest {
         val discriminator = ProjectJson.parseToJsonElement(encoded).jsonObject["type"]?.jsonPrimitive?.content
 
         assertEquals(
-            "com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse.FriendRequestSent",
+            "com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse.FriendRequestSent",
             discriminator,
         )
         assertEquals(event, ProjectJson.decodeFromString<RealtimeEvent>(encoded))

@@ -4,8 +4,8 @@ import com.github.woodsmarshes.chat.core.model.Contact
 import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings

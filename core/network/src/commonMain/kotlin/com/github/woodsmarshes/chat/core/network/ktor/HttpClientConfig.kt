@@ -10,8 +10,8 @@ import com.github.woodsmarshes.chat.core.common.utils.verbose
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenSnapshot
 import com.github.woodsmarshes.chat.core.model.error.DomainError
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body

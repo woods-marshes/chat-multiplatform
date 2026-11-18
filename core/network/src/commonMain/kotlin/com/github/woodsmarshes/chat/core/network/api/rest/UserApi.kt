@@ -6,10 +6,10 @@ import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserPreference
 import com.github.woodsmarshes.chat.core.model.UserSetting
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateProfileRequest
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateUserSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateProfileRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateUserSettingsRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.resources.get

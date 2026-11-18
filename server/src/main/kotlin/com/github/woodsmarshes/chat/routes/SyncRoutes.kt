@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.SyncService
 import com.github.woodsmarshes.chat.utils.extractUserId

@@ -5,8 +5,8 @@ import com.github.michaelbull.result.getError
 import com.github.woodsmarshes.chat.core.model.ContactStatus
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.error.ContactError
-import com.github.woodsmarshes.chat.core.network.dto.contact.AddContactRequest
-import com.github.woodsmarshes.chat.core.network.dto.contact.ContactRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.contact.AddContactRequest
+import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.repository.ContactRequestSourceImpl
 import com.github.woodsmarshes.chat.repository.ContactSourceImpl

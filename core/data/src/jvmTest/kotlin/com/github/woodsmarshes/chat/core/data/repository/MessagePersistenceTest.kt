@@ -13,7 +13,7 @@ import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.MessageStatus
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.UserEntity

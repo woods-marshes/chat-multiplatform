@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.chat
 
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import io.ktor.serialization.kotlinx.*
 import io.ktor.server.application.*
 import io.ktor.server.websocket.*

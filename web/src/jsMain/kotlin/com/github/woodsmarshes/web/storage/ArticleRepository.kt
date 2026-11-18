@@ -2,9 +2,9 @@ package com.github.woodsmarshes.web.storage
 
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
-import com.github.woodsmarshes.chat.core.network.dto.article.ArticleListResponse
-import com.github.woodsmarshes.chat.core.network.dto.article.CreateArticleRequest
-import com.github.woodsmarshes.chat.core.network.dto.article.UpdateArticleRequest
+import com.github.woodsmarshes.chat.core.contract.dto.article.ArticleListResponse
+import com.github.woodsmarshes.chat.core.contract.dto.article.CreateArticleRequest
+import com.github.woodsmarshes.chat.core.contract.dto.article.UpdateArticleRequest
 import com.github.woodsmarshes.web.koinInject
 import kotlin.uuid.Uuid
 

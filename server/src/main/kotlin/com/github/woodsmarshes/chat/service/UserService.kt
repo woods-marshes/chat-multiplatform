@@ -8,8 +8,8 @@ import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.UserRole.*
 import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.UserError
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateProfileRequest
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateUserSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateProfileRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateUserSettingsRequest
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import kotlin.uuid.Uuid

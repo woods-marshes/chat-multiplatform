@@ -3,7 +3,7 @@ package com.github.woodsmarshes.chat.events
 import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 

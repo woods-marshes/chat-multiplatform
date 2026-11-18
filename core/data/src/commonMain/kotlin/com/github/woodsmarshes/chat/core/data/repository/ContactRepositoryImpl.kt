@@ -20,8 +20,8 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ContactError
 import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
-import com.github.woodsmarshes.chat.core.network.dto.contact.ContactRequestAction
-import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.ChatDatabase

@@ -3,9 +3,9 @@ package com.github.woodsmarshes.chat.routes
 import com.github.woodsmarshes.chat.core.model.FileType
 import com.github.woodsmarshes.chat.core.model.MediaContent
 import com.github.woodsmarshes.chat.core.model.error.FileError
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateProfileRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateProfileRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ConversationSettingsService
 import com.github.woodsmarshes.chat.service.FileService

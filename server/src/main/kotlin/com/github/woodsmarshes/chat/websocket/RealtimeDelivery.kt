@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.chat.websocket
 
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.server.websocket.sendSerialized

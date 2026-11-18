@@ -6,7 +6,7 @@ plugins {
 kotlin {
     if (project.extra["enableAndroid"] as Boolean) {
         extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
-            namespace = "com.github.woodsmarshes.chat.core.network.api"
+            namespace = "com.github.woodsmarshes.chat.core.contract"
         }
     }
 

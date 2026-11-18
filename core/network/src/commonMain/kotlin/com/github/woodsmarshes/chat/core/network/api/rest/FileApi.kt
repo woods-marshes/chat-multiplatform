@@ -2,7 +2,7 @@ package com.github.woodsmarshes.chat.core.network.api.rest
 
 import com.github.woodsmarshes.chat.core.model.FileType
 import com.github.woodsmarshes.chat.core.model.MediaContent
-import com.github.woodsmarshes.chat.core.network.api.V1
+import com.github.woodsmarshes.chat.core.contract.api.V1
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.onUpload

@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.web.components
 
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.web.wrapper.tiptap.renderArticleContent
 import kotlinx.serialization.json.JsonElement
 import react.FC

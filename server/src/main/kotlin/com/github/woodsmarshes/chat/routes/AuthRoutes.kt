@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.auth.LoginRequest
-import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.AuthService
 import com.github.woodsmarshes.chat.utils.extractUserId

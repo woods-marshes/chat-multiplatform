@@ -1,14 +1,14 @@
 package com.github.woodsmarshes.chat.routes
 
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.conversation.CreateConversationRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.HandleGroupRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.InviteUserRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.InviteUsersRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.JoinGroupRequest
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UpdateConversationSettingsRequest
-import com.github.woodsmarshes.chat.core.network.dto.message.ReadReportRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateConversationRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.HandleGroupRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.InviteUserRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.InviteUsersRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.JoinGroupRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.dto.message.ReadReportRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ConversationLifecycleService
 import com.github.woodsmarshes.chat.service.ConversationSettingsService

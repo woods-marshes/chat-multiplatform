@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.serialization.WebsocketDeserializeException
 import io.ktor.websocket.Frame

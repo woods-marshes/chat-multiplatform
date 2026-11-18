@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.repository.database.schema
 
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.json.jsonb

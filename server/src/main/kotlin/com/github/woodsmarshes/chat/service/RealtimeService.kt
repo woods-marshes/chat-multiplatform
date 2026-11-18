@@ -1,10 +1,10 @@
 package com.github.woodsmarshes.chat.service
 
-import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus

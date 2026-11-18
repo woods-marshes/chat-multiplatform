@@ -15,8 +15,8 @@ import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateProfileRequest
-import com.github.woodsmarshes.chat.core.network.dto.user.UpdateUserSettingsRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateProfileRequest
+import com.github.woodsmarshes.chat.core.contract.dto.user.UpdateUserSettingsRequest
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import kotlinx.coroutines.CoroutineDispatcher

@@ -4,7 +4,7 @@ import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.koinInject
 import io.ktor.client.call.body

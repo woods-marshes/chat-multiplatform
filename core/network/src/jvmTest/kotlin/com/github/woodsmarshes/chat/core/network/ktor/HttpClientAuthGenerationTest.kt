@@ -5,9 +5,9 @@ import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.datastore.di.createPreferenceDataSources
 import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectProtobuf
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngineBase
 import io.ktor.client.engine.HttpClientEngineConfig

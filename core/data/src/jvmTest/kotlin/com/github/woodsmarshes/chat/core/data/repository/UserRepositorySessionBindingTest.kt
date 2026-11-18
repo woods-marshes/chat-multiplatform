@@ -20,7 +20,7 @@ import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.mockk.coEvery
 import io.mockk.mockk

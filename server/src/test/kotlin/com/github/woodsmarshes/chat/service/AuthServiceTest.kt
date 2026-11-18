@@ -12,8 +12,8 @@ import com.github.woodsmarshes.chat.base.jwt.TokenServiceImpl
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.AuthError
-import com.github.woodsmarshes.chat.core.network.dto.auth.LoginRequest
-import com.github.woodsmarshes.chat.core.network.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
+import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
 import com.github.woodsmarshes.chat.repository.UserAuthInfo
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.utils.connectToH2Database

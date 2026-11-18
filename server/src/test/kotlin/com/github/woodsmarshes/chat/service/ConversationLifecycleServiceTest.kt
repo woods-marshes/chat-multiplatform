@@ -7,7 +7,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.PrivateMetadata
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.repository.ContactRepository

@@ -10,8 +10,8 @@ import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.repository.ContactSourceImpl
 import com.github.woodsmarshes.chat.repository.ConversationDataSourceImpl

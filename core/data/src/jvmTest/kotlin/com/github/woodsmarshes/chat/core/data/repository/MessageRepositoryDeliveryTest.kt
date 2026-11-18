@@ -37,19 +37,19 @@ import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
-import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
-import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageRequest
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncBatch
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncChange
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncHead
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncSnapshot
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageRequest
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncBatch
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncChange
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncHead
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncSnapshot
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.ContactEntity
 import io.github.woodsmarshes.chat.db.ConversationEntity
@@ -1912,7 +1912,7 @@ class MessageRepositoryDeliveryTest {
             coEvery { rest.getSyncChanges(SyncScope.USER, userId, 1L, any()) } returns SyncBatch(
                 SyncScope.USER, userId, 1L, 2L, false, false,
                 listOf(
-                    SyncChange(2L, com.github.woodsmarshes.chat.core.network.dto.events.UnknownRealtimeEvent),
+                    SyncChange(2L, com.github.woodsmarshes.chat.core.contract.dto.events.UnknownRealtimeEvent),
                 ),
             )
             repo.startSession(); runCurrent()

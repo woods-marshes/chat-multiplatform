@@ -22,11 +22,11 @@ import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
-import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.ContactEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
 import io.ktor.client.plugins.ResponseException

@@ -8,9 +8,9 @@ import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles

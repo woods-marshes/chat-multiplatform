@@ -2,7 +2,7 @@ package com.github.woodsmarshes.chat.core.network.api.websocket
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.ConnectionState
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import io.github.oshai.kotlinlogging.KotlinLogging

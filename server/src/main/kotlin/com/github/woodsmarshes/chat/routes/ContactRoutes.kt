@@ -1,10 +1,10 @@
 package com.github.woodsmarshes.chat.routes
 
 import com.github.woodsmarshes.chat.core.model.RequestType
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.contact.AddContactRequest
-import com.github.woodsmarshes.chat.core.network.dto.contact.HandleContactRequest
-import com.github.woodsmarshes.chat.core.network.dto.contact.UpdateContactRequest
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.contact.AddContactRequest
+import com.github.woodsmarshes.chat.core.contract.dto.contact.HandleContactRequest
+import com.github.woodsmarshes.chat.core.contract.dto.contact.UpdateContactRequest
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ContactService
 import com.github.woodsmarshes.chat.utils.extractUserId

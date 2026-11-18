@@ -12,7 +12,7 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.PrivateMetadata
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.error.ContactError
-import com.github.woodsmarshes.chat.core.network.dto.contact.ContactRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus

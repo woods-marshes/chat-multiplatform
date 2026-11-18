@@ -1,6 +1,6 @@
 package com.github.woodsmarshes.chat.feature.article_editor.ui
 
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.feature.article_editor.model.CollabConfig
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi

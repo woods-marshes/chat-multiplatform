@@ -2,7 +2,7 @@ package com.github.woodsmarshes.chat.repository.database.schema
 
 import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.ConversationType
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.json.jsonb

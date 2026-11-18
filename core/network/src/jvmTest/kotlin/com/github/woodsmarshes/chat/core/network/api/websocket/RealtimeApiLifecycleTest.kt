@@ -7,8 +7,8 @@ import com.github.woodsmarshes.chat.core.model.MessageCategory
 import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
-import com.github.woodsmarshes.chat.core.network.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.RealtimeEvent
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import io.ktor.client.HttpClient

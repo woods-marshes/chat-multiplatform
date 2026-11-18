@@ -10,7 +10,7 @@ import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
-import com.github.woodsmarshes.chat.core.network.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.article_editor.model.EditorUiState
 import io.github.oshai.kotlinlogging.KotlinLogging

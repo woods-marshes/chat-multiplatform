@@ -2,8 +2,8 @@ package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
 import com.github.woodsmarshes.chat.core.model.RequestStatus
-import com.github.woodsmarshes.chat.core.network.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.network.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.GroupJoinRequests
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.SortOrder

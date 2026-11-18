@@ -2,8 +2,8 @@ package com.github.woodsmarshes.chat.core.network.ktor
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.AuthToken
-import com.github.woodsmarshes.chat.core.network.api.V1
-import com.github.woodsmarshes.chat.core.network.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.contract.api.V1
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException

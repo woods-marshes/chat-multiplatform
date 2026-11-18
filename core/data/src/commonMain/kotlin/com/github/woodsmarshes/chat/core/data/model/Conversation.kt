@@ -12,10 +12,10 @@ import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
-import com.github.woodsmarshes.chat.core.network.dto.conversation.ConversationResponse
-import com.github.woodsmarshes.chat.core.network.dto.conversation.GroupInfo
-import com.github.woodsmarshes.chat.core.network.dto.conversation.SimpleMessage
-import com.github.woodsmarshes.chat.core.network.dto.conversation.UserInfo
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupInfo
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.SimpleMessage
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.GetConversationListView
 import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
