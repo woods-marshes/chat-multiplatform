@@ -118,6 +118,12 @@ interface MessageRepository {
     suspend fun getUnreadCounts(userId: Uuid): Map<Uuid, Long>
 
     suspend fun getUnreadCount(conversationId: Uuid, userId: Uuid): Long
+
+    /** Admin: paged message history for one conversation, newest first, including revoked rows. */
+    suspend fun listMessagesPaged(conversationId: Uuid, page: Int, limit: Int): PagedMessages
+
+    /** Admin: platform-wide message counter. */
+    suspend fun countMessages(): Long
 }
 
 class MessageDataSourceImpl(
@@ -580,4 +586,31 @@ class MessageDataSourceImpl(
             .firstOrNull()
             ?.get(Messages.id.count()) ?: 0L
     }
+
+    override suspend fun listMessagesPaged(conversationId: Uuid, page: Int, limit: Int): PagedMessages = dbQuery {
+        val total = Messages.selectAll()
+            .where { Messages.conversationId eq conversationId }
+            .count()
+        val items = messagesWithSenderContext(conversationId)
+            .selectAll()
+            .where { Messages.conversationId eq conversationId }
+            .orderBy(Messages.id to SortOrder.DESC)
+            .limit(limit)
+            .offset(((page - 1).toLong()) * limit)
+            .map { row ->
+                val replyTo = row.getOrNull(Messages.replyToMessageId)?.value
+                    ?.let { loadReplyMessage(it, conversationId) }
+                row.toFilteredUser(replyTo = replyTo)
+            }
+        PagedMessages(items = items, total = total)
+    }
+
+    override suspend fun countMessages(): Long = dbQuery {
+        Messages.selectAll().count()
+    }
 }
+
+data class PagedMessages(
+    val items: List<Message>,
+    val total: Long,
+)

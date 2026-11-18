@@ -76,5 +76,41 @@ fun Route.adminRoutes() {
             val result = adminService.resetPassword(adminId, params.parent.id).getOrThrow()
             call.respond(result)
         }
+
+        get<V1.Admin.Conversations> { params ->
+            val adminId = call.extractUserId()
+            val result = adminService.listConversations(adminId, params.type, params.page, params.limit).getOrThrow()
+            call.respond(result)
+        }
+
+        get<V1.Admin.Conversations.Id> { params ->
+            val adminId = call.extractUserId()
+            val result = adminService.getConversationDetail(adminId, params.id).getOrThrow()
+            call.respond(result)
+        }
+
+        get<V1.Admin.Conversations.Id.Messages> { params ->
+            val adminId = call.extractUserId()
+            val result = adminService.listConversationMessages(adminId, params.parent.id, params.page, params.limit).getOrThrow()
+            call.respond(result)
+        }
+
+        post<V1.Admin.Messages.Id.Revoke> { params ->
+            val adminId = call.extractUserId()
+            adminService.revokeMessage(adminId, params.parent.id).getOrThrow()
+            call.respond(mapOf("success" to true))
+        }
+
+        get<V1.Admin.Stats> {
+            val adminId = call.extractUserId()
+            val result = adminService.getStats(adminId).getOrThrow()
+            call.respond(result)
+        }
+
+        get<V1.Admin.Logs> { params ->
+            val adminId = call.extractUserId()
+            val result = adminService.listLogs(adminId, params.level, params.limit).getOrThrow()
+            call.respond(result)
+        }
     }
 }

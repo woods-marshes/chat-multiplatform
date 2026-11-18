@@ -293,5 +293,40 @@ class V1 {
                 class ResetPassword(val parent: Id)
             }
         }
+
+        // GET /v1/admin/conversations?type=&page=&limit= — all conversations incl. deleted
+        // GET /v1/admin/conversations/{id} — detail with participants
+        // GET /v1/admin/conversations/{id}/messages?page=&limit= — message history (incl. revoked)
+        @Resource("/conversations")
+        class Conversations(
+            val parent: Admin = Admin(),
+            val type: ConversationType? = null,
+            val page: Int = 1,
+            val limit: Int = 20,
+        ) {
+            @Resource("/{id}")
+            class Id(val parent: Conversations, val id: Uuid) {
+                @Resource("/messages")
+                class Messages(val parent: Id, val page: Int = 1, val limit: Int = 20)
+            }
+        }
+
+        // POST /v1/admin/messages/{id}/revoke — moderator revoke (blanks content, syncs clients)
+        @Resource("/messages")
+        class Messages(val parent: Admin = Admin()) {
+            @Resource("/{id}")
+            class Id(val parent: Messages, val id: Uuid) {
+                @Resource("/revoke")
+                class Revoke(val parent: Id)
+            }
+        }
+
+        // GET /v1/admin/stats — platform-wide counters
+        @Resource("/stats")
+        class Stats(val parent: Admin = Admin())
+
+        // GET /v1/admin/logs?level=&limit= — recent WARN+ log entries (in-memory ring buffer)
+        @Resource("/logs")
+        class Logs(val parent: Admin = Admin(), val level: String? = null, val limit: Int = 100)
     }
 }

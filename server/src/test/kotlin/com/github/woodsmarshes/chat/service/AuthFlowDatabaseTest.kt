@@ -125,7 +125,9 @@ class AuthFlowDatabaseTest {
         override suspend fun revokeAllByUser(userId: Uuid, exceptSessionId: Uuid?) = delegate.revokeAllByUser(userId, exceptSessionId)
         override suspend fun revokeById(sessionId: Uuid, userId: Uuid) = delegate.revokeById(sessionId, userId)
         override suspend fun countActiveByUsers(userIds: List<Uuid>) = delegate.countActiveByUsers(userIds)
-        override suspend fun getLastActiveAt(userId: Uuid) = delegate.getLastActiveAt(userId)    }
+        override suspend fun getLastActiveAt(userId: Uuid) = delegate.getLastActiveAt(userId)
+        override suspend fun countActiveSessions() = delegate.countActiveSessions()
+    }
 
     @Test
     fun loginIssuesRefreshTokenThatRotatesOnRefresh(): Unit = runBlocking {

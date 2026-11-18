@@ -101,6 +101,9 @@ interface UserRepository{
 
     /** Conversation and message counts for the admin user-detail view. */
     suspend fun getUserAdminStats(userId: Uuid): UserAdminStats
+
+    /** Admin: platform-wide user counters. */
+    suspend fun getUserStats(): UserStats
 }
 
 class UserDataSourceImpl : UserRepository {
@@ -366,6 +369,13 @@ class UserDataSourceImpl : UserRepository {
             .count()
         UserAdminStats(conversationCount = conversationCount, messageCount = messageCount)
     }
+
+    override suspend fun getUserStats(): UserStats = dbQuery {
+        val total = Users.selectAll().count()
+        val admins = Users.selectAll().where { Users.role eq UserRole.ADMIN }.count()
+        val banned = Users.selectAll().where { Users.bannedAt.isNotNull() }.count()
+        UserStats(total = total, admins = admins, banned = banned)
+    }
 }
 
 /** Escapes `%`, `_` and the escape char for a LIKE pattern. */
@@ -386,4 +396,10 @@ data class PagedUsers(
 data class UserAdminStats(
     val conversationCount: Long,
     val messageCount: Long,
+)
+
+data class UserStats(
+    val total: Long,
+    val admins: Long,
+    val banned: Long,
 )

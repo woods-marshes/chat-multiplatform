@@ -9,9 +9,14 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
+import com.github.woodsmarshes.chat.repository.ConversationCounts
+import com.github.woodsmarshes.chat.repository.ConversationRepository
+import com.github.woodsmarshes.chat.repository.PagedMessages
+import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.PagedUsers
 import com.github.woodsmarshes.chat.repository.UserAdminStats
 import com.github.woodsmarshes.chat.repository.UserRepository
+import com.github.woodsmarshes.chat.repository.UserStats
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,7 +34,9 @@ class AdminServiceTest {
     private val authSessionRepository = mockk<AuthSessionRepository>()
     private val hashingService = mockk<HashingService>()
     private val userAccessCache = mockk<UserAccessCache>(relaxed = true)
-    private val service = AdminService(userRepository, authSessionRepository, hashingService, userAccessCache)
+    private val conversationRepository = mockk<ConversationRepository>()
+    private val messageRepository = mockk<MessageRepository>()
+    private val service = AdminService(userRepository, authSessionRepository, hashingService, userAccessCache, conversationRepository, messageRepository)
 
     private fun user(role: UserRole) = User(
         id = Uuid.random(),
@@ -122,6 +129,49 @@ class AdminServiceTest {
         coVerify(exactly = 1) { authSessionRepository.revokeAllByUser(targetId) }
     }
 
+    @Test
+    fun revokeMessageRejectsNonAdmin() = runBlocking {
+        coEvery { userRepository.getUserById(any()) } returns user(UserRole.MEMBER)
+
+        val result = service.revokeMessage(Uuid.random(), Uuid.random())
+
+        assertEquals(UserError.PermissionDenied, result.getError())
+    }
+
+    @Test
+    fun revokeMessageReturnsNotFoundWhenAlreadyRevoked() = runBlocking {
+        val adminId = Uuid.random()
+        val messageId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { messageRepository.revokeMessage(messageId) } returns false
+
+        val result = service.revokeMessage(adminId, messageId)
+
+        assertEquals(UserError.NotFound, result.getError())
+    }
+
+    @Test
+    fun getStatsAggregatesAllCounters() = runBlocking {
+        val adminId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserStats() } returns UserStats(total = 10, admins = 2, banned = 1)
+        coEvery { conversationRepository.countConversations() } returns ConversationCounts(total = 5, groups = 3, privates = 2)
+        coEvery { messageRepository.countMessages() } returns 100L
+        coEvery { authSessionRepository.countActiveSessions() } returns 7L
+
+        val result = service.getStats(adminId)
+
+        assertTrue(result.isOk)
+        val stats = result.get()!!
+        assertEquals(10, stats.userCount)
+        assertEquals(2, stats.adminCount)
+        assertEquals(1, stats.bannedUserCount)
+        assertEquals(5, stats.conversationCount)
+        assertEquals(3, stats.groupConversationCount)
+        assertEquals(2, stats.privateConversationCount)
+        assertEquals(100, stats.messageCount)
+        assertEquals(7, stats.activeSessionCount)
+    }
     @Test
     fun listUsersBatchesSessionCounts() = runBlocking {
         val adminId = Uuid.random()

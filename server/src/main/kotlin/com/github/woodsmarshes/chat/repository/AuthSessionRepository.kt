@@ -76,6 +76,9 @@ interface AuthSessionRepository {
 
     /** Most recent activity across the user's live sessions, if any. */
     suspend fun getLastActiveAt(userId: Uuid): Instant?
+
+    /** Admin: platform-wide count of live (unrevoked, unexpired) sessions. */
+    suspend fun countActiveSessions(): Long
 }
 
 class AuthSessionSourceImpl : AuthSessionRepository {
@@ -181,6 +184,15 @@ class AuthSessionSourceImpl : AuthSessionRepository {
             }
             .map { it[AuthSessions.lastUsedAt] ?: it[AuthSessions.createdAt] }
             .maxOrNull()
+    }
+
+    override suspend fun countActiveSessions(): Long = dbQuery {
+        AuthSessions.selectAll()
+            .where {
+                AuthSessions.revokedAt.isNull() and
+                    (AuthSessions.expiresAt greater Clock.System.now())
+            }
+            .count()
     }
 }
 

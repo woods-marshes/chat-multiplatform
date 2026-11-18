@@ -1,6 +1,8 @@
 package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.Conversation
+import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.GroupProfile
@@ -19,6 +21,8 @@ import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.leftJoin
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -51,6 +55,21 @@ interface ConversationRepository {
     suspend fun softDeleteConversation(conversationId: Uuid): Boolean
 
     suspend fun getConversationIncludeDeleted(conversationId: Uuid): Conversation?
+
+    /** Admin: paged conversation list (all rows, incl. soft-deleted), newest activity first. */
+    suspend fun listConversationsPaged(type: ConversationType?, page: Int, limit: Int): PagedConversations
+
+    /** Admin: participant and message counts for one conversation. */
+    suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats
+
+    /** Admin: participants of one conversation with their user profiles. */
+    suspend fun listConversationParticipants(conversationId: Uuid): List<ConversationParticipantInfo>
+
+    /** Admin: platform-wide conversation counters. */
+    suspend fun countConversations(): ConversationCounts
+
+    /** Admin: group display name for one conversation, null for PRIVATE or missing profile. */
+    suspend fun getGroupName(conversationId: Uuid): String?
 }
 
 class ConversationDataSourceImpl(
@@ -187,4 +206,90 @@ class ConversationDataSourceImpl(
             .map { it.toConversation() }
             .singleOrNull()
     }
+
+    override suspend fun listConversationsPaged(type: ConversationType?, page: Int, limit: Int): PagedConversations = dbQuery {
+        var condition: Op<Boolean> = Op.TRUE
+        type?.let { condition = condition and (Conversations.type eq it) }
+        val total = Conversations.selectAll().where { condition }.count()
+        val items = (Conversations leftJoin GroupProfiles)
+            .selectAll()
+            .where { condition }
+            .orderBy(Conversations.updatedAt, SortOrder.DESC)
+            .limit(limit)
+            .offset(((page - 1).toLong()) * limit)
+            .map { row ->
+                val conversation = row.toConversation()
+                val groupName = if (conversation.type == ConversationType.GROUP) {
+                    row.getOrNull(GroupProfiles.name)
+                } else null
+                AdminConversationRow(conversation = conversation, groupName = groupName)
+            }
+        PagedConversations(items = items, total = total)
+    }
+
+    override suspend fun getConversationAdminStats(conversationId: Uuid): ConversationAdminStats = dbQuery {
+        val participantCount = ConversationParticipants.selectAll()
+            .where { ConversationParticipants.conversationId eq conversationId }
+            .count()
+        val messageCount = Messages.selectAll()
+            .where { Messages.conversationId eq conversationId }
+            .count()
+        ConversationAdminStats(participantCount = participantCount, messageCount = messageCount)
+    }
+
+    override suspend fun listConversationParticipants(conversationId: Uuid): List<ConversationParticipantInfo> = dbQuery {
+        (ConversationParticipants innerJoin Users)
+            .selectAll()
+            .where { ConversationParticipants.conversationId eq conversationId }
+            .orderBy(ConversationParticipants.joinedAt, SortOrder.ASC)
+            .map { row ->
+                ConversationParticipantInfo(
+                    user = row.toSimpleUser(),
+                    role = row[ConversationParticipants.role],
+                    joinedAt = row[ConversationParticipants.joinedAt],
+                )
+            }
+    }
+
+    override suspend fun countConversations(): ConversationCounts = dbQuery {
+        val total = Conversations.selectAll().count()
+        val groups = Conversations.selectAll()
+            .where { Conversations.type eq ConversationType.GROUP }
+            .count()
+        ConversationCounts(total = total, groups = groups, privates = total - groups)
+    }
+
+    override suspend fun getGroupName(conversationId: Uuid): String? = dbQuery {
+        GroupProfiles.selectAll()
+            .where { GroupProfiles.conversationId eq conversationId }
+            .singleOrNull()
+            ?.get(GroupProfiles.name)
+    }
 }
+
+data class PagedConversations(
+    val items: List<AdminConversationRow>,
+    val total: Long,
+)
+
+data class AdminConversationRow(
+    val conversation: Conversation,
+    val groupName: String?,
+)
+
+data class ConversationAdminStats(
+    val participantCount: Long,
+    val messageCount: Long,
+)
+
+data class ConversationParticipantInfo(
+    val user: SimpleUser,
+    val role: ConversationRole,
+    val joinedAt: kotlin.time.Instant,
+)
+
+data class ConversationCounts(
+    val total: Long,
+    val groups: Long,
+    val privates: Long,
+)
