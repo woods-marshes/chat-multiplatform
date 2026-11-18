@@ -2,6 +2,7 @@ package com.github.woodsmarshes.chat
 
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.exceptions.AuthenticationException
+import com.github.woodsmarshes.chat.routes.adminRoutes
 import com.github.woodsmarshes.chat.routes.articleRoutes
 import com.github.woodsmarshes.chat.routes.authRoutes
 import com.github.woodsmarshes.chat.routes.contactRoutes
@@ -85,6 +86,7 @@ fun Application.configureRouting() {
         conversationRoutes()
         syncRoutes()
         authenticate {
+            adminRoutes()
             contactRoutes()
             fileRoutes()
             realtimeRoutes()

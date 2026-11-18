@@ -17,6 +17,7 @@ data class User(
     @ProtoNumber(8) val updatedAt: Instant,
     @ProtoNumber(9) val deletedAt: Instant?,
     @ProtoNumber(10) val role: UserRole = UserRole.MEMBER,
+    @ProtoNumber(11) val bannedAt: Instant? = null,
 )
 
 enum class UserRole {

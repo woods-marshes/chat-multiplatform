@@ -14,6 +14,7 @@ object Users : UuidTable(name = "users", uuidVersion = UuidVersion.V7) {
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at").clientDefault{ Clock.System.now() }
     val deletedAt = timestamp("deleted_at").nullable()
+    val bannedAt = timestamp("banned_at").nullable()
     val role = enumerationByName("role", 32, UserRole::class)
     val passwordHash = varchar("password_hash", length = 255)
     val salt = varchar("salt", length = 255)

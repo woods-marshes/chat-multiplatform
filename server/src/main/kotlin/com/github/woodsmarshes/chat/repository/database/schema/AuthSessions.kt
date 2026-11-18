@@ -17,6 +17,10 @@ object AuthSessions : Table("auth_sessions") {
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
     val expiresAt = timestamp("expires_at")
     val revokedAt = timestamp("revoked_at").nullable()
+    val deviceName = varchar("device_name", 100).nullable()
+    val userAgent = varchar("user_agent", 500).nullable()
+    val ipAddress = varchar("ip_address", 64).nullable()
+    val lastUsedAt = timestamp("last_used_at").nullable()
 
     override val primaryKey = PrimaryKey(id)
 }

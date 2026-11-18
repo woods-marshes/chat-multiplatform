@@ -6,4 +6,5 @@ data class ServerConfig(
     val tokenConfig: TokenConfig,
     val databaseConfig: DatabaseConfig?,
     val development: Boolean = false,
+    val adminEmails: Set<String> = emptySet(),
 )

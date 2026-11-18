@@ -64,6 +64,7 @@ fun Application.configureFrameworks() {
     configureSchema(database)
     configurePrivateFileBackfill(database, dbType)
     configureDependencyInjection(appConfig, environment.config, database, environment.log)
+    configureAdminBootstrap()
     configureUploadDirectories()
     configureSessionCleanup()
     configureFileCleanup()
@@ -186,6 +187,13 @@ private fun configureSchema(database: Database) {
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_request_id ON messages (user_id, conversation_id, client_request_id)"
         )
         exec("CREATE INDEX IF NOT EXISTS idx_sync_changes_created_at ON sync_changes (created_at)")
+        // Soft-ban flag and per-device session metadata, added after the
+        // original tables shipped; idempotent for existing databases.
+        exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS banned_at TIMESTAMP")
+        exec("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS device_name VARCHAR(100)")
+        exec("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500)")
+        exec("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS ip_address VARCHAR(64)")
+        exec("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP")
     }
 }
 
@@ -242,6 +250,22 @@ private fun Application.configureDependencyInjection(
         // accumulate idle pools forever. Only the pool created above is
         // ours to stop — other Database instances in the JVM are not.
         closeHikariDataSource(database)
+    }
+}
+
+private fun Application.configureAdminBootstrap() {
+    launch(Dispatchers.IO) {
+        val userRepository = getKoin().get<UserRepository>()
+        val adminEmails = getKoin().get<ServerConfig>().adminEmails
+        if (adminEmails.isEmpty()) return@launch
+        try {
+            val promoted = userRepository.promoteByEmails(adminEmails)
+            if (promoted > 0) log.info("Promoted {} user(s) to ADMIN via admin.emails", promoted)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.error("Admin bootstrap failed; retry on next restart", e)
+        }
     }
 }
 
@@ -339,6 +363,9 @@ private fun Application.extractServerConfig(): ServerConfig {
                 ?: error("jwt.secret must be configured in application.conf"),
         ),
         development = development,
+        adminEmails = config.propertyOrNull("admin.emails")?.getString()
+            ?.split(',')?.map { it.trim().lowercase() }?.filter { it.isNotEmpty() }?.toSet()
+            ?: emptySet(),
         databaseConfig = DatabaseConfig(
             url = config.propertyOrNull("postgres.url")?.getString() ?: "",
             username = config.propertyOrNull("postgres.username")?.getString() ?: "",

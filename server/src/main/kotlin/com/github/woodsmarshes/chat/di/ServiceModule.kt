@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.chat.di
 
 import com.github.woodsmarshes.chat.service.AttachmentLifecycle
+import com.github.woodsmarshes.chat.service.AdminService
 import com.github.woodsmarshes.chat.service.AuthService
 import com.github.woodsmarshes.chat.service.ContactService
 import com.github.woodsmarshes.chat.service.ConversationLifecycleService
@@ -18,6 +19,7 @@ import org.koin.dsl.module
 val serviceModule = module {
     singleOf(::SyncService)
     singleOf(::AuthService)
+    singleOf(::AdminService)
     single {
         ContactService(
             contactRepository = get(),

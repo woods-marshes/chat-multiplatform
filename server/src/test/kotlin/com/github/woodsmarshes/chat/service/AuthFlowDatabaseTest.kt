@@ -110,11 +110,22 @@ class AuthFlowDatabaseTest {
     private class NeverCreateSessionsRepository(
         private val delegate: AuthSessionRepository,
     ) : AuthSessionRepository {
-        override suspend fun createSession(userId: Uuid, tokenHash: String, expiresAt: Instant): Boolean = false
+        override suspend fun createSession(
+            userId: Uuid,
+            tokenHash: String,
+            expiresAt: Instant,
+            deviceName: String?,
+            userAgent: String?,
+            ipAddress: String?,
+        ): Boolean = false
         override suspend fun findActiveSession(tokenHash: String) = delegate.findActiveSession(tokenHash)
         override suspend fun revokeSession(tokenHash: String) = delegate.revokeSession(tokenHash)
         override suspend fun deleteExpiredSessions(): Int = delegate.deleteExpiredSessions()
-    }
+        override suspend fun listByUser(userId: Uuid) = delegate.listByUser(userId)
+        override suspend fun revokeAllByUser(userId: Uuid) = delegate.revokeAllByUser(userId)
+        override suspend fun revokeById(sessionId: Uuid, userId: Uuid) = delegate.revokeById(sessionId, userId)
+        override suspend fun countActiveByUsers(userIds: List<Uuid>) = delegate.countActiveByUsers(userIds)
+        override suspend fun getLastActiveAt(userId: Uuid) = delegate.getLastActiveAt(userId)    }
 
     @Test
     fun loginIssuesRefreshTokenThatRotatesOnRefresh(): Unit = runBlocking {

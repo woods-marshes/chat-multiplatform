@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.di
 
+import com.github.woodsmarshes.chat.base.UserAccessCache
 import com.github.woodsmarshes.chat.base.hashing.HashingService
 import com.github.woodsmarshes.chat.base.hashing.HashingServiceImpl
 import com.github.woodsmarshes.chat.base.jwt.TokenService
@@ -26,6 +27,8 @@ val MainModule = module {
     singleOf(::HashingServiceImpl) {
         bind<HashingService>()
     }
+
+    single { UserAccessCache(get()) }
 
     // The Prometheus registry backs both EventBusImpl's drop counter and the
     // MicrometerMetrics plugin; register it explicitly so singleOf's

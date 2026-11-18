@@ -7,12 +7,14 @@ import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
+import com.github.woodsmarshes.chat.repository.database.schema.Messages
 import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -28,6 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface UserRepository{
@@ -76,6 +79,28 @@ interface UserRepository{
      * guard is a leftover from an abandoned upload and safe to delete.
      */
     suspend fun listReferencedAvatarFileNames(): Set<String>
+
+    /** Admin: paged user list with optional keyword/role/ban filters. */
+    suspend fun listUsersPaged(
+        keyword: String?,
+        role: UserRole?,
+        banned: Boolean?,
+        page: Int,
+        limit: Int,
+    ): PagedUsers
+
+    suspend fun countAdmins(): Long
+
+    /** Sets or clears the soft-ban timestamp; null unbans. */
+    suspend fun setBannedAt(userId: Uuid, bannedAt: Instant?): Boolean
+
+    suspend fun updatePassword(userId: Uuid, passwordHash: String, salt: String): Boolean
+
+    /** Promotes every non-admin user whose email is in [emails] (lowercase). Returns rows updated. */
+    suspend fun promoteByEmails(emails: Set<String>): Int
+
+    /** Conversation and message counts for the admin user-detail view. */
+    suspend fun getUserAdminStats(userId: Uuid): UserAdminStats
 }
 
 class UserDataSourceImpl : UserRepository {
@@ -272,6 +297,75 @@ class UserDataSourceImpl : UserRepository {
             .mapNotNull { url -> url?.substringAfterLast('/')?.takeIf { name -> name.isNotEmpty() } }
             .toSet()
     }
+
+    override suspend fun listUsersPaged(
+        keyword: String?,
+        role: UserRole?,
+        banned: Boolean?,
+        page: Int,
+        limit: Int,
+    ): PagedUsers = dbQuery {
+        var condition: Op<Boolean> = Op.TRUE
+        keyword?.trim()?.takeIf { it.isNotEmpty() }?.let { kw ->
+            val pattern = "%${escapeLike(kw.lowercase())}%"
+            condition = condition and (
+                (Users.username.lowerCase() like pattern) or
+                    (Users.email.lowerCase() like pattern) or
+                    (Users.displayName.lowerCase() like pattern)
+                )
+        }
+        role?.let { condition = condition and (Users.role eq it) }
+        banned?.let { isBanned ->
+            condition = condition and if (isBanned) Users.bannedAt.isNotNull() else Users.bannedAt.isNull()
+        }
+        val total = Users.selectAll().where { condition }.count()
+        val items = Users.selectAll()
+            .where { condition }
+            .orderBy(Users.createdAt, SortOrder.DESC)
+            .limit(limit)
+            .offset(((page - 1).toLong()) * limit)
+            .map { it.toUser() }
+        PagedUsers(items = items, total = total)
+    }
+
+    override suspend fun countAdmins(): Long = dbQuery {
+        Users.selectAll().where { Users.role eq UserRole.ADMIN }.count()
+    }
+
+    override suspend fun setBannedAt(userId: Uuid, bannedAt: Instant?): Boolean = dbQuery {
+        Users.update({ Users.id eq userId }) {
+            it[Users.bannedAt] = bannedAt
+            it[updatedAt] = Clock.System.now()
+        } > 0
+    }
+
+    override suspend fun updatePassword(userId: Uuid, passwordHash: String, salt: String): Boolean = dbQuery {
+        Users.update({ Users.id eq userId }) {
+            it[Users.passwordHash] = passwordHash
+            it[Users.salt] = salt
+            it[updatedAt] = Clock.System.now()
+        } > 0
+    }
+
+    override suspend fun promoteByEmails(emails: Set<String>): Int = dbQuery {
+        if (emails.isEmpty()) return@dbQuery 0
+        Users.update({
+            (Users.email.lowerCase() inList emails) and (Users.role neq UserRole.ADMIN)
+        }) {
+            it[role] = UserRole.ADMIN
+            it[updatedAt] = Clock.System.now()
+        }
+    }
+
+    override suspend fun getUserAdminStats(userId: Uuid): UserAdminStats = dbQuery {
+        val conversationCount = ConversationParticipants.selectAll()
+            .where { ConversationParticipants.userId eq userId }
+            .count()
+        val messageCount = Messages.selectAll()
+            .where { Messages.senderId eq userId }
+            .count()
+        UserAdminStats(conversationCount = conversationCount, messageCount = messageCount)
+    }
 }
 
 /** Escapes `%`, `_` and the escape char for a LIKE pattern. */
@@ -283,4 +377,13 @@ data class UserAuthInfo(
     val passwordHash: String,
     val salt: String,
     val domainUser: User
+)
+data class PagedUsers(
+    val items: List<User>,
+    val total: Long,
+)
+
+data class UserAdminStats(
+    val conversationCount: Long,
+    val messageCount: Long,
 )

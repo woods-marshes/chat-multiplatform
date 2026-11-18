@@ -19,3 +19,5 @@ jwt:
   secret: ${JWT_SECRET:my-local-test-secret-key-change-in-prod}
 metrics:
   token: ${METRICS_TOKEN:}
+admin:
+  emails: ${ADMIN_EMAILS:}

@@ -3,6 +3,8 @@ package com.github.woodsmarshes.chat
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.github.woodsmarshes.chat.base.ServerConfig
+import com.github.woodsmarshes.chat.base.UserAccessCache
+import com.github.woodsmarshes.chat.utils.Keys
 import io.ktor.http.*
 import io.ktor.http.auth.AuthScheme
 import io.ktor.http.auth.HttpAuthHeader
@@ -10,10 +12,12 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.response.*
+import kotlin.uuid.Uuid
 import org.koin.ktor.ext.inject
 
 fun Application.configureSecurity() {
     val appConfig by inject<ServerConfig>()
+    val userAccessCache by inject<UserAccessCache>()
     val config = appConfig.tokenConfig
 
     authentication {
@@ -27,9 +31,15 @@ fun Application.configureSecurity() {
                     .build()
             )
             validate { credential ->
-                if (credential.payload.audience.contains(config.audience)) {
-                    JWTPrincipal(credential.payload)
-                } else null
+                if (!credential.payload.audience.contains(config.audience)) return@validate null
+                // Stateless access tokens cannot be revoked individually, so
+                // a ban only takes effect here: the cached ban state rejects
+                // the token within the cache TTL (or immediately after an
+                // explicit invalidate on ban/unban).
+                val userId = credential.payload.getClaim(Keys.USER_ID).asString()
+                    ?.let { Uuid.parseOrNull(it) }
+                if (userId != null && userAccessCache.isBanned(userId)) return@validate null
+                JWTPrincipal(credential.payload)
             }
             challenge { _, _ ->
                 call.respond(HttpStatusCode.Unauthorized, "Token is not valid or has expired")

@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.FileType
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.RequestType
+import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import io.ktor.resources.Resource
 import kotlin.uuid.Uuid
@@ -249,5 +250,36 @@ class V1 {
             val id: Uuid,
             val limit: Int = 100,
         )
+    }
+
+    @Resource("/admin")
+    class Admin(val parent: V1 = V1()) {
+        @Resource("/users")
+        class Users(
+            val parent: Admin = Admin(),
+            val keyword: String? = null,
+            val role: UserRole? = null,
+            val banned: Boolean? = null,
+            val page: Int = 1,
+            val limit: Int = 20,
+        ) {
+            @Resource("/{id}")
+            class Id(val parent: Users, val id: Uuid) {
+                @Resource("/ban")
+                class Ban(val parent: Id)
+
+                @Resource("/role")
+                class Role(val parent: Id)
+
+                @Resource("/sessions")
+                class Sessions(val parent: Id) {
+                    @Resource("/revoke-all")
+                    class RevokeAll(val parent: Sessions)
+                }
+
+                @Resource("/reset-password")
+                class ResetPassword(val parent: Id)
+            }
+        }
     }
 }

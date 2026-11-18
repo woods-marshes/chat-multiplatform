@@ -64,7 +64,7 @@ class AuthService(
                     email = request.email,
                     passwordHash = saltedHash.hash,
                     salt = saltedHash.salt,
-                    role = UserRole.MEMBER
+                    role = if (request.email.lowercase() in appConfig.adminEmails) UserRole.ADMIN else UserRole.MEMBER
                 ) ?: Err(AuthError.InsertionFailed).bind()
                 userSettingRepository.initSettings(user.id)
                     ?: Err(AuthError.InsertionFailed).bind()
@@ -99,6 +99,11 @@ class AuthService(
         )
         if (!isValidPassword) {
             Err(AuthError.InvalidCredentials).bind()
+        }
+        // Ban is checked only after the password verifies, so the account
+        // state is never revealed to someone who only knows the email.
+        if (authInfo.domainUser.bannedAt != null) {
+            Err(AuthError.AccountBanned).bind()
         }
         AuthResponse(
             user = authInfo.domainUser,

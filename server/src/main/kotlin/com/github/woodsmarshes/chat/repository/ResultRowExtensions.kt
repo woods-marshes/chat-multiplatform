@@ -26,7 +26,8 @@ fun ResultRow.toUser(): User = User(
     createdAt = this[Users.createdAt],
     updatedAt = this[Users.updatedAt],
     deletedAt = this[Users.deletedAt],
-    role = this[Users.role]
+    role = this[Users.role],
+    bannedAt = this[Users.bannedAt]
 )
 
 fun ResultRow.toUserAuthInfo(): UserAuthInfo = UserAuthInfo(

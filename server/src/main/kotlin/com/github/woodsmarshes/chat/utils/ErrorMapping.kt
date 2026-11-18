@@ -26,6 +26,7 @@ fun AuthError.mapToStatus(): HttpStatusCode = when (this) {
     AuthError.UserAlreadyExists -> HttpStatusCode.Conflict      // 409
     AuthError.WeakPassword -> HttpStatusCode.BadRequest         // 400
     AuthError.InsertionFailed -> HttpStatusCode.InternalServerError // 500
+    AuthError.AccountBanned -> HttpStatusCode.Forbidden            // 403
     is AuthError.Unknown -> HttpStatusCode.InternalServerError
 }
 
