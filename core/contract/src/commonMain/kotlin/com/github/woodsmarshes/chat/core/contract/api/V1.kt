@@ -296,6 +296,7 @@ class V1 {
 
         // GET /v1/admin/conversations?type=&page=&limit= — all conversations incl. deleted
         // GET /v1/admin/conversations/{id} — detail with participants
+        // DELETE /v1/admin/conversations/{id} — soft delete (syncs clients)
         // GET /v1/admin/conversations/{id}/messages?beforeId=&limit= — cursor-paged history (incl. revoked)
         @Resource("/conversations")
         class Conversations(
