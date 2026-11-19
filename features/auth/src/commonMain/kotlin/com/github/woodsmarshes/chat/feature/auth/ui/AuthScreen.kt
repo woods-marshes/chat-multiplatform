@@ -75,6 +75,7 @@ fun AuthScreen(
             onEmailChange = viewModel::updateEmail,
             onPasswordChange = viewModel::updatePassword,
             onConfirmPasswordChange = viewModel::updateConfirmPassword,
+            onServerAddressChange = viewModel::updateServerAddress,
             onSubmit = viewModel::submit,
             snackbarHostState = snackbarHostState,
             sharedTransitionScope = this
@@ -92,6 +93,7 @@ private fun AuthScreenContent(
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onConfirmPasswordChange: (String) -> Unit,
+    onServerAddressChange: (String) -> Unit,
     onSubmit: () -> Unit,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     sharedTransitionScope: SharedTransitionScope
@@ -184,6 +186,7 @@ private fun AuthScreenContent(
                                         onEmailChange = onEmailChange,
                                         onPasswordChange = onPasswordChange,
                                         onConfirmPasswordChange = onConfirmPasswordChange,
+                                        onServerAddressChange = onServerAddressChange,
                                         onSubmit = onSubmit
                                     )
                                 }
@@ -236,6 +239,7 @@ private fun AuthScreenContent(
                                     onEmailChange = onEmailChange,
                                     onPasswordChange = onPasswordChange,
                                     onConfirmPasswordChange = onConfirmPasswordChange,
+                                    onServerAddressChange = onServerAddressChange,
                                     onSubmit = onSubmit
                                 )
                             }
@@ -291,6 +295,7 @@ private fun AuthFormContent(
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onConfirmPasswordChange: (String) -> Unit,
+    onServerAddressChange: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
@@ -316,6 +321,26 @@ private fun AuthFormContent(
                 onModeChange(if (index == 0) AuthMode.Login else AuthMode.Register)
             },
             withContour = true,
+        )
+
+        AppTextField(
+            value = uiState.serverAddress,
+            onValueChange = onServerAddressChange,
+            label = strings.serverAddressLabel,
+            modifier = Modifier.fillMaxWidth(),
+            isError = uiState.serverError != null,
+            errorText = uiState.serverError?.localizedMessage(),
+            leadingIcon = { Icon(Icons.Default.Dns, null) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Next
+            ),
+            keyboardActions = KeyboardActions(
+                onNext = {
+                    focusManager.moveFocus(FocusDirection.Down)
+                }
+            )
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -520,5 +545,6 @@ private fun com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.
         com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.PasswordShort -> strings.authWeakPassword
         com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.ConfirmEmpty -> strings.authConfirmEmpty
         com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.PasswordMismatch -> strings.authPasswordMismatch
+        com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError.ServerInvalid -> strings.serverAddressInvalid
     }
 }

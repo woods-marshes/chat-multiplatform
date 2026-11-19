@@ -46,6 +46,9 @@ import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
+import com.github.woodsmarshes.chat.core.datastore.ServerConfigStore
+import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
@@ -136,8 +139,91 @@ class SessionManagerTest {
     private val currentUser = User(userId, "user", null, null, null, null, now, now, null)
     private val secondUser = User(secondUserId, "user2", null, null, null, null, now, now, null)
 
+    private fun testEndpointProvider() = ServerEndpointProvider(
+        seed = NetworkConfig.forDevelopment(),
+        serverConfigDataSource = object : ServerConfigStore {
+            override suspend fun currentServerBaseUrl(): String? = null
+            override suspend fun setServerBaseUrl(url: String) = Unit
+        },
+    )
+
+    @Test
+    fun switchingServerForTheSameUserRebindsTheDatabaseToTheNewServerKey() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val managerScope = CoroutineScope(SupervisorJob() + dispatcher)
+
+        val loggedInFlow = MutableStateFlow(true)
+        val userFlow = MutableStateFlow<User?>(currentUser)
+        val dbStub = StrictDatabaseStub(mockk(relaxed = true))
+        val provider = testEndpointProvider()
+
+        val databaseHolder = mockk<DatabaseHolder>()
+        coEvery { databaseHolder.stopDatabaseSession() } returns Unit
+        coEvery { databaseHolder.getOrCreateDatabase(any(), any(), any()) } coAnswers {
+            dbStub.holder.getOrCreateDatabase(firstArg<Uuid>(), secondArg<String>(), thirdArg<Long?>())
+        }
+        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any(), any()) } coAnswers {
+            dbStub.holder.closeDatabaseIfCurrent(firstArg<Uuid>(), secondArg<String>(), thirdArg<Long?>())
+        }
+
+        val authRepository = mockk<AuthRepository>()
+        every { authRepository.observeIsLoggedIn() } returns loggedInFlow
+        coEvery { authRepository.logout() } coAnswers { loggedInFlow.value = false }
+
+        val userSettingDataSource = mockk<UserSettingDataSource>()
+        every { userSettingDataSource.user } returns userFlow
+
+        val realtimeApi = mockk<RealtimeApi>()
+        every { realtimeApi.connectionState } returns MutableStateFlow(ConnectionState.Idle)
+        coEvery { realtimeApi.connect() } returns Unit
+        coEvery { realtimeApi.disconnect() } returns Unit
+
+        val messageRepository = mockk<MessageRepository>()
+        coEvery { messageRepository.startSession() } returns Unit
+        coEvery { messageRepository.stopSession() } returns Unit
+
+        try {
+            val sessionManager = SessionManager(
+                authRepository = authRepository,
+                userSettingDataSource = userSettingDataSource,
+                realtimeApi = realtimeApi,
+                databaseHolder = databaseHolder,
+                messageRepository = messageRepository,
+                userRepository = InertUserRepository,
+                contactRepository = InertContactRepository,
+                serverEndpointProvider = provider,
+                scope = managerScope,
+            )
+            runCurrent()
+
+            val firstKey = dbStub.currentServerKey
+            assertEquals(provider.currentServerKey, firstKey)
+            assertTrue(dbStub.isOpen)
+            assertIs<SessionState.Active>(sessionManager.sessionState.value)
+
+            sessionManager.logout()
+            runCurrent()
+            runCurrent()
+            assertTrue(!dbStub.isOpen, "logout must close the old server's database")
+
+            provider.update("https://other.example.com")
+            loggedInFlow.value = true
+            runCurrent()
+
+            assertTrue(dbStub.isOpen)
+            assertTrue(
+                dbStub.currentServerKey != firstKey,
+                "the same user on another server must not reuse the previous driver: ${dbStub.currentServerKey}",
+            )
+            assertEquals(provider.currentServerKey, dbStub.currentServerKey)
+            assertEquals(2, dbStub.openedGenerations.size)
+        } finally {
+            managerScope.cancel()
+        }
+    }
+
     /**
-     * Mirrors [DatabaseHolder]'s exact `(userId, generation)` state machine so
+     * Mirrors [DatabaseHolder]'s exact `(userId, serverKey, generation)` state machine so
      * tests fail if `closeDatabaseIfCurrent` is called with a mismatched
      * generation (such as passing `stopTransitionGen` instead of the DB's own
      * `resourceGeneration`).
@@ -147,6 +233,8 @@ class SessionManagerTest {
         private val steps: MutableList<String>? = null,
     ) {
         var currentUserId: Uuid? = null
+            private set
+        var currentServerKey: String? = null
             private set
         var currentGeneration: Long = 0L
             private set
@@ -160,26 +248,32 @@ class SessionManagerTest {
         val holder: DatabaseHolder = mockk()
 
         init {
-            coEvery { holder.getOrCreateDatabase(any(), any()) } coAnswers {
+            coEvery { holder.getOrCreateDatabase(any(), any(), any()) } coAnswers {
                 val u = firstArg<Uuid>()
-                val g = secondArg<Long?>()
+                val sk = secondArg<String>()
+                val g = thirdArg<Long?>()
                 openedGenerations += u to g
                 if (g != null) currentGeneration = g
-                if (currentUserId != u || !isOpen) {
+                if (currentUserId != u || currentServerKey != sk || !isOpen) {
                     currentUserId = u
+                    currentServerKey = sk
                     isOpen = true
                 }
                 steps?.add("db.open")
                 db
             }
             coEvery { holder.stopDatabaseSession() } returns Unit
-            coEvery { holder.closeDatabaseIfCurrent(any(), any()) } coAnswers {
+            coEvery { holder.closeDatabaseIfCurrent(any(), any(), any()) } coAnswers {
                 val u = firstArg<Uuid>()
-                val g = secondArg<Long?>()
+                val sk = secondArg<String>()
+                val g = thirdArg<Long?>()
                 closeAttempts += u to g
-                if (isOpen && currentUserId == u && (g == null || currentGeneration == g)) {
+                if (isOpen && currentUserId == u && currentServerKey == sk &&
+                    (g == null || currentGeneration == g)
+                ) {
                     isOpen = false
                     currentUserId = null
+                    currentServerKey = null
                     currentGeneration = 0L
                     effectiveCloseCount++
                     steps?.add("db.close")
@@ -301,6 +395,7 @@ class SessionManagerTest {
                 messageRepository = trackedRepo,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -430,6 +525,7 @@ class SessionManagerTest {
                 messageRepository = trackedRepo,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -534,6 +630,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -582,16 +679,16 @@ class SessionManagerTest {
         val dbStub = StrictDatabaseStub(mockk(relaxed = true))
         val databaseHolder = mockk<DatabaseHolder>()
         coEvery { databaseHolder.stopDatabaseSession() } returns Unit
-        coEvery { databaseHolder.getOrCreateDatabase(userId, any()) } coAnswers {
+        coEvery { databaseHolder.getOrCreateDatabase(userId, any(), any()) } coAnswers {
             if (failDbOpen) {
                 steps += "db.open.fail"
                 error("DB open failed")
             }
             steps += "db.open.ok"
-            dbStub.holder.getOrCreateDatabase(firstArg<Uuid>(), secondArg<Long?>())
+            dbStub.holder.getOrCreateDatabase(firstArg<Uuid>(), secondArg<String>(), thirdArg<Long?>())
         }
-        coEvery { databaseHolder.closeDatabaseIfCurrent(userId, any()) } coAnswers {
-            dbStub.holder.closeDatabaseIfCurrent(firstArg<Uuid>(), secondArg<Long?>())
+        coEvery { databaseHolder.closeDatabaseIfCurrent(userId, any(), any()) } coAnswers {
+            dbStub.holder.closeDatabaseIfCurrent(firstArg<Uuid>(), secondArg<String>(), thirdArg<Long?>())
             if (!dbStub.isOpen) {
                 steps += "db.rollback.close"
             }
@@ -631,6 +728,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -736,6 +834,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -813,6 +912,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             val stateCollector = launch {
@@ -931,6 +1031,7 @@ class SessionManagerTest {
                 messageRepository = repo,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1051,6 +1152,7 @@ class SessionManagerTest {
                 messageRepository = repo,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1146,6 +1248,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1259,17 +1362,18 @@ class SessionManagerTest {
 
         val databaseHolder = mockk<DatabaseHolder>()
         coEvery { databaseHolder.stopDatabaseSession() } returns Unit
-        coEvery { databaseHolder.getOrCreateDatabase(any(), any()) } coAnswers {
-            dbStub.holder.getOrCreateDatabase(firstArg<Uuid>(), secondArg<Long?>())
+        coEvery { databaseHolder.getOrCreateDatabase(any(), any(), any()) } coAnswers {
+            dbStub.holder.getOrCreateDatabase(firstArg<Uuid>(), secondArg<String>(), thirdArg<Long?>())
         }
-        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any()) } coAnswers {
+        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>()
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>()
             if (failDbClose) {
                 steps += "db.close.fail($u@$g)"
                 error("database close failed")
             }
-            dbStub.holder.closeDatabaseIfCurrent(u, g)
+            dbStub.holder.closeDatabaseIfCurrent(u, sk, g)
         }
 
         val authRepository = mockk<AuthRepository>()
@@ -1296,6 +1400,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1414,6 +1519,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1484,9 +1590,10 @@ class SessionManagerTest {
 
         val databaseHolder = mockk<DatabaseHolder>()
         coEvery { databaseHolder.stopDatabaseSession() } returns Unit
-        coEvery { databaseHolder.getOrCreateDatabase(any(), any()) } coAnswers {
+        coEvery { databaseHolder.getOrCreateDatabase(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>()
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>()
             openedDatabases += u to g
             activeDbUserId = u
             activeDbGen = g ?: 0L
@@ -1494,9 +1601,10 @@ class SessionManagerTest {
             steps += "db.open($u)"
             if (u == userId) db1 else db2
         }
-        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any()) } coAnswers {
+        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>()
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>()
             if (isDbOpen && activeDbUserId == u && (g == null || activeDbGen == g)) {
                 isDbOpen = false
                 activeDbUserId = null
@@ -1552,6 +1660,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1674,6 +1783,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1724,18 +1834,20 @@ class SessionManagerTest {
 
         val databaseHolder = mockk<DatabaseHolder>()
         coEvery { databaseHolder.stopDatabaseSession() } returns Unit
-        coEvery { databaseHolder.getOrCreateDatabase(any(), any()) } coAnswers {
+        coEvery { databaseHolder.getOrCreateDatabase(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>() ?: 0L
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>() ?: 0L
             activeDbUserId = u
             activeDbGen = g
             activeDb = if (u == userId) db1 else db2
             steps += "db.open($u)"
             activeDb!!
         }
-        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any()) } coAnswers {
+        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>()
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>()
             if (activeDb != null && activeDbUserId == u && (g == null || activeDbGen == g)) {
                 if (u == userId) db1CloseCount++
                 activeDb = null
@@ -1813,6 +1925,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = userRepository,
                 contactRepository = InertContactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()
@@ -1895,18 +2008,20 @@ class SessionManagerTest {
 
         val databaseHolder = mockk<DatabaseHolder>()
         coEvery { databaseHolder.stopDatabaseSession() } returns Unit
-        coEvery { databaseHolder.getOrCreateDatabase(any(), any()) } coAnswers {
+        coEvery { databaseHolder.getOrCreateDatabase(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>() ?: 0L
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>() ?: 0L
             activeDbUserId = u
             activeDbGen = g
             activeDb = if (u == userId) db1 else db2
             steps += "db.open($u)"
             activeDb!!
         }
-        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any()) } coAnswers {
+        coEvery { databaseHolder.closeDatabaseIfCurrent(any(), any(), any()) } coAnswers {
             val u = firstArg<Uuid>()
-            val g = secondArg<Long?>()
+            val sk = secondArg<String>()
+            val g = thirdArg<Long?>()
             if (activeDb != null && activeDbUserId == u && (g == null || activeDbGen == g)) {
                 if (u == userId) db1CloseCount++
                 activeDb = null
@@ -1992,6 +2107,7 @@ class SessionManagerTest {
                 messageRepository = messageRepository,
                 userRepository = InertUserRepository,
                 contactRepository = contactRepository,
+                serverEndpointProvider = testEndpointProvider(),
                 scope = managerScope,
             )
             runCurrent()

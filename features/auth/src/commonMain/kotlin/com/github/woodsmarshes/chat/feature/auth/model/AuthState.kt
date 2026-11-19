@@ -3,7 +3,7 @@ package com.github.woodsmarshes.chat.feature.auth.model
 import com.github.woodsmarshes.chat.core.model.User
 
 enum class AuthValidationError {
-    NameEmpty, NameShort, NameLong, EmailEmpty, PasswordEmpty, PasswordShort, ConfirmEmpty, PasswordMismatch
+    NameEmpty, NameShort, NameLong, EmailEmpty, PasswordEmpty, PasswordShort, ConfirmEmpty, PasswordMismatch, ServerInvalid
 }
 
 sealed interface AuthMode {
@@ -24,26 +24,28 @@ data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
+    val serverAddress: String = "",
     val nameError: AuthValidationError? = null,
     val emailError: AuthValidationError? = null,
     val passwordError: AuthValidationError? = null,
     val confirmPasswordError: AuthValidationError? = null,
+    val serverError: AuthValidationError? = null,
     val screenState: AuthScreenState = AuthScreenState.Idle
 ) {
     override fun toString(): String =
         "AuthUiState(mode=$mode, name=$name, email=$email, password=<redacted>, confirmPassword=<redacted>, " +
             "nameError=$nameError, emailError=$emailError, passwordError=$passwordError, " +
-            "confirmPasswordError=$confirmPasswordError, screenState=$screenState)"
+            "confirmPasswordError=$confirmPasswordError, serverError=$serverError, screenState=$screenState)"
 
     val canSubmit: Boolean get() {
         val hasErrors = nameError != null || emailError != null ||
-                passwordError != null || confirmPasswordError != null
+                passwordError != null || confirmPasswordError != null || serverError != null
         val fieldsFilled = when (mode) {
             AuthMode.Login -> email.isNotBlank() && password.isNotBlank()
             AuthMode.Register -> name.isNotBlank() && email.isNotBlank() &&
                     password.isNotBlank() && confirmPassword.isNotBlank()
         }
-        return !hasErrors && fieldsFilled
+        return !hasErrors && fieldsFilled && serverAddress.isNotBlank()
     }
 
     companion object {

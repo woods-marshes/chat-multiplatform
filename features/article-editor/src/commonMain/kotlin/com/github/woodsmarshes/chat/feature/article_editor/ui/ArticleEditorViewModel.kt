@@ -10,6 +10,7 @@ import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.article_editor.model.EditorUiState
@@ -27,7 +28,7 @@ import kotlin.uuid.Uuid
 class ArticleEditorViewModel(
     private val articleRepository: ArticleRepository,
     private val userRepository: UserRepository,
-    private val networkConfig: NetworkConfig,
+    private val serverEndpointProvider: ServerEndpointProvider,
     private val authRepository: AuthRepository,
     private val articleId: Uuid? = null,
 ) : ViewModel() {
@@ -71,7 +72,7 @@ class ArticleEditorViewModel(
                             val user = userRepository.getMeFlow().first()
                             val token = authRepository.jwtToken.first()
 
-                            val resolvedCollabUrl = resolveCollabUrl(networkConfig)
+                            val resolvedCollabUrl = resolveCollabUrl(serverEndpointProvider.current)
 
                             _uiState.update {
                                 it.copy(
@@ -110,7 +111,7 @@ class ArticleEditorViewModel(
                     val user = userRepository.getMeFlow().first()
                     val token = authRepository.jwtToken.first()
 
-                    val resolvedCollabUrl = resolveCollabUrl(networkConfig)
+                    val resolvedCollabUrl = resolveCollabUrl(serverEndpointProvider.current)
 
                     _uiState.update {
                         it.copy(
@@ -192,8 +193,8 @@ class ArticleEditorViewModel(
     }
 
     private fun resolveCollabUrl(networkConfig: NetworkConfig): String {
-        val host = networkConfig.host
-        val isLocal = host == "localhost" || host == "127.0.0.1"
+        val host = networkConfig.hostForUrl
+        val isLocal = networkConfig.host == "localhost" || networkConfig.host == "127.0.0.1"
         val wsProtocol = if (networkConfig.useTls) "wss" else "ws"
 
         return if (isLocal) {

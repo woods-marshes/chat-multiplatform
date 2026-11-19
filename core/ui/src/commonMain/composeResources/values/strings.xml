@@ -262,6 +262,9 @@
     <string name="auth_password_empty">密码不能为空</string>
     <string name="auth_confirm_empty">请再次输入密码</string>
     <string name="auth_password_mismatch">两次输入的密码不一致</string>
+    <string name="server_address_label">服务器地址</string>
+    <string name="server_address_invalid">服务器地址格式无效</string>
+    <string name="current_server_label">当前服务器</string>
     <string name="show_password_cd">显示密码</string>
     <string name="hide_password_cd">隐藏密码</string>
     <string name="unsupported_message">[暂不支持的消息类型]</string>

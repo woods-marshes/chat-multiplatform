@@ -6,8 +6,11 @@ import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepository
 import com.github.woodsmarshes.chat.core.model.error.AuthError
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
+import com.github.woodsmarshes.chat.core.network.ktor.parseServerAddress
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.auth.model.AuthMode
+import com.github.woodsmarshes.chat.feature.auth.model.AuthValidationError
 import com.github.woodsmarshes.chat.feature.auth.model.AuthScreenState
 import com.github.woodsmarshes.chat.feature.auth.model.AuthUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -16,10 +19,13 @@ import kotlinx.coroutines.launch
 
 class AuthViewModel(
     private val authRepository: AuthRepository,
+    private val serverEndpointProvider: ServerEndpointProvider,
 ) : ViewModel() {
     private val log = KotlinLogging.logger {}
 
-    private val _uiState = MutableStateFlow(AuthUiState())
+    private val _uiState = MutableStateFlow(
+        AuthUiState(serverAddress = serverEndpointProvider.current.baseUrl)
+    )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     // Register-only validation results must follow the active mode: the name and
@@ -57,6 +63,17 @@ class AuthViewModel(
         it.copy(confirmPassword = confirm, confirmPasswordError = AuthUiState.validateConfirmPassword(confirm, it.password)) 
     }
 
+    fun updateServerAddress(address: String) = _uiState.update {
+        it.copy(
+            serverAddress = address,
+            serverError = if (address.isBlank() || parseServerAddress(address).isSuccess) {
+                null
+            } else {
+                AuthValidationError.ServerInvalid
+            },
+        )
+    }
+
     fun resetScreenState() = _uiState.update { it.copy(screenState = AuthScreenState.Idle) }
 
     fun submit() {
@@ -68,9 +85,36 @@ class AuthViewModel(
 
         val s = _uiState.value
         log.info { "[AuthViewModel]: submitting mode=${s.mode}" }
+
+        // Fail fast on an unparseable address before entering Loading, so the
+        // double-submit guard and the UI spinner stay synchronous.
+        if (parseServerAddress(s.serverAddress).isFailure) {
+            _uiState.update {
+                it.copy(
+                    serverError = AuthValidationError.ServerInvalid,
+                    screenState = AuthScreenState.Idle,
+                )
+            }
+            return
+        }
         _uiState.update { it.copy(screenState = AuthScreenState.Loading) }
 
         viewModelScope.launch {
+            // Apply the server selection before any credential request so the
+            // login call itself targets the entered endpoint. A failed login
+            // intentionally keeps the selection (see ServerEndpointProvider).
+            val endpointResult = serverEndpointProvider.update(s.serverAddress)
+            if (endpointResult.isFailure) {
+                _uiState.update {
+                    it.copy(
+                        serverError = AuthValidationError.ServerInvalid,
+                        screenState = AuthScreenState.Idle,
+                    )
+                }
+                return@launch
+            }
+
+
             val result = when (s.mode) {
                 AuthMode.Login -> authRepository.login(s.email, s.password)
                 AuthMode.Register -> authRepository.register(s.name, s.email, s.password)

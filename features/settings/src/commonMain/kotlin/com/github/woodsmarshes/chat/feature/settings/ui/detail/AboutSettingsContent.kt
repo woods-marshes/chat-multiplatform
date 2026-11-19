@@ -86,6 +86,7 @@ import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.FriendRequestPolicy
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
 import com.github.woodsmarshes.chat.core.ui.components.AppHorizontalDivider
 import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
@@ -120,6 +121,7 @@ import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
@@ -132,6 +134,9 @@ internal fun AboutSettingsContent(
     snackbarHostState: SnackbarHostState,
 ) {
     val strings = LocalStrings.current
+    val serverEndpointProvider = koinInject<ServerEndpointProvider>()
+    val serverConfig by serverEndpointProvider.config.collectAsStateWithLifecycle()
+    val serverBaseUrl = serverConfig.baseUrl
     val uriHandler = LocalUriHandler.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -256,6 +261,14 @@ internal fun AboutSettingsContent(
                     icon = Icons.Default.Gavel,
                     title = strings.aboutLicenseLabel,
                     value = AppBuildInfo.licenseName,
+                )
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                AboutInfoRow(
+                    icon = Icons.Default.Public,
+                    title = strings.currentServerLabel,
+                    value = serverBaseUrl,
                 )
             }
         }

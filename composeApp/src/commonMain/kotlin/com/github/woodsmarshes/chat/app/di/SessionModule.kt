@@ -5,6 +5,6 @@ import org.koin.dsl.module
 
 val sessionModule = module {
     single(createdAtStart = true) {
-        SessionManager(get(), get(), get(), get(), get(), get(), get())
+        SessionManager(get(), get(), get(), get(), get(), get(), get(), get())
     }
 }

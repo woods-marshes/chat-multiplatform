@@ -18,6 +18,7 @@ import com.github.woodsmarshes.chat.core.model.UserSetting
 import com.github.woodsmarshes.chat.core.model.error.ContactError
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Result
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -88,7 +89,9 @@ sealed interface SessionState {
  * database, the message repository's session workers, and the realtime socket.
  *
  * Startup order on login:
- *  1. Open the per-user database (`databaseHolder.getOrCreateDatabase(userId, sessionGen)`)
+ *  1. Open the per-user, per-server database
+ *     (`databaseHolder.getOrCreateDatabase(userId, serverKey, sessionGen)`) where
+ *     `serverKey` is the fingerprint of the endpoint captured before opening,
  *     and seed the authenticated user's record into that explicitly bound
  *     database (`db.usersQueries.upsertUser(user.toUserEntity())`).
  *  2. Start the message session (`messageRepository.startSession`), which
@@ -129,14 +132,21 @@ class SessionManager(
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
     private val contactRepository: ContactRepository,
+    private val serverEndpointProvider: ServerEndpointProvider,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val log = KotlinLogging.logger {}
     private val transitionMutex = Mutex()
     private var currentGeneration = 0L
 
-    /** The `(userId, sessionGen)` currently bound to [databaseHolder], if any. */
-    private var boundDatabaseIdentity: Pair<Uuid, Long>? = null
+    /** The `(userId, serverKey, sessionGen)` currently bound to [databaseHolder], if any. */
+    private var boundDatabaseIdentity: BoundDatabaseIdentity? = null
+
+    private data class BoundDatabaseIdentity(
+        val userId: Uuid,
+        val serverKey: String,
+        val sessionGen: Long,
+    )
 
     /**
      * The persisted credential generation (`AuthSessionSnapshot.generation`)
@@ -227,6 +237,10 @@ class SessionManager(
 
     init {
         scope.launch {
+            // The persisted server selection must be applied before the first
+            // authenticated request: auto-login against the compile-time
+            // default server could receive a 401 and wipe the stored session.
+            serverEndpointProvider.ensureLoaded()
             // Observe the unified auth session snapshot as a trigger, and
             // always read the authoritative target inside transitionMutex so a
             // stale emission queued before a new login cannot tear down the
@@ -253,6 +267,7 @@ class SessionManager(
     }
 
     internal suspend fun reconcileNow(forceRetryAfterFailure: Boolean = false) {
+        serverEndpointProvider.ensureLoaded()
         transitionMutex.withLock {
             reconcileLocked(forceRetryAfterFailure = forceRetryAfterFailure)
         }
@@ -262,7 +277,7 @@ class SessionManager(
         scope.launch {
             transitionMutex.withLock {
                 val dbIdentity = boundDatabaseIdentity
-                val fallbackUserId = dbIdentity?.first ?: authSessionFlow.first().user?.id ?: userSettingDataSource.user.first()?.id
+                val fallbackUserId = dbIdentity?.userId ?: authSessionFlow.first().user?.id ?: userSettingDataSource.user.first()?.id
                 val stopTransitionGen = ++currentGeneration
                 activeCredentialGeneration = null
                 _sessionState.value = SessionState.Stopping(fallbackUserId, stopTransitionGen)
@@ -291,9 +306,9 @@ class SessionManager(
 
                 val desiredNow = desiredSession()
                 if (desiredNow != null) {
-                    if (dbIdentity != null && dbIdentity.first != desiredNow.userId) {
+                    if (dbIdentity != null && dbIdentity.userId != desiredNow.userId) {
                         try {
-                            closeBoundDatabaseLocked(dbIdentity.first, dbIdentity.second)
+                            closeBoundDatabaseLocked(dbIdentity.userId, dbIdentity.serverKey, dbIdentity.sessionGen)
                         } catch (t: Throwable) {
                             if (t is CancellationException) throw t
                             log.error(t) { "[SessionManager] closing previous user DB failed during logout" }
@@ -318,8 +333,9 @@ class SessionManager(
                     if (dbIdentity != null) {
                         scheduleDelayedDatabaseCloseLocked(
                             DelayedDatabaseClose(
-                                userId = dbIdentity.first,
-                                resourceGeneration = dbIdentity.second,
+                                userId = dbIdentity.userId,
+                                serverKey = dbIdentity.serverKey,
+                                resourceGeneration = dbIdentity.sessionGen,
                                 stopTransitionGeneration = stopTransitionGen,
                             )
                         )
@@ -327,6 +343,7 @@ class SessionManager(
                         scheduleDelayedDatabaseCloseLocked(
                             DelayedDatabaseClose(
                                 userId = fallbackUserId,
+                                serverKey = serverEndpointProvider.currentServerKey,
                                 resourceGeneration = null,
                                 stopTransitionGeneration = stopTransitionGen,
                             )
@@ -339,6 +356,7 @@ class SessionManager(
 
     private data class DelayedDatabaseClose(
         val userId: Uuid,
+        val serverKey: String,
         val resourceGeneration: Long?,
         val stopTransitionGeneration: Long,
     )
@@ -376,7 +394,7 @@ class SessionManager(
                     _sessionState.value is SessionState.Idle
                 ) {
                     try {
-                        closeBoundDatabaseLocked(closeReq.userId, closeReq.resourceGeneration)
+                        closeBoundDatabaseLocked(closeReq.userId, closeReq.serverKey, closeReq.resourceGeneration)
                         pendingCleanupRequired = false
                     } catch (t: Throwable) {
                         if (t is CancellationException) throw t
@@ -429,12 +447,13 @@ class SessionManager(
     }
 
     /** Must be called while holding [transitionMutex]. */
-    private suspend fun closeBoundDatabaseLocked(userId: Uuid, resourceGeneration: Long?) {
-        databaseHolder.closeDatabaseIfCurrent(userId, resourceGeneration)
+    private suspend fun closeBoundDatabaseLocked(userId: Uuid, serverKey: String, resourceGeneration: Long?) {
+        databaseHolder.closeDatabaseIfCurrent(userId, serverKey, resourceGeneration)
         val currentBound = boundDatabaseIdentity
         if (currentBound != null &&
-            currentBound.first == userId &&
-            (resourceGeneration == null || currentBound.second == resourceGeneration)
+            currentBound.userId == userId &&
+            currentBound.serverKey == serverKey &&
+            (resourceGeneration == null || currentBound.sessionGen == resourceGeneration)
         ) {
             boundDatabaseIdentity = null
         }
@@ -450,7 +469,8 @@ class SessionManager(
                 when (current) {
                     is SessionState.Active -> {
                         val dbIdentity = boundDatabaseIdentity
-                        val resourceGen = dbIdentity?.takeIf { it.first == current.userId }?.second ?: current.generation
+                        val boundForCurrent = dbIdentity?.takeIf { it.userId == current.userId }
+                        val resourceGen = boundForCurrent?.sessionGen ?: current.generation
                         val stopGen = ++currentGeneration
                         activeCredentialGeneration = null
                         _sessionState.value = SessionState.Stopping(current.userId, stopGen)
@@ -471,6 +491,7 @@ class SessionManager(
                         scheduleDelayedDatabaseCloseLocked(
                             DelayedDatabaseClose(
                                 userId = current.userId,
+                                serverKey = boundForCurrent?.serverKey ?: serverEndpointProvider.currentServerKey,
                                 resourceGeneration = resourceGen,
                                 stopTransitionGeneration = stopGen,
                             )
@@ -489,7 +510,7 @@ class SessionManager(
                         val teardownError = stopWorkersSafely()
                         if (teardownError != null) {
                             pendingCleanupRequired = true
-                            val uid = (current as? SessionState.StartFailed)?.userId ?: boundDatabaseIdentity?.first ?: Uuid.NIL
+                            val uid = (current as? SessionState.StartFailed)?.userId ?: boundDatabaseIdentity?.userId ?: Uuid.NIL
                             recordStartFailedLocked(
                                 userId = uid,
                                 generation = ++currentGeneration,
@@ -501,15 +522,15 @@ class SessionManager(
                         val dbIdentity = boundDatabaseIdentity
                         if (dbIdentity != null) {
                             try {
-                                closeBoundDatabaseLocked(dbIdentity.first, dbIdentity.second)
+                                closeBoundDatabaseLocked(dbIdentity.userId, dbIdentity.serverKey, dbIdentity.sessionGen)
                             } catch (t: Throwable) {
                                 if (t is CancellationException) throw t
                                 log.error(t) {
-                                    "[SessionManager] closing bound database failed while reconciling logged-out state for user=${dbIdentity.first} gen=${dbIdentity.second}"
+                                    "[SessionManager] closing bound database failed while reconciling logged-out state for user=${dbIdentity.userId} gen=${dbIdentity.sessionGen}"
                                 }
                                 pendingCleanupRequired = true
                                 recordStartFailedLocked(
-                                    userId = dbIdentity.first,
+                                    userId = dbIdentity.userId,
                                     generation = ++currentGeneration,
                                     cause = t,
                                     targetSession = null,
@@ -542,7 +563,8 @@ class SessionManager(
                     // Switching from one user to another OR re-logging in as the
                     // same user with a new credential generation: tear down old first.
                     val dbIdentity = boundDatabaseIdentity
-                    val resourceGen = dbIdentity?.takeIf { it.first == current.userId }?.second ?: current.generation
+                    val boundForCurrent = dbIdentity?.takeIf { it.userId == current.userId }
+                    val resourceGen = boundForCurrent?.sessionGen ?: current.generation
                     val stopGen = ++currentGeneration
                     activeCredentialGeneration = null
                     _sessionState.value = SessionState.Stopping(current.userId, stopGen)
@@ -561,7 +583,11 @@ class SessionManager(
                     }
                     if (current.userId != desired.userId) {
                         try {
-                            closeBoundDatabaseLocked(current.userId, resourceGen)
+                            closeBoundDatabaseLocked(
+                                current.userId,
+                                boundForCurrent?.serverKey ?: serverEndpointProvider.currentServerKey,
+                                resourceGen,
+                            )
                         } catch (t: Throwable) {
                             if (t is CancellationException) throw t
                             log.error(t) { "[SessionManager] closing previous user DB failed on account switch" }
@@ -599,11 +625,11 @@ class SessionManager(
                             val dbIdentity = boundDatabaseIdentity
                             if (dbIdentity != null) {
                                 try {
-                                    closeBoundDatabaseLocked(dbIdentity.first, dbIdentity.second)
+                                    closeBoundDatabaseLocked(dbIdentity.userId, dbIdentity.serverKey, dbIdentity.sessionGen)
                                 } catch (t: Throwable) {
                                     if (t is CancellationException) throw t
                                     log.error(t) {
-                                        "[SessionManager] closing bound database failed during StartFailed recovery for user=${dbIdentity.first} gen=${dbIdentity.second}"
+                                        "[SessionManager] closing bound database failed during StartFailed recovery for user=${dbIdentity.userId} gen=${dbIdentity.sessionGen}"
                                     }
                                     pendingCleanupRequired = true
                                     recordStartFailedLocked(
@@ -625,9 +651,9 @@ class SessionManager(
                 SessionState.Idle,
                 is SessionState.Stopping -> {
                     val dbIdentity = boundDatabaseIdentity
-                    if (dbIdentity != null && dbIdentity.first != desired.userId) {
+                    if (dbIdentity != null && dbIdentity.userId != desired.userId) {
                         try {
-                            closeBoundDatabaseLocked(dbIdentity.first, dbIdentity.second)
+                            closeBoundDatabaseLocked(dbIdentity.userId, dbIdentity.serverKey, dbIdentity.sessionGen)
                         } catch (t: Throwable) {
                             if (t is CancellationException) throw t
                             log.error(t) { "[SessionManager] closing previous user DB failed before starting new user" }
@@ -666,9 +692,12 @@ class SessionManager(
         var userSessionStarted = false
         var contactSessionStarted = false
         var messageSessionStarted = false
+        // Captured before opening the DB: the serverKey must describe the
+        // endpoint this session belongs to even if the selection changes later.
+        val serverKey = serverEndpointProvider.currentServerKey
         try {
-            val db = databaseHolder.getOrCreateDatabase(userId, sessionGen)
-            boundDatabaseIdentity = userId to sessionGen
+            val db = databaseHolder.getOrCreateDatabase(userId, serverKey, sessionGen)
+            boundDatabaseIdentity = BoundDatabaseIdentity(userId, serverKey, sessionGen)
             dbOpened = true
             db.usersQueries.upsertUser(desired.user.toUserEntity())
             userRepository.startSession()
@@ -689,6 +718,7 @@ class SessionManager(
                 val rollbackErr = withContext(NonCancellable) {
                     rollbackPartialStart(
                         userId = userId,
+                        serverKey = serverKey,
                         sessionGen = sessionGen,
                         dbOpened = true,
                         userSessionStarted = true,
@@ -721,6 +751,7 @@ class SessionManager(
             withContext(NonCancellable) {
                 val rollbackErr = rollbackPartialStart(
                     userId = userId,
+                    serverKey = serverKey,
                     sessionGen = sessionGen,
                     dbOpened = dbOpened,
                     userSessionStarted = userSessionStarted,
@@ -750,6 +781,7 @@ class SessionManager(
             withContext(NonCancellable) {
                 val rollbackErr = rollbackPartialStart(
                     userId = userId,
+                    serverKey = serverKey,
                     sessionGen = sessionGen,
                     dbOpened = dbOpened,
                     userSessionStarted = userSessionStarted,
@@ -781,6 +813,7 @@ class SessionManager(
      */
     private suspend fun rollbackPartialStart(
         userId: Uuid,
+        serverKey: String,
         sessionGen: Long,
         dbOpened: Boolean,
         userSessionStarted: Boolean,
@@ -812,7 +845,7 @@ class SessionManager(
         }
 
         if (dbOpened) {
-            return runCatching { closeBoundDatabaseLocked(userId, sessionGen) }
+            return runCatching { closeBoundDatabaseLocked(userId, serverKey, sessionGen) }
                 .onFailure { log.warn(it) { "[SessionManager] rollback closeDatabase failed" } }
                 .exceptionOrNull()
         }

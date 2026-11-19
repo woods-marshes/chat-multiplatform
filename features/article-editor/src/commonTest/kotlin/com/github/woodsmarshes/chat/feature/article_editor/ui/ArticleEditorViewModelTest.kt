@@ -18,7 +18,9 @@ import com.github.woodsmarshes.chat.core.model.error.ArticleError
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
+import com.github.woodsmarshes.chat.core.datastore.ServerConfigStore
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -130,11 +132,19 @@ class ArticleEditorViewModelTest {
         assertEquals(emptyList(), saved, "a non-object body must never reach the repository")
     }
 
+    private object EmptyServerConfigStore : ServerConfigStore {
+        override suspend fun currentServerBaseUrl(): String? = null
+        override suspend fun setServerBaseUrl(url: String) = Unit
+    }
+
     /** [loadResult] null models a load that emits nothing at all. */
     private fun editorViewModel(loadResult: Result<Article?, ArticleError>?) = ArticleEditorViewModel(
         articleRepository = FakeArticleRepository(loadResult),
         userRepository = FakeUserRepository(me()),
-        networkConfig = NetworkConfig(host = "127.0.0.1"),
+        serverEndpointProvider = ServerEndpointProvider(
+            seed = NetworkConfig(host = "127.0.0.1"),
+            serverConfigDataSource = EmptyServerConfigStore,
+        ),
         authRepository = FakeAuthRepository(),
         articleId = articleId,
     )

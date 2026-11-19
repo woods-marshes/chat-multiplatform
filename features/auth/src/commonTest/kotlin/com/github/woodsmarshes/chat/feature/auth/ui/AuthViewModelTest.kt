@@ -3,6 +3,9 @@ package com.github.woodsmarshes.chat.feature.auth.ui
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepository
+import com.github.woodsmarshes.chat.core.datastore.ServerConfigStore
+import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.feature.auth.model.AuthMode
@@ -49,7 +52,7 @@ class AuthViewModelTest {
      */
     @Test
     fun switchingBackToLoginDropsRegisterOnlyValidationErrors() {
-        val vm = AuthViewModel(FakeAuthRepository())
+        val vm = AuthViewModel(FakeAuthRepository(), testEndpointProvider())
 
         vm.setMode(AuthMode.Register)
         vm.updateName("a")
@@ -68,7 +71,7 @@ class AuthViewModelTest {
 
     @Test
     fun switchingBackToRegisterKeepsRegisterValidationErrors() {
-        val vm = AuthViewModel(FakeAuthRepository())
+        val vm = AuthViewModel(FakeAuthRepository(), testEndpointProvider())
 
         vm.setMode(AuthMode.Register)
         vm.updateName("a")
@@ -89,7 +92,7 @@ class AuthViewModelTest {
     fun submittingTwiceOnlyAuthenticatesOnce() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repository = FakeAuthRepository()
-        val vm = AuthViewModel(repository)
+        val vm = AuthViewModel(repository, testEndpointProvider())
 
         vm.updateEmail("user@example.com")
         vm.updatePassword("secret1")
@@ -106,7 +109,7 @@ class AuthViewModelTest {
 
     @Test
     fun authUiStateToStringRedactsPasswordFields() {
-        val vm = AuthViewModel(FakeAuthRepository())
+        val vm = AuthViewModel(FakeAuthRepository(), testEndpointProvider())
         val rawPassword = "MySuperSecretPassword!123"
         val rawConfirm = "MySuperSecretConfirm!456"
 
@@ -119,6 +122,14 @@ class AuthViewModelTest {
         assertFalse(stateText.contains(rawConfirm), "toString() must never leak confirmPassword")
         assertTrue(stateText.contains("<redacted>"))
     }
+
+    private fun testEndpointProvider() = ServerEndpointProvider(
+        seed = NetworkConfig.forDevelopment(),
+        serverConfigDataSource = object : ServerConfigStore {
+            override suspend fun currentServerBaseUrl(): String? = null
+            override suspend fun setServerBaseUrl(url: String) = Unit
+        },
+    )
 
     private class FakeAuthRepository : AuthRepository {
 

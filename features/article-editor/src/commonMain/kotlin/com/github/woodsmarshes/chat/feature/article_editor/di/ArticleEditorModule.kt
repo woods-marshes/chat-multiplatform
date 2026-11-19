@@ -10,7 +10,7 @@ val articleEditorModule = module {
         ArticleEditorViewModel(
             articleRepository = get(),
             userRepository = get(),
-            networkConfig = get(),
+            serverEndpointProvider = get(),
             authRepository = get(),
             articleId = articleId,
         )

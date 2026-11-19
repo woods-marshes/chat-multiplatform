@@ -13,7 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +31,7 @@ import coil3.compose.AsyncImagePainter
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 
-val LocalServerBaseUrl = staticCompositionLocalOf { "http://127.0.0.1:9051" }
+val LocalServerBaseUrl = compositionLocalOf { "http://127.0.0.1:9051" }
 
 fun resolveMediaUrl(url: String?, baseUrl: String): String? {
     val trimmed = url?.trim()?.takeIf { it.isNotEmpty() } ?: return null
