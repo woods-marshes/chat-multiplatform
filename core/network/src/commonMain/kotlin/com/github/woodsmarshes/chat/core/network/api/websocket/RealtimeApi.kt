@@ -3,7 +3,7 @@ package com.github.woodsmarshes.chat.core.network.api.websocket
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
-import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
@@ -63,7 +63,7 @@ import kotlin.time.TimeSource
  */
 class RealtimeApi(
     private val client: HttpClient,
-    private val config: NetworkConfig,
+    private val serverEndpointProvider: ServerEndpointProvider,
     private val authTokenDataSource: AuthTokenDataSource,
     private val tokenRefresher: TokenRefresher,
     private val scope: CoroutineScope
@@ -99,7 +99,7 @@ class RealtimeApi(
     // static mocks. Not part of the public contract; production uses defaults.
     internal var openSession: suspend (token: String) -> DefaultClientWebSocketSession =
         { token ->
-            client.webSocketSession(config.wsUrl) {
+            client.webSocketSession(serverEndpointProvider.current.wsUrl) {
                 url {
                     // 用 URL query param 而非 Header，因为浏览器 WebSocket API
                     // 不支持在握手阶段设置自定义 Header。WSS 下 query string 是 TLS 加密的。

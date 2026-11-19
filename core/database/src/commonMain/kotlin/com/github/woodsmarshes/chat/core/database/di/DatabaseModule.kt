@@ -161,6 +161,7 @@ class DatabaseHolder(
     private var currentDb: ChatDatabase? = null
     private var currentDriver: SqlDriver? = null
     private var currentUserId: Uuid? = null
+    private var currentServerKey: String? = null
     @Volatile
     private var currentGeneration: Long = 0L
 
@@ -173,8 +174,13 @@ class DatabaseHolder(
     val sessionGate: DatabaseSessionGate
         get() = managedSessionGate
 
-    suspend fun getOrCreateDatabase(userId: Uuid, generation: Long? = null): ChatDatabase = mutex.withLock {
-        if (currentUserId == userId && currentDb != null) {
+    /**
+     * serverKey namespaces the database file per server endpoint (see
+     * serverKeyFor in core:network): the same userId on two servers are two
+     * different people and must never share a driver.
+     */
+    suspend fun getOrCreateDatabase(userId: Uuid, serverKey: String, generation: Long? = null): ChatDatabase = mutex.withLock {
+        if (currentUserId == userId && currentServerKey == serverKey && currentDb != null) {
             if (generation != null) {
                 if (generation != currentGeneration) managedSessionGate.stop()
                 currentGeneration = generation
@@ -186,13 +192,14 @@ class DatabaseHolder(
         managedSessionGate.stop()
         closeLocked()
 
-        val dbName = "chat_${userId}.db"
+        val dbName = "chat_${serverKey}_${userId}.db"
         try {
             val openedDb = createDatabase { schema ->
                 provideDbDriver(schema, platformContext, dbName).also { currentDriver = it }
             }
             currentDb = openedDb
             currentUserId = userId
+            currentServerKey = serverKey
             currentGeneration = if (generation != null && generation > 0L) generation else 1L
             managedSessionGate.start()
             openedDb
@@ -212,11 +219,14 @@ class DatabaseHolder(
     }
 
     /**
-     * Closes the active database only when it still belongs to [userId] and,
-     * when [generation] is supplied, the same session generation.
+     * Closes the active database only when it still belongs to
+     * `(userId, serverKey)` and, when [generation] is supplied, the same
+     * session generation.
      */
-    suspend fun closeDatabaseIfCurrent(userId: Uuid, generation: Long? = null) = mutex.withLock {
-        if (currentUserId == userId && (generation == null || currentGeneration == generation)) {
+    suspend fun closeDatabaseIfCurrent(userId: Uuid, serverKey: String, generation: Long? = null) = mutex.withLock {
+        if (currentUserId == userId && currentServerKey == serverKey &&
+            (generation == null || currentGeneration == generation)
+        ) {
             managedSessionGate.stop()
             closeLocked()
         }
@@ -228,6 +238,7 @@ class DatabaseHolder(
         currentDriver = null
         currentDb = null
         currentUserId = null
+        currentServerKey = null
         currentGeneration = 0L
     }
 

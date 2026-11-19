@@ -30,5 +30,12 @@ kotlin {
                 implementation(libs.kotlin.test)
             }
         }
+
+        jvmTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+            // Data sources log through kotlin-logging, which needs an SLF4J
+            // provider at runtime; without one the JVM tests fail to construct them.
+            implementation(libs.slf4j.simple)
+        }
     }
 }

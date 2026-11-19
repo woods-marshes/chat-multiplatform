@@ -83,7 +83,7 @@ class StaleRequestGenerationException(
 expect fun httpEngine(): HttpClientEngineFactory<*>
 fun createHttpClient(
     httpClientEngine: HttpClientEngine,
-    config: NetworkConfig,
+    serverEndpointProvider: ServerEndpointProvider,
     authTokenDataSource: AuthTokenDataSource,
     tokenRefresher: TokenRefresher,
     httpEventBus: HttpEventBus,
@@ -121,10 +121,11 @@ fun createHttpClient(
     install(Resources)
 
     defaultRequest {
+        val endpoint = serverEndpointProvider.current
         url {
-            host = config.host
-            port = config.port
-            protocol = config.protocol
+            host = endpoint.host
+            port = endpoint.port
+            protocol = endpoint.protocol
         }
         header(HttpHeaders.ContentType, ContentType.Application.ProtoBuf)
     }

@@ -11,11 +11,18 @@ data class NetworkConfig(
     val protocol: URLProtocol
         get() = if (useTls) URLProtocol.HTTPS else URLProtocol.HTTP
 
+    /**
+     * Host as it appears inside a URL. IPv6 literals are stored bare
+     * (`::1`) so they stay comparable, but URLs require brackets.
+     */
+    val hostForUrl: String
+        get() = if (':' in host && !host.startsWith("[")) "[$host]" else host
+
     val baseUrl: String
-        get() = "${protocol.name}://$host:$port"
+        get() = "${protocol.name}://$hostForUrl:$port"
 
     val wsUrl: String
-        get() = "${if (useTls) "wss" else "ws"}://$host:$port/ws"
+        get() = "${if (useTls) "wss" else "ws"}://$hostForUrl:$port/ws"
 
     companion object {
         fun forDevelopment(

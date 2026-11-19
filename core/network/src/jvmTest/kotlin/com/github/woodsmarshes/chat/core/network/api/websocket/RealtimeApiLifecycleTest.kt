@@ -10,6 +10,7 @@ import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
@@ -137,7 +138,10 @@ class RealtimeApiLifecycleTest {
         val ownerScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         val api = RealtimeApi(
             client = client,
-            config = NetworkConfig(host = "127.0.0.1"),
+            serverEndpointProvider = ServerEndpointProvider(
+                seed = NetworkConfig(host = "127.0.0.1"),
+                serverConfigDataSource = mockk(relaxed = true),
+            ),
             authTokenDataSource = authTokenDataSource,
             tokenRefresher = tokenRefresher,
             scope = ownerScope,

@@ -11,6 +11,7 @@ import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.ktor.HttpEventBus
 import com.github.woodsmarshes.chat.core.network.ktor.HttpEventBusImpl
 import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import com.github.woodsmarshes.chat.core.network.ktor.createHttpClient
 import com.github.woodsmarshes.chat.core.network.ktor.httpEngine
@@ -26,11 +27,12 @@ val networkConfig = module {
 
 val networkModule = module {
     singleOf(::HttpEventBusImpl) bind HttpEventBus::class
+    singleOf(::ServerEndpointProvider)
     singleOf(::TokenRefresher)
     single<HttpClient> {
         createHttpClient(
             httpClientEngine = httpEngine().create(),
-            config = get(),
+            serverEndpointProvider = get(),
             authTokenDataSource = get(),
             tokenRefresher = get(),
             httpEventBus = get(),

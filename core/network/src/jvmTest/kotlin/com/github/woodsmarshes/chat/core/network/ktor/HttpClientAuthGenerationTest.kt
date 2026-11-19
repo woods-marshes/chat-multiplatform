@@ -131,11 +131,37 @@ class HttpClientAuthGenerationTest {
         }
     }
 
+    @Test
+    fun eachRequestUsesTheEndpointSelectedWhenItIsSent() = runBlocking {
+        val dispatcher = Dispatchers.Default
+        val hosts = mutableListOf<String>()
+
+        val h = createHarness(dispatcher) { req ->
+            synchronized(hosts) { hosts += "${req.url.protocol.name}://${req.url.host}:${req.url.port}" }
+            HttpStatusCode.OK to ByteArray(0)
+        }
+
+        try {
+            h.commitLogin(user1, freshJwt("alice-switch"), "refresh-switch")
+            h.client.get("/v1/protected-resource")
+            h.provider.update("https://other.example.com")
+            h.client.get("/v1/protected-resource")
+
+            assertEquals(
+                listOf("http://127.0.0.1:9051", "https://other.example.com:443"),
+                synchronized(hosts) { hosts.toList() },
+            )
+        } finally {
+            h.close()
+        }
+    }
+
     private class Harness(
         val storeScope: CoroutineScope,
         val authTokenDataSource: AuthTokenDataSource,
         val userSettingDataSource: UserSettingDataSource,
         val tokenRefresher: TokenRefresher,
+        val provider: ServerEndpointProvider,
         val client: HttpClient,
         private val tempDir: java.nio.file.Path,
     ) {
@@ -168,16 +194,20 @@ class HttpClientAuthGenerationTest {
         val tempDir = Files.createTempDirectory("http-auth-gen-test-")
         val storeFile = tempDir.resolve("test.preferences_pb").toFile()
         val storeScope = CoroutineScope(SupervisorJob() + dispatcher)
-        val (authTokenDataSource, userSettingDataSource) = createPreferenceDataSources(
+        val (authTokenDataSource, userSettingDataSource, serverConfigDataSource) = createPreferenceDataSources(
             filePath = storeFile.absolutePath,
             scope = storeScope,
             json = ProjectJson,
         )
         val tokenRefresher = TokenRefresher(authTokenDataSource)
         val engine = ScriptedHttpEngine(dispatcher, handler)
+        val provider = ServerEndpointProvider(
+            seed = NetworkConfig.forDevelopment(),
+            serverConfigDataSource = serverConfigDataSource,
+        )
         val client = createHttpClient(
             httpClientEngine = engine,
-            config = NetworkConfig.forDevelopment(),
+            serverEndpointProvider = provider,
             authTokenDataSource = authTokenDataSource,
             tokenRefresher = tokenRefresher,
             httpEventBus = HttpEventBusImpl(),
@@ -189,6 +219,7 @@ class HttpClientAuthGenerationTest {
             authTokenDataSource = authTokenDataSource,
             userSettingDataSource = userSettingDataSource,
             tokenRefresher = tokenRefresher,
+            provider = provider,
             client = client,
             tempDir = tempDir,
         )

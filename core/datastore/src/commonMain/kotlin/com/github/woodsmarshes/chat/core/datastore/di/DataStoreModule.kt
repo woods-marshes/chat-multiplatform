@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import com.github.woodsmarshes.chat.core.common.di.PlatformContext
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
+import com.github.woodsmarshes.chat.core.datastore.ServerConfigDataSource
+import com.github.woodsmarshes.chat.core.datastore.ServerConfigStore
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.serialization.json.Json
@@ -25,13 +27,21 @@ val dataStoreModule = module {
     }
     singleOf(::UserSettingDataSource)
     singleOf(::AuthTokenDataSource)
+    singleOf(::ServerConfigDataSource)
+    single<ServerConfigStore> { get<ServerConfigDataSource>() }
 }
+
+data class PreferenceDataSources(
+    val authTokenDataSource: AuthTokenDataSource,
+    val userSettingDataSource: UserSettingDataSource,
+    val serverConfigDataSource: ServerConfigDataSource,
+)
 
 fun createPreferenceDataSources(
     filePath: String,
     scope: CoroutineScope,
     json: Json,
-): Pair<AuthTokenDataSource, UserSettingDataSource> {
+): PreferenceDataSources {
     val dataStore = PreferenceDataStoreFactory.createWithPath(
         scope = scope,
         corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
@@ -39,7 +49,8 @@ fun createPreferenceDataSources(
     )
     val userSettingDataSource = UserSettingDataSource(dataStore, json)
     val authTokenDataSource = AuthTokenDataSource(dataStore, userSettingDataSource)
-    return authTokenDataSource to userSettingDataSource
+    val serverConfigDataSource = ServerConfigDataSource(dataStore)
+    return PreferenceDataSources(authTokenDataSource, userSettingDataSource, serverConfigDataSource)
 }
 
 // A corrupt preferences file (truncated by a process kill, disk-full, ...)

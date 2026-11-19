@@ -49,7 +49,11 @@ kotlin {
 
                 implementation(projects.core.common)
                 implementation(projects.core.model)
-                implementation(projects.core.datastore)
+                // ServerEndpointProvider's public constructor takes a
+                // ServerConfigStore, so the type must be on consumers' compile
+                // classpath (features/auth and features/article-editor tests
+                // build fakes for it).
+                api(projects.core.datastore)
 
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.datetime)
