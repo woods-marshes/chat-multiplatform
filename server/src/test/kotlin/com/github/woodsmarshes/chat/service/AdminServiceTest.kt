@@ -551,4 +551,21 @@ class AdminServiceTest {
         assertEquals(UserError.PermissionDenied, result.getError())
         coVerify(exactly = 0) { userRepository.changeUserRole(any(), any()) }
     }
+
+    @Test
+    fun listUsersForwardsFiltersToRepository() = runBlocking {
+        val adminId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery {
+            userRepository.listUsersPaged("ali", UserRole.MEMBER, true, 2, 10)
+        } returns PagedUsers(items = emptyList(), total = 0)
+        coEvery { authSessionRepository.countActiveByUsers(emptyList()) } returns emptyMap<Uuid, Int>()
+
+        val result = service.listUsers(adminId, "ali", UserRole.MEMBER, true, 2, 10)
+
+        assertTrue(result.isOk)
+        coVerify(exactly = 1) {
+            userRepository.listUsersPaged("ali", UserRole.MEMBER, true, 2, 10)
+        }
+    }
 }
