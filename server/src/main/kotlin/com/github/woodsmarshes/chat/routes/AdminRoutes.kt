@@ -60,7 +60,6 @@ fun Route.adminRoutes() {
 
         get<V1.Admin.Users.Id.Sessions> { params ->
             val adminId = call.extractUserId()
-            adminService.requireAdmin(adminId).getOrThrow()
             val result = adminService.listUserSessions(adminId, params.parent.id).getOrThrow()
             call.respond(result)
         }

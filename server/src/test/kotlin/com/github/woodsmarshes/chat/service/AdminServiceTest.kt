@@ -146,6 +146,8 @@ class AdminServiceTest {
     fun resetPasswordRevokesAllSessions() = runBlocking {
         val adminId = Uuid.random()
         val targetId = Uuid.random()
+        val session = mockk<WebSocketServerSession>()
+        sessionIndex.add(targetId, session)
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
         coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
         every { hashingService.generateSaltedHash(any()) } returns SaltedHash(hash = "h", salt = "s")
@@ -157,6 +159,26 @@ class AdminServiceTest {
         assertTrue(result.isOk)
         assertEquals(16, result.get()!!.temporaryPassword.length)
         coVerify(exactly = 1) { authSessionRepository.revokeAllByUser(targetId) }
+        verify(exactly = 1) { realtimeDelivery.closeSession(session) }
+    }
+
+    @Test
+    fun revokeAllUserSessionsDisconnectsLiveWebSocketSessions() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        val session = mockk<WebSocketServerSession>()
+        sessionIndex.add(targetId, session)
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
+        coEvery { authSessionRepository.revokeAllByUser(targetId) } returns 2
+
+        val result = service.revokeAllUserSessions(adminId, targetId)
+
+        assertTrue(result.isOk)
+        assertEquals(2, result.get())
+        coVerify(exactly = 1) { authSessionRepository.revokeAllByUser(targetId) }
+        coVerify(exactly = 1) { userAccessCache.invalidate(targetId) }
+        verify(exactly = 1) { realtimeDelivery.closeSession(session) }
     }
 
     @Test

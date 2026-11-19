@@ -115,12 +115,12 @@ class AdminService(
     }
 
     /**
-     * A ban must also drop already-established WebSocket connections: the JWT
-     * validate hook only runs at handshake time, so without this a banned user
-     * keeps sending and receiving until the access token expires. Reconnect is
-     * impossible — the transaction above invalidated the access cache, so the
-     * next handshake fails the banned check. A close failure must not turn the
-     * ban itself into a 500.
+     * Revoking credentials must also drop already-established WebSocket
+     * connections: the JWT validate hook only runs at handshake time, so
+     * without this a revoked session keeps sending and receiving until the
+     * access token expires. Every path that revokes sessions or bans calls
+     * this — ban, revoke-all, password reset. A close failure must not turn
+     * the revocation itself into a 500.
      */
     private fun disconnectLiveSessions(userId: Uuid) {
         sessionIndex.getSessions(userId).forEach { session ->
@@ -185,6 +185,7 @@ class AdminService(
         requireMutableTarget(target).bind()
         val revoked = authSessionRepository.revokeAllByUser(targetId)
         userAccessCache.invalidate(targetId)
+        disconnectLiveSessions(targetId)
         auditLogger.info("action=revoke-all-sessions admin={} target={} revoked={}", adminId, targetId, revoked)
         revoked
     }
@@ -194,6 +195,7 @@ class AdminService(
         val response = inTransaction {
             resetPasswordTx(adminId, targetId)
         }.bind()
+        disconnectLiveSessions(targetId)
         auditLogger.info("action=reset-password admin={} target={}", adminId, targetId)
         response
     }
