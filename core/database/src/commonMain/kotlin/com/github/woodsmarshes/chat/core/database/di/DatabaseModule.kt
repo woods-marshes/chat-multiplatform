@@ -192,6 +192,9 @@ class DatabaseHolder(
         managedSessionGate.stop()
         closeLocked()
 
+        // shortcut: databases created before server namespacing
+        // (`chat_<userId>.db`) are orphaned on upgrade — their content is a
+        // re-syncable cache, so they are left in place rather than migrated.
         val dbName = "chat_${serverKey}_${userId}.db"
         try {
             val openedDb = createDatabase { schema ->

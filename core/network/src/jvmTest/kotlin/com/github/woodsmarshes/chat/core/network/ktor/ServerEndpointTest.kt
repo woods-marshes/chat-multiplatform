@@ -161,14 +161,14 @@ class ServerEndpointTest {
         val result = provider.stage("HTTPS://Chat.Example.com:8443/")
 
         val endpoint = assertNotNull(result.getOrNull())
-        assertEquals(NetworkConfig("Chat.Example.com", 8443, useTls = true), endpoint)
+        assertEquals(NetworkConfig("chat.example.com", 8443, useTls = true), endpoint)
         assertEquals(provider.current, endpoint)
         assertNull(store.value, "staging must not touch persistent storage")
         assertEquals(0, store.writes)
 
         provider.commitStaged()
 
-        assertEquals("https://Chat.Example.com:8443", store.value)
+        assertEquals("https://chat.example.com:8443", store.value)
         assertEquals(1, store.writes)
         assertEquals(serverKeyFor(endpoint), provider.currentServerKey)
     }
@@ -252,6 +252,29 @@ class ServerEndpointTest {
         provider.ensureLoaded()
 
         assertEquals("fresh.example.com", provider.current.host)
-        assertEquals(0, store.reads)
+        // stage() loads the persisted endpoint first, so the store is read
+        // exactly once — by stage itself, not by the later ensureLoaded.
+        assertEquals(1, store.reads)
+    }
+
+    @Test
+    fun stageBeforeEnsureLoadedStillRevertsToTheStoredEndpoint() = runTest {
+        val store = FakeStore(value = "https://saved.example.com")
+        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+
+        // No ensureLoaded() call: stage must load storage itself so the
+        // revert target is the persisted address, not the compile-time seed.
+        provider.stage("https://typo.example.com")
+        provider.revertStaged()
+
+        assertEquals("saved.example.com", provider.current.host)
+        assertEquals("https://saved.example.com", store.value)
+        assertEquals(0, store.writes)
+    }
+
+    @Test
+    fun hostIsNormalizedToLowercase() {
+        assertEquals(NetworkConfig("example.com", 443, useTls = true), parse("EXAMPLE.com"))
+        assertEquals(parse("example.com"), parse("Example.COM:443"))
     }
 }

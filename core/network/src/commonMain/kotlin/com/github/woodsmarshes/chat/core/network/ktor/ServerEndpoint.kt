@@ -72,7 +72,9 @@ fun parseServerAddress(raw: String): Result<NetworkConfig> = runCatching {
     // without a scheme is treated as plain HTTP (e.g. `192.168.1.5:9051`).
     val useTls = schemeTls ?: (explicitPort == null || explicitPort == 443)
     val port = explicitPort ?: if (useTls) 443 else 80
-    NetworkConfig(host = host, port = port, useTls = useTls)
+    // Hostnames are case-insensitive; normalizing keeps serverKeyFor (and
+    // therefore the per-server database namespace) stable across spellings.
+    NetworkConfig(host = host.lowercase(), port = port, useTls = useTls)
 }
 
 private fun parsePort(raw: String): Int {
@@ -134,27 +136,30 @@ class ServerEndpointProvider(
 
     /** Idempotent; safe to call concurrently. */
     suspend fun ensureLoaded() {
-        mutex.withLock {
-            if (loaded) return
-            val stored = try {
-                serverConfigDataSource.currentServerBaseUrl()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // A failing preferences read must not wedge session startup;
-                // fall back to the compile-time seed.
-                null
-            }
-            if (!stored.isNullOrBlank()) {
-                // A corrupt stored value degrades to the seed instead of
-                // breaking every request.
-                parseServerAddress(stored).getOrNull()?.let {
-                    _config.value = it
-                    committed = it
-                }
-            }
-            loaded = true
+        mutex.withLock { loadLocked() }
+    }
+
+    /** Callers must hold [mutex]. */
+    private suspend fun loadLocked() {
+        if (loaded) return
+        val stored = try {
+            serverConfigDataSource.currentServerBaseUrl()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A failing preferences read must not wedge session startup;
+            // fall back to the compile-time seed.
+            null
         }
+        if (!stored.isNullOrBlank()) {
+            // A corrupt stored value degrades to the seed instead of
+            // breaking every request.
+            parseServerAddress(stored).getOrNull()?.let {
+                _config.value = it
+                committed = it
+            }
+        }
+        loaded = true
     }
 
     /**
@@ -164,6 +169,10 @@ class ServerEndpointProvider(
      * must enforce that policy.
      */
     suspend fun stage(rawAddress: String): Result<NetworkConfig> = mutex.withLock {
+        // Load the persisted endpoint first when startup hasn't finished:
+        // [committed] must reflect storage so a failed login's revertStaged
+        // restores the real previous selection instead of the seed.
+        loadLocked()
         val parsed = parseServerAddress(rawAddress).getOrElse {
             return@withLock Result.failure(it)
         }
