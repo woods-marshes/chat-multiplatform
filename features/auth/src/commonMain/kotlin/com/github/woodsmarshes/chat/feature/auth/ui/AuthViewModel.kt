@@ -100,10 +100,12 @@ class AuthViewModel(
         _uiState.update { it.copy(screenState = AuthScreenState.Loading) }
 
         viewModelScope.launch {
-            // Apply the server selection before any credential request so the
-            // login call itself targets the entered endpoint. A failed login
-            // intentionally keeps the selection (see ServerEndpointProvider).
-            val endpointResult = serverEndpointProvider.update(s.serverAddress)
+            // Apply the selection in memory before any credential request so
+            // the login call itself targets the entered endpoint. It is only
+            // persisted once the server accepts the credentials; a failed
+            // login rolls back to the previously saved address so a typo
+            // cannot survive a restart.
+            val endpointResult = serverEndpointProvider.stage(s.serverAddress)
             if (endpointResult.isFailure) {
                 _uiState.update {
                     it.copy(
@@ -114,15 +116,20 @@ class AuthViewModel(
                 return@launch
             }
 
-
             val result = when (s.mode) {
                 AuthMode.Login -> authRepository.login(s.email, s.password)
                 AuthMode.Register -> authRepository.register(s.name, s.email, s.password)
             }
 
             result.onOk { user ->
+                serverEndpointProvider.commitStaged().onFailure { cause ->
+                    // The session is already authenticated against the new
+                    // endpoint; only the preference write failed.
+                    log.warn(cause) { "[AuthViewModel]: failed to persist server selection" }
+                }
                 _uiState.update { it.copy(screenState = AuthScreenState.Success(user)) }
             }.onErr { error ->
+                serverEndpointProvider.revertStaged()
                 log.info { "[AuthViewModel]: error -> $error" }
                 _uiState.update { it.copy(screenState = AuthScreenState.Error(error.toMessage())) }
             }

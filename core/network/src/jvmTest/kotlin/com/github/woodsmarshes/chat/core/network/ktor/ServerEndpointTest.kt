@@ -154,28 +154,33 @@ class ServerEndpointTest {
     }
 
     @Test
-    fun updateNormalizesPersistsAndSwitches() = runTest {
+    fun stageAppliesInMemoryAndCommitPersists() = runTest {
         val store = FakeStore()
         val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
 
-        val result = provider.update("HTTPS://Chat.Example.com:8443/")
+        val result = provider.stage("HTTPS://Chat.Example.com:8443/")
 
         val endpoint = assertNotNull(result.getOrNull())
         assertEquals(NetworkConfig("Chat.Example.com", 8443, useTls = true), endpoint)
         assertEquals(provider.current, endpoint)
+        assertNull(store.value, "staging must not touch persistent storage")
+        assertEquals(0, store.writes)
+
+        provider.commitStaged()
+
         assertEquals("https://Chat.Example.com:8443", store.value)
         assertEquals(1, store.writes)
         assertEquals(serverKeyFor(endpoint), provider.currentServerKey)
     }
 
     @Test
-    fun updateRejectsInvalidInputWithoutTouchingStoreOrMemory() = runTest {
+    fun stageRejectsInvalidInputWithoutTouchingStoreOrMemory() = runTest {
         val seed = NetworkConfig.forDevelopment()
         val store = FakeStore()
         val provider = ServerEndpointProvider(seed, store)
         provider.ensureLoaded()
 
-        val result = provider.update("http://example.com/path")
+        val result = provider.stage("http://example.com/path")
 
         assertIs<IllegalArgumentException>(result.exceptionOrNull())
         assertEquals(seed, provider.current)
@@ -184,24 +189,66 @@ class ServerEndpointTest {
     }
 
     @Test
-    fun updateKeepsMemoryUnchangedWhenPersistFails() = runTest {
+    fun revertStagedRestoresThePreviouslyPersistedEndpoint() = runTest {
         val seed = NetworkConfig.forDevelopment()
-        val store = FakeStore(failWrite = true)
+        val store = FakeStore()
         val provider = ServerEndpointProvider(seed, store)
-        provider.ensureLoaded()
 
-        val result = provider.update("https://chat.example.com")
+        provider.stage("https://other.example.com")
+        assertEquals("other.example.com", provider.current.host)
 
-        assertIs<IOException>(result.exceptionOrNull())
+        provider.revertStaged()
+
         assertEquals(seed, provider.current)
+        assertNull(store.value, "a reverted selection must never be written")
+        assertEquals(0, store.writes)
     }
 
     @Test
-    fun updateMarksProviderLoadedSoLaterEnsureLoadedCannotRevertSelection() = runTest {
+    fun revertStagedRestoresTheAddressLoadedFromStorage() = runTest {
+        val store = FakeStore(value = "https://saved.example.com")
+        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+        provider.ensureLoaded()
+
+        provider.stage("https://typo.example.com")
+        provider.revertStaged()
+
+        assertEquals("saved.example.com", provider.current.host)
+        assertEquals("https://saved.example.com", store.value)
+    }
+
+    @Test
+    fun revertStagedIsNoOpWithoutAStagedSelection() = runTest {
+        val seed = NetworkConfig.forDevelopment()
+        val store = FakeStore()
+        val provider = ServerEndpointProvider(seed, store)
+
+        provider.commitStaged()
+        provider.revertStaged()
+
+        assertEquals(seed, provider.current)
+        assertEquals(1, store.writes)
+    }
+
+    @Test
+    fun commitStagedReportsWriteFailureButKeepsTheAuthenticatedEndpoint() = runTest {
+        val seed = NetworkConfig.forDevelopment()
+        val store = FakeStore(failWrite = true)
+        val provider = ServerEndpointProvider(seed, store)
+
+        provider.stage("https://chat.example.com")
+        val result = provider.commitStaged()
+
+        assertIs<IOException>(result.exceptionOrNull())
+        assertEquals("chat.example.com", provider.current.host)
+    }
+
+    @Test
+    fun stageMarksProviderLoadedSoLaterEnsureLoadedCannotRevertSelection() = runTest {
         val store = FakeStore(value = "https://stale.example.com")
         val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
 
-        provider.update("https://fresh.example.com")
+        provider.stage("https://fresh.example.com")
         provider.ensureLoaded()
 
         assertEquals("fresh.example.com", provider.current.host)

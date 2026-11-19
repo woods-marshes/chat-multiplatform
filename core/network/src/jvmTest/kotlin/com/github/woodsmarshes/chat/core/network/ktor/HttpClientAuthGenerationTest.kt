@@ -144,7 +144,8 @@ class HttpClientAuthGenerationTest {
         try {
             h.commitLogin(user1, freshJwt("alice-switch"), "refresh-switch")
             h.client.get("/v1/protected-resource")
-            h.provider.update("https://other.example.com")
+            h.provider.stage("https://other.example.com")
+            h.provider.commitStaged()
             h.client.get("/v1/protected-resource")
 
             assertEquals(

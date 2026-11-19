@@ -1,5 +1,6 @@
 package com.github.woodsmarshes.chat.feature.auth.ui
 
+import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepository
@@ -25,6 +26,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -108,6 +110,43 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun failedLoginRevertsTheServerSelectionAndNeverPersistsIt() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = RecordingServerConfigStore()
+        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+        val repository = FakeAuthRepository().apply { loginResult = Err(AuthError.InvalidCredentials) }
+        val vm = AuthViewModel(repository, provider)
+
+        vm.updateServerAddress("https://other.example.com")
+        vm.updateEmail("user@example.com")
+        vm.updatePassword("secret1")
+        vm.submit()
+        advanceUntilIdle()
+
+        assertEquals(NetworkConfig.forDevelopment(), provider.current)
+        assertEquals(emptyList(), store.writes)
+        assertIs<AuthScreenState.Error>(vm.uiState.value.screenState)
+    }
+
+    @Test
+    fun successfulLoginPersistsTheServerSelection() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = RecordingServerConfigStore()
+        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+        val vm = AuthViewModel(FakeAuthRepository(), provider)
+
+        vm.updateServerAddress("https://other.example.com")
+        vm.updateEmail("user@example.com")
+        vm.updatePassword("secret1")
+        vm.submit()
+        advanceUntilIdle()
+
+        assertEquals(listOf("https://other.example.com:443"), store.writes)
+        assertEquals("other.example.com", provider.current.host)
+        assertIs<AuthScreenState.Success>(vm.uiState.value.screenState)
+    }
+
+    @Test
     fun authUiStateToStringRedactsPasswordFields() {
         val vm = AuthViewModel(FakeAuthRepository(), testEndpointProvider())
         val rawPassword = "MySuperSecretPassword!123"
@@ -131,6 +170,16 @@ class AuthViewModelTest {
         },
     )
 
+    private class RecordingServerConfigStore : ServerConfigStore {
+        val writes = mutableListOf<String>()
+
+        override suspend fun currentServerBaseUrl(): String? = null
+
+        override suspend fun setServerBaseUrl(url: String) {
+            writes += url
+        }
+    }
+
     private class FakeAuthRepository : AuthRepository {
 
         val user = User(
@@ -147,13 +196,15 @@ class AuthViewModelTest {
 
         val loginCalls = mutableListOf<Pair<String, String>>()
 
+        var loginResult: Result<User, AuthError> = Ok(user)
+
         override val jwtToken: Flow<String?> = MutableStateFlow(null)
 
         override fun observeIsLoggedIn(): Flow<Boolean> = MutableStateFlow(false)
 
         override suspend fun login(email: String, password: String): Result<User, AuthError> {
             loginCalls += email to password
-            return Ok(user)
+            return loginResult
         }
 
         override suspend fun register(

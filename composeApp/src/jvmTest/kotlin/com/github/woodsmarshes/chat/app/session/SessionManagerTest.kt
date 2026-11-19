@@ -206,7 +206,8 @@ class SessionManagerTest {
             runCurrent()
             assertTrue(!dbStub.isOpen, "logout must close the old server's database")
 
-            provider.update("https://other.example.com")
+            provider.stage("https://other.example.com")
+            provider.commitStaged()
             loggedInFlow.value = true
             runCurrent()
 

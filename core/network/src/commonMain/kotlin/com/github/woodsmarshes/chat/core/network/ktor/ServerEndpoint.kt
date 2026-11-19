@@ -103,9 +103,12 @@ fun serverKeyFor(config: NetworkConfig): String =
  * restored, otherwise startup requests would hit the seed server; the
  * caller (SessionManager) awaits it explicitly.
  *
- * [update] persists a validated address immediately; a later login failure
- * does NOT roll it back — that is intentional, the user may simply retry
- * with corrected credentials.
+ * Selection is a two-phase operation because the login page is the only place
+ * allowed to change servers: [stage] validates and applies an address in
+ * memory so the following login request targets it, while [commitStaged]
+ * persists it only after the credentials were accepted. A failed login calls
+ * [revertStaged], restoring the last persisted endpoint, so a typo in the
+ * address never survives a restart.
  */
 class ServerEndpointProvider(
     private val seed: NetworkConfig,
@@ -113,6 +116,12 @@ class ServerEndpointProvider(
 ) {
     private val mutex = Mutex()
     private var loaded = false
+
+    /** Last endpoint written to (or read from) persistent storage. */
+    private var committed: NetworkConfig = seed
+
+    /** True while [current] differs from [committed] because of [stage]. */
+    private var selectionStaged = false
 
     private val _config = MutableStateFlow(seed)
     val config: StateFlow<NetworkConfig> = _config.asStateFlow()
@@ -139,30 +148,63 @@ class ServerEndpointProvider(
             if (!stored.isNullOrBlank()) {
                 // A corrupt stored value degrades to the seed instead of
                 // breaking every request.
-                parseServerAddress(stored).getOrNull()?.let { _config.value = it }
+                parseServerAddress(stored).getOrNull()?.let {
+                    _config.value = it
+                    committed = it
+                }
             }
             loaded = true
         }
     }
 
     /**
-     * Validates [rawAddress], persists the normalized base URL, and switches
-     * the in-memory endpoint atomically. Only meaningful while logged out —
-     * callers must enforce that policy.
+     * Validates [rawAddress] and applies it in memory without persisting it.
+     * The caller must follow up with [commitStaged] on success or
+     * [revertStaged] on failure. Only meaningful while logged out — callers
+     * must enforce that policy.
      */
-    suspend fun update(rawAddress: String): Result<NetworkConfig> = mutex.withLock {
+    suspend fun stage(rawAddress: String): Result<NetworkConfig> = mutex.withLock {
         val parsed = parseServerAddress(rawAddress).getOrElse {
             return@withLock Result.failure(it)
         }
+        _config.value = parsed
+        selectionStaged = true
+        loaded = true
+        Result.success(parsed)
+    }
+
+    /**
+     * Persists the endpoint applied by [stage] and makes it the fallback for
+     * future [revertStaged] calls.
+     *
+     * A write failure is reported but leaves the in-memory endpoint in place:
+     * the caller is already authenticated against it, so refusing to continue
+     * would be worse than losing the preference on the next start.
+     */
+    suspend fun commitStaged(): Result<Unit> = mutex.withLock {
+        val target = _config.value
         try {
-            serverConfigDataSource.setServerBaseUrl(parsed.baseUrl)
+            serverConfigDataSource.setServerBaseUrl(target.baseUrl)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             return@withLock Result.failure(e)
         }
-        _config.value = parsed
+        committed = target
+        selectionStaged = false
         loaded = true
-        Result.success(parsed)
+        Result.success(Unit)
+    }
+
+    /**
+     * Discards a staged selection and restores the last persisted endpoint.
+     * No-op when nothing is staged, so it is safe to call on every failure.
+     */
+    suspend fun revertStaged() {
+        mutex.withLock {
+            if (!selectionStaged) return@withLock
+            _config.value = committed
+            selectionStaged = false
+        }
     }
 }
