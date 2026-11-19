@@ -1,6 +1,7 @@
 package com.github.woodsmarshes.web.components
 
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
+import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.web.Router
 import com.github.woodsmarshes.web.koinInject
 import com.github.woodsmarshes.web.state.useCurrentContext
@@ -23,9 +24,9 @@ val UserMenu = FC<Props> {
     val (open, setOpen) = useState(false)
     val (loggingOut, setLoggingOut) = useState(false)
 
-    // 点击菜单外部时关闭下拉。
-    // 新版 useEffect 把回调放在 suspend CoroutineScope 里，卸载/依赖变化时该 scope
-    // 会被取消，因此用 awaitCancellation() + try/finally 来挂载与清理副作用。
+    // Close the dropdown when clicking outside it.
+    // The effect callback runs in a suspend CoroutineScope that is cancelled on
+    // unmount/dependency change, so use awaitCancellation() + try/finally.
     useEffect(open) {
         if (!open) return@useEffect
 
@@ -44,7 +45,6 @@ val UserMenu = FC<Props> {
     }
 
     if (user == null) {
-        // 未登录：直接展示登录按钮
         button {
             className = ClassName("btn btn-primary btn-sm user-menu-login")
             onClick = { Router.navigate("/login") }
@@ -59,14 +59,12 @@ val UserMenu = FC<Props> {
             setOpen(false)
             koinInject<CoroutineScope>().promise {
                 try {
-                    // One atomic write: token, profile and generation clear
-                    // together (the old two-step clear could leave the
-                    // previous user's profile behind).
+                    // One atomic write: token, profile and generation clear together.
                     koinInject<AuthTokenDataSource>().clearLoginSession()
                 } catch (e: Exception) {
                     console.log("Logout failed: ${e.message}")
                 }
-                // UserProvider 订阅了 Flow，会自动更新为未登录态
+                // UserProvider observes the Flow and updates to logged-out state.
                 Router.navigate("/login")
                 setLoggingOut(false)
             }
@@ -76,7 +74,6 @@ val UserMenu = FC<Props> {
     div {
         className = ClassName("user-menu")
 
-        // 触发器：头像 + 名字
         button {
             className = ClassName("user-menu-trigger")
             onClick = { event ->
@@ -97,7 +94,6 @@ val UserMenu = FC<Props> {
             div {
                 className = ClassName("user-menu-dropdown")
 
-                // Profile
                 a {
                     href = "#/me"
                     className = ClassName("user-menu-item")
@@ -109,7 +105,6 @@ val UserMenu = FC<Props> {
                     +"Profile"
                 }
 
-                // 我的文章
                 a {
                     href = "#/my/articles"
                     className = ClassName("user-menu-item")
@@ -121,7 +116,6 @@ val UserMenu = FC<Props> {
                     +"文章"
                 }
 
-                // 设置
                 a {
                     href = "#/settings"
                     className = ClassName("user-menu-item")
@@ -133,9 +127,21 @@ val UserMenu = FC<Props> {
                     +"设置"
                 }
 
+                if (user.role == UserRole.ADMIN) {
+                    a {
+                        href = "#/admin"
+                        className = ClassName("user-menu-item")
+                        onClick = { event ->
+                            event.preventDefault()
+                            setOpen(false)
+                            Router.navigate("/admin")
+                        }
+                        +"管理后台"
+                    }
+                }
+
                 div { className = ClassName("user-menu-divider") }
 
-                // 退出登录
                 a {
                     href = "#"
                     className = ClassName("user-menu-item user-menu-item-danger")
