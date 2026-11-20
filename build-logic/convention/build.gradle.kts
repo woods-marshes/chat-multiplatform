@@ -8,6 +8,10 @@ dependencies {
     compileOnly(libs.android.gradlePlugin)
     compileOnly(libs.kotlin.gradlePlugin)
     compileOnly(libs.composeCompiler.gradlePlugin)
+    // Runtime-scoped: RootPlugin applies SpotlessPlugin by id inside
+    // subprojects, so the plugin must ship on the convention plugin's
+    // runtime classpath (compileOnly would leave it unresolved there).
+    implementation(libs.spotless.gradle.plugin)
 }
 
 tasks {

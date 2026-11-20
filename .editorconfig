@@ -1,0 +1,12 @@
+root = true
+
+[*]
+max_line_length = 140
+
+[*.{kt,kts}]
+# Composable functions are PascalCase by Compose convention.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# Match ktlint's import ordering for IDE tooling as well.
+ij_kotlin_imports_layout = *,java.**,javax.**,kotlin.**,^
+# Force explicit imports (ktlint standard:no-wildcard-imports).
+ij_kotlin_names_count_to_use_import_on_demand = 9999
