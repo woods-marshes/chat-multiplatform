@@ -14,10 +14,13 @@ import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.WebSocketSessionManager
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.util.logging.Logger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
@@ -73,6 +76,9 @@ class RealtimeService(
         try {
             block()
         } catch (e: Exception) {
+            if (e is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
             log.error("Error handling realtime event", e)
         }
     }
