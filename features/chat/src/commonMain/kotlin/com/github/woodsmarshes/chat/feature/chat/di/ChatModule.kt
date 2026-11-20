@@ -13,6 +13,7 @@ val chatModule =
                 messageRepository = get(),
                 userRepository = get(),
                 conversationRepository = get(),
+                fileApi = get(),
             )
         }
     }

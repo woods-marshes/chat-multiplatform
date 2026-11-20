@@ -73,7 +73,10 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.github.woodsmarshes.chat.core.model.FileContent
+import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
@@ -91,9 +94,19 @@ import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+import com.github.woodsmarshes.chat.feature.chat.file.rememberDownloadedFileSaver
 import com.github.woodsmarshes.chat.feature.chat.ui.bubble.MessageFormatter
 import com.github.woodsmarshes.chat.feature.chat.ui.bubble.messageItems
 import com.github.woodsmarshes.chat.feature.chat.ui.input.ChatInputBar
+import com.github.woodsmarshes.chat.feature.chat.ui.player.ImageViewerOverlay
+import com.github.woodsmarshes.chat.feature.chat.ui.player.VideoPlayerOverlay
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.dialogs.FileKitMode
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.name
+import io.github.vinceglb.filekit.readBytes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -271,11 +284,71 @@ fun ChatScreen(
                 )
             }
         }
-    val showComingSoonToast: () -> Unit = {
+
+    // Media pickers: selection → bytes → ViewModel upload+send. Upload failures
+    // surface as a snackbar; send failures flow through uiState.error.
+    fun onPickedFile(file: PlatformFile?) {
+        if (file == null) return
         coroutineScope.launch {
-            snackbarHostState.showSnackbar(strings.featureComingSoon)
+            runCatching { file.readBytes() }
+                .onSuccess { bytes -> viewModel.sendMediaFile(file.name, bytes) }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    snackbarHostState.showSnackbar(strings.mediaUploadFailed)
+                }
         }
     }
+
+    // Fullscreen media overlays: image zoom viewer and video player.
+    var viewingImage by remember { mutableStateOf<ImageContent?>(null) }
+    var playingVideo by remember { mutableStateOf<VideoContent?>(null) }
+    val fileSaver = rememberDownloadedFileSaver()
+    var isDownloadingFile by remember { mutableStateOf(false) }
+
+    fun onFileDownload(file: FileContent) {
+        if (isDownloadingFile) return
+        isDownloadingFile = true
+        coroutineScope.launch {
+            try {
+                val bytes = viewModel.downloadFileContent(file)
+                val saved =
+                    bytes != null && fileSaver(file.fileName, bytes, file.mimeType)
+                snackbarHostState.showSnackbar(
+                    if (saved) strings.fileDownloaded else strings.fileDownloadFailed,
+                )
+            } finally {
+                isDownloadingFile = false
+            }
+        }
+    }
+
+    val showUploadFailed: () -> Unit = {
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar(strings.mediaUploadFailed)
+        }
+    }
+
+    val imagePickerLauncher =
+        rememberFilePickerLauncher(
+            type = FileKitType.Image,
+            mode = FileKitMode.Single,
+            onError = { showUploadFailed() },
+            onResult = ::onPickedFile,
+        )
+    val filePickerLauncher =
+        rememberFilePickerLauncher(
+            type = FileKitType.File(),
+            mode = FileKitMode.Single,
+            onError = { showUploadFailed() },
+            onResult = ::onPickedFile,
+        )
+    val audioPickerLauncher =
+        rememberFilePickerLauncher(
+            type = FileKitType.File("mp3", "wav", "ogg", "m4a", "aac", "flac", "opus"),
+            mode = FileKitMode.Single,
+            onError = { showUploadFailed() },
+            onResult = ::onPickedFile,
+        )
 
     // Back gesture/button exits multi-select before leaving the chat.
     NavigationBackHandler(
@@ -425,9 +498,9 @@ fun ChatScreen(
                         onSend = viewModel::sendMessage,
                         replyTo = uiState.replyToMessage,
                         onClearReply = viewModel::clearReplyTo,
-                        onImageClick = showComingSoonToast,
-                        onFileClick = showComingSoonToast,
-                        onVoiceClick = showComingSoonToast,
+                        onImageClick = { imagePickerLauncher.launch() },
+                        onFileClick = { filePickerLauncher.launch() },
+                        onVoiceClick = { audioPickerLauncher.launch() },
                         isSending = uiState.isSending,
                     )
                 }
@@ -496,7 +569,9 @@ fun ChatScreen(
                             onRetry = onRetryCallback,
                             onReply = onReplyCallback,
                             onAvatarClick = onAvatarClickCallback,
-                            onAudioPlayPauseClick = { showComingSoonToast() },
+                            onImageClick = { image -> viewingImage = image },
+                            onVideoPlayClick = { video -> playingVideo = video },
+                            onFileClick = { file -> onFileDownload(file) },
                             selectionActive = uiState.selectionMode,
                             selectedIds = selectedIds,
                             onToggleSelection = viewModel::toggleSelection,
@@ -592,6 +667,20 @@ fun ChatScreen(
         onDismiss = viewModel::dismissForward,
         onTargetSelected = viewModel::forwardMessages,
     )
+
+    // Media overlays render after the Scaffold so they cover the whole window.
+    viewingImage?.let { image ->
+        ImageViewerOverlay(
+            content = image,
+            onDismiss = { viewingImage = null },
+        )
+    }
+    playingVideo?.let { video ->
+        VideoPlayerOverlay(
+            content = video,
+            onDismiss = { playingVideo = null },
+        )
+    }
 }
 
 /** Bottom action bar shown in multi-select mode. */

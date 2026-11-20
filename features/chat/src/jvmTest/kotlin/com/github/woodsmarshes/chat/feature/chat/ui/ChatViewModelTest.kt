@@ -23,6 +23,8 @@ import com.github.woodsmarshes.chat.core.model.presentation.LastMessageInfo
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
+import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
+import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -95,6 +97,7 @@ class ChatViewModelTest {
                 messageRepository = messageRepository,
                 userRepository = userRepository,
                 conversationRepository = conversationRepository,
+                fileApi = mockk(relaxed = true),
             )
         block(vm)
     }
@@ -111,6 +114,7 @@ class ChatViewModelTest {
                         messageRepository = FakeMessageRepository(),
                         userRepository = FakeUserRepository(MutableStateFlow(null)),
                         conversationRepository = FakeConversationRepository(),
+                        fileApi = mockk(relaxed = true),
                     )
                 assertNull(vm.chatHeader.value)
             } finally {

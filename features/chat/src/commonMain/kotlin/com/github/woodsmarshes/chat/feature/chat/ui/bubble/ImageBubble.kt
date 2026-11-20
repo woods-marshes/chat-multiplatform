@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.ui.components.BlurHashPlaceholder
 import com.github.woodsmarshes.chat.core.ui.components.avatar.LocalServerBaseUrl
 import com.github.woodsmarshes.chat.core.ui.components.avatar.resolveMediaUrl
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
@@ -99,6 +100,10 @@ fun ImageBubble(
                     .height(imageHeight),
             contentAlignment = Alignment.Center,
         ) {
+            BlurHashPlaceholder(
+                blurHash = content.blurHash,
+                modifier = Modifier.fillMaxSize(),
+            )
             AsyncImage(
                 model = resolvedUrl,
                 contentDescription = content.fileName,

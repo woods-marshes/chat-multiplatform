@@ -103,6 +103,9 @@
     <string name="media_image">图片</string>
     <string name="media_file">文件</string>
     <string name="media_voice">语音</string>
+    <string name="media_upload_failed">文件上传失败</string>
+    <string name="file_downloaded">文件已下载</string>
+    <string name="file_download_failed">文件下载失败</string>
 
     <!-- Image Bubble -->
     <string name="image_load_failed">图片加载失败</string>

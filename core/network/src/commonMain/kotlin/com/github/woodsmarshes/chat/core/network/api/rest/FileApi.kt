@@ -10,6 +10,7 @@ import io.ktor.client.plugins.resources.post
 import io.ktor.client.request.forms.InputProvider
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
+import io.ktor.client.request.get
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
@@ -54,6 +55,13 @@ class FileApi(
                     onProgress(bytesSentTotal, contentLength)
                 }
             }.body()
+
+    /**
+     * Downloads a private chat attachment. [path] must be the server-issued
+     * content path (e.g. `/v1/files/content/{fileName}`); the shared client's
+     * bearer auth attaches the JWT and handles 401 refresh automatically.
+     */
+    suspend fun downloadFileContent(path: String): ByteArray = client.get(path).body<ByteArray>()
 
     suspend fun uploadAvatar(
         source: Source,

@@ -2,11 +2,9 @@ package com.github.woodsmarshes.chat.feature.chat.ui.bubble
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
-import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
-import com.github.woodsmarshes.chat.core.model.KmpMediaPlaybackState
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
@@ -35,12 +33,8 @@ fun LazyListScope.messageItems(
     formatter: MessageFormatter,
     ownUserId: Uuid? = null,
     connectionState: ConnectionState = ConnectionState.Idle,
-    audioState: KmpMediaPlaybackState = KmpMediaPlaybackState(),
-    videoIsPlaying: Boolean = false,
     onImageClick: ((ImageContent) -> Unit)? = null,
     onVideoPlayClick: ((VideoContent) -> Unit)? = null,
-    onAudioPlayPauseClick: ((AudioContent) -> Unit)? = null,
-    onAudioSeek: ((MessageUiModel, Float) -> Unit)? = null,
     onFileClick: ((FileContent) -> Unit)? = null,
     onRetry: ((MessageUiModel) -> Unit)? = null,
     onReply: ((MessageUiModel) -> Unit)? = null,
@@ -70,8 +64,6 @@ fun LazyListScope.messageItems(
                 message = message,
                 isOwnMessage = isOwn,
                 formatter = formatter,
-                audioState = audioState,
-                videoIsPlaying = videoIsPlaying,
                 onRetry =
                     if (message.sendStatus is MessageState.SendFailed && onRetry != null) {
                         { onRetry(message) }
@@ -80,8 +72,6 @@ fun LazyListScope.messageItems(
                     },
                 onImageClick = onImageClick,
                 onVideoPlayClick = onVideoPlayClick,
-                onAudioPlayPauseClick = onAudioPlayPauseClick,
-                onAudioSeek = onAudioSeek?.let { seek -> { _, frac -> seek(message, frac) } },
                 onFileClick = onFileClick,
             )
         }

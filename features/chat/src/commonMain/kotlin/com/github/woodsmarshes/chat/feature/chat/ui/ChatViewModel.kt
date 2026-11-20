@@ -13,15 +13,19 @@ import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.MessageRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
+import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
+import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.chat.model.ChatUiState
+import com.github.woodsmarshes.chat.feature.chat.model.MediaFileTyper
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,6 +46,7 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.io.Buffer
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -52,6 +57,7 @@ class ChatViewModel(
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository,
+    private val fileApi: FileApi,
 ) : ViewModel() {
     // Retain the keyed viewport with the conversation while a detail entry covers it.
     val messageListState = LazyListState()
@@ -253,6 +259,75 @@ class ChatViewModel(
                     log.warn { "[ChatVM] retryMessage failed: ${error.message}" }
                     _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
                 }
+        }
+    }
+
+    /**
+     * Uploads a picked media file and then sends the server-enriched content
+     * (dimensions, blurhash, waveform, ...) as a chat message. Upload requires
+     * connectivity; once it succeeds the message itself goes through the same
+     * outbox path as text, so it survives a dropped connection afterwards.
+     */
+    fun sendMediaFile(
+        fileName: String,
+        bytes: ByteArray,
+    ) {
+        if (_uiState.value.isSending) return
+        val conversationId = conversationUuid ?: return
+        if (fileName.isBlank() || bytes.isEmpty()) return
+
+        _uiState.update { it.copy(isSending = true) }
+        viewModelScope.launch {
+            val fileType = MediaFileTyper.infer(fileName)
+            val source = Buffer().apply { write(bytes) }
+            val uploaded =
+                try {
+                    fileApi.uploadFile(
+                        source = source,
+                        fileName = fileName,
+                        fileType = fileType,
+                        onProgress = { _, _ -> },
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.warn(e) { "[ChatVM] media upload failed for $fileName" }
+                    null
+                }
+
+            if (uploaded == null) {
+                _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
+                return@launch
+            }
+
+            messageRepository
+                .sendMessage(
+                    conversationId = conversationId,
+                    content = uploaded,
+                    replyToMessageId = _uiState.value.replyToMessage?.id,
+                ).onOk {
+                    clearReplyTo()
+                    _uiState.update { it.copy(isSending = false, error = null) }
+                }.onErr {
+                    log.warn { "[ChatVM] media sendMessage failed: ${it.message}" }
+                    _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
+                }
+        }
+    }
+
+    /**
+     * Downloads a private file attachment's bytes. Returns null on any failure;
+     * the caller decides how to surface it.
+     */
+    suspend fun downloadFileContent(content: FileContent): ByteArray? {
+        val path = content.url.takeIf { it.startsWith("/") } ?: return null
+        return try {
+            fileApi.downloadFileContent(path)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "[ChatVM] file download failed: ${content.fileName}" }
+            null
         }
     }
 

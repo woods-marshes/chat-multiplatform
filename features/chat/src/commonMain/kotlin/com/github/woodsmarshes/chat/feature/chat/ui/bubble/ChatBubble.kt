@@ -12,7 +12,6 @@ import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
-import com.github.woodsmarshes.chat.core.model.KmpMediaPlaybackState
 import com.github.woodsmarshes.chat.core.model.MessageContent
 import com.github.woodsmarshes.chat.core.model.MessageRenderType
 import com.github.woodsmarshes.chat.core.model.TextContent
@@ -31,13 +30,9 @@ fun MessageBubbleContent(
     isOwnMessage: Boolean,
     modifier: Modifier = Modifier,
     formatter: MessageFormatter = rememberFormatter(),
-    audioState: KmpMediaPlaybackState = KmpMediaPlaybackState(),
-    videoIsPlaying: Boolean = false,
     onRetry: (() -> Unit)?,
     onImageClick: ((ImageContent) -> Unit)?,
     onVideoPlayClick: ((VideoContent) -> Unit)?,
-    onAudioPlayPauseClick: ((AudioContent) -> Unit)?,
-    onAudioSeek: ((AudioContent, Float) -> Unit)? = null,
     onFileClick: ((FileContent) -> Unit)?,
 ) {
     val strings = LocalStrings.current
@@ -87,25 +82,15 @@ fun MessageBubbleContent(
                     content = message.content as? VideoContent,
                     isOwnMessage = isOwnMessage,
                     modifier = Modifier,
-                    isPlaying = videoIsPlaying,
                     onPlayClick = onVideoPlayClick,
                 )
             }
 
             MessageRenderType.AUDIO -> {
-                val audioContent = message.content as? AudioContent
-                AudioBubble(
-                    content = audioContent,
+                AudioBubblePlayer(
+                    content = message.content as? AudioContent,
                     isOwnMessage = isOwnMessage,
                     modifier = Modifier,
-                    state = audioState,
-                    onPlayPauseToggle =
-                        if (audioContent == null) {
-                            null
-                        } else {
-                            onAudioPlayPauseClick?.let { click -> { click(audioContent) } }
-                        },
-                    onSeek = if (audioContent == null) null else onAudioSeek?.let { seek -> { frac -> seek(audioContent, frac) } },
                 )
             }
 
