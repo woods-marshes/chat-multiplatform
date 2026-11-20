@@ -13,6 +13,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  spotless:
+    name: Spotless Format Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Check Kotlin formatting
+        run: ./gradlew spotlessCheck -PenableAndroid=false --no-daemon
+
   client:
     name: Client Compile Check (Android targets = ${{ matrix.enable-android }})
     runs-on: ubuntu-latest
