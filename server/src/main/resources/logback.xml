@@ -5,20 +5,10 @@
         </encoder>
     </appender>
     <appender name="ADMIN_BUFFER" class="com.github.woodsmarshes.chat.logging.AdminLogAppender">
-        <bufferName>app</bufferName>
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>WARN</level>
         </filter>
     </appender>
-    <!-- Dedicated audit channel: no threshold, so INFO audit events are kept.
-         additivity stays on so audit actions also reach the console; the
-         ADMIN_BUFFER appender drops them anyway via its WARN threshold. -->
-    <appender name="AUDIT_BUFFER" class="com.github.woodsmarshes.chat.logging.AdminLogAppender">
-        <bufferName>audit</bufferName>
-    </appender>
-    <logger name="admin.audit" level="INFO">
-        <appender-ref ref="AUDIT_BUFFER"/>
-    </logger>
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="ADMIN_BUFFER"/>

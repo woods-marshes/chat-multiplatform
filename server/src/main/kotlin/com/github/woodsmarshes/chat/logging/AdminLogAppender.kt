@@ -6,29 +6,21 @@ import ch.qos.logback.classic.spi.ThrowableProxyUtil
 import ch.qos.logback.core.AppenderBase
 
 /**
- * Logback appender that mirrors events into an [AdminLogBuffer]. The
- * target is selected by [bufferName] from logback.xml: "app" (default)
- * feeds the WARN+ application tail, "audit" feeds the dedicated
- * `admin.audit` channel. Throwable events keep a short stack-trace
- * excerpt in [AdminLogBuffer.Entry.detail] — the full trace stays in
- * the console log.
+ * Logback appender that mirrors WARN+ events into [AppLogBuffer] — the
+ * live application tail behind GET /v1/admin/logs. Admin audit actions
+ * are not logged here; they are persisted to `admin_audit_logs`.
+ * Throwable events keep a short stack-trace excerpt in
+ * [AdminLogBuffer.Entry.detail] — the full trace stays in the console log.
  */
 class AdminLogAppender : AppenderBase<ILoggingEvent>() {
-    /** Buffer selector set from logback.xml: "app" or "audit". */
-    var bufferName: String = "app"
 
     override fun append(event: ILoggingEvent) {
-        buffer().add(
+        AppLogBuffer.add(
             level = event.level.levelStr,
             logger = event.loggerName,
             message = event.formattedMessage,
             detail = event.throwableProxy?.let { throwableDetail(it) },
         )
-    }
-
-    private fun buffer(): AdminLogBuffer = when (bufferName) {
-        "audit" -> AuditLogBuffer
-        else -> AppLogBuffer
     }
 
     private fun throwableDetail(proxy: IThrowableProxy): String =

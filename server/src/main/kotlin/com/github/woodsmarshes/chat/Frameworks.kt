@@ -6,6 +6,7 @@ import com.github.woodsmarshes.chat.base.jwt.TokenConfig
 import com.github.woodsmarshes.chat.di.MainModule
 import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
+import com.github.woodsmarshes.chat.repository.AdminAuditLogRepository
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
@@ -50,6 +51,7 @@ private const val ARTIFACT_SWEEP_MINUTES = 60L
 private const val JOURNAL_SWEEP_MINUTES = 360L
 private const val JOURNAL_SWEEP_INITIAL_DELAY_MINUTES = 5L
 private const val JOURNAL_RETENTION_DAYS = 14L
+private const val AUDIT_RETENTION_DAYS = 365L
 // A thumbnail/cover/avatar is only swept when this much older than the last
 // change AND unreferenced — keeps artifacts of in-flight uploads safe.
 private const val ORPHAN_FILE_MIN_AGE_MS = 60L * 60 * 1000
@@ -276,9 +278,13 @@ private fun Application.configureUploadDirectories() {
 private fun Application.configureSessionCleanup() {
     launch(Dispatchers.IO) {
         val sessions = getKoin().get<AuthSessionRepository>()
+        val auditLogs = getKoin().get<AdminAuditLogRepository>()
         while (isActive) {
             try {
                 sessions.deleteExpiredSessions()
+                // Audit rows are tiny but unbounded; keep one year of history.
+                val swept = auditLogs.deleteOlderThan(Clock.System.now().minus(AUDIT_RETENTION_DAYS.days))
+                if (swept > 0) log.info("Audit sweep pruned {} expired audit log(s)", swept)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

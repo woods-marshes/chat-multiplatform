@@ -15,6 +15,8 @@ import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.UserError
+import com.github.woodsmarshes.chat.repository.AdminAuditLogRecord
+import com.github.woodsmarshes.chat.repository.AdminAuditLogRepository
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.AdminConversationRow
 import com.github.woodsmarshes.chat.repository.AuthSessionRecord
@@ -28,7 +30,6 @@ import com.github.woodsmarshes.chat.repository.UserAdminStats
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserStats
 import com.github.woodsmarshes.chat.utils.connectToH2Database
-import com.github.woodsmarshes.chat.logging.AuditLogBuffer
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.SessionIndex
 import io.ktor.server.websocket.WebSocketServerSession
@@ -55,6 +56,7 @@ class AdminServiceTest {
     private val messageRepository = mockk<MessageRepository>()
     private val sessionIndex = SessionIndex()
     private val realtimeDelivery = mockk<RealtimeDelivery>(relaxed = true)
+    private val adminAuditLogRepository = mockk<AdminAuditLogRepository>(relaxed = true)
 
     // Real H2 connection so inTransaction blocks have a transaction context.
     private val database = connectToH2Database()
@@ -62,6 +64,7 @@ class AdminServiceTest {
     private val service = AdminService(
         userRepository, authSessionRepository, hashingService, userAccessCache,
         conversationRepository, messageRepository, sessionIndex, realtimeDelivery,
+        adminAuditLogRepository,
     )
 
     private fun user(role: UserRole, id: Uuid = Uuid.random()) = User(
@@ -488,18 +491,57 @@ class AdminServiceTest {
     }
 
     @Test
-    fun listAuditLogsReturnsAuditChannelEntries() = runBlocking {
-        AuditLogBuffer.clear()
-        AuditLogBuffer.add("INFO", "admin.audit", "action=ban admin=x target=y banned=true")
+    fun listAuditLogsMapsPersistedRecords() = runBlocking {
         val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        val record = AdminAuditLogRecord(
+            id = Uuid.random(),
+            createdAt = Clock.System.now(),
+            adminId = adminId,
+            action = "ban",
+            targetId = targetId,
+            detail = null,
+        )
         coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { adminAuditLogRepository.listRecent(10) } returns listOf(record)
 
         val result = service.listAuditLogs(adminId, 10)
 
         assertTrue(result.isOk)
-        assertEquals(1, result.get()!!.items.size)
-        assertEquals("admin.audit", result.get()!!.items.single().logger)
-        AuditLogBuffer.clear()
+        val item = result.get()!!.items.single()
+        assertEquals("admin.audit", item.logger)
+        assertTrue(item.message.contains("ban"))
+        assertTrue(item.message.contains(targetId.toString()))
+    }
+
+    @Test
+    fun setBannedRecordsAuditEntry() = runBlocking {
+        val adminId = Uuid.random()
+        val targetId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { userRepository.getUserById(targetId) } returns user(UserRole.MEMBER)
+        coEvery { userRepository.setBannedAt(targetId, any()) } returns true
+        coEvery { authSessionRepository.revokeAllByUser(targetId) } returns 1
+
+        val result = service.setBanned(adminId, targetId, banned = true)
+
+        assertTrue(result.isOk)
+        coVerify(exactly = 1) {
+            adminAuditLogRepository.record(adminId, "ban", targetId, null)
+        }
+    }
+
+    @Test
+    fun failedMutationRecordsNoAuditEntry() = runBlocking {
+        val adminId = Uuid.random()
+        val messageId = Uuid.random()
+        coEvery { userRepository.getUserById(adminId) } returns user(UserRole.ADMIN)
+        coEvery { messageRepository.revokeMessage(messageId) } returns false
+
+        val result = service.revokeMessage(adminId, messageId)
+
+        assertEquals(UserError.NotFound, result.getError())
+        coVerify(exactly = 0) { adminAuditLogRepository.record(any(), any(), any(), any()) }
     }
 
     @Test

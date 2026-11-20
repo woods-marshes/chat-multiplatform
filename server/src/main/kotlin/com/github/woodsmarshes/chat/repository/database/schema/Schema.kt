@@ -24,4 +24,5 @@ val ALL_SCHEMA_TABLES: List<Table> = listOf(
     YjsDocuments,
     SyncStreams,
     SyncChanges,
+    AdminAuditLogs,
 )

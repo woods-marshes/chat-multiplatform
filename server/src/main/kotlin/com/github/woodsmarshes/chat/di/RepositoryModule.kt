@@ -1,5 +1,7 @@
 package com.github.woodsmarshes.chat.di
 
+import com.github.woodsmarshes.chat.repository.AdminAuditLogDataSourceImpl
+import com.github.woodsmarshes.chat.repository.AdminAuditLogRepository
 import com.github.woodsmarshes.chat.repository.ArticleDataSourceImpl
 import com.github.woodsmarshes.chat.repository.ArticleRepository
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
@@ -78,6 +80,10 @@ val repositoryModule = module {
 
     singleOf(::AuthSessionSourceImpl) {
         bind<AuthSessionRepository>()
+    }
+
+    singleOf(::AdminAuditLogDataSourceImpl) {
+        bind<AdminAuditLogRepository>()
     }
 
 }

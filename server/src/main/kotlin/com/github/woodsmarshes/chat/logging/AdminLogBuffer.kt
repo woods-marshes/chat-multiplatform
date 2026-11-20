@@ -8,14 +8,11 @@ import kotlin.time.Instant
 /**
  * In-memory ring buffer of recent log entries for the admin monitoring
  * endpoints. Logback cannot be injected through Koin (it is configured
- * from logback.xml before the DI graph exists), so the buffers are
- * process-wide singletons that [AdminLogAppender] writes into and
+ * from logback.xml before the DI graph exists), so the buffer is a
+ * process-wide singleton that [AdminLogAppender] writes into and
  * [com.github.woodsmarshes.chat.service.AdminService] reads from.
- *
- * Two instances exist: [AppLogBuffer] mirrors WARN+ application logs
- * (a live tail, not an audit log) and [AuditLogBuffer] captures the
- * `admin.audit` channel, so a WARN storm cannot evict audit records.
- * Entries are lost on restart.
+ * Entries are lost on restart — admin audit actions live in
+ * `admin_audit_logs` instead, this buffer is only the WARN+ app tail.
  */
 class AdminLogBuffer(private val capacity: Int) {
     data class Entry(
@@ -58,6 +55,3 @@ class AdminLogBuffer(private val capacity: Int) {
 
 /** WARN+ application log tail behind GET /v1/admin/logs. */
 val AppLogBuffer = AdminLogBuffer(capacity = 500)
-
-/** `admin.audit` channel behind GET /v1/admin/audit-logs. */
-val AuditLogBuffer = AdminLogBuffer(capacity = 2000)

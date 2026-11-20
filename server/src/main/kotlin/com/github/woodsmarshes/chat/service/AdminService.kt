@@ -22,7 +22,8 @@ import com.github.woodsmarshes.chat.core.model.ConversationType
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.logging.AppLogBuffer
-import com.github.woodsmarshes.chat.logging.AuditLogBuffer
+import com.github.woodsmarshes.chat.repository.AdminAuditLogRecord
+import com.github.woodsmarshes.chat.repository.AdminAuditLogRepository
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.ConversationAdminStats
 import com.github.woodsmarshes.chat.repository.ConversationRepository
@@ -43,7 +44,8 @@ import org.slf4j.LoggerFactory
  * role changes, session revocation, password resets, conversation/message
  * moderation, platform stats and the log tail. Every public method re-checks
  * the caller's ADMIN role — the routes never trust the client. Mutating
- * actions are audit-logged under the `admin.audit` logger.
+ * actions are persisted to `admin_audit_logs` inside the same transaction
+ * as the mutation, so the audit trail can never disagree with reality.
  *
  * Admin accounts are immutable through this API — see
  * [requireMutableTarget] — so admin identity only changes via seed data or
@@ -58,11 +60,11 @@ class AdminService(
     private val messageRepository: MessageRepository,
     private val sessionIndex: SessionIndex,
     private val realtimeDelivery: RealtimeDelivery,
+    private val adminAuditLogRepository: AdminAuditLogRepository,
 ) {
     private val secureRandom = SecureRandom()
 
     private val logger = LoggerFactory.getLogger(AdminService::class.java)
-    private val auditLogger = LoggerFactory.getLogger("admin.audit")
 
     suspend fun requireAdmin(adminId: Uuid): Result<Unit, UserError> = coroutineBinding {
         val admin = userRepository.getUserById(adminId) ?: Err(UserError.NotFound).bind()
@@ -111,7 +113,6 @@ class AdminService(
             setBannedTx(adminId, targetId, banned)
         }.bind()
         if (banned) disconnectLiveSessions(targetId)
-        auditLogger.info("action={} admin={} target={} banned={}", if (banned) "ban" else "unban", adminId, targetId, banned)
     }
 
     /**
@@ -151,10 +152,21 @@ class AdminService(
             authSessionRepository.revokeAllByUser(targetId)
         }
         userAccessCache.invalidate(targetId)
+        adminAuditLogRepository.record(
+            adminId = adminId,
+            action = if (banned) "ban" else "unban",
+            targetId = targetId,
+        )
     }
 
     suspend fun changeRole(adminId: Uuid, targetId: Uuid, newRole: UserRole): Result<Unit, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
+        inTransaction {
+            changeRoleTx(adminId, targetId, newRole)
+        }.bind()
+    }
+
+    private suspend fun changeRoleTx(adminId: Uuid, targetId: Uuid, newRole: UserRole): Result<Unit, UserError> = coroutineBinding {
         val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
         requireMutableTarget(target).bind()
         // Admin identity is never granted through the API either.
@@ -164,7 +176,7 @@ class AdminService(
             Err(UserError.PermissionDenied).bind()
         }
         if (!userRepository.changeUserRole(targetId, newRole)) Err(UserError.UpdateFailed).bind()
-        auditLogger.info("action=change-role admin={} target={} role={}", adminId, targetId, newRole)
+        adminAuditLogRepository.record(adminId, "change-role", targetId, "role=$newRole")
     }
 
     suspend fun listUserSessions(adminId: Uuid, targetId: Uuid): Result<AuthSessionListResponse, UserError> = coroutineBinding {
@@ -183,10 +195,13 @@ class AdminService(
         requireAdmin(adminId).bind()
         val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
         requireMutableTarget(target).bind()
-        val revoked = authSessionRepository.revokeAllByUser(targetId)
+        val revoked = inTransaction {
+            val count = authSessionRepository.revokeAllByUser(targetId)
+            adminAuditLogRepository.record(adminId, "revoke-all-sessions", targetId, "revoked=$count")
+            count
+        }
         userAccessCache.invalidate(targetId)
         disconnectLiveSessions(targetId)
-        auditLogger.info("action=revoke-all-sessions admin={} target={} revoked={}", adminId, targetId, revoked)
         revoked
     }
 
@@ -196,7 +211,6 @@ class AdminService(
             resetPasswordTx(adminId, targetId)
         }.bind()
         disconnectLiveSessions(targetId)
-        auditLogger.info("action=reset-password admin={} target={}", adminId, targetId)
         response
     }
 
@@ -212,6 +226,7 @@ class AdminService(
         // the old credentials' sessions outlive the credential change.
         authSessionRepository.revokeAllByUser(targetId)
         userAccessCache.invalidate(targetId)
+        adminAuditLogRepository.record(adminId, "reset-password", targetId)
         ResetPasswordResponse(temporaryPassword = temporaryPassword)
     }
 
@@ -286,9 +301,15 @@ class AdminService(
      */
     suspend fun deleteConversation(adminId: Uuid, conversationId: Uuid): Result<Unit, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
+        inTransaction {
+            deleteConversationTx(adminId, conversationId)
+        }.bind()
+    }
+
+    private suspend fun deleteConversationTx(adminId: Uuid, conversationId: Uuid): Result<Unit, UserError> = coroutineBinding {
         conversationRepository.getConversationIncludeDeleted(conversationId) ?: Err(UserError.NotFound).bind()
         if (!conversationRepository.softDeleteConversation(conversationId, adminId)) Err(UserError.UpdateFailed).bind()
-        auditLogger.info("action=delete-conversation admin={} conversation={}", adminId, conversationId)
+        adminAuditLogRepository.record(adminId, "delete-conversation", conversationId)
     }
 
     /**
@@ -298,8 +319,14 @@ class AdminService(
      */
     suspend fun revokeMessage(adminId: Uuid, messageId: Uuid): Result<Unit, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
+        inTransaction {
+            revokeMessageTx(adminId, messageId)
+        }.bind()
+    }
+
+    private suspend fun revokeMessageTx(adminId: Uuid, messageId: Uuid): Result<Unit, UserError> = coroutineBinding {
         if (!messageRepository.revokeMessage(messageId)) Err(UserError.NotFound).bind()
-        auditLogger.info("action=revoke-message admin={} message={}", adminId, messageId)
+        adminAuditLogRepository.record(adminId, "revoke-message", messageId)
     }
 
     suspend fun getStats(adminId: Uuid): Result<AdminStatsResponse, UserError> = coroutineBinding {
@@ -340,20 +367,12 @@ class AdminService(
         )
     }
 
-    /** Admin audit channel: every mutating admin action, newest first. */
+    /** Admin audit trail: persisted admin actions, newest first. */
     suspend fun listAuditLogs(adminId: Uuid, limit: Int): Result<AdminLogListResponse, UserError> = coroutineBinding {
         requireAdmin(adminId).bind()
         val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
         AdminLogListResponse(
-            items = AuditLogBuffer.list(level = null, limit = safeLimit).map {
-                AdminLogEntry(
-                    timestamp = it.timestamp,
-                    level = it.level,
-                    logger = it.logger,
-                    message = it.message,
-                    detail = it.detail,
-                )
-            }
+            items = adminAuditLogRepository.listRecent(safeLimit).map { it.toLogEntry() }
         )
     }
     /** 16 chars from an unambiguous alphabet — shown once, never stored. */
@@ -367,3 +386,15 @@ class AdminService(
         val ALLOWED_LOG_LEVELS = setOf("WARN", "ERROR")
     }
 }
+
+/** Audit rows reuse the log-entry DTO so the endpoint contract stays unchanged. */
+private fun AdminAuditLogRecord.toLogEntry(): AdminLogEntry = AdminLogEntry(
+    timestamp = createdAt,
+    level = "INFO",
+    logger = "admin.audit",
+    message = buildString {
+        append(action).append(" admin=").append(adminId)
+        targetId?.let { append(" target=").append(it) }
+    },
+    detail = detail,
+)
