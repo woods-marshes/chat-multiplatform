@@ -18,8 +18,8 @@ class TiptapEditorScriptNodeExecutionTest {
 
         val title = "中文标题 🚀 \"quotes\" 'single' \\backslash\nsecond line\r\nthird"
         val jsonStr =
-            """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello 世界 🎉 \"quoted\"\nline 2""" +
-                """}]}]}"""
+            """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello 世界 🎉 \"quoted\"\n""" +
+                """line 2"}]}]}"""
         val userName = "Wood \"The Reviewer\" \\ \n🌱"
 
         val nonCollabScript =
