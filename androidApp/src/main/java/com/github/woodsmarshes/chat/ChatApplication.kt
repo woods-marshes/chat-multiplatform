@@ -21,9 +21,10 @@ class ChatApplication : Application() {
         val static = Static
         val platformContext = AndroidContext(this)
         initKoin(
-            platformModule = module {
-                single<PlatformContext> { platformContext }
-            }
+            platformModule =
+                module {
+                    single<PlatformContext> { platformContext }
+                },
         )
     }
 }
