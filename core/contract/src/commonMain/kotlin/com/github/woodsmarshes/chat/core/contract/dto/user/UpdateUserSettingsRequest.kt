@@ -8,5 +8,5 @@ import kotlinx.serialization.protobuf.ProtoNumber
 @Serializable
 data class UpdateUserSettingsRequest(
     @ProtoNumber(1) val privacy: PrivacySetting? = null,
-    @ProtoNumber(2) val preferences: UserPreference? = null
+    @ProtoNumber(2) val preferences: UserPreference? = null,
 )

@@ -3,6 +3,7 @@ package com.github.woodsmarshes.chat.core.data.repository
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
@@ -15,7 +16,6 @@ import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlin.uuid.Uuid
@@ -40,9 +40,7 @@ interface ConversationRepository {
      * sync worker schedules coalesced authoritative unread refreshes for the
      * restored conversations after the commit instead.
      */
-    suspend fun applyUserSnapshotConversations(
-        responses: List<ConversationResponse>,
-    ): Result<Unit, ConversationError> = Ok(Unit)
+    suspend fun applyUserSnapshotConversations(responses: List<ConversationResponse>): Result<Unit, ConversationError> = Ok(Unit)
 
     suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError>
 
@@ -52,29 +50,29 @@ interface ConversationRepository {
         description: String? = null,
         avatar: String? = null,
         settings: GroupSettings? = null,
-        memberIds: List<Uuid> = emptyList()
+        memberIds: List<Uuid> = emptyList(),
     ): Result<Conversation, ConversationError>
 
-    suspend fun checkHandleExists(handle: String): Result<Boolean, ConversationError> =
-        Err(ConversationError.OperationFailed)
+    suspend fun checkHandleExists(handle: String): Result<Boolean, ConversationError> = Err(ConversationError.OperationFailed)
 
     suspend fun uploadGroupAvatar(
         conversationId: Uuid,
         bytes: ByteArray,
     ): Result<String, ConversationError> = Err(ConversationError.OperationFailed)
 
-    suspend fun joinGroup(id: Uuid, message: String? = null): Result<Unit, ConversationError>
+    suspend fun joinGroup(
+        id: Uuid,
+        message: String? = null,
+    ): Result<Unit, ConversationError>
 
     suspend fun inviteUsers(
         conversationId: Uuid,
         userIds: List<Uuid>,
     ): Result<Unit, ConversationError> = Err(ConversationError.OperationFailed)
 
-    suspend fun leaveGroup(conversationId: Uuid): Result<Unit, ConversationError> =
-        Err(ConversationError.OperationFailed)
+    suspend fun leaveGroup(conversationId: Uuid): Result<Unit, ConversationError> = Err(ConversationError.OperationFailed)
 
-    suspend fun deleteConversation(conversationId: Uuid): Result<Unit, ConversationError> =
-        Err(ConversationError.OperationFailed)
+    suspend fun deleteConversation(conversationId: Uuid): Result<Unit, ConversationError> = Err(ConversationError.OperationFailed)
 
     suspend fun getGroupJoinRequests(
         conversationId: Uuid,
@@ -92,9 +90,8 @@ interface ConversationRepository {
         status: RequestStatus? = RequestStatus.PENDING,
     ): Result<List<GroupJoinRequest>, ConversationError> = Err(ConversationError.OperationFailed)
 
-    suspend fun getSentGroupRequests(
-        status: RequestStatus? = null,
-    ): Result<List<GroupJoinRequest>, ConversationError> = Err(ConversationError.OperationFailed)
+    suspend fun getSentGroupRequests(status: RequestStatus? = null): Result<List<GroupJoinRequest>, ConversationError> =
+        Err(ConversationError.OperationFailed)
 
     /** Live local ledger of join requests for one conversation; [status] = null for every status. */
     fun observeGroupJoinRequests(
@@ -117,14 +114,14 @@ interface ConversationRepository {
         avatarUrl: String? = null,
         handle: String? = null,
         ownerId: Uuid? = null,
-        settings: GroupSettings? = null
+        settings: GroupSettings? = null,
     ): Result<Conversation, ConversationError>
 
     suspend fun getParticipants(id: Uuid): Flow<List<Pair<ConversationParticipant, User>>>
 
     suspend fun updateMyParticipantSettings(
         conversationId: Uuid,
-        settings: ParticipantSettings
+        settings: ParticipantSettings,
     ): Result<Unit, ConversationError>
 
     suspend fun searchGroups(keyword: String): Result<List<GroupProfile>, ConversationError>

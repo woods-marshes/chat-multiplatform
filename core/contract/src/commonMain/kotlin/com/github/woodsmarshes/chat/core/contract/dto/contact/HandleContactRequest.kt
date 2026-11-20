@@ -6,12 +6,17 @@ import kotlinx.serialization.protobuf.ProtoNumber
 @Serializable
 data class HandleContactRequest(
     @ProtoNumber(1) val action: ContactRequestAction,
-    @ProtoNumber(2) val remark: String?
+    @ProtoNumber(2) val remark: String?,
 )
 
 @Serializable
 enum class ContactRequestAction {
-    @ProtoNumber(1) APPROVE,
-    @ProtoNumber(2) REJECT,
-    @ProtoNumber(3) CANCEL
+    @ProtoNumber(1)
+    APPROVE,
+
+    @ProtoNumber(2)
+    REJECT,
+
+    @ProtoNumber(3)
+    CANCEL,
 }

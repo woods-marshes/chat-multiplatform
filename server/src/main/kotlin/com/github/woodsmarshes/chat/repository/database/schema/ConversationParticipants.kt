@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.repository.database.schema
 
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
-import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp

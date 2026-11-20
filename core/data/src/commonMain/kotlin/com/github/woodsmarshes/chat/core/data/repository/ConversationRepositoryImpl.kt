@@ -4,6 +4,12 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateGroupRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreatePrivateRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupJoinRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.HandleGroupRequest
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.core.data.model.toConversation
 import com.github.woodsmarshes.chat.core.data.model.toEntity
 import com.github.woodsmarshes.chat.core.data.model.toGroupJoinRequest
@@ -21,6 +27,8 @@ import com.github.woodsmarshes.chat.core.database.dao.GroupProfileDao
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
@@ -34,34 +42,26 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationHeader
 import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
-import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.model.presentation.LastMessageInfo
+import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import com.github.woodsmarshes.chat.core.network.api.rest.FileApi
 import com.github.woodsmarshes.chat.core.network.api.rest.UserApi
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateGroupRequest
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreatePrivateRequest
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupJoinRequestAction
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.HandleGroupRequest
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
-import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
 import kotlin.collections.emptyList
 import kotlin.collections.map
@@ -82,7 +82,6 @@ class ConversationRepositoryImpl(
     private val userSettingDataSource: UserSettingDataSource,
     private val unreadRefreshCoordinator: UnreadRefreshCoordinator,
 ) : ConversationRepository {
-
     private suspend fun <T> sessionOperation(block: suspend () -> Result<T, ConversationError>): Result<T, ConversationError> =
         databaseHolder.sessionGate.executeResult(
             onStopped = { ConversationError.PermissionDenied },
@@ -90,8 +89,7 @@ class ConversationRepositoryImpl(
             block,
         )
 
-    private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> =
-        databaseHolder.sessionGate.observeSession(factory)
+    private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> = databaseHolder.sessionGate.observeSession(factory)
 
     private val log = KotlinLogging.logger {}
     val ownUser = userSettingDataSource.user
@@ -114,8 +112,9 @@ class ConversationRepositoryImpl(
                                 ConversationType.GROUP -> {
                                     groupIds.add(entity.conversation_id)
                                 }
+
                                 ConversationType.PRIVATE -> {
-                                   c2CIds.add(entity.conversation_id)
+                                    c2CIds.add(entity.conversation_id)
                                 }
                             }
                         }
@@ -129,19 +128,20 @@ class ConversationRepositoryImpl(
                         ) { groupRows, c2cRows, memberAvatarRows ->
                             val groups = groupRows.associateBy { it.conversation_id }
                             val c2cs = c2cRows.associateBy { it.conversation_id }
-                            val memberAvatars = memberAvatarRows
-                                .groupBy { it.conversation_id }
-                                .mapValues { (_, rows) ->
-                                    rows.map { row ->
-                                        SenderUser(
-                                            id = row.u_id,
-                                            username = row.u_username,
-                                            displayName = row.u_display_name,
-                                            avatarUrl = row.u_avatar,
-                                            role = row.p_role
-                                        )
+                            val memberAvatars =
+                                memberAvatarRows
+                                    .groupBy { it.conversation_id }
+                                    .mapValues { (_, rows) ->
+                                        rows.map { row ->
+                                            SenderUser(
+                                                id = row.u_id,
+                                                username = row.u_username,
+                                                displayName = row.u_display_name,
+                                                avatarUrl = row.u_avatar,
+                                                role = row.p_role,
+                                            )
+                                        }
                                     }
-                                }
                             entities.mapIndexed { index, entity ->
                                 val lastMessage =
                                     if (entity.last_message_id != null) {
@@ -149,13 +149,17 @@ class ConversationRepositoryImpl(
                                             id = entity.last_message_id!!,
                                             content = entity.last_message_content!!,
                                             renderType = entity.last_message_render_type!!,
-                                            senderName = entity.last_message_sender_participant_settings?.nickname ?: entity.last_message_sender_username,
+                                            senderName =
+                                                entity.last_message_sender_participant_settings?.nickname
+                                                    ?: entity.last_message_sender_username,
                                             senderAvatar = entity.last_message_sender_avatar,
                                             createdAt = entity.last_message_created_at!!,
                                             isOwnMessage = currentUser.id == entity.last_message_sender_id,
                                             revokedAt = entity.last_message_revoked_at,
                                         )
-                                    } else null
+                                    } else {
+                                        null
+                                    }
                                 log.debug { "[getConversationListFlow] lastMessage=$lastMessage" }
                                 when (entity.conversation_type) {
                                     ConversationType.GROUP -> {
@@ -170,9 +174,10 @@ class ConversationRepositoryImpl(
                                             unreadCount = entity.conversation_unread_count.toInt(),
                                             isPinned = entity.participant_settings?.pinnedAt != null,
                                             createdAt = entity.conversation_created_at,
-                                            memberAvatars = memberAvatars[entity.conversation_id] ?: emptyList()
+                                            memberAvatars = memberAvatars[entity.conversation_id] ?: emptyList(),
                                         )
                                     }
+
                                     ConversationType.PRIVATE -> {
                                         ConversationUiModel(
                                             id = entity.conversation_id,
@@ -184,7 +189,7 @@ class ConversationRepositoryImpl(
                                             lastMessage = lastMessage,
                                             unreadCount = entity.conversation_unread_count.toInt(),
                                             isPinned = entity.participant_settings?.pinnedAt != null,
-                                            createdAt = entity.conversation_created_at
+                                            createdAt = entity.conversation_created_at,
                                         )
                                     }
                                 }
@@ -196,11 +201,14 @@ class ConversationRepositoryImpl(
         }
     }
 
-    override suspend fun syncConversations(): Result<Unit, ConversationError> = sessionOperation { coroutineBinding {
-        val snapshotToken = unreadRefreshCoordinator.captureListGeneration()
-        val responses = bindApi(ConversationError::Unknown) { userApi.getMyConversations() }
-        persistConversationResponses(responses, snapshotToken, softDeleteMissing = false)
-    } }
+    override suspend fun syncConversations(): Result<Unit, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val snapshotToken = unreadRefreshCoordinator.captureListGeneration()
+                val responses = bindApi(ConversationError::Unknown) { userApi.getMyConversations() }
+                persistConversationResponses(responses, snapshotToken, softDeleteMissing = false)
+            }
+        }
 
     /**
      * Joins the caller's active database transaction (see the interface KDoc):
@@ -211,10 +219,8 @@ class ConversationRepositoryImpl(
      * coalesced authoritative detail refreshes after the commit, so no
      * in-memory generation state can outlive a rolled-back transaction.
      */
-    override suspend fun applyUserSnapshotConversations(
-        responses: List<ConversationResponse>,
-    ): Result<Unit, ConversationError> {
-        return try {
+    override suspend fun applyUserSnapshotConversations(responses: List<ConversationResponse>): Result<Unit, ConversationError> =
+        try {
             persistConversationResponses(
                 responses = responses,
                 snapshotToken = null,
@@ -227,7 +233,6 @@ class ConversationRepositoryImpl(
         } catch (failure: Exception) {
             Err(ConversationError.Unknown(failure.message ?: "Failed to apply USER conversation snapshot"))
         }
-    }
 
     private suspend fun persistConversationResponses(
         responses: List<ConversationResponse>,
@@ -250,39 +255,53 @@ class ConversationRepositoryImpl(
         }
         conversationDao.insertConversations(responses.map { it.toConversation().toEntity() })
         val (groups, privates) = responses.partition { it.type == ConversationType.GROUP }
-        userDao.insertUsers(privates.mapNotNull { it.toUserEntity() } + groups.mapNotNull { it.toGroupOwnerUserEntity() } + responses.mapNotNull { it.lastMessage?.sender?.toUserEntity() })
+        userDao.insertUsers(
+            privates.mapNotNull { it.toUserEntity() } + groups.mapNotNull { it.toGroupOwnerUserEntity() } +
+                responses.mapNotNull { it.lastMessage?.sender?.toUserEntity() },
+        )
         groupProfileDao.insertGroupProfiles(groups.mapNotNull { it.toGroupProfileEntity() })
         participantDao.insertParticipants(responses.map { it.toParticipantEntity() })
         participantDao.insertParticipantsIfAbsent(responses.mapNotNull { it.toPeerParticipantEntity() })
         responses.mapNotNull { it.toMessageEntity() }.forEach { message ->
             runCatching { messageDao.seedMessage(message) }
-                .onFailure { if (it is CancellationException) throw it; log.warn(it) { "Skipping unpersistable last message ${message.id}" } }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    log.warn(it) { "Skipping unpersistable last message ${message.id}" }
+                }
         }
-        if (applyUnreadSnapshot && snapshotToken != null) unreadRefreshCoordinator.applyListSnapshot(
-            token = snapshotToken,
-            entries = responses.map { it.conversationId to it.unreadCount.toLong() },
-            conversationDao = conversationDao,
-        )
-    }
-
-    override suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError> = sessionOperation { coroutineBinding {
-        val conversation = bindApi(ConversationError::Unknown) {
-            conversationApi.createConversation(
-                CreatePrivateRequest(targetUserId)
+        if (applyUnreadSnapshot && snapshotToken != null) {
+            unreadRefreshCoordinator.applyListSnapshot(
+                token = snapshotToken,
+                entries = responses.map { it.conversationId to it.unreadCount.toLong() },
+                conversationDao = conversationDao,
             )
         }
+    }
 
-        bindApi(ConversationError::Unknown) {
-            conversationApi.getDetail(conversation.id)
-        }.also { response ->
-            conversationDao.insertConversation(response.toConversation().toEntity())
-            response.toUserEntity()?.let { userDao.insertUser(it) }
-            participantDao.insertParticipant(response.toParticipantEntity())
-            participantDao.insertParticipant(response.toParticipantEntity().copy(
-                user_id = targetUserId
-            ))
-        }.toConversation()
-    } }
+    override suspend fun createDirectChat(targetUserId: Uuid): Result<Conversation, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val conversation =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.createConversation(
+                            CreatePrivateRequest(targetUserId),
+                        )
+                    }
+
+                bindApi(ConversationError::Unknown) {
+                    conversationApi.getDetail(conversation.id)
+                }.also { response ->
+                    conversationDao.insertConversation(response.toConversation().toEntity())
+                    response.toUserEntity()?.let { userDao.insertUser(it) }
+                    participantDao.insertParticipant(response.toParticipantEntity())
+                    participantDao.insertParticipant(
+                        response.toParticipantEntity().copy(
+                            user_id = targetUserId,
+                        ),
+                    )
+                }.toConversation()
+            }
+        }
 
     override suspend fun createGroup(
         name: String,
@@ -290,38 +309,43 @@ class ConversationRepositoryImpl(
         description: String?,
         avatar: String?,
         settings: GroupSettings?,
-        memberIds: List<Uuid>
-    ): Result<Conversation, ConversationError> = sessionOperation { coroutineBinding {
-        val conversation = bindApi(ConversationError::Unknown) {
-            conversationApi.createConversation(
-                CreateGroupRequest(
-                    name = name,
-                    handle = handle,
-                    description = description,
-                    avatar = avatar,
-                    settings = settings,
-                    memberIds = memberIds
-                )
-            )
-        }
+        memberIds: List<Uuid>,
+    ): Result<Conversation, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val conversation =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.createConversation(
+                            CreateGroupRequest(
+                                name = name,
+                                handle = handle,
+                                description = description,
+                                avatar = avatar,
+                                settings = settings,
+                                memberIds = memberIds,
+                            ),
+                        )
+                    }
 
-        bindApi(ConversationError::Unknown) {
-            conversationApi.getDetail(conversation.id)
-        }.also { response ->
-            conversationDao.insertConversation(response.toConversation().toEntity())
-            response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
-            response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
-            participantDao.insertParticipant(response.toParticipantEntity())
-        }.toConversation().also {
-            if (memberIds.isNotEmpty()) {
-                runCatching {
-                    val participants = conversationApi.getParticipants(conversation.id)
-                    userDao.insertUsers(participants.map { (_, user) -> user.toUserEntity() })
-                    participantDao.insertParticipants(participants.map { (p, _) -> p.toEntity() })
-                }
+                bindApi(ConversationError::Unknown) {
+                    conversationApi.getDetail(conversation.id)
+                }.also { response ->
+                    conversationDao.insertConversation(response.toConversation().toEntity())
+                    response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
+                    response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
+                    participantDao.insertParticipant(response.toParticipantEntity())
+                }.toConversation()
+                    .also {
+                        if (memberIds.isNotEmpty()) {
+                            runCatching {
+                                val participants = conversationApi.getParticipants(conversation.id)
+                                userDao.insertUsers(participants.map { (_, user) -> user.toUserEntity() })
+                                participantDao.insertParticipants(participants.map { (p, _) -> p.toEntity() })
+                            }
+                        }
+                    }
             }
         }
-    } }
 
     override suspend fun checkHandleExists(handle: String): Result<Boolean, ConversationError> =
         sessionOperation {
@@ -335,61 +359,73 @@ class ConversationRepositoryImpl(
     override suspend fun uploadGroupAvatar(
         conversationId: Uuid,
         bytes: ByteArray,
-    ): Result<String, ConversationError> = sessionOperation {
-        coroutineBinding {
-            val url = bindApi(ConversationError::Unknown) {
-                val buffer = Buffer().apply { write(bytes) }
-                fileApi.uploadAvatar(
-                    source = buffer,
-                    isGroup = true,
-                    targetId = conversationId,
-                    onProgress = { _, _ -> },
-                )
+    ): Result<String, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val url =
+                    bindApi(ConversationError::Unknown) {
+                        val buffer = Buffer().apply { write(bytes) }
+                        fileApi.uploadAvatar(
+                            source = buffer,
+                            isGroup = true,
+                            targetId = conversationId,
+                            onProgress = { _, _ -> },
+                        )
+                    }
+                if (url.isNotBlank()) {
+                    updateGroupProfile(
+                        conversationId = conversationId,
+                        avatarUrl = url,
+                    ).bind()
+                }
+                url
             }
-            if (url.isNotBlank()) {
-                updateGroupProfile(
-                    conversationId = conversationId,
-                    avatarUrl = url,
-                ).bind()
-            }
-            url
-        }
-    }
-
-    override suspend fun joinGroup(id: Uuid, message: String?): Result<Unit, ConversationError> = sessionOperation { coroutineBinding {
-        val success = bindApi(ConversationError::Unknown) {
-            conversationApi.joinGroup(id, message)
-        }
-        if (!success) {
-            Err(ConversationError.OperationFailed).bind<Unit>()
         }
 
-        // Sync the conversation to get updated participant info
-        syncConversations()
-        Unit
-    } }
+    override suspend fun joinGroup(
+        id: Uuid,
+        message: String?,
+    ): Result<Unit, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val success =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.joinGroup(id, message)
+                    }
+                if (!success) {
+                    Err(ConversationError.OperationFailed).bind<Unit>()
+                }
+
+                // Sync the conversation to get updated participant info
+                syncConversations()
+                Unit
+            }
+        }
 
     override suspend fun inviteUsers(
         conversationId: Uuid,
         userIds: List<Uuid>,
-    ): Result<Unit, ConversationError> = sessionOperation {
-        coroutineBinding {
-            val success = bindApi(ConversationError::Unknown) {
-                conversationApi.inviteUsers(conversationId, userIds)
+    ): Result<Unit, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val success =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.inviteUsers(conversationId, userIds)
+                    }
+                if (!success) {
+                    Err(ConversationError.OperationFailed).bind<Unit>()
+                }
+                refreshGroupDetail(conversationId)
             }
-            if (!success) {
-                Err(ConversationError.OperationFailed).bind<Unit>()
-            }
-            refreshGroupDetail(conversationId)
         }
-    }
 
     override suspend fun leaveGroup(conversationId: Uuid): Result<Unit, ConversationError> =
         sessionOperation {
             coroutineBinding {
-                val success = bindApi(ConversationError::Unknown) {
-                    conversationApi.leaveGroup(conversationId)
-                }
+                val success =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.leaveGroup(conversationId)
+                    }
                 if (!success) {
                     Err(ConversationError.OperationFailed).bind<Unit>()
                 }
@@ -404,9 +440,10 @@ class ConversationRepositoryImpl(
     override suspend fun deleteConversation(conversationId: Uuid): Result<Unit, ConversationError> =
         sessionOperation {
             coroutineBinding {
-                val success = bindApi(ConversationError::Unknown) {
-                    conversationApi.deleteConversation(conversationId)
-                }
+                val success =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.deleteConversation(conversationId)
+                    }
                 if (!success) {
                     Err(ConversationError.OperationFailed).bind<Unit>()
                 }
@@ -417,78 +454,83 @@ class ConversationRepositoryImpl(
     override suspend fun getGroupJoinRequests(
         conversationId: Uuid,
         status: RequestStatus,
-    ): Result<List<GroupJoinRequest>, ConversationError> = sessionOperation {
-        coroutineBinding {
-            val requests = bindApi(ConversationError::Unknown) {
-                conversationApi.getGroupJoinRequests(conversationId, status)
+    ): Result<List<GroupJoinRequest>, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val requests =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.getGroupJoinRequests(conversationId, status)
+                    }
+                persistGroupJoinRequests(requests)
+                requests
             }
-            persistGroupJoinRequests(requests)
-            requests
         }
-    }
 
     override suspend fun handleGroupJoinRequest(
         conversationId: Uuid,
         requestId: Uuid,
         approve: Boolean,
         reason: String?,
-    ): Result<Unit, ConversationError> = sessionOperation {
-        coroutineBinding {
-            val action = if (approve) GroupJoinRequestAction.APPROVE else GroupJoinRequestAction.REJECT
-            val success = bindApi(ConversationError::Unknown) {
-                conversationApi.handleGroupRequests(
-                    conversationId = conversationId,
-                    requests = listOf(
-                        HandleGroupRequest(
-                            groupJoinRequestId = requestId,
-                            action = action,
-                            reason = reason,
+    ): Result<Unit, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val action = if (approve) GroupJoinRequestAction.APPROVE else GroupJoinRequestAction.REJECT
+                val success =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.handleGroupRequests(
+                            conversationId = conversationId,
+                            requests =
+                                listOf(
+                                    HandleGroupRequest(
+                                        groupJoinRequestId = requestId,
+                                        action = action,
+                                        reason = reason,
+                                    ),
+                                ),
                         )
-                    ),
+                    }
+                if (!success) {
+                    Err(ConversationError.OperationFailed).bind<Unit>()
+                }
+                if (approve) {
+                    refreshGroupDetail(conversationId)
+                }
+                // Mirror the decision locally: the Handled realtime event only
+                // reaches the applicant, so the approving admin must update the
+                // ledger row themselves.
+                groupJoinRequestDao.updateGroupJoinRequestStatus(
+                    id = requestId,
+                    status = if (approve) RequestStatus.ACCEPTED else RequestStatus.REJECTED,
+                    handledBy = userSettingDataSource.user.firstOrNull()?.id,
+                    updatedAt = Clock.System.now(),
                 )
             }
-            if (!success) {
-                Err(ConversationError.OperationFailed).bind<Unit>()
-            }
-            if (approve) {
-                refreshGroupDetail(conversationId)
-            }
-            // Mirror the decision locally: the Handled realtime event only
-            // reaches the applicant, so the approving admin must update the
-            // ledger row themselves.
-            groupJoinRequestDao.updateGroupJoinRequestStatus(
-                id = requestId,
-                status = if (approve) RequestStatus.ACCEPTED else RequestStatus.REJECTED,
-                handledBy = userSettingDataSource.user.firstOrNull()?.id,
-                updatedAt = Clock.System.now(),
-            )
         }
-    }
 
-    override suspend fun getIncomingGroupRequests(
-        status: RequestStatus?,
-    ): Result<List<GroupJoinRequest>, ConversationError> = sessionOperation {
-        coroutineBinding {
-            val requests = bindApi(ConversationError::Unknown) {
-                // null = every status; the server already supports it
-                userApi.getIncomingGroupRequests(status)
+    override suspend fun getIncomingGroupRequests(status: RequestStatus?): Result<List<GroupJoinRequest>, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val requests =
+                    bindApi(ConversationError::Unknown) {
+                        // null = every status; the server already supports it
+                        userApi.getIncomingGroupRequests(status)
+                    }
+                persistGroupJoinRequests(requests)
+                requests
             }
-            persistGroupJoinRequests(requests)
-            requests
         }
-    }
 
-    override suspend fun getSentGroupRequests(
-        status: RequestStatus?,
-    ): Result<List<GroupJoinRequest>, ConversationError> = sessionOperation {
-        coroutineBinding {
-            val requests = bindApi(ConversationError::Unknown) {
-                userApi.getSentGroupRequests(status)
+    override suspend fun getSentGroupRequests(status: RequestStatus?): Result<List<GroupJoinRequest>, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val requests =
+                    bindApi(ConversationError::Unknown) {
+                        userApi.getSentGroupRequests(status)
+                    }
+                persistGroupJoinRequests(requests)
+                requests
             }
-            persistGroupJoinRequests(requests)
-            requests
         }
-    }
 
     private suspend fun persistGroupJoinRequests(requests: List<GroupJoinRequest>) {
         if (requests.isEmpty()) return
@@ -505,7 +547,8 @@ class ConversationRepositoryImpl(
         conversationId: Uuid,
         status: RequestStatus?,
     ): Flow<List<GroupJoinRequest>> =
-        groupJoinRequestDao.selectGroupJoinRequestsByConversation(conversationId, status)
+        groupJoinRequestDao
+            .selectGroupJoinRequestsByConversation(conversationId, status)
             .map { rows -> rows.map { it.toGroupJoinRequest() } }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -514,7 +557,8 @@ class ConversationRepositoryImpl(
             if (me == null) {
                 flowOf(emptyList())
             } else {
-                groupJoinRequestDao.selectIncomingGroupRequests(me.id)
+                groupJoinRequestDao
+                    .selectIncomingGroupRequests(me.id)
                     .map { rows -> rows.map { it.toGroupJoinRequest() } }
             }
         }
@@ -525,7 +569,8 @@ class ConversationRepositoryImpl(
             if (me == null) {
                 flowOf(emptyList())
             } else {
-                groupJoinRequestDao.selectSentGroupRequests(me.id)
+                groupJoinRequestDao
+                    .selectSentGroupRequests(me.id)
                     .map { rows -> rows.map { it.toGroupJoinRequest() } }
             }
         }
@@ -547,70 +592,79 @@ class ConversationRepositoryImpl(
         avatarUrl: String?,
         handle: String?,
         ownerId: Uuid?,
-        settings: GroupSettings?
-    ): Result<Conversation, ConversationError> = sessionOperation {
-        coroutineBinding {
-            bindApi(ConversationError::Unknown) {
-                conversationApi.updateGroupSettings(
-                    conversationId,
-                    UpdateConversationSettingsRequest(
-                        name = name,
-                        handle = handle,
-                        description = description,
-                        avatarUrl = avatarUrl,
-                        ownerId = ownerId,
-                        settings = settings,
+        settings: GroupSettings?,
+    ): Result<Conversation, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                bindApi(ConversationError::Unknown) {
+                    conversationApi.updateGroupSettings(
+                        conversationId,
+                        UpdateConversationSettingsRequest(
+                            name = name,
+                            handle = handle,
+                            description = description,
+                            avatarUrl = avatarUrl,
+                            ownerId = ownerId,
+                            settings = settings,
+                        ),
                     )
-                )
-            }
+                }
 
-            // Refresh conversation data
-            bindApi(ConversationError::Unknown) {
-                conversationApi.getDetail(conversationId)
-            }.also { response ->
-                conversationDao.insertConversation(response.toConversation().toEntity())
-                response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
-                response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
-            }.toConversation()
+                // Refresh conversation data
+                bindApi(ConversationError::Unknown) {
+                    conversationApi.getDetail(conversationId)
+                }.also { response ->
+                    conversationDao.insertConversation(response.toConversation().toEntity())
+                    response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
+                    response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
+                }.toConversation()
+            }
         }
-    }
 
-    override suspend fun getParticipants(id: Uuid): Flow<List<Pair<ConversationParticipant, User>>> {
-        return sessionFlow { flow {
-            try {
-                val participants = conversationApi.getParticipants(id)
-                emit(participants)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.error(e) { "getParticipants failed; emitting empty list" }
-                emit(emptyList())
+    override suspend fun getParticipants(id: Uuid): Flow<List<Pair<ConversationParticipant, User>>> =
+        sessionFlow {
+            flow {
+                try {
+                    val participants = conversationApi.getParticipants(id)
+                    emit(participants)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.error(e) { "getParticipants failed; emitting empty list" }
+                    emit(emptyList())
+                }
             }
-        } }
-    }
+        }
 
     override suspend fun updateMyParticipantSettings(
         conversationId: Uuid,
-        settings: ParticipantSettings
-    ): Result<Unit, ConversationError> = sessionOperation { coroutineBinding {
-        val success = bindApi(ConversationError::Unknown) {
-            conversationApi.updatePersonalSettings(conversationId, settings)
-        }
+        settings: ParticipantSettings,
+    ): Result<Unit, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                val success =
+                    bindApi(ConversationError::Unknown) {
+                        conversationApi.updatePersonalSettings(conversationId, settings)
+                    }
 
-        if (success) {
-            // The settings update might affect how we display the conversation
-            syncConversations()
-        }
+                if (success) {
+                    // The settings update might affect how we display the conversation
+                    syncConversations()
+                }
 
-        Unit
-    } }
-
-    override suspend fun searchGroups(keyword: String): Result<List<GroupProfile>, ConversationError> = sessionOperation { coroutineBinding {
-            bindApi(ConversationError::Unknown) {
-                conversationApi.searchGroups(keyword.trim())
+                Unit
             }
-            // Public search results are not membership records and must not enter the relational cache.
-        } }
+        }
+
+    override suspend fun searchGroups(keyword: String): Result<List<GroupProfile>, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                bindApi(ConversationError::Unknown) {
+                    conversationApi.searchGroups(keyword.trim())
+                }
+                // Public search results are not membership records and must not enter the relational cache.
+            }
+        }
 
     override fun getGroupProfileFlow(conversationId: Uuid): Flow<GroupProfile?> =
         groupProfileDao.getGroupProfile(conversationId).map { it?.toGroupProfile() }
@@ -628,25 +682,28 @@ class ConversationRepositoryImpl(
             }
         }
 
-    override suspend fun refreshGroupDetail(conversationId: Uuid): Result<Unit, ConversationError> = sessionOperation { coroutineBinding {
-        bindApi(ConversationError::Unknown) {
-            conversationApi.getDetail(conversationId)
-        }.also { response ->
-            conversationDao.insertConversation(response.toConversation().toEntity())
-            response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
-            response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
-            participantDao.insertParticipant(response.toParticipantEntity())
+    override suspend fun refreshGroupDetail(conversationId: Uuid): Result<Unit, ConversationError> =
+        sessionOperation {
+            coroutineBinding {
+                bindApi(ConversationError::Unknown) {
+                    conversationApi.getDetail(conversationId)
+                }.also { response ->
+                    conversationDao.insertConversation(response.toConversation().toEntity())
+                    response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
+                    response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
+                    participantDao.insertParticipant(response.toParticipantEntity())
+                }
+                runCatching {
+                    val participants = conversationApi.getParticipants(conversationId)
+                    userDao.insertUsers(participants.map { (_, user) -> user.toUserEntity() })
+                    participantDao.insertParticipants(participants.map { (p, _) -> p.toEntity() })
+                }.onFailure { e ->
+                    if (e is CancellationException) throw e
+                    log.warn(e) { "Failed to refresh group participants for $conversationId" }
+                }
+                Unit
+            }
         }
-        runCatching {
-            val participants = conversationApi.getParticipants(conversationId)
-            userDao.insertUsers(participants.map { (_, user) -> user.toUserEntity() })
-            participantDao.insertParticipants(participants.map { (p, _) -> p.toEntity() })
-        }.onFailure { e ->
-            if (e is CancellationException) throw e
-            log.warn(e) { "Failed to refresh group participants for $conversationId" }
-        }
-        Unit
-    } }
 
     override fun getConversationHeaderFlow(conversationId: Uuid): Flow<ConversationHeader?> =
         combine(
@@ -656,15 +713,21 @@ class ConversationRepositoryImpl(
             userSettingDataSource.user,
         ) { conversation, groupProfile, participants, me ->
             when {
-                conversation == null -> null
-                conversation.type == ConversationType.GROUP -> groupProfile?.let { profile ->
-                    ConversationHeader(
-                        conversationId = conversationId,
-                        isGroup = true,
-                        title = profile.name,
-                        avatarUrl = profile.avatar_url,
-                    )
+                conversation == null -> {
+                    null
                 }
+
+                conversation.type == ConversationType.GROUP -> {
+                    groupProfile?.let { profile ->
+                        ConversationHeader(
+                            conversationId = conversationId,
+                            isGroup = true,
+                            title = profile.name,
+                            avatarUrl = profile.avatar_url,
+                        )
+                    }
+                }
+
                 else -> {
                     // Private chat: title and avatar come from the other
                     // participant; nickname (contact remark) wins over the

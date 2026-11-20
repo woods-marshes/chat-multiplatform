@@ -37,6 +37,6 @@ sealed class MessageEvent {
         val conversationId: Uuid,
         val userId: Uuid,
         val isTyping: Boolean,
-        val timestamp: Instant
+        val timestamp: Instant,
     ) : MessageEvent()
 }

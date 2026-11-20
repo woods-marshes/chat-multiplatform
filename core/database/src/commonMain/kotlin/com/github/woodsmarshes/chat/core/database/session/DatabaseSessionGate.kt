@@ -6,13 +6,13 @@ import com.github.woodsmarshes.chat.core.common.session.SessionStoppedException
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 
@@ -55,8 +55,7 @@ internal class DirectDatabaseSessionGate(
     override val currentGeneration: Long
         get() = 1L
 
-    override fun isGenerationActive(generation: Long): Boolean =
-        runCatching { dbProvider() }.isSuccess
+    override fun isGenerationActive(generation: Long): Boolean = runCatching { dbProvider() }.isSuccess
 
     override suspend fun <T> runInSession(
         expectedGeneration: Long?,
@@ -64,9 +63,10 @@ internal class DirectDatabaseSessionGate(
         block: suspend (ChatDatabase) -> T,
     ): T {
         currentCoroutineContext().ensureActive()
-        val db = expectedDatabase ?: runCatching { dbProvider() }.getOrElse {
-            throw SessionStoppedException(it.message ?: "Database is not initialized")
-        }
+        val db =
+            expectedDatabase ?: runCatching { dbProvider() }.getOrElse {
+                throw SessionStoppedException(it.message ?: "Database is not initialized")
+            }
         return block(db)
     }
 }
@@ -121,30 +121,42 @@ class ManagedDatabaseSessionGate(
     private val activeDbProvider: () -> ChatDatabase?,
     private val activeGenerationProvider: () -> Long,
 ) : DatabaseSessionGate {
-    private class Binding(val database: ChatDatabase, val generation: Long)
-    private val lifecycle = ResourceSession(
-        dispatcher = dispatcher,
-        create = {
-            Binding(activeDbProvider() ?: throw SessionStoppedException("Database is not initialized"), activeGenerationProvider())
-        },
-        validateExisting = { binding ->
-            check(binding.database === activeDbProvider() && binding.generation == activeGenerationProvider()) {
-                "Stop the current database session before rebinding"
-            }
-        },
-        dispose = {
-            val pending = listeners.value
-            listeners.value = emptySet()
-            var failure: Throwable? = null
-            pending.forEach { listener ->
-                try { listener() } catch (error: Throwable) {
-                    if (failure == null) failure = error else if (failure !== error) failure.addSuppressed(error)
-                }
-            }
-            failure?.let { throw it }
-        },
+    private class Binding(
+        val database: ChatDatabase,
+        val generation: Long,
     )
+
+    private val lifecycle =
+        ResourceSession(
+            dispatcher = dispatcher,
+            create = {
+                Binding(activeDbProvider() ?: throw SessionStoppedException("Database is not initialized"), activeGenerationProvider())
+            },
+            validateExisting = { binding ->
+                check(binding.database === activeDbProvider() && binding.generation == activeGenerationProvider()) {
+                    "Stop the current database session before rebinding"
+                }
+            },
+            dispose = {
+                val pending = listeners.value
+                listeners.value = emptySet()
+                var failure: Throwable? = null
+                pending.forEach { listener ->
+                    try {
+                        listener()
+                    } catch (error: Throwable) {
+                        if (failure == null) {
+                            failure = error
+                        } else if (failure !== error) {
+                            failure.addSuppressed(error)
+                        }
+                    }
+                }
+                failure?.let { throw it }
+            },
+        )
     private val listeners = kotlinx.coroutines.flow.MutableStateFlow<Set<() -> Unit>>(emptySet())
+
     override fun registerStopListener(listener: () -> Unit): () -> Unit {
         while (true) {
             val old = listeners.value
@@ -179,22 +191,23 @@ class ManagedDatabaseSessionGate(
         expectedGeneration: Long?,
         expectedDatabase: ChatDatabase?,
         block: suspend (ChatDatabase) -> T,
-    ): T = lifecycle.execute { binding ->
-        val currentGen = binding.generation
-        if (expectedGeneration != null && expectedGeneration != currentGen) {
-            throw SessionStoppedException(
-                "Operation bound to database generation $expectedGeneration, active is $currentGen",
-            )
+    ): T =
+        lifecycle.execute { binding ->
+            val currentGen = binding.generation
+            if (expectedGeneration != null && expectedGeneration != currentGen) {
+                throw SessionStoppedException(
+                    "Operation bound to database generation $expectedGeneration, active is $currentGen",
+                )
+            }
+            val currentDb = binding.database
+            if (activeDbProvider() !== currentDb || activeGenerationProvider() != currentGen) {
+                throw SessionStoppedException("Database binding changed during the session")
+            }
+            if (expectedDatabase != null && expectedDatabase !== currentDb) {
+                throw SessionStoppedException("Operation bound to a stale ChatDatabase instance")
+            }
+            block(currentDb)
         }
-        val currentDb = binding.database
-        if (activeDbProvider() !== currentDb || activeGenerationProvider() != currentGen) {
-            throw SessionStoppedException("Database binding changed during the session")
-        }
-        if (expectedDatabase != null && expectedDatabase !== currentDb) {
-            throw SessionStoppedException("Operation bound to a stale ChatDatabase instance")
-        }
-        block(currentDb)
-    }
 }
 
 /**
@@ -220,17 +233,19 @@ internal fun <Row : Any, Result> sessionBoundQueryFlow(
     queryFactory: (ChatDatabase) -> Query<Row>,
     extractor: (Query<Row>) -> Result,
 ): Flow<Result> {
-    if (gate is DirectDatabaseSessionGate) return flow {
-        val query = queryFactory(checkNotNull(gate.boundDatabase))
-        val trigger = Channel<Unit>(Channel.CONFLATED)
-        val listener = Query.Listener { trigger.trySend(Unit) }
-        query.addListener(listener)
-        try {
-            trigger.trySend(Unit)
-            for (signal in trigger) emit(withContext(ioContext.minusKey(Job)) { extractor(query) })
-        } finally {
-            query.removeListener(listener)
-            trigger.close()
+    if (gate is DirectDatabaseSessionGate) {
+        return flow {
+            val query = queryFactory(checkNotNull(gate.boundDatabase))
+            val trigger = Channel<Unit>(Channel.CONFLATED)
+            val listener = Query.Listener { trigger.trySend(Unit) }
+            query.addListener(listener)
+            try {
+                trigger.trySend(Unit)
+                for (signal in trigger) emit(withContext(ioContext.minusKey(Job)) { extractor(query) })
+            } finally {
+                query.removeListener(listener)
+                trigger.close()
+            }
         }
     }
     val pinnedDb = gate.boundDatabase
@@ -243,18 +258,20 @@ internal fun <Row : Any, Result> sessionBoundQueryFlow(
             ) { db ->
                 val query = queryFactory(db)
                 val trigger = Channel<Unit>(Channel.CONFLATED)
-                val listener = Query.Listener {
-                    trigger.trySend(Unit)
-                }
+                val listener =
+                    Query.Listener {
+                        trigger.trySend(Unit)
+                    }
                 query.addListener(listener)
                 try {
                     trigger.trySend(Unit)
                     for (unit in trigger) {
                         currentCoroutineContext().ensureActive()
-                        val value = withContext(ioContext.minusKey(Job)) {
-                            currentCoroutineContext().ensureActive()
-                            extractor(query)
-                        }
+                        val value =
+                            withContext(ioContext.minusKey(Job)) {
+                                currentCoroutineContext().ensureActive()
+                                extractor(query)
+                            }
                         currentCoroutineContext().ensureActive()
                         send(value)
                     }
@@ -272,5 +289,4 @@ internal fun <Row : Any, Result> sessionBoundQueryFlow(
             currentCoroutineContext().ensureActive()
         }
     }
-
 }

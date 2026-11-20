@@ -37,13 +37,14 @@ import kotlin.uuid.Uuid
  * message is a different message and must be rejected.
  */
 class MessageRepositoryIdempotencyTest {
-
     private val database = connectToH2Database()
     private val repository = MessageDataSourceImpl()
 
     private val senderId = Uuid.random()
     private val conversationId = Uuid.random()
-    private val now = kotlin.time.Clock.System.now()
+    private val now =
+        kotlin.time.Clock.System
+            .now()
 
     @BeforeTest
     fun seed() {
@@ -87,127 +88,141 @@ class MessageRepositoryIdempotencyTest {
     }
 
     @Test
-    fun resendingWithADifferentReplyTargetIsRejected() = runBlocking {
-        val requestId = Uuid.random()
-        val replyTarget = insertRootMessage()
+    fun resendingWithADifferentReplyTargetIsRejected() =
+        runBlocking {
+            val requestId = Uuid.random()
+            val replyTarget = insertRootMessage()
 
-        repository.insertMessage(
-            conversationId = conversationId,
-            senderId = senderId,
-            content = TextContent(text = "hello"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.TEXT,
-            requestId = requestId,
-        )
-
-        val failure = assertFailsWith<AppException> {
             repository.insertMessage(
                 conversationId = conversationId,
                 senderId = senderId,
                 content = TextContent(text = "hello"),
                 category = MessageCategory.NORMAL,
                 renderType = MessageRenderType.TEXT,
-                replyToMessageId = replyTarget.id,
                 requestId = requestId,
             )
+
+            val failure =
+                assertFailsWith<AppException> {
+                    repository.insertMessage(
+                        conversationId = conversationId,
+                        senderId = senderId,
+                        content = TextContent(text = "hello"),
+                        category = MessageCategory.NORMAL,
+                        renderType = MessageRenderType.TEXT,
+                        replyToMessageId = replyTarget.id,
+                        requestId = requestId,
+                    )
+                }
+
+            assertEquals(MessageError.InvalidContent, failure.error)
         }
 
-        assertEquals(MessageError.InvalidContent, failure.error)
-    }
+    @Test
+    fun resendingWithTheSamePayloadReturnsTheStoredMessage() =
+        runBlocking {
+            val requestId = Uuid.random()
+            val replyTarget = insertRootMessage()
+
+            val first =
+                repository.insertMessage(
+                    conversationId = conversationId,
+                    senderId = senderId,
+                    content = TextContent(text = "hello"),
+                    category = MessageCategory.NORMAL,
+                    renderType = MessageRenderType.TEXT,
+                    replyToMessageId = replyTarget.id,
+                    requestId = requestId,
+                )
+            val second =
+                repository.insertMessage(
+                    conversationId = conversationId,
+                    senderId = senderId,
+                    content = TextContent(text = "hello"),
+                    category = MessageCategory.NORMAL,
+                    renderType = MessageRenderType.TEXT,
+                    replyToMessageId = replyTarget.id,
+                    requestId = requestId,
+                )
+
+            assertEquals(first!!.first.id, second!!.first.id)
+            assertEquals(replyTarget.id, second.first.replyTo?.id)
+            assertFalse(second.second)
+        }
 
     @Test
-    fun resendingWithTheSamePayloadReturnsTheStoredMessage() = runBlocking {
-        val requestId = Uuid.random()
-        val replyTarget = insertRootMessage()
+    fun resendingMediaWithADifferentUrlIsRejected() =
+        runBlocking {
+            val requestId = Uuid.random()
 
-        val first = repository.insertMessage(
-            conversationId = conversationId,
-            senderId = senderId,
-            content = TextContent(text = "hello"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.TEXT,
-            replyToMessageId = replyTarget.id,
-            requestId = requestId,
-        )
-        val second = repository.insertMessage(
-            conversationId = conversationId,
-            senderId = senderId,
-            content = TextContent(text = "hello"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.TEXT,
-            replyToMessageId = replyTarget.id,
-            requestId = requestId,
-        )
-
-        assertEquals(first!!.first.id, second!!.first.id)
-        assertEquals(replyTarget.id, second.first.replyTo?.id)
-        assertFalse(second.second)
-    }
-
-    @Test
-    fun resendingMediaWithADifferentUrlIsRejected() = runBlocking {
-        val requestId = Uuid.random()
-
-        repository.insertMessage(
-            conversationId = conversationId,
-            senderId = senderId,
-            content = uploadedFile("a.pdf"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.FILE,
-            requestId = requestId,
-        )
-
-        val failure = assertFailsWith<AppException> {
             repository.insertMessage(
                 conversationId = conversationId,
                 senderId = senderId,
-                content = uploadedFile("b.pdf"),
+                content = uploadedFile("a.pdf"),
                 category = MessageCategory.NORMAL,
                 renderType = MessageRenderType.FILE,
                 requestId = requestId,
             )
+
+            val failure =
+                assertFailsWith<AppException> {
+                    repository.insertMessage(
+                        conversationId = conversationId,
+                        senderId = senderId,
+                        content = uploadedFile("b.pdf"),
+                        category = MessageCategory.NORMAL,
+                        renderType = MessageRenderType.FILE,
+                        requestId = requestId,
+                    )
+                }
+
+            assertEquals(MessageError.InvalidContent, failure.error)
         }
 
-        assertEquals(MessageError.InvalidContent, failure.error)
-    }
-
     @Test
-    fun resendingTheSameFileReturnsTheStoredMessage() = runBlocking {
-        val requestId = Uuid.random()
+    fun resendingTheSameFileReturnsTheStoredMessage() =
+        runBlocking {
+            val requestId = Uuid.random()
 
-        val first = repository.insertMessage(
-            conversationId = conversationId,
-            senderId = senderId,
-            content = uploadedFile("a.pdf"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.FILE,
-            requestId = requestId,
+            val first =
+                repository.insertMessage(
+                    conversationId = conversationId,
+                    senderId = senderId,
+                    content = uploadedFile("a.pdf"),
+                    category = MessageCategory.NORMAL,
+                    renderType = MessageRenderType.FILE,
+                    requestId = requestId,
+                )
+            val second =
+                repository.insertMessage(
+                    conversationId = conversationId,
+                    senderId = senderId,
+                    content = uploadedFile("a.pdf"),
+                    category = MessageCategory.NORMAL,
+                    renderType = MessageRenderType.FILE,
+                    requestId = requestId,
+                )
+
+            assertEquals(first!!.first.id, second!!.first.id)
+            assertFalse(second.second)
+        }
+
+    private fun uploadedFile(name: String) =
+        FileContent(
+            url = "/v1/files/content/$name",
+            fileName = name,
+            mimeType = "application/pdf",
+            size = 3,
         )
-        val second = repository.insertMessage(
-            conversationId = conversationId,
-            senderId = senderId,
-            content = uploadedFile("a.pdf"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.FILE,
-            requestId = requestId,
-        )
 
-        assertEquals(first!!.first.id, second!!.first.id)
-        assertFalse(second.second)
-    }
-
-    private fun uploadedFile(name: String) = FileContent(
-        url = "/v1/files/content/$name",
-        fileName = name,
-        mimeType = "application/pdf",
-        size = 3,
-    )
-
-    private suspend fun insertRootMessage() = repository.insertMessage(
-        conversationId = conversationId,
-        senderId = senderId,
-        content = TextContent(text = "root"),
-        category = MessageCategory.NORMAL,
-        renderType = MessageRenderType.TEXT,
-    )!!.first
+    private suspend fun insertRootMessage() =
+        repository
+            .insertMessage(
+                conversationId = conversationId,
+                senderId = senderId,
+                content = TextContent(text = "root"),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.TEXT,
+            )!!
+            .first
 }

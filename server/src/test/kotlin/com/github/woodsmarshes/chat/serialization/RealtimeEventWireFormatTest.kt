@@ -19,18 +19,23 @@ import kotlin.uuid.Uuid
  * migration-accompanied decision.
  */
 class RealtimeEventWireFormatTest {
-
-    private val event: RealtimeEvent = ContactEventResponse.FriendRequestSent(
-        requestId = Uuid.random(),
-        senderId = Uuid.random(),
-        receiverId = Uuid.random(),
-        timestamp = Instant.fromEpochMilliseconds(1_700_000_000_000),
-    )
+    private val event: RealtimeEvent =
+        ContactEventResponse.FriendRequestSent(
+            requestId = Uuid.random(),
+            senderId = Uuid.random(),
+            receiverId = Uuid.random(),
+            timestamp = Instant.fromEpochMilliseconds(1_700_000_000_000),
+        )
 
     @Test
     fun storedEventsKeepTheirClassDiscriminator() {
         val encoded = ProjectJson.encodeToString(event)
-        val discriminator = ProjectJson.parseToJsonElement(encoded).jsonObject["type"]?.jsonPrimitive?.content
+        val discriminator =
+            ProjectJson
+                .parseToJsonElement(encoded)
+                .jsonObject["type"]
+                ?.jsonPrimitive
+                ?.content
 
         assertEquals(
             "com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse.FriendRequestSent",

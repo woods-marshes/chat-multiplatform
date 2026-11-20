@@ -18,16 +18,16 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 
 class FileServiceAttachmentAccessTest {
-
     private val uploadStore = mockk<TemporaryUploadStore>(relaxUnitFun = true)
     private val privateFileRepository = mockk<PrivateFileRepository>()
     private val participantRepository = mockk<ConversationParticipantRepository>()
 
-    private val service = FileService(
-        uploadStore = uploadStore,
-        privateFileRepository = privateFileRepository,
-        participantRepository = participantRepository,
-    )
+    private val service =
+        FileService(
+            uploadStore = uploadStore,
+            privateFileRepository = privateFileRepository,
+            participantRepository = participantRepository,
+        )
 
     private val requesterId = Uuid.random()
     private val fileName = "${Uuid.random()}.pdf"
@@ -79,7 +79,7 @@ class FileServiceAttachmentAccessTest {
             assertTrue(service.publicFileExists("/uploads/image/${present.name}"))
             assertFalse(service.publicFileExists("/uploads/image/missing-${Uuid.random()}.png"))
             assertFalse(service.publicFileExists("/uploads/../secrets.txt"))
-            assertFalse(service.publicFileExists("/v1/files/content/${fileName}"))
+            assertFalse(service.publicFileExists("/v1/files/content/$fileName"))
         } finally {
             present.delete()
         }

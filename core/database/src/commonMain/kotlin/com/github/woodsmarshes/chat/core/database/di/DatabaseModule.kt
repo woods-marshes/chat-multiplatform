@@ -36,9 +36,10 @@ import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlin.uuid.Uuid
 
-val databaseModule = module {
-    single { DatabaseHolder(get()) }
-}
+val databaseModule =
+    module {
+        single { DatabaseHolder(get()) }
+    }
 
 /**
  * Coroutine context element that pins DAO write operations within a
@@ -56,84 +57,93 @@ suspend fun createDatabase(driverFactory: suspend (SqlSchema<QueryResult.AsyncVa
     val driver = driverFactory(ChatDatabase.Schema)
     return ChatDatabase(
         driver = driver,
-        ArticleAdapter = Article.Adapter(
-            idAdapter = uuidAdapter,
-            contentAdapter = jsonElementAdapter,
-            author_idAdapter = uuidAdapter,
-            statusAdapter = EnumColumnAdapter(),
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-            published_atAdapter = instantAdapter,
-            deleted_atAdapter = instantAdapter,
-            statsAdapter = articleStatsAdapter,
-        ),
-        ContactEntityAdapter = ContactEntity.Adapter(
-            contact_idAdapter = uuidAdapter,
-            statusAdapter = EnumColumnAdapter(),
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-        ),
-        ContactRequestEntityAdapter = ContactRequestEntity.Adapter(
-            idAdapter = uuidAdapter,
-            sender_idAdapter = uuidAdapter,
-            receiver_idAdapter = uuidAdapter,
-            statusAdapter = EnumColumnAdapter(),
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-        ),
-        GroupJoinRequestEntityAdapter = GroupJoinRequestEntity.Adapter(
-            idAdapter = uuidAdapter,
-            conversation_idAdapter = uuidAdapter,
-            applicant_idAdapter = uuidAdapter,
-            statusAdapter = EnumColumnAdapter(),
-            handled_byAdapter = uuidAdapter,
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-        ),
-        ConversationEntityAdapter = ConversationEntity.Adapter(
-            idAdapter = uuidAdapter,
-            typeAdapter = EnumColumnAdapter(),
-            last_message_idAdapter = uuidAdapter,
-            metadataAdapter = conversationMetadataAdapter,
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-            deleted_atAdapter = instantAdapter,
-        ),
-        GroupProfileEntityAdapter = GroupProfileEntity.Adapter(
-            conversation_idAdapter = uuidAdapter,
-            owner_idAdapter = uuidAdapter,
-            settingsAdapter = groupSettingsAdapter,
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-        ),
-        MessageEntityAdapter = MessageEntity.Adapter(
-            idAdapter = uuidAdapter,
-            conversation_idAdapter = uuidAdapter,
-            user_idAdapter = uuidAdapter,
-            categoryAdapter = EnumColumnAdapter(),
-            render_typeAdapter = EnumColumnAdapter(),
-            contentAdapter = messageContentAdapter,
-            reply_to_message_idAdapter = uuidAdapter,
-            created_atAdapter = instantAdapter,
-            revoked_atAdapter = instantAdapter,
-            local_send_statusAdapter = EnumColumnAdapter(),
-        ),
-        ParticipantEntityAdapter = ParticipantEntity.Adapter(
-            conversation_idAdapter = uuidAdapter,
-            user_idAdapter = uuidAdapter,
-            roleAdapter = EnumColumnAdapter(),
-            last_read_message_idAdapter = uuidAdapter,
-            joined_atAdapter = instantAdapter,
-            muted_untilAdapter = instantAdapter,
-            settingsAdapter = participantSettingsAdapter,
-        ),
-        UserEntityAdapter = UserEntity.Adapter(
-            idAdapter = uuidAdapter,
-            created_atAdapter = instantAdapter,
-            updated_atAdapter = instantAdapter,
-            deleted_atAdapter = instantAdapter,
-            roleAdapter = EnumColumnAdapter(),
-        )
+        ArticleAdapter =
+            Article.Adapter(
+                idAdapter = uuidAdapter,
+                contentAdapter = jsonElementAdapter,
+                author_idAdapter = uuidAdapter,
+                statusAdapter = EnumColumnAdapter(),
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+                published_atAdapter = instantAdapter,
+                deleted_atAdapter = instantAdapter,
+                statsAdapter = articleStatsAdapter,
+            ),
+        ContactEntityAdapter =
+            ContactEntity.Adapter(
+                contact_idAdapter = uuidAdapter,
+                statusAdapter = EnumColumnAdapter(),
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+            ),
+        ContactRequestEntityAdapter =
+            ContactRequestEntity.Adapter(
+                idAdapter = uuidAdapter,
+                sender_idAdapter = uuidAdapter,
+                receiver_idAdapter = uuidAdapter,
+                statusAdapter = EnumColumnAdapter(),
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+            ),
+        GroupJoinRequestEntityAdapter =
+            GroupJoinRequestEntity.Adapter(
+                idAdapter = uuidAdapter,
+                conversation_idAdapter = uuidAdapter,
+                applicant_idAdapter = uuidAdapter,
+                statusAdapter = EnumColumnAdapter(),
+                handled_byAdapter = uuidAdapter,
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+            ),
+        ConversationEntityAdapter =
+            ConversationEntity.Adapter(
+                idAdapter = uuidAdapter,
+                typeAdapter = EnumColumnAdapter(),
+                last_message_idAdapter = uuidAdapter,
+                metadataAdapter = conversationMetadataAdapter,
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+                deleted_atAdapter = instantAdapter,
+            ),
+        GroupProfileEntityAdapter =
+            GroupProfileEntity.Adapter(
+                conversation_idAdapter = uuidAdapter,
+                owner_idAdapter = uuidAdapter,
+                settingsAdapter = groupSettingsAdapter,
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+            ),
+        MessageEntityAdapter =
+            MessageEntity.Adapter(
+                idAdapter = uuidAdapter,
+                conversation_idAdapter = uuidAdapter,
+                user_idAdapter = uuidAdapter,
+                categoryAdapter = EnumColumnAdapter(),
+                render_typeAdapter = EnumColumnAdapter(),
+                contentAdapter = messageContentAdapter,
+                reply_to_message_idAdapter = uuidAdapter,
+                created_atAdapter = instantAdapter,
+                revoked_atAdapter = instantAdapter,
+                local_send_statusAdapter = EnumColumnAdapter(),
+            ),
+        ParticipantEntityAdapter =
+            ParticipantEntity.Adapter(
+                conversation_idAdapter = uuidAdapter,
+                user_idAdapter = uuidAdapter,
+                roleAdapter = EnumColumnAdapter(),
+                last_read_message_idAdapter = uuidAdapter,
+                joined_atAdapter = instantAdapter,
+                muted_untilAdapter = instantAdapter,
+                settingsAdapter = participantSettingsAdapter,
+            ),
+        UserEntityAdapter =
+            UserEntity.Adapter(
+                idAdapter = uuidAdapter,
+                created_atAdapter = instantAdapter,
+                updated_atAdapter = instantAdapter,
+                deleted_atAdapter = instantAdapter,
+                roleAdapter = EnumColumnAdapter(),
+            ),
     )
 }
 
@@ -157,19 +167,22 @@ class DatabaseHolder(
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val mutex = Mutex()
+
     @Volatile
     private var currentDb: ChatDatabase? = null
     private var currentDriver: SqlDriver? = null
     private var currentUserId: Uuid? = null
     private var currentServerKey: String? = null
+
     @Volatile
     private var currentGeneration: Long = 0L
 
-    private val managedSessionGate = ManagedDatabaseSessionGate(
-        dispatcher = dispatcher,
-        activeDbProvider = { currentDb },
-        activeGenerationProvider = { currentGeneration },
-    )
+    private val managedSessionGate =
+        ManagedDatabaseSessionGate(
+            dispatcher = dispatcher,
+            activeDbProvider = { currentDb },
+            activeGenerationProvider = { currentGeneration },
+        )
 
     val sessionGate: DatabaseSessionGate
         get() = managedSessionGate
@@ -179,39 +192,45 @@ class DatabaseHolder(
      * serverKeyFor in core:network): the same userId on two servers are two
      * different people and must never share a driver.
      */
-    suspend fun getOrCreateDatabase(userId: Uuid, serverKey: String, generation: Long? = null): ChatDatabase = mutex.withLock {
-        if (currentUserId == userId && currentServerKey == serverKey && currentDb != null) {
-            if (generation != null) {
-                if (generation != currentGeneration) managedSessionGate.stop()
-                currentGeneration = generation
+    suspend fun getOrCreateDatabase(
+        userId: Uuid,
+        serverKey: String,
+        generation: Long? = null,
+    ): ChatDatabase =
+        mutex.withLock {
+            if (currentUserId == userId && currentServerKey == serverKey && currentDb != null) {
+                if (generation != null) {
+                    if (generation != currentGeneration) managedSessionGate.stop()
+                    currentGeneration = generation
+                }
+                managedSessionGate.start()
+                return@withLock currentDb!!
             }
-            managedSessionGate.start()
-            return@withLock currentDb!!
-        }
 
-        managedSessionGate.stop()
-        closeLocked()
-
-        // shortcut: databases created before server namespacing
-        // (`chat_<userId>.db`) are orphaned on upgrade — their content is a
-        // re-syncable cache, so they are left in place rather than migrated.
-        val dbName = "chat_${serverKey}_${userId}.db"
-        try {
-            val openedDb = createDatabase { schema ->
-                provideDbDriver(schema, platformContext, dbName).also { currentDriver = it }
-            }
-            currentDb = openedDb
-            currentUserId = userId
-            currentServerKey = serverKey
-            currentGeneration = if (generation != null && generation > 0L) generation else 1L
-            managedSessionGate.start()
-            openedDb
-        } catch (t: Throwable) {
             managedSessionGate.stop()
             closeLocked()
-            throw t
+
+            // shortcut: databases created before server namespacing
+            // (`chat_<userId>.db`) are orphaned on upgrade — their content is a
+            // re-syncable cache, so they are left in place rather than migrated.
+            val dbName = "chat_${serverKey}_$userId.db"
+            try {
+                val openedDb =
+                    createDatabase { schema ->
+                        provideDbDriver(schema, platformContext, dbName).also { currentDriver = it }
+                    }
+                currentDb = openedDb
+                currentUserId = userId
+                currentServerKey = serverKey
+                currentGeneration = if (generation != null && generation > 0L) generation else 1L
+                managedSessionGate.start()
+                openedDb
+            } catch (t: Throwable) {
+                managedSessionGate.stop()
+                closeLocked()
+                throw t
+            }
         }
-    }
 
     /**
      * Cancels all active database query observation Flows and PagingSource
@@ -226,7 +245,11 @@ class DatabaseHolder(
      * `(userId, serverKey)` and, when [generation] is supplied, the same
      * session generation.
      */
-    suspend fun closeDatabaseIfCurrent(userId: Uuid, serverKey: String, generation: Long? = null) = mutex.withLock {
+    suspend fun closeDatabaseIfCurrent(
+        userId: Uuid,
+        serverKey: String,
+        generation: Long? = null,
+    ) = mutex.withLock {
         if (currentUserId == userId && currentServerKey == serverKey &&
             (generation == null || currentGeneration == generation)
         ) {
@@ -245,7 +268,5 @@ class DatabaseHolder(
         currentGeneration = 0L
     }
 
-    fun getActiveDatabase(): ChatDatabase {
-        return currentDb ?: throw IllegalStateException("Database is not initialized! User is not logged in.")
-    }
+    fun getActiveDatabase(): ChatDatabase = currentDb ?: throw IllegalStateException("Database is not initialized! User is not logged in.")
 }

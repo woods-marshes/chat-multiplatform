@@ -26,7 +26,6 @@ import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class GroupMembershipServiceTest {
-
     private val conversationRepository = mockk<ConversationRepository>()
     private val participantRepository = mockk<ConversationParticipantRepository>()
     private val groupJoinRequestRepository = mockk<GroupJoinRequestRepository>()
@@ -34,113 +33,123 @@ class GroupMembershipServiceTest {
     private val contactRepository = mockk<ContactRepository>()
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
 
-    private val service = GroupMembershipService(
-        conversationRepository = conversationRepository,
-        conversationParticipantRepository = participantRepository,
-        groupJoinRequestRepository = groupJoinRequestRepository,
-        groupProfileRepository = groupProfileRepository,
-        contactRepository = contactRepository,
-        eventBus = eventBus,
-    )
+    private val service =
+        GroupMembershipService(
+            conversationRepository = conversationRepository,
+            conversationParticipantRepository = participantRepository,
+            groupJoinRequestRepository = groupJoinRequestRepository,
+            groupProfileRepository = groupProfileRepository,
+            contactRepository = contactRepository,
+            eventBus = eventBus,
+        )
 
     @Test
-    fun leaveGroupDeletesParticipantRowOfTheRequestingUser() = runBlocking {
-        val conversationId = Uuid.random()
-        val userId = Uuid.random()
-        val now = Clock.System.now()
-        val conversation = Conversation(
-            id = conversationId,
-            type = ConversationType.GROUP,
-            metadata = GroupMetadata(),
-            createdAt = now,
-            updatedAt = now,
-            deletedAt = null,
-            lastMessageId = null,
-        )
-        val groupProfile = GroupProfile(
-            conversationId = conversationId,
-            name = "group",
-            handle = null,
-            description = null,
-            avatarUrl = null,
-            ownerId = userId,
-            settings = GroupSettings(),
-            createdAt = now,
-            updatedAt = now,
-        )
-        coEvery { conversationRepository.getConversationWithGroupProfile(conversationId) } returns
-            (conversation to groupProfile)
-        coEvery { participantRepository.getConversationParticipant(userId, conversationId) } returns
-            ConversationParticipant(
-                conversationId = conversationId,
-                userId = userId,
-                role = ConversationRole.MEMBER,
-                lastReadMessageId = null,
-                joinedAt = now,
-                settings = ParticipantSettings(),
-            )
-        coEvery { participantRepository.deleteConversationParticipant(any(), any()) } returns true
+    fun leaveGroupDeletesParticipantRowOfTheRequestingUser() =
+        runBlocking {
+            val conversationId = Uuid.random()
+            val userId = Uuid.random()
+            val now = Clock.System.now()
+            val conversation =
+                Conversation(
+                    id = conversationId,
+                    type = ConversationType.GROUP,
+                    metadata = GroupMetadata(),
+                    createdAt = now,
+                    updatedAt = now,
+                    deletedAt = null,
+                    lastMessageId = null,
+                )
+            val groupProfile =
+                GroupProfile(
+                    conversationId = conversationId,
+                    name = "group",
+                    handle = null,
+                    description = null,
+                    avatarUrl = null,
+                    ownerId = userId,
+                    settings = GroupSettings(),
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            coEvery { conversationRepository.getConversationWithGroupProfile(conversationId) } returns
+                (conversation to groupProfile)
+            coEvery { participantRepository.getConversationParticipant(userId, conversationId) } returns
+                ConversationParticipant(
+                    conversationId = conversationId,
+                    userId = userId,
+                    role = ConversationRole.MEMBER,
+                    lastReadMessageId = null,
+                    joinedAt = now,
+                    settings = ParticipantSettings(),
+                )
+            coEvery { participantRepository.deleteConversationParticipant(any(), any()) } returns true
 
-        val result = service.leaveGroup(conversationId, userId)
+            val result = service.leaveGroup(conversationId, userId)
 
-        assertTrue(result.isOk)
-        coVerify(exactly = 1) {
-            participantRepository.deleteConversationParticipant(userId, conversationId)
+            assertTrue(result.isOk)
+            coVerify(exactly = 1) {
+                participantRepository.deleteConversationParticipant(userId, conversationId)
+            }
         }
-    }
 
     @Test
-    fun ownerCannotLeaveGroup() = runBlocking {
-        val conversationId = Uuid.random()
-        val ownerId = Uuid.random()
-        val now = Clock.System.now()
-        val conversation = Conversation(
-            id = conversationId,
-            type = ConversationType.GROUP,
-            metadata = GroupMetadata(),
-            createdAt = now,
-            updatedAt = now,
-            deletedAt = null,
-            lastMessageId = null,
-        )
-        val groupProfile = GroupProfile(
-            conversationId = conversationId,
-            name = "group",
-            handle = null,
-            description = null,
-            avatarUrl = null,
-            ownerId = ownerId,
-            settings = GroupSettings(),
-            createdAt = now,
-            updatedAt = now,
-        )
-        coEvery { conversationRepository.getConversationWithGroupProfile(conversationId) } returns
-            (conversation to groupProfile)
-        coEvery { participantRepository.getConversationParticipant(ownerId, conversationId) } returns
-            ConversationParticipant(
-                conversationId = conversationId,
-                userId = ownerId,
-                role = ConversationRole.OWNER,
-                lastReadMessageId = null,
-                joinedAt = now,
-                settings = ParticipantSettings(),
-            )
+    fun ownerCannotLeaveGroup() =
+        runBlocking {
+            val conversationId = Uuid.random()
+            val ownerId = Uuid.random()
+            val now = Clock.System.now()
+            val conversation =
+                Conversation(
+                    id = conversationId,
+                    type = ConversationType.GROUP,
+                    metadata = GroupMetadata(),
+                    createdAt = now,
+                    updatedAt = now,
+                    deletedAt = null,
+                    lastMessageId = null,
+                )
+            val groupProfile =
+                GroupProfile(
+                    conversationId = conversationId,
+                    name = "group",
+                    handle = null,
+                    description = null,
+                    avatarUrl = null,
+                    ownerId = ownerId,
+                    settings = GroupSettings(),
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            coEvery { conversationRepository.getConversationWithGroupProfile(conversationId) } returns
+                (conversation to groupProfile)
+            coEvery { participantRepository.getConversationParticipant(ownerId, conversationId) } returns
+                ConversationParticipant(
+                    conversationId = conversationId,
+                    userId = ownerId,
+                    role = ConversationRole.OWNER,
+                    lastReadMessageId = null,
+                    joinedAt = now,
+                    settings = ParticipantSettings(),
+                )
 
-        val result = service.leaveGroup(conversationId, ownerId)
+            val result = service.leaveGroup(conversationId, ownerId)
 
-        assertTrue(result.isErr)
-        coVerify(exactly = 0) { participantRepository.deleteConversationParticipant(any(), any()) }
-    }
+            assertTrue(result.isErr)
+            coVerify(exactly = 0) { participantRepository.deleteConversationParticipant(any(), any()) }
+        }
 
-    private fun participantOf(conversationId: Uuid, userId: Uuid, role: ConversationRole) =
-        ConversationParticipant(
-            conversationId = conversationId,
-            userId = userId,
-            role = role,
-            lastReadMessageId = null,
-            joinedAt = Clock.System.now(),
-            settings = ParticipantSettings(),
-        )
+    private fun participantOf(
+        conversationId: Uuid,
+        userId: Uuid,
+        role: ConversationRole,
+    ) = ConversationParticipant(
+        conversationId = conversationId,
+        userId = userId,
+        role = role,
+        lastReadMessageId = null,
+        joinedAt = Clock.System.now(),
+        settings = ParticipantSettings(),
+    )
 
     private fun groupContext(
         conversationId: Uuid,
@@ -175,80 +184,84 @@ class GroupMembershipServiceTest {
     }
 
     @Test
-    fun inviteUsersToGroupInvitesOnlyFriendsAndPublishesOnce() = runBlocking {
-        val conversationId = Uuid.random()
-        val inviterId = Uuid.random()
-        val friend = Uuid.random()
-        val stranger = Uuid.random()
-        coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns
-            groupContext(conversationId, inviterId, ConversationRole.MEMBER, allowMemberInvite = true)
-        coEvery { contactRepository.getFriendIds(inviterId) } returns listOf(friend)
-        coEvery {
-            participantRepository.inviteUsersToConversation(conversationId, inviterId, setOf(friend))
-        } returns listOf(participantOf(conversationId, friend, ConversationRole.MEMBER))
+    fun inviteUsersToGroupInvitesOnlyFriendsAndPublishesOnce() =
+        runBlocking {
+            val conversationId = Uuid.random()
+            val inviterId = Uuid.random()
+            val friend = Uuid.random()
+            val stranger = Uuid.random()
+            coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns
+                groupContext(conversationId, inviterId, ConversationRole.MEMBER, allowMemberInvite = true)
+            coEvery { contactRepository.getFriendIds(inviterId) } returns listOf(friend)
+            coEvery {
+                participantRepository.inviteUsersToConversation(conversationId, inviterId, setOf(friend))
+            } returns listOf(participantOf(conversationId, friend, ConversationRole.MEMBER))
 
-        val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(friend, stranger))
+            val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(friend, stranger))
 
-        assertTrue(result.isOk)
-        // The stranger is filtered out before the write; only the friend row is invited.
-        coVerify(exactly = 1) {
-            participantRepository.inviteUsersToConversation(conversationId, inviterId, setOf(friend))
+            assertTrue(result.isOk)
+            // The stranger is filtered out before the write; only the friend row is invited.
+            coVerify(exactly = 1) {
+                participantRepository.inviteUsersToConversation(conversationId, inviterId, setOf(friend))
+            }
+            coVerify(exactly = 1) {
+                eventBus.publishConversationEvent(
+                    match {
+                        it is ConversationEvent.UserJoinedConversation &&
+                            it.conversationId == conversationId &&
+                            it.userId == listOf(friend) &&
+                            it.inviterId == inviterId
+                    },
+                )
+            }
         }
-        coVerify(exactly = 1) {
-            eventBus.publishConversationEvent(
-                match {
-                    it is ConversationEvent.UserJoinedConversation &&
-                        it.conversationId == conversationId &&
-                        it.userId == listOf(friend) &&
-                        it.inviterId == inviterId
-                }
-            )
+
+    @Test
+    fun inviteUsersToGroupFailsWhenNothingCanBeInvited() =
+        runBlocking {
+            val conversationId = Uuid.random()
+            val inviterId = Uuid.random()
+            val target = Uuid.random()
+            coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns
+                groupContext(conversationId, inviterId, ConversationRole.MEMBER, allowMemberInvite = true)
+            // Current pinned semantics: no invitable target (not a friend, or
+            // already a member) collapses into OperationFailed.
+            coEvery { contactRepository.getFriendIds(inviterId) } returns emptyList()
+            coEvery {
+                participantRepository.inviteUsersToConversation(conversationId, inviterId, emptySet())
+            } returns emptyList()
+
+            val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(target))
+
+            assertTrue(result.isErr)
+            coVerify(exactly = 0) { eventBus.publishConversationEvent(any()) }
         }
-    }
 
     @Test
-    fun inviteUsersToGroupFailsWhenNothingCanBeInvited() = runBlocking {
-        val conversationId = Uuid.random()
-        val inviterId = Uuid.random()
-        val target = Uuid.random()
-        coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns
-            groupContext(conversationId, inviterId, ConversationRole.MEMBER, allowMemberInvite = true)
-        // Current pinned semantics: no invitable target (not a friend, or
-        // already a member) collapses into OperationFailed.
-        coEvery { contactRepository.getFriendIds(inviterId) } returns emptyList()
-        coEvery {
-            participantRepository.inviteUsersToConversation(conversationId, inviterId, emptySet())
-        } returns emptyList()
+    fun memberCannotInviteWhenGroupDisallowsMemberInvite() =
+        runBlocking {
+            val conversationId = Uuid.random()
+            val inviterId = Uuid.random()
+            coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns
+                groupContext(conversationId, inviterId, ConversationRole.MEMBER, allowMemberInvite = false)
 
-        val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(target))
+            val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(Uuid.random()))
 
-        assertTrue(result.isErr)
-        coVerify(exactly = 0) { eventBus.publishConversationEvent(any()) }
-    }
+            assertTrue(result.isErr)
+            coVerify(exactly = 0) { participantRepository.inviteUsersToConversation(any(), any(), any()) }
+            coVerify(exactly = 0) { eventBus.publishConversationEvent(any()) }
+        }
 
     @Test
-    fun memberCannotInviteWhenGroupDisallowsMemberInvite() = runBlocking {
-        val conversationId = Uuid.random()
-        val inviterId = Uuid.random()
-        coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns
-            groupContext(conversationId, inviterId, ConversationRole.MEMBER, allowMemberInvite = false)
+    fun nonParticipantCannotInvite() =
+        runBlocking {
+            val conversationId = Uuid.random()
+            val inviterId = Uuid.random()
+            coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns null
 
-        val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(Uuid.random()))
+            val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(Uuid.random()))
 
-        assertTrue(result.isErr)
-        coVerify(exactly = 0) { participantRepository.inviteUsersToConversation(any(), any(), any()) }
-        coVerify(exactly = 0) { eventBus.publishConversationEvent(any()) }
-    }
-
-    @Test
-    fun nonParticipantCannotInvite() = runBlocking {
-        val conversationId = Uuid.random()
-        val inviterId = Uuid.random()
-        coEvery { participantRepository.getGroupParticipantContext(inviterId, conversationId) } returns null
-
-        val result = service.inviteUsersToGroup(conversationId, inviterId, listOf(Uuid.random()))
-
-        assertEquals(true, result.isErr)
-        coVerify(exactly = 0) { participantRepository.inviteUsersToConversation(any(), any(), any()) }
-    }
+            assertEquals(true, result.isErr)
+            coVerify(exactly = 0) { participantRepository.inviteUsersToConversation(any(), any(), any()) }
+        }
 }

@@ -32,4 +32,3 @@ data class LastMessageInfo(
     val isOwnMessage: Boolean = false,
     val revokedAt: Instant? = null,
 )
-

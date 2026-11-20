@@ -39,11 +39,25 @@ interface RealtimeDelivery {
      * false if rejected (unregistered, queue full, closing, or delivery closed).
      * Does NOT create or resurrect writers on send.
      */
-    suspend fun sendToSession(session: WebSocketServerSession, data: RealtimeEvent): Boolean
+    suspend fun sendToSession(
+        session: WebSocketServerSession,
+        data: RealtimeEvent,
+    ): Boolean
 
-    suspend fun sendToUser(userId: Uuid, data: RealtimeEvent)
-    suspend fun sendToUsers(userIds: List<Uuid>, data: RealtimeEvent)
-    suspend fun sendToConversation(conversationId: Uuid, data: RealtimeEvent)
+    suspend fun sendToUser(
+        userId: Uuid,
+        data: RealtimeEvent,
+    )
+
+    suspend fun sendToUsers(
+        userIds: List<Uuid>,
+        data: RealtimeEvent,
+    )
+
+    suspend fun sendToConversation(
+        conversationId: Uuid,
+        data: RealtimeEvent,
+    )
 
     /**
      * Drops the cached member set of [conversationId] so the next broadcast reads
@@ -67,8 +81,8 @@ class WebSocketRealtimeDelivery(
     private val queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     private val sender: suspend (WebSocketServerSession, RealtimeEvent) -> Unit =
         { session, event -> session.sendSerialized<RealtimeEvent>(event) },
-) : RealtimeDelivery, AutoCloseable {
-
+) : RealtimeDelivery,
+    AutoCloseable {
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 64
         private const val SOCKET_CLOSE_TIMEOUT_MS = 2000L
@@ -88,7 +102,10 @@ class WebSocketRealtimeDelivery(
     private var isClosed = false
     private val writers = HashMap<WebSocketServerSession, ConnectionWriter>()
 
-    private class CachedParticipants(val members: List<Uuid>, val expiresAtNanos: Long)
+    private class CachedParticipants(
+        val members: List<Uuid>,
+        val expiresAtNanos: Long,
+    )
 
     private val participantCache = ConcurrentHashMap<Uuid, CachedParticipants>()
 
@@ -124,39 +141,41 @@ class WebSocketRealtimeDelivery(
     ) {
         val channel = Channel<RealtimeEvent>(capacity)
         val isClosing = AtomicBoolean(false)
-        val job: Job = scope.launch(start = CoroutineStart.LAZY) {
-            var exitReason = CloseReason(CloseReason.Codes.NORMAL, "Session completed")
-            try {
-                for (event in channel) {
-                    if (!isActive || !session.isActive) {
-                        exitReason = CloseReason(CloseReason.Codes.NORMAL, "Session inactive")
-                        break
+        val job: Job =
+            scope.launch(start = CoroutineStart.LAZY) {
+                var exitReason = CloseReason(CloseReason.Codes.NORMAL, "Session completed")
+                try {
+                    for (event in channel) {
+                        if (!isActive || !session.isActive) {
+                            exitReason = CloseReason(CloseReason.Codes.NORMAL, "Session inactive")
+                            break
+                        }
+                        sender(session, event)
                     }
-                    sender(session, event)
-                }
-            } catch (e: CancellationException) {
-                exitReason = CloseReason(CloseReason.Codes.NORMAL, "Cancelled")
-                throw e
-            } catch (e: Exception) {
-                logger.error("Failed to deliver realtime event: ${e.message}", e)
-                exitReason = CloseReason(CloseReason.Codes.GOING_AWAY, "Delivery failed")
-            } finally {
-                channel.cancel()
-                if (isClosing.compareAndSet(false, true)) {
-                    onTeardown(this@ConnectionWriter, exitReason)
+                } catch (e: CancellationException) {
+                    exitReason = CloseReason(CloseReason.Codes.NORMAL, "Cancelled")
+                    throw e
+                } catch (e: Exception) {
+                    logger.error("Failed to deliver realtime event: ${e.message}", e)
+                    exitReason = CloseReason(CloseReason.Codes.GOING_AWAY, "Delivery failed")
+                } finally {
+                    channel.cancel()
+                    if (isClosing.compareAndSet(false, true)) {
+                        onTeardown(this@ConnectionWriter, exitReason)
+                    }
                 }
             }
-        }
 
         fun installCompletionHandler() {
             job.invokeOnCompletion { cause ->
                 channel.cancel()
                 if (isClosing.compareAndSet(false, true)) {
-                    val reason = when (cause) {
-                        null -> CloseReason(CloseReason.Codes.NORMAL, "Job completed")
-                        is CancellationException -> CloseReason(CloseReason.Codes.NORMAL, "Cancelled")
-                        else -> CloseReason(CloseReason.Codes.GOING_AWAY, "Delivery failed")
-                    }
+                    val reason =
+                        when (cause) {
+                            null -> CloseReason(CloseReason.Codes.NORMAL, "Job completed")
+                            is CancellationException -> CloseReason(CloseReason.Codes.NORMAL, "Cancelled")
+                            else -> CloseReason(CloseReason.Codes.GOING_AWAY, "Delivery failed")
+                        }
                     onTeardown(this@ConnectionWriter, reason)
                 }
             }
@@ -193,21 +212,23 @@ class WebSocketRealtimeDelivery(
     }
 
     override fun registerSession(session: WebSocketServerSession): Boolean {
-        val writerToStart: ConnectionWriter = synchronized(lock) {
-            if (isClosed || !scope.isActive || !session.isActive || writers.containsKey(session)) {
-                return false
+        val writerToStart: ConnectionWriter =
+            synchronized(lock) {
+                if (isClosed || !scope.isActive || !session.isActive || writers.containsKey(session)) {
+                    return false
+                }
+                val writer =
+                    ConnectionWriter(
+                        session = session,
+                        capacity = queueCapacity,
+                        scope = scope,
+                        logger = logger,
+                        sender = sender,
+                        onTeardown = ::teardownFromWriter,
+                    )
+                writers[session] = writer
+                writer
             }
-            val writer = ConnectionWriter(
-                session = session,
-                capacity = queueCapacity,
-                scope = scope,
-                logger = logger,
-                sender = sender,
-                onTeardown = ::teardownFromWriter,
-            )
-            writers[session] = writer
-            writer
-        }
         // Install completion handler after writers[session] is established.
         // If the job was already cancelled (e.g. parent scope cancelled in flight),
         // invokeOnCompletion fires immediately and cleans up without lingering.
@@ -216,53 +237,75 @@ class WebSocketRealtimeDelivery(
         return true
     }
 
-    private fun teardownFromWriter(writer: ConnectionWriter, reason: CloseReason) {
-        val closeWork = synchronized(lock) {
-            if (writers[writer.session] === writer) {
-                writers.remove(writer.session)
-                sessions.remove(writer.session)
-                CloseWorkItem(writer.session, writer, reason)
-            } else null
-        }
+    private fun teardownFromWriter(
+        writer: ConnectionWriter,
+        reason: CloseReason,
+    ) {
+        val closeWork =
+            synchronized(lock) {
+                if (writers[writer.session] === writer) {
+                    writers.remove(writer.session)
+                    sessions.remove(writer.session)
+                    CloseWorkItem(writer.session, writer, reason)
+                } else {
+                    null
+                }
+            }
         if (closeWork != null) {
             executeCloseWork(closeWork)
         }
     }
 
     override fun closeSession(session: WebSocketServerSession) {
-        val closeWork = synchronized(lock) {
-            val writer = writers.remove(session)
-            sessions.remove(session)
-            if (writer != null) {
-                CloseWorkItem(session, writer, CloseReason(CloseReason.Codes.NORMAL, "Session closed"))
-            } else null
-        }
+        val closeWork =
+            synchronized(lock) {
+                val writer = writers.remove(session)
+                sessions.remove(session)
+                if (writer != null) {
+                    CloseWorkItem(session, writer, CloseReason(CloseReason.Codes.NORMAL, "Session closed"))
+                } else {
+                    null
+                }
+            }
         if (closeWork != null) {
             executeCloseWork(closeWork)
         }
     }
 
-    override suspend fun sendToSession(session: WebSocketServerSession, data: RealtimeEvent): Boolean {
-        val writer = synchronized(lock) {
-            if (isClosed) null else writers[session]
-        } ?: return false
+    override suspend fun sendToSession(
+        session: WebSocketServerSession,
+        data: RealtimeEvent,
+    ): Boolean {
+        val writer =
+            synchronized(lock) {
+                if (isClosed) null else writers[session]
+            } ?: return false
         return writer.enqueue(data)
     }
 
-    override suspend fun sendToUser(userId: Uuid, data: RealtimeEvent) {
+    override suspend fun sendToUser(
+        userId: Uuid,
+        data: RealtimeEvent,
+    ) {
         val userSessions = sessions.getSessions(userId)
         userSessions.forEach { session ->
             sendToSession(session, data)
         }
     }
 
-    override suspend fun sendToUsers(userIds: List<Uuid>, data: RealtimeEvent) {
+    override suspend fun sendToUsers(
+        userIds: List<Uuid>,
+        data: RealtimeEvent,
+    ) {
         userIds.forEach { userId ->
             sendToUser(userId, data)
         }
     }
 
-    override suspend fun sendToConversation(conversationId: Uuid, data: RealtimeEvent) {
+    override suspend fun sendToConversation(
+        conversationId: Uuid,
+        data: RealtimeEvent,
+    ) {
         conversationMembers(conversationId).forEach { userId ->
             sessions.getSessions(userId).forEach { session ->
                 sendToSession(session, data)
@@ -294,40 +337,46 @@ class WebSocketRealtimeDelivery(
     }
 
     override fun close() {
-        val itemsToClose = synchronized(lock) {
-            if (isClosed) return
-            isClosed = true
-            val list = writers.map { (session, writer) ->
-                sessions.remove(session)
-                CloseWorkItem(session, writer, CloseReason(CloseReason.Codes.GOING_AWAY, "Server shutdown"))
+        val itemsToClose =
+            synchronized(lock) {
+                if (isClosed) return
+                isClosed = true
+                val list =
+                    writers.map { (session, writer) ->
+                        sessions.remove(session)
+                        CloseWorkItem(session, writer, CloseReason(CloseReason.Codes.GOING_AWAY, "Server shutdown"))
+                    }
+                writers.clear()
+                list
             }
-            writers.clear()
-            list
-        }
         itemsToClose.forEach { executeCloseWork(it) }
     }
 
     private fun executeCloseWork(item: CloseWorkItem) {
         item.writer.cancelAndDiscard(item.reason)
         if (scope.isActive) {
-            val closeJob = scope.launch {
-                try {
-                    val closedGracefully = withTimeoutOrNull(SOCKET_CLOSE_TIMEOUT_MS) {
-                        if (item.session.isActive) {
-                            item.session.close(item.reason)
-                            true
-                        } else false
-                    } ?: false
+            val closeJob =
+                scope.launch {
+                    try {
+                        val closedGracefully =
+                            withTimeoutOrNull(SOCKET_CLOSE_TIMEOUT_MS) {
+                                if (item.session.isActive) {
+                                    item.session.close(item.reason)
+                                    true
+                                } else {
+                                    false
+                                }
+                            } ?: false
 
-                    if (!closedGracefully && item.session.isActive) {
-                        // Close call timed out or was unacknowledged: cancel the session
-                        // scope to guarantee no lingering connection remains.
-                        item.session.cancel()
+                        if (!closedGracefully && item.session.isActive) {
+                            // Close call timed out or was unacknowledged: cancel the session
+                            // scope to guarantee no lingering connection remains.
+                            item.session.cancel()
+                        }
+                    } catch (_: Exception) {
+                        runCatching { item.session.cancel() }
                     }
-                } catch (_: Exception) {
-                    runCatching { item.session.cancel() }
                 }
-            }
             closeJob.invokeOnCompletion { cause ->
                 // If closeJob is cancelled before or during execution (e.g. parent
                 // scope cancelled while closeJob is in the dispatcher queue),
@@ -343,5 +392,6 @@ class WebSocketRealtimeDelivery(
     }
 
     internal fun getActiveWritersCount(): Int = synchronized(lock) { writers.size }
+
     internal fun getWriterForTest(session: WebSocketServerSession): ConnectionWriter? = synchronized(lock) { writers[session] }
 }

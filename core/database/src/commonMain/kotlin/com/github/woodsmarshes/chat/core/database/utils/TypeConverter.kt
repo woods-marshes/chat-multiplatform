@@ -12,25 +12,19 @@ import kotlinx.serialization.json.JsonElement
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-val instantAdapter = object : ColumnAdapter<Instant, Long> {
-    override fun decode(databaseValue: Long): Instant {
-        return Instant.fromEpochMilliseconds(databaseValue)
+val instantAdapter =
+    object : ColumnAdapter<Instant, Long> {
+        override fun decode(databaseValue: Long): Instant = Instant.fromEpochMilliseconds(databaseValue)
+
+        override fun encode(value: Instant): Long = value.toEpochMilliseconds()
     }
 
-    override fun encode(value: Instant): Long {
-        return value.toEpochMilliseconds()
-    }
-}
+val uuidAdapter =
+    object : ColumnAdapter<Uuid, ByteArray> {
+        override fun decode(databaseValue: ByteArray): Uuid = Uuid.fromByteArray(databaseValue)
 
-val uuidAdapter = object : ColumnAdapter<Uuid, ByteArray> {
-    override fun decode(databaseValue: ByteArray): Uuid {
-        return Uuid.fromByteArray(databaseValue)
+        override fun encode(value: Uuid): ByteArray = value.toByteArray()
     }
-
-    override fun encode(value: Uuid): ByteArray {
-        return value.toByteArray()
-    }
-}
 
 /**
  * DB-side mirror of the wire format (core:network ProjectJson) with the same
@@ -38,68 +32,51 @@ val uuidAdapter = object : ColumnAdapter<Uuid, ByteArray> {
  * a newer app version must not make previously persisted rows undecodable.
  * Kept local so core:database does not depend on core:network.
  */
-private val DbJson = Json {
-    classDiscriminator = "type"
-    ignoreUnknownKeys = true
-    isLenient = true
-}
-
-val participantSettingsAdapter = object : ColumnAdapter<ParticipantSettings, String> {
-    override fun decode(databaseValue: String): ParticipantSettings {
-        return DbJson.decodeFromString(databaseValue)
+private val DbJson =
+    Json {
+        classDiscriminator = "type"
+        ignoreUnknownKeys = true
+        isLenient = true
     }
 
-    override fun encode(value: ParticipantSettings): String {
-        return DbJson.encodeToString(value)
-    }
-}
+val participantSettingsAdapter =
+    object : ColumnAdapter<ParticipantSettings, String> {
+        override fun decode(databaseValue: String): ParticipantSettings = DbJson.decodeFromString(databaseValue)
 
-val groupSettingsAdapter = object : ColumnAdapter<GroupSettings, String> {
-    override fun decode(databaseValue: String): GroupSettings {
-        return DbJson.decodeFromString(databaseValue)
+        override fun encode(value: ParticipantSettings): String = DbJson.encodeToString(value)
     }
 
-    override fun encode(value: GroupSettings): String {
-        return DbJson.encodeToString(value)
-    }
-}
+val groupSettingsAdapter =
+    object : ColumnAdapter<GroupSettings, String> {
+        override fun decode(databaseValue: String): GroupSettings = DbJson.decodeFromString(databaseValue)
 
-val conversationMetadataAdapter = object : ColumnAdapter<ConversationMetadata, String> {
-    override fun decode(databaseValue: String): ConversationMetadata {
-        return DbJson.decodeFromString(databaseValue)
+        override fun encode(value: GroupSettings): String = DbJson.encodeToString(value)
     }
 
-    override fun encode(value: ConversationMetadata): String {
-        return DbJson.encodeToString(value)
-    }
-}
+val conversationMetadataAdapter =
+    object : ColumnAdapter<ConversationMetadata, String> {
+        override fun decode(databaseValue: String): ConversationMetadata = DbJson.decodeFromString(databaseValue)
 
-val messageContentAdapter = object : ColumnAdapter<MessageContent, String> {
-    override fun decode(databaseValue: String): MessageContent {
-        return DbJson.decodeFromString(databaseValue)
+        override fun encode(value: ConversationMetadata): String = DbJson.encodeToString(value)
     }
 
-    override fun encode(value: MessageContent): String {
-        return DbJson.encodeToString(value)
-    }
-}
+val messageContentAdapter =
+    object : ColumnAdapter<MessageContent, String> {
+        override fun decode(databaseValue: String): MessageContent = DbJson.decodeFromString(databaseValue)
 
-val jsonElementAdapter = object : ColumnAdapter<JsonElement, String> {
-    override fun decode(databaseValue: String): JsonElement {
-        return DbJson.decodeFromString(databaseValue)
+        override fun encode(value: MessageContent): String = DbJson.encodeToString(value)
     }
 
-    override fun encode(value: JsonElement): String {
-        return DbJson.encodeToString(value)
-    }
-}
+val jsonElementAdapter =
+    object : ColumnAdapter<JsonElement, String> {
+        override fun decode(databaseValue: String): JsonElement = DbJson.decodeFromString(databaseValue)
 
-val articleStatsAdapter = object : ColumnAdapter<ArticleStats, String> {
-    override fun decode(databaseValue: String): ArticleStats {
-        return DbJson.decodeFromString(databaseValue)
+        override fun encode(value: JsonElement): String = DbJson.encodeToString(value)
     }
 
-    override fun encode(value: ArticleStats): String {
-        return DbJson.encodeToString(value)
+val articleStatsAdapter =
+    object : ColumnAdapter<ArticleStats, String> {
+        override fun decode(databaseValue: String): ArticleStats = DbJson.decodeFromString(databaseValue)
+
+        override fun encode(value: ArticleStats): String = DbJson.encodeToString(value)
     }
-}

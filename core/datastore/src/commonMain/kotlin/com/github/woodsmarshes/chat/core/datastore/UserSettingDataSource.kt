@@ -29,7 +29,7 @@ data class BoundCredentialIdentity(
 
 class UserSettingDataSource(
     private val dataStore: DataStore<Preferences>,
-    private val json: Json
+    private val json: Json,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -52,25 +52,30 @@ class UserSettingDataSource(
             .getOrNull()
     }
 
-    val userId: Flow<Uuid?> = dataStore.data.map { preferences ->
-        decodeOrNull<User>(preferences[Keys.USER])?.id
-    }
+    val userId: Flow<Uuid?> =
+        dataStore.data.map { preferences ->
+            decodeOrNull<User>(preferences[Keys.USER])?.id
+        }
 
-    val user: Flow<User?> = dataStore.data.map { preferences ->
-        decodeOrNull<User>(preferences[Keys.USER])
-    }
+    val user: Flow<User?> =
+        dataStore.data.map { preferences ->
+            decodeOrNull<User>(preferences[Keys.USER])
+        }
 
-    val preference: Flow<UserPreference?> = dataStore.data.map { preferences ->
-        decodeOrNull<UserPreference>(preferences[Keys.PREFERENCE])
-    }
+    val preference: Flow<UserPreference?> =
+        dataStore.data.map { preferences ->
+            decodeOrNull<UserPreference>(preferences[Keys.PREFERENCE])
+        }
 
-    val privacySetting: Flow<PrivacySetting?> = dataStore.data.map { preferences ->
-        decodeOrNull<PrivacySetting>(preferences[Keys.PRIVACY_SETTING])
-    }
+    val privacySetting: Flow<PrivacySetting?> =
+        dataStore.data.map { preferences ->
+            decodeOrNull<PrivacySetting>(preferences[Keys.PRIVACY_SETTING])
+        }
 
-    val updatedAt: Flow<Instant?> = dataStore.data.map { preferences ->
-        preferences[Keys.UPDATED_AT]?.let { Instant.fromEpochSeconds(it) }
-    }
+    val updatedAt: Flow<Instant?> =
+        dataStore.data.map { preferences ->
+            preferences[Keys.UPDATED_AT]?.let { Instant.fromEpochSeconds(it) }
+        }
 
     suspend fun setPreference(preference: UserPreference) {
         dataStore.edit {
@@ -173,13 +178,14 @@ class UserSettingDataSource(
         return true
     }
 
-    internal fun sharesDataStoreWith(other: DataStore<Preferences>): Boolean =
-        dataStore === other
+    internal fun sharesDataStoreWith(other: DataStore<Preferences>): Boolean = dataStore === other
 
-    internal fun decodeUserFromPreferences(preferences: Preferences): User? =
-        decodeOrNull<User>(preferences[Keys.USER])
+    internal fun decodeUserFromPreferences(preferences: Preferences): User? = decodeOrNull<User>(preferences[Keys.USER])
 
-    internal fun writeUserInPlace(preferences: MutablePreferences, user: User) {
+    internal fun writeUserInPlace(
+        preferences: MutablePreferences,
+        user: User,
+    ) {
         preferences[Keys.USER] = json.encodeToString(user)
     }
 

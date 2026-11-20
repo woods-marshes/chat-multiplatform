@@ -35,9 +35,12 @@ internal suspend fun persistServerMessage(
     asReplyTarget: Boolean = false,
 ) {
     val ownId = resolvedOwnUserId
-    val candidate = if (!asReplyTarget && ownId != null && message.sender?.id == ownId) {
-        ownRequestId?.let(Uuid::parseOrNull) ?: message.clientRequestId
-    } else null
+    val candidate =
+        if (!asReplyTarget && ownId != null && message.sender?.id == ownId) {
+            ownRequestId?.let(Uuid::parseOrNull) ?: message.clientRequestId
+        } else {
+            null
+        }
     messageDao.transaction {
         message.replyTo?.let { reply ->
             persistServerMessage(
@@ -67,11 +70,12 @@ internal suspend fun persistServerMessage(
             return@transaction
         }
         val local = candidate?.let { messageDao.findMessageById(it) }
-        val matchingId = candidate?.takeIf {
-            local != null && local.user_id == entity.user_id &&
-                local.conversation_id == message.conversationId &&
-                local.local_send_status in listOf(MessageStatus.SENDING, MessageStatus.FAILED)
-        }
+        val matchingId =
+            candidate?.takeIf {
+                local != null && local.user_id == entity.user_id &&
+                    local.conversation_id == message.conversationId &&
+                    local.local_send_status in listOf(MessageStatus.SENDING, MessageStatus.FAILED)
+            }
         messageDao.mergeServerMessage(entity, matchingId)
         if (conversationDao != null) {
             val currentLast = conversationDao.findConversationById(message.conversationId)?.last_message_id

@@ -1,6 +1,5 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.contract.api.V1
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateConversationRequest
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.HandleGroupRequest
@@ -9,6 +8,7 @@ import com.github.woodsmarshes.chat.core.contract.dto.conversation.InviteUsersRe
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.JoinGroupRequest
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.core.contract.dto.message.ReadReportRequest
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ConversationLifecycleService
 import com.github.woodsmarshes.chat.service.ConversationSettingsService
@@ -48,7 +48,7 @@ fun Route.conversationRoutes() {
     }
 
     authenticate {
-        //创建会话 (单聊或群聊)
+        // 创建会话 (单聊或群聊)
         post<V1.Conversations> {
             val userId = call.extractUserId()
             val req = call.receive<CreateConversationRequest>()
@@ -80,11 +80,12 @@ fun Route.conversationRoutes() {
         post<V1.Conversations.Id.InviteUsers> { params ->
             val userId = call.extractUserId()
             val req = call.receive<InviteUsersRequest>()
-            membersService.inviteUsersToGroup(
-                conversationId = params.parent.id,
-                inviterId = userId,
-                userIds = req.userIds
-            ).getOrThrow()
+            membersService
+                .inviteUsersToGroup(
+                    conversationId = params.parent.id,
+                    inviterId = userId,
+                    userIds = req.userIds,
+                ).getOrThrow()
             call.respond(mapOf("success" to true))
         }
 
@@ -130,24 +131,28 @@ fun Route.conversationRoutes() {
         // 获取消息历史
         get<V1.Conversations.Id.Messages> { params ->
             val userId = call.extractUserId()
-            val messages = messageService.getHistory(
-                userId = userId,
-                conversationId = params.parent.id,
-                limit = params.limit.coerceIn(1, MAX_PAGE_SIZE),
-                beforeId = params.beforeId,
-            ).getOrThrow()
+            val messages =
+                messageService
+                    .getHistory(
+                        userId = userId,
+                        conversationId = params.parent.id,
+                        limit = params.limit.coerceIn(1, MAX_PAGE_SIZE),
+                        beforeId = params.beforeId,
+                    ).getOrThrow()
             call.respond(messages)
         }
 
         // 搜索消息
         get<V1.Conversations.Id.Messages.Search> { params ->
             val userId = call.extractUserId()
-            val messages = messageService.searchMessages(
-                userId = userId,
-                conversationId = params.parent.parent.id,
-                keyword = params.keyword,
-                limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE)
-            ).getOrThrow()
+            val messages =
+                messageService
+                    .searchMessages(
+                        userId = userId,
+                        conversationId = params.parent.parent.id,
+                        keyword = params.keyword,
+                        limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE),
+                    ).getOrThrow()
             call.respond(messages)
         }
 
@@ -162,11 +167,13 @@ fun Route.conversationRoutes() {
         // 获取该群的申请列表 (管理员视角)
         get<V1.Conversations.Id.Requests> { params ->
             val userId = call.extractUserId()
-            val response = membersService.getGroupRequestsByConversation(
-                conversationId = params.parent.id,
-                adminId = userId,
-                status = params.status
-            ).getOrThrow()
+            val response =
+                membersService
+                    .getGroupRequestsByConversation(
+                        conversationId = params.parent.id,
+                        adminId = userId,
+                        status = params.status,
+                    ).getOrThrow()
             call.respond(response)
         }
 
@@ -174,10 +181,11 @@ fun Route.conversationRoutes() {
         post<V1.Conversations.Id.Requests> { params ->
             val userId = call.extractUserId()
             val req = call.receive<List<HandleGroupRequest>>() // { action: "APPROVE"/"REJECT", reason: "..." }
-            membersService.handleGroupRequest(
-                adminId = userId,
-                requests = req
-            ).getOrThrow()
+            membersService
+                .handleGroupRequest(
+                    adminId = userId,
+                    requests = req,
+                ).getOrThrow()
             call.respond(mapOf("success" to true))
         }
     }

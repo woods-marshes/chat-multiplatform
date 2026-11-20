@@ -23,7 +23,6 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.imageio.ImageIO
-import kotlin.uuid.Uuid
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -32,18 +31,19 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class FileServiceUploadTest {
-
     private val uploadStore = mockk<TemporaryUploadStore>(relaxUnitFun = true)
     private val privateFileRepository = mockk<PrivateFileRepository>()
     private val participantRepository = mockk<ConversationParticipantRepository>()
 
-    private val service = FileService(
-        uploadStore = uploadStore,
-        privateFileRepository = privateFileRepository,
-        participantRepository = participantRepository,
-    )
+    private val service =
+        FileService(
+            uploadStore = uploadStore,
+            privateFileRepository = privateFileRepository,
+            participantRepository = participantRepository,
+        )
 
     private val stored = mutableListOf<File>()
 
@@ -68,118 +68,130 @@ class FileServiceUploadTest {
     }
 
     @Test
-    fun uploadRejectsBlockedExtensions() = runBlocking {
-        val before = File("private-uploads/file").listFiles()?.size ?: 0
+    fun uploadRejectsBlockedExtensions() =
+        runBlocking {
+            val before = File("private-uploads/file").listFiles()?.size ?: 0
 
-        val html = service.uploadFile(FileType.FILE, "payload.html", byteArrayOf(1), "text/html")
-        assertEquals(FileError.UnsupportedFormat, html.getError())
+            val html = service.uploadFile(FileType.FILE, "payload.html", byteArrayOf(1), "text/html")
+            assertEquals(FileError.UnsupportedFormat, html.getError())
 
-        val svg = service.uploadFile(FileType.FILE, "payload.svg", byteArrayOf(1), "image/svg+xml")
-        assertEquals(FileError.UnsupportedFormat, svg.getError())
+            val svg = service.uploadFile(FileType.FILE, "payload.svg", byteArrayOf(1), "image/svg+xml")
+            assertEquals(FileError.UnsupportedFormat, svg.getError())
 
-        // Nothing was written to disk for the rejected uploads.
-        val after = File("private-uploads/file").listFiles()?.size ?: 0
-        assertEquals(before, after)
-    }
+            // Nothing was written to disk for the rejected uploads.
+            val after = File("private-uploads/file").listFiles()?.size ?: 0
+            assertEquals(before, after)
+        }
 
     @Test
-    fun uploadStoresTheFileUnderAUniquePrivateUrl() = runBlocking {
-        val result = service.uploadFile(
-            fileType = FileType.FILE,
-            fileName = "quarterly report.pdf",
-            fileData = byteArrayOf(1, 2, 3),
-            mimeType = "application/pdf",
-        )
+    fun uploadStoresTheFileUnderAUniquePrivateUrl() =
+        runBlocking {
+            val result =
+                service.uploadFile(
+                    fileType = FileType.FILE,
+                    fileName = "quarterly report.pdf",
+                    fileData = byteArrayOf(1, 2, 3),
+                    mimeType = "application/pdf",
+                )
 
-        val media = result.get()
-        assertNotNull(media)
-        assertTrue(media.url.startsWith("/v1/files/content/"), "private attachments must be served authenticated")
-        assertTrue(media.url.endsWith(".pdf"))
-        media.url.substringAfterLast('/').let { name ->
-            val file = File("private-uploads/file", name)
-            stored.add(file)
-            assertTrue(file.isFile, "the bytes must be on disk")
+            val media = result.get()
+            assertNotNull(media)
+            assertTrue(media.url.startsWith("/v1/files/content/"), "private attachments must be served authenticated")
+            assertTrue(media.url.endsWith(".pdf"))
+            media.url.substringAfterLast('/').let { name ->
+                val file = File("private-uploads/file", name)
+                stored.add(file)
+                assertTrue(file.isFile, "the bytes must be on disk")
+            }
+            coVerify(exactly = 1) { uploadStore.register(any(), any(), any()) }
         }
-        coVerify(exactly = 1) { uploadStore.register(any(), any(), any()) }
-    }
 
-    private fun pngBytes(width: Int, height: Int): ByteArray =
+    private fun pngBytes(
+        width: Int,
+        height: Int,
+    ): ByteArray =
         ByteArrayOutputStream().use { out ->
             ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", out)
             out.toByteArray()
         }
 
     @Test
-    fun oversizedPixelImagesAreRejectedBeforeDecode() = runBlocking {
-        // A tiny compressed payload whose decoded size explodes past the
-        // budget — the byte cap alone does not bound processing cost.
-        val smallBudget = FileService(
-            uploadStore = uploadStore,
-            privateFileRepository = privateFileRepository,
-            participantRepository = participantRepository,
-            maxImagePixels = 1_000_000L,
-        )
-        smallBudget.ensureUploadDirectories()
-        // 1200x1200 = 1.44M pixels, yet only a few KB compressed.
-        val bytes = pngBytes(1200, 1200)
-        val before = File("uploads/image").listFiles()?.size ?: 0
+    fun oversizedPixelImagesAreRejectedBeforeDecode() =
+        runBlocking {
+            // A tiny compressed payload whose decoded size explodes past the
+            // budget — the byte cap alone does not bound processing cost.
+            val smallBudget =
+                FileService(
+                    uploadStore = uploadStore,
+                    privateFileRepository = privateFileRepository,
+                    participantRepository = participantRepository,
+                    maxImagePixels = 1_000_000L,
+                )
+            smallBudget.ensureUploadDirectories()
+            // 1200x1200 = 1.44M pixels, yet only a few KB compressed.
+            val bytes = pngBytes(1200, 1200)
+            val before = File("uploads/image").listFiles()?.size ?: 0
 
-        val result = smallBudget.uploadFile(FileType.IMAGE, "pixel-bomb.png", bytes, "image/png")
+            val result = smallBudget.uploadFile(FileType.IMAGE, "pixel-bomb.png", bytes, "image/png")
 
-        assertEquals(FileError.FileTooLarge, result.getError())
-        // The staged bytes were removed again: no file left behind.
-        assertEquals(before, File("uploads/image").listFiles()?.size ?: 0)
-    }
-
-    @Test
-    fun oversizedPixelAvatarsAreRejectedBeforeDecode() = runBlocking {
-        // Avatars feed the same decoder, so the pixel budget must gate them
-        // too — the 400x400 output size says nothing about decode cost.
-        val smallBudget = FileService(
-            uploadStore = uploadStore,
-            privateFileRepository = privateFileRepository,
-            participantRepository = participantRepository,
-            maxImagePixels = 1_000_000L,
-        )
-        smallBudget.ensureUploadDirectories()
-        val bytes = pngBytes(1200, 1200)
-        val before = File("uploads/avatar").listFiles()?.size ?: 0
-
-        val result = smallBudget.uploadFile(FileType.AVATAR, "avatar.jpg", bytes, "image/jpeg")
-
-        assertEquals(FileError.FileTooLarge, result.getError())
-        assertEquals(before, File("uploads/avatar").listFiles()?.size ?: 0)
-    }
+            assertEquals(FileError.FileTooLarge, result.getError())
+            // The staged bytes were removed again: no file left behind.
+            assertEquals(before, File("uploads/image").listFiles()?.size ?: 0)
+        }
 
     @Test
-    fun imagesThatFailProcessingLeaveNoFilesBehind() = runBlocking {
-        val before = File("uploads/image").listFiles()?.size ?: 0
-        val thumbnailsBefore = File("uploads/thumbnails").listFiles()?.size ?: 0
+    fun oversizedPixelAvatarsAreRejectedBeforeDecode() =
+        runBlocking {
+            // Avatars feed the same decoder, so the pixel budget must gate them
+            // too — the 400x400 output size says nothing about decode cost.
+            val smallBudget =
+                FileService(
+                    uploadStore = uploadStore,
+                    privateFileRepository = privateFileRepository,
+                    participantRepository = participantRepository,
+                    maxImagePixels = 1_000_000L,
+                )
+            smallBudget.ensureUploadDirectories()
+            val bytes = pngBytes(1200, 1200)
+            val before = File("uploads/avatar").listFiles()?.size ?: 0
 
-        val result = service.uploadFile(FileType.IMAGE, "garbage.png", "definitely not an image".toByteArray(), "image/png")
+            val result = smallBudget.uploadFile(FileType.AVATAR, "avatar.jpg", bytes, "image/jpeg")
 
-        assertEquals(FileError.UnsupportedFormat, result.getError())
-        assertEquals(before, File("uploads/image").listFiles()?.size ?: 0)
-        assertEquals(thumbnailsBefore, File("uploads/thumbnails").listFiles()?.size ?: 0)
-    }
+            assertEquals(FileError.FileTooLarge, result.getError())
+            assertEquals(before, File("uploads/avatar").listFiles()?.size ?: 0)
+        }
 
     @Test
-    fun imagesKeepTheirDimensionsAndDerivedArtifacts() = runBlocking {
-        val bytes = pngBytes(640, 480)
+    fun imagesThatFailProcessingLeaveNoFilesBehind() =
+        runBlocking {
+            val before = File("uploads/image").listFiles()?.size ?: 0
+            val thumbnailsBefore = File("uploads/thumbnails").listFiles()?.size ?: 0
 
-        val media = service.uploadFile(FileType.IMAGE, "photo.png", bytes, "image/png").get()
+            val result = service.uploadFile(FileType.IMAGE, "garbage.png", "definitely not an image".toByteArray(), "image/png")
 
-        val image = assertNotNull(media) as ImageContent
-        assertEquals(640, image.width)
-        assertEquals(480, image.height)
-        assertNotNull(image.blurHash)
-        val thumbnailUrl = assertNotNull(image.thumbnailUrl)
-        val thumbFile = File(thumbnailUrl.removePrefix("/"))
-        stored.add(thumbFile)
-        assertTrue(thumbFile.isFile, "the thumbnail must be on disk")
-        stored += File(image.url.removePrefix("/"))
-        coVerify(exactly = 1) { uploadStore.register(any(), any(), any()) }
-    }
+            assertEquals(FileError.UnsupportedFormat, result.getError())
+            assertEquals(before, File("uploads/image").listFiles()?.size ?: 0)
+            assertEquals(thumbnailsBefore, File("uploads/thumbnails").listFiles()?.size ?: 0)
+        }
+
+    @Test
+    fun imagesKeepTheirDimensionsAndDerivedArtifacts() =
+        runBlocking {
+            val bytes = pngBytes(640, 480)
+
+            val media = service.uploadFile(FileType.IMAGE, "photo.png", bytes, "image/png").get()
+
+            val image = assertNotNull(media) as ImageContent
+            assertEquals(640, image.width)
+            assertEquals(480, image.height)
+            assertNotNull(image.blurHash)
+            val thumbnailUrl = assertNotNull(image.thumbnailUrl)
+            val thumbFile = File(thumbnailUrl.removePrefix("/"))
+            stored.add(thumbFile)
+            assertTrue(thumbFile.isFile, "the thumbnail must be on disk")
+            stored += File(image.url.removePrefix("/"))
+            coVerify(exactly = 1) { uploadStore.register(any(), any(), any()) }
+        }
 
     @Test
     fun deletePublicUploadRemovesExactlyItsTarget() {
@@ -199,7 +211,10 @@ class FileServiceUploadTest {
         assertTrue(keep.exists())
     }
 
-    private fun pcm16LeWavBytes(sampleRate: Int = 8000, samples: ShortArray): ByteArray {
+    private fun pcm16LeWavBytes(
+        sampleRate: Int = 8000,
+        samples: ShortArray,
+    ): ByteArray {
         val dataSize = samples.size * 2
         val buf = ByteBuffer.allocate(44 + dataSize).order(ByteOrder.LITTLE_ENDIAN)
         buf.put("RIFF".toByteArray(Charsets.US_ASCII))
@@ -220,65 +235,75 @@ class FileServiceUploadTest {
     }
 
     @Test
-    fun audioUploadDegradesToEmptyWaveformWhenWaveformGenerationFails() = runBlocking {
-        mockkObject(MediaProbe)
-        mockkObject(WaveformGenerator)
-        try {
-            every { MediaProbe.probe(any(), any()) } returns
-                MediaProbe.Outcome.Success(MediaProbe.Result(durationMs = 1_000L, width = null, height = null))
-            every { WaveformGenerator.generate(any(), any(), any(), any()) } throws
-                WaveformGenerator.WaveformGenerationException(
-                    WaveformGenerator.FailureReason.NON_ZERO_EXIT,
-                    "Simulated ffmpeg decode failure",
-                )
+    fun audioUploadDegradesToEmptyWaveformWhenWaveformGenerationFails() =
+        runBlocking {
+            mockkObject(MediaProbe)
+            mockkObject(WaveformGenerator)
+            try {
+                every { MediaProbe.probe(any(), any()) } returns
+                    MediaProbe.Outcome.Success(MediaProbe.Result(durationMs = 1_000L, width = null, height = null))
+                every { WaveformGenerator.generate(any(), any(), any(), any()) } throws
+                    WaveformGenerator.WaveformGenerationException(
+                        WaveformGenerator.FailureReason.NON_ZERO_EXIT,
+                        "Simulated ffmpeg decode failure",
+                    )
 
-            val media = service.uploadFile(
-                fileType = FileType.AUDIO,
-                fileName = "broken-waveform.wav",
-                fileData = byteArrayOf(1, 2, 3, 4),
-                mimeType = "audio/wav",
-            ).get()
+                val media =
+                    service
+                        .uploadFile(
+                            fileType = FileType.AUDIO,
+                            fileName = "broken-waveform.wav",
+                            fileData = byteArrayOf(1, 2, 3, 4),
+                            mimeType = "audio/wav",
+                        ).get()
+
+                val audio = assertNotNull(media) as AudioContent
+                stored += File(audio.url.removePrefix("/"))
+                assertEquals(1_000L, audio.duration)
+                assertEquals(emptyList(), audio.waveform)
+            } finally {
+                unmockkObject(WaveformGenerator)
+                unmockkObject(MediaProbe)
+            }
+        }
+
+    @Test
+    fun audioUploadSucceedsWithNonEmptyWaveformForValidWav() =
+        runBlocking {
+            // 0.2s at 8000Hz = 1600 samples at ~50% peak amplitude
+            val samples = ShortArray(1600) { 16384 }
+            val wavBytes = pcm16LeWavBytes(sampleRate = 8000, samples = samples)
+
+            val media =
+                service
+                    .uploadFile(
+                        fileType = FileType.AUDIO,
+                        fileName = "tone.wav",
+                        fileData = wavBytes,
+                        mimeType = "audio/wav",
+                    ).get()
 
             val audio = assertNotNull(media) as AudioContent
             stored += File(audio.url.removePrefix("/"))
-            assertEquals(1_000L, audio.duration)
-            assertEquals(emptyList(), audio.waveform)
-        } finally {
-            unmockkObject(WaveformGenerator)
-            unmockkObject(MediaProbe)
+            assertTrue(audio.duration > 0L)
+            assertEquals(80, audio.waveform.size)
+            assertTrue(audio.waveform.any { it > 0 }, "valid tone must produce non-zero waveform samples")
         }
-    }
-
-    @Test
-    fun audioUploadSucceedsWithNonEmptyWaveformForValidWav() = runBlocking {
-        // 0.2s at 8000Hz = 1600 samples at ~50% peak amplitude
-        val samples = ShortArray(1600) { 16384 }
-        val wavBytes = pcm16LeWavBytes(sampleRate = 8000, samples = samples)
-
-        val media = service.uploadFile(
-            fileType = FileType.AUDIO,
-            fileName = "tone.wav",
-            fileData = wavBytes,
-            mimeType = "audio/wav",
-        ).get()
-
-        val audio = assertNotNull(media) as AudioContent
-        stored += File(audio.url.removePrefix("/"))
-        assertTrue(audio.duration > 0L)
-        assertEquals(80, audio.waveform.size)
-        assertTrue(audio.waveform.any { it > 0 }, "valid tone must produce non-zero waveform samples")
-    }
 
     @Test
     fun sweepOrphanFilesRemovesOnlyStaleUnreferencedArtifacts() {
-        val root = java.nio.file.Files.createTempDirectory("sweep-").toFile()
+        val root =
+            java.nio.file.Files
+                .createTempDirectory("sweep-")
+                .toFile()
         // Isolated upload tree: the sweep must never touch the real ./uploads.
-        val service = FileService(
-            uploadStore = uploadStore,
-            privateFileRepository = privateFileRepository,
-            participantRepository = participantRepository,
-            uploadDir = root.absolutePath,
-        )
+        val service =
+            FileService(
+                uploadStore = uploadStore,
+                privateFileRepository = privateFileRepository,
+                participantRepository = participantRepository,
+                uploadDir = root.absolutePath,
+            )
         val oldStamp = System.currentTimeMillis() - 2 * 60 * 60 * 1000
         val dir = { name: String -> File(root, name).apply { mkdirs() } }
         val imageDir = dir("image")
@@ -287,7 +312,12 @@ class FileServiceUploadTest {
         val covers = dir("covers")
         val avatars = dir("avatar")
 
-        fun stale(file: File) = file.apply { writeBytes(byteArrayOf(1)); setLastModified(oldStamp) }
+        fun stale(file: File) =
+            file.apply {
+                writeBytes(byteArrayOf(1))
+                setLastModified(oldStamp)
+            }
+
         fun fresh(file: File) = file.apply { writeBytes(byteArrayOf(1)) }
 
         try {
@@ -302,10 +332,11 @@ class FileServiceUploadTest {
             val orphanAvatar = stale(File(avatars, "orphan.jpg"))
             val referencedAvatar = stale(File(avatars, "referenced.jpg"))
 
-            val swept = service.sweepOrphanFiles(
-                referencedAvatarFileNames = setOf("referenced.jpg"),
-                minAgeMillis = 60L * 60 * 1000,
-            )
+            val swept =
+                service.sweepOrphanFiles(
+                    referencedAvatarFileNames = setOf("referenced.jpg"),
+                    minAgeMillis = 60L * 60 * 1000,
+                )
 
             assertEquals(3, swept)
             assertFalse(orphanThumb.exists(), "thumbnail without its original must be swept")

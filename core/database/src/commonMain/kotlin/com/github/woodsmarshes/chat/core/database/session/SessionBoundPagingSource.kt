@@ -29,7 +29,6 @@ internal class SessionBoundPagingSource<Key : Any, Value : Any>(
     private val boundGeneration: Long,
     delegateFactory: (ChatDatabase) -> PagingSource<Key, Value>,
 ) : PagingSource<Key, Value>() {
-
     private fun isSessionActive(): Boolean =
         boundDatabase != null &&
             boundGeneration > 0L &&
@@ -65,8 +64,7 @@ internal class SessionBoundPagingSource<Key : Any, Value : Any>(
     override val jumpingSupported: Boolean
         get() = delegate?.jumpingSupported ?: false
 
-    override fun getRefreshKey(state: PagingState<Key, Value>): Key? =
-        delegate?.getRefreshKey(state)
+    override fun getRefreshKey(state: PagingState<Key, Value>): Key? = delegate?.getRefreshKey(state)
 
     override suspend fun load(params: LoadParams<Key>): LoadResult<Key, Value> {
         currentCoroutineContext().ensureActive()
@@ -79,8 +77,14 @@ internal class SessionBoundPagingSource<Key : Any, Value : Any>(
                 expectedDatabase = boundDatabase,
             ) { db ->
                 when {
-                    db !== boundDatabase || !isSessionActive() -> sessionEnded()
-                    invalid -> LoadResult.Invalid()
+                    db !== boundDatabase || !isSessionActive() -> {
+                        sessionEnded()
+                    }
+
+                    invalid -> {
+                        LoadResult.Invalid()
+                    }
+
                     else -> {
                         val result = source.load(params)
                         if (isSessionActive()) result else sessionEnded()

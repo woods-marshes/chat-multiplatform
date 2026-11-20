@@ -33,11 +33,11 @@ data class SenderUser(
 )
 
 sealed class MessageState {
-
     data object Sending : MessageState()
 
-    data class SendFailed(val reason: String) : MessageState()
+    data class SendFailed(
+        val reason: String,
+    ) : MessageState()
 
     data object Completed : MessageState()
-
 }

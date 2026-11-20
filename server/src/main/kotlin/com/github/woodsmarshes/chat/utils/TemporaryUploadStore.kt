@@ -17,24 +17,44 @@ data class PendingUpload(
 )
 
 interface TemporaryUploadStore {
-    fun register(media: MediaContent, physicalPaths: List<String>, uploaderId: Uuid? = null)
-    fun retrieveAndConfirm(url: String, senderId: Uuid? = null): MediaContent?
+    fun register(
+        media: MediaContent,
+        physicalPaths: List<String>,
+        uploaderId: Uuid? = null,
+    )
+
+    fun retrieveAndConfirm(
+        url: String,
+        senderId: Uuid? = null,
+    ): MediaContent?
+
     fun invalidate(url: String)
+
     fun cleanExpiredFiles(expirationMinutes: Int = 30)
 }
 
-class TemporaryUploadStoreImpl : TemporaryUploadStore, AutoCloseable {
+class TemporaryUploadStoreImpl :
+    TemporaryUploadStore,
+    AutoCloseable {
     private val pendingMap = ConcurrentHashMap<String, PendingUpload>()
 
-    override fun register(media: MediaContent, physicalPaths: List<String>, uploaderId: Uuid?) {
-        pendingMap[media.url] = PendingUpload(
-            content = media,
-            physicalPaths = physicalPaths,
-            uploaderId = uploaderId,
-        )
+    override fun register(
+        media: MediaContent,
+        physicalPaths: List<String>,
+        uploaderId: Uuid?,
+    ) {
+        pendingMap[media.url] =
+            PendingUpload(
+                content = media,
+                physicalPaths = physicalPaths,
+                uploaderId = uploaderId,
+            )
     }
 
-    override fun retrieveAndConfirm(url: String, senderId: Uuid?): MediaContent? {
+    override fun retrieveAndConfirm(
+        url: String,
+        senderId: Uuid?,
+    ): MediaContent? {
         // Confirming must not be destructive: re-attaching the same URL (e.g.
         // forwarding) has to keep succeeding while the file remains on disk,
         // and the cleanup job only ever deletes uploads that never made it
@@ -48,11 +68,12 @@ class TemporaryUploadStoreImpl : TemporaryUploadStore, AutoCloseable {
         //   cached entry whose bytes were deleted cannot be reused.
         var matched: MediaContent? = null
         pendingMap.computeIfPresent(url) { _, entry ->
-            val ownerAllowed = when {
-                entry.uploaderId != null -> senderId != null && entry.uploaderId == senderId
-                url.startsWith(PRIVATE_FILE_URL_PREFIX) -> false
-                else -> true
-            }
+            val ownerAllowed =
+                when {
+                    entry.uploaderId != null -> senderId != null && entry.uploaderId == senderId
+                    url.startsWith(PRIVATE_FILE_URL_PREFIX) -> false
+                    else -> true
+                }
             if (!ownerAllowed) {
                 return@computeIfPresent entry
             }
@@ -83,18 +104,19 @@ class TemporaryUploadStoreImpl : TemporaryUploadStore, AutoCloseable {
                     // bytes, drop only the in-memory bookkeeping.
                     return@computeIfPresent null
                 }
-                val remainingPaths = current.physicalPaths.filter { path ->
-                    try {
-                        val file = File(path)
-                        if (file.exists() && !file.delete() && file.exists()) {
+                val remainingPaths =
+                    current.physicalPaths.filter { path ->
+                        try {
+                            val file = File(path)
+                            if (file.exists() && !file.delete() && file.exists()) {
+                                true
+                            } else {
+                                false
+                            }
+                        } catch (_: Exception) {
                             true
-                        } else {
-                            false
                         }
-                    } catch (_: Exception) {
-                        true
                     }
-                }
                 if (remainingPaths.isEmpty()) {
                     null
                 } else {

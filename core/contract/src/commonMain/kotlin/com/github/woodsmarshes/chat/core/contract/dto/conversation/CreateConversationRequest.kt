@@ -20,7 +20,7 @@ data class CreateGroupRequest(
     @ProtoNumber(3) val description: String? = null,
     @ProtoNumber(4) val avatar: String? = null,
     @ProtoNumber(5) val settings: GroupSettings? = null,
-    @ProtoNumber(6) val memberIds: List<Uuid> = emptyList()
+    @ProtoNumber(6) val memberIds: List<Uuid> = emptyList(),
 ) : CreateConversationRequest {
     override val type: ConversationType = ConversationType.GROUP
 }
@@ -28,7 +28,7 @@ data class CreateGroupRequest(
 @Serializable
 @SerialName("PRIVATE")
 data class CreatePrivateRequest(
-    @ProtoNumber(1) val targetUserId: Uuid
+    @ProtoNumber(1) val targetUserId: Uuid,
 ) : CreateConversationRequest {
     override val type: ConversationType = ConversationType.PRIVATE
 }

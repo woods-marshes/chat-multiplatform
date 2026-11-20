@@ -13,7 +13,9 @@ data class HandleGroupRequest(
 
 @Serializable
 enum class GroupJoinRequestAction {
-    @ProtoNumber(1) APPROVE,
-    @ProtoNumber(2) REJECT
-}
+    @ProtoNumber(1)
+    APPROVE,
 
+    @ProtoNumber(2)
+    REJECT,
+}

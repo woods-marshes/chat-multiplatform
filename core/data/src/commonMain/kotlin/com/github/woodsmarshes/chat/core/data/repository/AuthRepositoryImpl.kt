@@ -4,6 +4,7 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.UserSettingDataSource
 import com.github.woodsmarshes.chat.core.model.AuthSessionSnapshot
@@ -11,7 +12,6 @@ import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.network.api.rest.AuthApi
-import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import com.github.woodsmarshes.chat.core.network.ktor.jwtExpiryEpochMs
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -28,13 +28,11 @@ class AuthRepositoryImpl(
     private val userSettingDataSource: UserSettingDataSource,
     private val authApi: AuthApi,
 ) : AuthRepository {
-
     private val log = KotlinLogging.logger {}
 
     override val jwtToken: Flow<String?> = authTokenDataSource.jwtToken
 
-    override fun observeAuthSession(): Flow<AuthSessionSnapshot> =
-        authTokenDataSource.sessionSnapshot
+    override fun observeAuthSession(): Flow<AuthSessionSnapshot> = authTokenDataSource.sessionSnapshot
 
     /**
      * Pure mapping of the unified persisted [AuthSessionSnapshot]: logged in
@@ -49,26 +47,30 @@ class AuthRepositoryImpl(
 
     override suspend fun login(
         email: String,
-        password: String
-    ): Result<User, AuthError> = coroutineBinding {
-        val requestEpoch = authTokenDataSource.beginAuthRequest()
-        val resp = bindApi(AuthError::Unknown) {
-            authApi.login(email, password)
+        password: String,
+    ): Result<User, AuthError> =
+        coroutineBinding {
+            val requestEpoch = authTokenDataSource.beginAuthRequest()
+            val resp =
+                bindApi(AuthError::Unknown) {
+                    authApi.login(email, password)
+                }
+            commitAuthResponse(requestEpoch, resp).bind()
         }
-        commitAuthResponse(requestEpoch, resp).bind()
-    }
 
     override suspend fun register(
         username: String,
         email: String,
-        password: String
-    ): Result<User, AuthError> = coroutineBinding {
-        val requestEpoch = authTokenDataSource.beginAuthRequest()
-        val resp = bindApi(AuthError::Unknown) {
-            authApi.register(username, email, password)
+        password: String,
+    ): Result<User, AuthError> =
+        coroutineBinding {
+            val requestEpoch = authTokenDataSource.beginAuthRequest()
+            val resp =
+                bindApi(AuthError::Unknown) {
+                    authApi.register(username, email, password)
+                }
+            commitAuthResponse(requestEpoch, resp).bind()
         }
-        commitAuthResponse(requestEpoch, resp).bind()
-    }
 
     /**
      * Commits [resp] to persisted credential and user settings only if
@@ -82,27 +84,30 @@ class AuthRepositoryImpl(
         requestEpoch: Long,
         resp: AuthResponse,
     ): Result<User, AuthError> {
-        val committed = authTokenDataSource.withCredentialLock {
-            if (!authTokenDataSource.isAuthRequestValidLocked(requestEpoch)) {
-                return@withCredentialLock false
+        val committed =
+            authTokenDataSource.withCredentialLock {
+                if (!authTokenDataSource.isAuthRequestValidLocked(requestEpoch)) {
+                    return@withCredentialLock false
+                }
+                withContext(NonCancellable) {
+                    val committedGen =
+                        authTokenDataSource.commitSessionLocked(
+                            requestEpoch = requestEpoch,
+                            user = resp.user,
+                            token =
+                                AuthToken(
+                                    jwtToken = resp.accessToken,
+                                    // The rotating refresh token; drives /v1/auth/refresh and the
+                                    // server-side logout revocation.
+                                    refreshToken = resp.refreshToken,
+                                    // Decoded from the JWT payload; drives the client's
+                                    // proactive refresh margin.
+                                    expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
+                                ),
+                        )
+                    committedGen != null
+                }
             }
-            withContext(NonCancellable) {
-                val committedGen = authTokenDataSource.commitSessionLocked(
-                    requestEpoch = requestEpoch,
-                    user = resp.user,
-                    token = AuthToken(
-                        jwtToken = resp.accessToken,
-                        // The rotating refresh token; drives /v1/auth/refresh and the
-                        // server-side logout revocation.
-                        refreshToken = resp.refreshToken,
-                        // Decoded from the JWT payload; drives the client's
-                        // proactive refresh margin.
-                        expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
-                    ),
-                )
-                committedGen != null
-            }
-        }
         if (!committed) {
             val staleRefresh = resp.refreshToken
             if (!staleRefresh.isNullOrEmpty()) {
@@ -123,11 +128,12 @@ class AuthRepositoryImpl(
      * flight is never overwritten or cleared.
      */
     override suspend fun logout() {
-        val capturedRefresh = withContext(NonCancellable) {
-            authTokenDataSource.withCredentialLock {
-                authTokenDataSource.invalidateAndClearLocked()
+        val capturedRefresh =
+            withContext(NonCancellable) {
+                authTokenDataSource.withCredentialLock {
+                    authTokenDataSource.invalidateAndClearLocked()
+                }
             }
-        }
         if (!capturedRefresh.isNullOrEmpty()) {
             runCatching { authApi.logout(capturedRefresh) }
                 .onFailure { log.warn(it) { "[Auth] server-side session revocation failed" } }
@@ -148,16 +154,18 @@ class AuthRepositoryImpl(
         // opening and user initialization are handled by SessionManager.
         return try {
             val resp = authApi.refreshToken()
-            val updated = authTokenDataSource.commitRefreshedSessionIfCurrent(
-                expectedGeneration = snapshot.generation,
-                expectedRefreshToken = snapshot.refreshToken,
-                user = resp.user,
-                token = AuthToken(
-                    jwtToken = resp.accessToken,
-                    refreshToken = resp.refreshToken ?: snapshot.refreshToken,
-                    expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
-                ),
-            )
+            val updated =
+                authTokenDataSource.commitRefreshedSessionIfCurrent(
+                    expectedGeneration = snapshot.generation,
+                    expectedRefreshToken = snapshot.refreshToken,
+                    user = resp.user,
+                    token =
+                        AuthToken(
+                            jwtToken = resp.accessToken,
+                            refreshToken = resp.refreshToken ?: snapshot.refreshToken,
+                            expiryTimestamp = jwtExpiryEpochMs(resp.accessToken),
+                        ),
+                )
             if (!updated) {
                 return Err(AuthError.InvalidCredentials)
             }

@@ -21,68 +21,69 @@ import com.github.woodsmarshes.chat.core.database.dao.UserDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDaoImpl
 import org.koin.dsl.module
 
-val daosModule = module {
-    single<UserDao> {
-        UserDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
+val daosModule =
+    module {
+        single<UserDao> {
+            UserDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<ParticipantDao> {
+            ParticipantDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<MessageDao> {
+            MessageDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<GroupProfileDao> {
+            GroupProfileDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<ConversationDao> {
+            ConversationDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<ArticleDao> {
+            ArticleDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<ContactDao> {
+            ContactDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<ContactRequestDao> {
+            ContactRequestDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
+        single<GroupJoinRequestDao> {
+            GroupJoinRequestDaoImpl(
+                dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
+                ioContext = get<AppDispatchers>().io,
+                sessionGate = get<DatabaseHolder>().sessionGate,
+            )
+        }
     }
-    single<ParticipantDao> {
-        ParticipantDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<MessageDao> {
-        MessageDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<GroupProfileDao> {
-        GroupProfileDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<ConversationDao> {
-        ConversationDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<ArticleDao> {
-        ArticleDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<ContactDao> {
-        ContactDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<ContactRequestDao> {
-        ContactRequestDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-    single<GroupJoinRequestDao> {
-        GroupJoinRequestDaoImpl(
-            dbProvider = { get<DatabaseHolder>().getActiveDatabase() },
-            ioContext = get<AppDispatchers>().io,
-            sessionGate = get<DatabaseHolder>().sessionGate,
-        )
-    }
-}

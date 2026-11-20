@@ -68,7 +68,10 @@ class MessageRemoteMediatorTest {
     private val now = Instant.fromEpochMilliseconds(1_700_000_000_000)
     private val peerSender = SimpleUser(peerUserId, "peer", null, null, now, now, null, UserRole.MEMBER)
 
-    private fun serverMessage(id: Uuid, replyTo: Message? = null) = Message(
+    private fun serverMessage(
+        id: Uuid,
+        replyTo: Message? = null,
+    ) = Message(
         id = id,
         conversationId = conversationId,
         sender = peerSender,
@@ -88,11 +91,16 @@ class MessageRemoteMediatorTest {
             ChatDatabase,
         ) -> Unit,
     ) {
-        val driver = JdbcSqliteDriver(
-            JdbcSqliteDriver.IN_MEMORY,
-            Properties().apply { put("foreign_keys", "true") },
-        )
-        val db = createDatabase { schema -> schema.create(driver).await(); driver }
+        val driver =
+            JdbcSqliteDriver(
+                JdbcSqliteDriver.IN_MEMORY,
+                Properties().apply { put("foreign_keys", "true") },
+            )
+        val db =
+            createDatabase { schema ->
+                schema.create(driver).await()
+                driver
+            }
         val dispatcher = StandardTestDispatcher(testScheduler)
         val gate = ManagedDatabaseSessionGate(dispatcher, { db }, { 1L })
         val holder = mockk<DatabaseHolder>()
@@ -125,17 +133,18 @@ class MessageRemoteMediatorTest {
         val participantDao = ParticipantDaoImpl({ db }, dispatcher, gate)
 
         gate.start()
-        val mediator = MessageRemoteMediator(
-            ownUserId = ownUserId,
-            conversationId = conversationId,
-            isGroup = isGroup,
-            appDispatchers = dispatchers,
-            databaseHolder = holder,
-            conversationApi = api,
-            messageDao = messageDao,
-            userDao = userDao,
-            participantDao = participantDao,
-        )
+        val mediator =
+            MessageRemoteMediator(
+                ownUserId = ownUserId,
+                conversationId = conversationId,
+                isGroup = isGroup,
+                appDispatchers = dispatchers,
+                databaseHolder = holder,
+                conversationApi = api,
+                messageDao = messageDao,
+                userDao = userDao,
+                participantDao = participantDao,
+            )
         try {
             block(mediator, messageDao, api, gate, db)
         } finally {
@@ -149,13 +158,14 @@ class MessageRemoteMediatorTest {
         pageSize: Int = 20,
     ): PagingState<Uuid, KeyedMessagesWithRelations> {
         val source = dao.pinForPaging().pagingSource(conversationId, pageSize.toLong())
-        val loaded = source.load(
-            PagingSource.LoadParams.Refresh(
-                key = null,
-                loadSize = pageSize,
-                placeholdersEnabled = false,
-            ),
-        ) as PagingSource.LoadResult.Page
+        val loaded =
+            source.load(
+                PagingSource.LoadParams.Refresh(
+                    key = null,
+                    loadSize = pageSize,
+                    placeholdersEnabled = false,
+                ),
+            ) as PagingSource.LoadResult.Page
         return PagingState(
             pages = listOf(loaded),
             anchorPosition = loaded.data.lastIndex.takeIf { it >= 0 },
@@ -165,145 +175,149 @@ class MessageRemoteMediatorTest {
     }
 
     @Test
-    fun appendUsesOldestConfirmedTimelineMessageAndIgnoresOutboxAndHiddenSeeds() = runTest {
-        fixture { mediator, dao, api, _, _ ->
-            // Hidden seed row (older than everything, in_timeline = false) must be ignored.
-            dao.seedMessage(serverMessage(seedId).toMessageEntity(MessageStatus.SENT, inTimeline = false)!!)
-            // Confirmed timeline rows.
-            dao.insertMessage(serverMessage(confirmedNewestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
-            dao.insertMessage(serverMessage(confirmedOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
-            // Unacked outbox rows with smaller client UUIDs at the tail of PagingState.
-            dao.insertMessage(serverMessage(localFailedOldestId).toMessageEntity(MessageStatus.FAILED, inTimeline = true)!!)
-            dao.insertMessage(serverMessage(localSendingOldestId).toMessageEntity(MessageStatus.SENDING, inTimeline = true)!!)
+    fun appendUsesOldestConfirmedTimelineMessageAndIgnoresOutboxAndHiddenSeeds() =
+        runTest {
+            fixture { mediator, dao, api, _, _ ->
+                // Hidden seed row (older than everything, in_timeline = false) must be ignored.
+                dao.seedMessage(serverMessage(seedId).toMessageEntity(MessageStatus.SENT, inTimeline = false)!!)
+                // Confirmed timeline rows.
+                dao.insertMessage(serverMessage(confirmedNewestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+                dao.insertMessage(serverMessage(confirmedOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+                // Unacked outbox rows with smaller client UUIDs at the tail of PagingState.
+                dao.insertMessage(serverMessage(localFailedOldestId).toMessageEntity(MessageStatus.FAILED, inTimeline = true)!!)
+                dao.insertMessage(serverMessage(localSendingOldestId).toMessageEntity(MessageStatus.SENDING, inTimeline = true)!!)
 
-            val state = pagingStateFromDb(dao, pageSize = 20)
-            // Verify PagingState tail actually holds the temporary SENDING row.
-            assertEquals(localSendingOldestId, state.lastItemOrNull()?.id)
+                val state = pagingStateFromDb(dao, pageSize = 20)
+                // Verify PagingState tail actually holds the temporary SENDING row.
+                assertEquals(localSendingOldestId, state.lastItemOrNull()?.id)
 
-            coEvery {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = confirmedOldestId)
-            } returns listOf(serverMessage(olderPageMsg2), serverMessage(olderPageMsg1))
+                coEvery {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = confirmedOldestId)
+                } returns listOf(serverMessage(olderPageMsg2), serverMessage(olderPageMsg1))
 
-            val result = mediator.load(LoadType.APPEND, state)
-            assertTrue(result is RemoteMediator.MediatorResult.Success)
-            assertTrue(result.endOfPaginationReached)
+                val result = mediator.load(LoadType.APPEND, state)
+                assertTrue(result is RemoteMediator.MediatorResult.Success)
+                assertTrue(result.endOfPaginationReached)
 
-            // Must query using confirmedOldestId, NOT localSendingOldestId or seedId.
-            coVerify(exactly = 1) {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = confirmedOldestId)
+                // Must query using confirmedOldestId, NOT localSendingOldestId or seedId.
+                coVerify(exactly = 1) {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = confirmedOldestId)
+                }
+                assertNotNull(dao.getMessageById(olderPageMsg1).first())
+                assertNotNull(dao.getMessageById(olderPageMsg2).first())
             }
-            assertNotNull(dao.getMessageById(olderPageMsg1).first())
-            assertNotNull(dao.getMessageById(olderPageMsg2).first())
         }
-    }
 
     @Test
-    fun appendWithOnlyOutboxRowsRequestsNewestPageWithNullBeforeId() = runTest {
-        fixture { mediator, dao, api, _, _ ->
-            dao.insertMessage(serverMessage(localSendingOldestId).toMessageEntity(MessageStatus.SENDING, inTimeline = true)!!)
-            dao.insertMessage(serverMessage(localFailedOldestId).toMessageEntity(MessageStatus.FAILED, inTimeline = true)!!)
-            dao.seedMessage(serverMessage(seedId).toMessageEntity(MessageStatus.SENT, inTimeline = false)!!)
+    fun appendWithOnlyOutboxRowsRequestsNewestPageWithNullBeforeId() =
+        runTest {
+            fixture { mediator, dao, api, _, _ ->
+                dao.insertMessage(serverMessage(localSendingOldestId).toMessageEntity(MessageStatus.SENDING, inTimeline = true)!!)
+                dao.insertMessage(serverMessage(localFailedOldestId).toMessageEntity(MessageStatus.FAILED, inTimeline = true)!!)
+                dao.seedMessage(serverMessage(seedId).toMessageEntity(MessageStatus.SENT, inTimeline = false)!!)
 
-            val state = pagingStateFromDb(dao, pageSize = 20)
-            assertEquals(localSendingOldestId, state.lastItemOrNull()?.id)
-            assertNull(dao.getOldestConfirmedTimelineMessageId(conversationId))
+                val state = pagingStateFromDb(dao, pageSize = 20)
+                assertEquals(localSendingOldestId, state.lastItemOrNull()?.id)
+                assertNull(dao.getOldestConfirmedTimelineMessageId(conversationId))
 
-            coEvery {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = null)
-            } returns listOf(serverMessage(confirmedNewestId), serverMessage(confirmedOldestId))
+                coEvery {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = null)
+                } returns listOf(serverMessage(confirmedNewestId), serverMessage(confirmedOldestId))
 
-            val result = mediator.load(LoadType.APPEND, state)
-            assertTrue(result is RemoteMediator.MediatorResult.Success)
-            coVerify(exactly = 1) {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = null)
+                val result = mediator.load(LoadType.APPEND, state)
+                assertTrue(result is RemoteMediator.MediatorResult.Success)
+                coVerify(exactly = 1) {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = null)
+                }
+                assertEquals(true, dao.getMessageById(confirmedOldestId).first()?.in_timeline)
             }
-            assertEquals(true, dao.getMessageById(confirmedOldestId).first()?.in_timeline)
         }
-    }
 
     @Test
-    fun staleAppendAfterWindowDemoteIsDiscardedAndDoesNotReactivateDemotedSegment() = runTest {
-        fixture { mediator, dao, api, _, _ ->
-            // Initial timeline has confirmedOldestId and olderPageMsg2 (already on disk).
-            dao.insertMessage(serverMessage(confirmedOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
-            dao.insertMessage(serverMessage(olderPageMsg2).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+    fun staleAppendAfterWindowDemoteIsDiscardedAndDoesNotReactivateDemotedSegment() =
+        runTest {
+            fixture { mediator, dao, api, _, _ ->
+                // Initial timeline has confirmedOldestId and olderPageMsg2 (already on disk).
+                dao.insertMessage(serverMessage(confirmedOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+                dao.insertMessage(serverMessage(olderPageMsg2).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
 
-            val state = pagingStateFromDb(dao, pageSize = 20)
-            val requestStarted = CompletableDeferred<Unit>()
-            val allowResponse = CompletableDeferred<Unit>()
+                val state = pagingStateFromDb(dao, pageSize = 20)
+                val requestStarted = CompletableDeferred<Unit>()
+                val allowResponse = CompletableDeferred<Unit>()
 
-            coEvery {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = olderPageMsg2)
-            } coAnswers {
-                requestStarted.complete(Unit)
-                allowResponse.await()
-                // Returns both an already-cached demoted row and a brand-new ancient row.
-                listOf(serverMessage(olderPageMsg2), serverMessage(olderPageMsg1))
-            }
+                coEvery {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = olderPageMsg2)
+                } coAnswers {
+                    requestStarted.complete(Unit)
+                    allowResponse.await()
+                    // Returns both an already-cached demoted row and a brand-new ancient row.
+                    listOf(serverMessage(olderPageMsg2), serverMessage(olderPageMsg1))
+                }
 
-            var appendResult: RemoteMediator.MediatorResult? = null
-            val appendJob = launch { appendResult = mediator.load(LoadType.APPEND, state) }
-            requestStarted.await()
+                var appendResult: RemoteMediator.MediatorResult? = null
+                val appendJob = launch { appendResult = mediator.load(LoadType.APPEND, state) }
+                requestStarted.await()
 
-            // While the HTTP request is in flight, a reconnect anchor jumps the window
-            // and demotes everything before windowJumpOldestId (bumping window_generation).
-            dao.demoteTimelineBefore(conversationId, windowJumpOldestId)
-            dao.insertMessage(serverMessage(windowJumpOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
-            assertEquals(1L, dao.getWindowGeneration(conversationId))
-            assertEquals(false, dao.getMessageById(confirmedOldestId).first()?.in_timeline)
-            assertEquals(false, dao.getMessageById(olderPageMsg2).first()?.in_timeline)
-
-            allowResponse.complete(Unit)
-            runCurrent()
-            appendJob.join()
-
-            assertTrue(appendResult is RemoteMediator.MediatorResult.Error, "Stale APPEND must return MediatorResult.Error")
-            assertNull(dao.getMessageById(olderPageMsg1).first(), "Stale APPEND response must not be inserted")
-            assertEquals(false, dao.getMessageById(olderPageMsg2).first()?.in_timeline, "Demoted row must stay out of timeline")
-
-            // A subsequent APPEND now reads generation = 1 and beforeId = windowJumpOldestId, succeeding cleanly.
-            coEvery {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = windowJumpOldestId)
-            } returns listOf(serverMessage(confirmedNewestId))
-
-            val retryResult = mediator.load(LoadType.APPEND, pagingStateFromDb(dao, pageSize = 20))
-            assertTrue(retryResult is RemoteMediator.MediatorResult.Success)
-            assertEquals(true, dao.getMessageById(confirmedNewestId).first()?.in_timeline)
-        }
-    }
-
-    @Test
-    fun staleRefreshAndStaleEmptyAppendReturnErrorInsteadOfSuccess() = runTest {
-        fixture { mediator, dao, api, _, _ ->
-            dao.insertMessage(serverMessage(confirmedOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
-            val state = pagingStateFromDb(dao, pageSize = 20)
-
-            // 1. REFRESH whose window is demoted while HTTP is in flight returns MediatorResult.Error.
-            coEvery {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = null)
-            } coAnswers {
+                // While the HTTP request is in flight, a reconnect anchor jumps the window
+                // and demotes everything before windowJumpOldestId (bumping window_generation).
                 dao.demoteTimelineBefore(conversationId, windowJumpOldestId)
-                listOf(serverMessage(olderPageMsg1))
+                dao.insertMessage(serverMessage(windowJumpOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+                assertEquals(1L, dao.getWindowGeneration(conversationId))
+                assertEquals(false, dao.getMessageById(confirmedOldestId).first()?.in_timeline)
+                assertEquals(false, dao.getMessageById(olderPageMsg2).first()?.in_timeline)
+
+                allowResponse.complete(Unit)
+                runCurrent()
+                appendJob.join()
+
+                assertTrue(appendResult is RemoteMediator.MediatorResult.Error, "Stale APPEND must return MediatorResult.Error")
+                assertNull(dao.getMessageById(olderPageMsg1).first(), "Stale APPEND response must not be inserted")
+                assertEquals(false, dao.getMessageById(olderPageMsg2).first()?.in_timeline, "Demoted row must stay out of timeline")
+
+                // A subsequent APPEND now reads generation = 1 and beforeId = windowJumpOldestId, succeeding cleanly.
+                coEvery {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = windowJumpOldestId)
+                } returns listOf(serverMessage(confirmedNewestId))
+
+                val retryResult = mediator.load(LoadType.APPEND, pagingStateFromDb(dao, pageSize = 20))
+                assertTrue(retryResult is RemoteMediator.MediatorResult.Success)
+                assertEquals(true, dao.getMessageById(confirmedNewestId).first()?.in_timeline)
             }
-
-            val refreshResult = mediator.load(LoadType.REFRESH, state)
-            assertTrue(refreshResult is RemoteMediator.MediatorResult.Error, "Stale REFRESH must return Error to allow retry")
-            assertNull(dao.getMessageById(olderPageMsg1).first(), "Stale REFRESH must not write rows")
-
-            // 2. Empty APPEND whose window is demoted while HTTP is in flight returns Error, not endOfPaginationReached=true.
-            dao.insertMessage(serverMessage(windowJumpOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
-            coEvery {
-                api.getMessages(conversationId = conversationId, limit = 20, beforeId = windowJumpOldestId)
-            } coAnswers {
-                dao.demoteTimelineBefore(conversationId, Uuid.parse("00000000-0000-0000-0000-000000000099"))
-                emptyList()
-            }
-
-            val emptyAppendResult = mediator.load(LoadType.APPEND, state)
-            assertTrue(
-                emptyAppendResult is RemoteMediator.MediatorResult.Error,
-                "Stale empty APPEND must return Error rather than falsely terminating pagination",
-            )
         }
-    }
+
+    @Test
+    fun staleRefreshAndStaleEmptyAppendReturnErrorInsteadOfSuccess() =
+        runTest {
+            fixture { mediator, dao, api, _, _ ->
+                dao.insertMessage(serverMessage(confirmedOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+                val state = pagingStateFromDb(dao, pageSize = 20)
+
+                // 1. REFRESH whose window is demoted while HTTP is in flight returns MediatorResult.Error.
+                coEvery {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = null)
+                } coAnswers {
+                    dao.demoteTimelineBefore(conversationId, windowJumpOldestId)
+                    listOf(serverMessage(olderPageMsg1))
+                }
+
+                val refreshResult = mediator.load(LoadType.REFRESH, state)
+                assertTrue(refreshResult is RemoteMediator.MediatorResult.Error, "Stale REFRESH must return Error to allow retry")
+                assertNull(dao.getMessageById(olderPageMsg1).first(), "Stale REFRESH must not write rows")
+
+                // 2. Empty APPEND whose window is demoted while HTTP is in flight returns Error, not endOfPaginationReached=true.
+                dao.insertMessage(serverMessage(windowJumpOldestId).toMessageEntity(MessageStatus.SENT, inTimeline = true)!!)
+                coEvery {
+                    api.getMessages(conversationId = conversationId, limit = 20, beforeId = windowJumpOldestId)
+                } coAnswers {
+                    dao.demoteTimelineBefore(conversationId, Uuid.parse("00000000-0000-0000-0000-000000000099"))
+                    emptyList()
+                }
+
+                val emptyAppendResult = mediator.load(LoadType.APPEND, state)
+                assertTrue(
+                    emptyAppendResult is RemoteMediator.MediatorResult.Error,
+                    "Stale empty APPEND must return Error rather than falsely terminating pagination",
+                )
+            }
+        }
 }

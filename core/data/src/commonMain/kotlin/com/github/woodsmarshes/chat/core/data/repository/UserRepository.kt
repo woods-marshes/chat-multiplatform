@@ -31,7 +31,7 @@ interface UserRepository {
     suspend fun updateMyProfile(
         displayName: String? = null,
         avatarUrl: String? = null,
-        bio: String? = null
+        bio: String? = null,
     ): Result<User, UserError>
 
     suspend fun uploadMyAvatar(
@@ -45,7 +45,7 @@ interface UserRepository {
 
     suspend fun updateGlobalSettings(
         privacy: PrivacySetting? = null,
-        preferences: UserPreference? = null
+        preferences: UserPreference? = null,
     ): Result<Boolean, UserError>
 
     suspend fun fetchUserDetail(userId: Uuid): Result<User, UserError>

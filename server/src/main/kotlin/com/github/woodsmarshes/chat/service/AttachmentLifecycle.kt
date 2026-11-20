@@ -34,7 +34,10 @@ class AttachmentLifecycle(
      */
     private val attachmentLockStripes = Array(LOCK_STRIPE_COUNT) { Mutex() }
 
-    suspend fun <T> withAttachmentLock(fileName: String, action: suspend () -> T): T {
+    suspend fun <T> withAttachmentLock(
+        fileName: String,
+        action: suspend () -> T,
+    ): T {
         val stripeIndex = (fileName.hashCode() and Int.MAX_VALUE) % attachmentLockStripes.size
         return attachmentLockStripes[stripeIndex].withLock {
             action()
@@ -49,7 +52,10 @@ class AttachmentLifecycle(
      * still exists on disk. Public /uploads media additionally accepts an
      * existing file on disk, since that tree is public by design.
      */
-    suspend fun resolveTrustedMedia(content: MediaContent, senderId: Uuid): MediaContent? {
+    suspend fun resolveTrustedMedia(
+        content: MediaContent,
+        senderId: Uuid,
+    ): MediaContent? {
         val fromPending = uploadStore.retrieveAndConfirm(content.url, senderId)
         if (fromPending != null) {
             if (content.url.startsWith(PRIVATE_FILE_URL_PREFIX)) {
@@ -68,14 +74,21 @@ class AttachmentLifecycle(
                     return null
                 }
                 val conversations = privateFileRepository.getConversationsForFile(fileName)
-                val authorized = conversations.isNotEmpty() && conversations.any { convId ->
-                    participantRepository.getConversationParticipant(senderId, convId) != null
-                }
+                val authorized =
+                    conversations.isNotEmpty() &&
+                        conversations.any { convId ->
+                            participantRepository.getConversationParticipant(senderId, convId) != null
+                        }
                 content.takeIf { authorized }
             }
-            content.url.startsWith(PUBLIC_UPLOAD_URL_PREFIX) ->
+
+            content.url.startsWith(PUBLIC_UPLOAD_URL_PREFIX) -> {
                 content.takeIf { fileService.publicFileExists(content.url) }
-            else -> null
+            }
+
+            else -> {
+                null
+            }
         }
     }
 

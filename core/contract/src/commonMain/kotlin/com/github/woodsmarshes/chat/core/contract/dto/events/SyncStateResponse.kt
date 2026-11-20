@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.core.contract.dto.events
 
-import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.model.Message
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import kotlin.time.Instant
@@ -33,7 +33,6 @@ data class SyncHead(
  */
 @Serializable
 sealed class SyncStateResponse : RealtimeEvent {
-
     @Serializable
     data class Heads(
         @ProtoNumber(1) val entries: List<SyncHead> = emptyList(),

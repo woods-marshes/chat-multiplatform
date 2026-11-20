@@ -1,5 +1,7 @@
 package com.github.woodsmarshes.chat.app.session
 
+import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepository
 import com.github.woodsmarshes.chat.core.data.repository.ContactRepository
@@ -19,8 +21,6 @@ import com.github.woodsmarshes.chat.core.model.error.ContactError
 import com.github.woodsmarshes.chat.core.model.error.UserError
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
 import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
-import com.github.michaelbull.result.Err
-import com.github.michaelbull.result.Result
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -65,23 +65,36 @@ sealed interface SessionState {
     data object Idle : SessionState
 
     /** Opening DB, starting message workers, and starting the realtime loop for [userId] at [generation]. */
-    data class Starting(val userId: Uuid, val generation: Long) : SessionState
+    data class Starting(
+        val userId: Uuid,
+        val generation: Long,
+    ) : SessionState
 
     /**
      * Local session environment for [userId] at [generation] is ready (DB open,
      * message consumers/executor active, realtime connection loop started); UI
      * may enter authenticated screens.
      */
-    data class Active(val userId: Uuid, val generation: Long) : SessionState
+    data class Active(
+        val userId: Uuid,
+        val generation: Long,
+    ) : SessionState
 
     /**
      * Startup or prior-session teardown for [userId] at [generation] failed;
      * recoverable via [SessionManager.retrySessionStart] or re-auth.
      */
-    data class StartFailed(val userId: Uuid, val generation: Long, val cause: Throwable) : SessionState
+    data class StartFailed(
+        val userId: Uuid,
+        val generation: Long,
+        val cause: Throwable,
+    ) : SessionState
 
     /** Tearing down producer, session workers, and database for [userId] at transition [generation]. */
-    data class Stopping(val userId: Uuid?, val generation: Long) : SessionState
+    data class Stopping(
+        val userId: Uuid?,
+        val generation: Long,
+    ) : SessionState
 }
 
 /**
@@ -187,11 +200,9 @@ class SessionManager(
                 userId == other.userId &&
                 credentialGeneration == other.credentialGeneration
 
-        override fun hashCode(): Int =
-            31 * userId.hashCode() + credentialGeneration.hashCode()
+        override fun hashCode(): Int = 31 * userId.hashCode() + credentialGeneration.hashCode()
 
-        override fun toString(): String =
-            "DesiredSession(userId=$userId, credentialGeneration=$credentialGeneration)"
+        override fun toString(): String = "DesiredSession(userId=$userId, credentialGeneration=$credentialGeneration)"
     }
 
     private val authSessionFlow: Flow<AuthSessionSnapshot> =
@@ -216,22 +227,27 @@ class SessionManager(
      * `true` only when [SessionState.Active], and `false` when [SessionState.Idle],
      * [SessionState.Stopping], or [SessionState.StartFailed].
      */
-    val isLoggedIn: StateFlow<Boolean?> = _sessionState
-        .map { state ->
-            when (state) {
-                SessionState.Initializing,
-                is SessionState.Starting -> null
-                is SessionState.Active -> true
-                SessionState.Idle,
-                is SessionState.Stopping,
-                is SessionState.StartFailed -> false
-            }
-        }
-        .stateIn(scope = scope, started = SharingStarted.Eagerly, initialValue = null)
+    val isLoggedIn: StateFlow<Boolean?> =
+        _sessionState
+            .map { state ->
+                when (state) {
+                    SessionState.Initializing,
+                    is SessionState.Starting,
+                    -> null
+
+                    is SessionState.Active -> true
+
+                    SessionState.Idle,
+                    is SessionState.Stopping,
+                    is SessionState.StartFailed,
+                    -> false
+                }
+            }.stateIn(scope = scope, started = SharingStarted.Eagerly, initialValue = null)
 
     /** Cached user of the current session (for the navigation rail avatar). */
-    val currentUser: StateFlow<User?> = userSettingDataSource.user
-        .stateIn(scope = scope, started = SharingStarted.Eagerly, initialValue = null)
+    val currentUser: StateFlow<User?> =
+        userSettingDataSource.user
+            .stateIn(scope = scope, started = SharingStarted.Eagerly, initialValue = null)
 
     val connectionState: StateFlow<ConnectionState> = realtimeApi.connectionState
 
@@ -337,7 +353,7 @@ class SessionManager(
                                 serverKey = dbIdentity.serverKey,
                                 resourceGeneration = dbIdentity.sessionGen,
                                 stopTransitionGeneration = stopTransitionGen,
-                            )
+                            ),
                         )
                     } else if (fallbackUserId != null) {
                         scheduleDelayedDatabaseCloseLocked(
@@ -346,7 +362,7 @@ class SessionManager(
                                 serverKey = serverEndpointProvider.currentServerKey,
                                 resourceGeneration = null,
                                 stopTransitionGeneration = stopTransitionGen,
-                            )
+                            ),
                         )
                     }
                 }
@@ -378,8 +394,7 @@ class SessionManager(
         failedTarget = null
     }
 
-    private fun hasFailedForTarget(targetSession: DesiredSession?): Boolean =
-        hasFailedTarget && failedTarget == targetSession
+    private fun hasFailedForTarget(targetSession: DesiredSession?): Boolean = hasFailedTarget && failedTarget == targetSession
 
     /**
      * Queues the final identity-checked close after the database stop barrier.
@@ -388,30 +403,31 @@ class SessionManager(
      */
     private fun scheduleDelayedDatabaseCloseLocked(closeReq: DelayedDatabaseClose) {
         pendingDelayedCloseJob?.cancel()
-        pendingDelayedCloseJob = scope.launch {
-            transitionMutex.withLock {
-                if (currentGeneration == closeReq.stopTransitionGeneration &&
-                    _sessionState.value is SessionState.Idle
-                ) {
-                    try {
-                        closeBoundDatabaseLocked(closeReq.userId, closeReq.serverKey, closeReq.resourceGeneration)
-                        pendingCleanupRequired = false
-                    } catch (t: Throwable) {
-                        if (t is CancellationException) throw t
-                        log.error(t) {
-                            "[SessionManager] delayed database close failed for user=${closeReq.userId} gen=${closeReq.resourceGeneration}"
+        pendingDelayedCloseJob =
+            scope.launch {
+                transitionMutex.withLock {
+                    if (currentGeneration == closeReq.stopTransitionGeneration &&
+                        _sessionState.value is SessionState.Idle
+                    ) {
+                        try {
+                            closeBoundDatabaseLocked(closeReq.userId, closeReq.serverKey, closeReq.resourceGeneration)
+                            pendingCleanupRequired = false
+                        } catch (t: Throwable) {
+                            if (t is CancellationException) throw t
+                            log.error(t) {
+                                "[SessionManager] delayed database close failed for user=${closeReq.userId} gen=${closeReq.resourceGeneration}"
+                            }
+                            pendingCleanupRequired = true
+                            recordStartFailedLocked(
+                                userId = closeReq.userId,
+                                generation = closeReq.stopTransitionGeneration,
+                                cause = t,
+                                targetSession = null,
+                            )
                         }
-                        pendingCleanupRequired = true
-                        recordStartFailedLocked(
-                            userId = closeReq.userId,
-                            generation = closeReq.stopTransitionGeneration,
-                            cause = t,
-                            targetSession = null,
-                        )
                     }
                 }
             }
-        }
     }
 
     private suspend fun desiredSession(): DesiredSession? {
@@ -427,27 +443,37 @@ class SessionManager(
      * returns the first failure (with any subsequent failures attached as
      * suppressed), or `null` when all confirmed stopped.
      */
-    private suspend fun stopWorkersSafely(): Throwable? = withContext(NonCancellable) {
-        val disconnectErr = runCatching { realtimeApi.disconnect() }
-            .onFailure { log.error(it) { "[SessionManager] realtime disconnect failed" } }
-            .exceptionOrNull()
-        val stopMsgErr = runCatching { messageRepository.stopSession() }
-            .onFailure { log.error(it) { "[SessionManager] message stopSession failed" } }
-            .exceptionOrNull()
-        val stopContactErr = runCatching { contactRepository.stopSession() }
-            .onFailure { log.error(it) { "[SessionManager] contact stopSession failed" } }
-            .exceptionOrNull()
-        val stopUserErr = runCatching { userRepository.stopSession() }
-            .onFailure { log.error(it) { "[SessionManager] user stopSession failed" } }
-            .exceptionOrNull()
-        val stopDatabaseErr = runCatching { databaseHolder.stopDatabaseSession() }
-            .onFailure { log.error(it) { "[SessionManager] database readers and operations failed to stop" } }
-            .exceptionOrNull()
-        combineErrors(disconnectErr, stopMsgErr, stopContactErr, stopUserErr, stopDatabaseErr)
-    }
+    private suspend fun stopWorkersSafely(): Throwable? =
+        withContext(NonCancellable) {
+            val disconnectErr =
+                runCatching { realtimeApi.disconnect() }
+                    .onFailure { log.error(it) { "[SessionManager] realtime disconnect failed" } }
+                    .exceptionOrNull()
+            val stopMsgErr =
+                runCatching { messageRepository.stopSession() }
+                    .onFailure { log.error(it) { "[SessionManager] message stopSession failed" } }
+                    .exceptionOrNull()
+            val stopContactErr =
+                runCatching { contactRepository.stopSession() }
+                    .onFailure { log.error(it) { "[SessionManager] contact stopSession failed" } }
+                    .exceptionOrNull()
+            val stopUserErr =
+                runCatching { userRepository.stopSession() }
+                    .onFailure { log.error(it) { "[SessionManager] user stopSession failed" } }
+                    .exceptionOrNull()
+            val stopDatabaseErr =
+                runCatching { databaseHolder.stopDatabaseSession() }
+                    .onFailure { log.error(it) { "[SessionManager] database readers and operations failed to stop" } }
+                    .exceptionOrNull()
+            combineErrors(disconnectErr, stopMsgErr, stopContactErr, stopUserErr, stopDatabaseErr)
+        }
 
     /** Must be called while holding [transitionMutex]. */
-    private suspend fun closeBoundDatabaseLocked(userId: Uuid, serverKey: String, resourceGeneration: Long?) {
+    private suspend fun closeBoundDatabaseLocked(
+        userId: Uuid,
+        serverKey: String,
+        resourceGeneration: Long?,
+    ) {
         databaseHolder.closeDatabaseIfCurrent(userId, serverKey, resourceGeneration)
         val currentBound = boundDatabaseIdentity
         if (currentBound != null &&
@@ -494,12 +520,14 @@ class SessionManager(
                                 serverKey = boundForCurrent?.serverKey ?: serverEndpointProvider.currentServerKey,
                                 resourceGeneration = resourceGen,
                                 stopTransitionGeneration = stopGen,
-                            )
+                            ),
                         )
                     }
+
                     SessionState.Initializing,
                     is SessionState.StartFailed,
-                    is SessionState.Stopping -> {
+                    is SessionState.Stopping,
+                    -> {
                         if (current is SessionState.StartFailed &&
                             !forceRetryAfterFailure &&
                             hasFailedForTarget(null)
@@ -542,8 +570,12 @@ class SessionManager(
                         clearFailedTargetLocked()
                         _sessionState.value = SessionState.Idle
                     }
+
                     SessionState.Idle,
-                    is SessionState.Starting -> Unit
+                    is SessionState.Starting,
+                    -> {
+                        Unit
+                    }
                 }
                 return
             }
@@ -605,6 +637,7 @@ class SessionManager(
                     if (!startForUserLocked(desired)) continue
                     return
                 }
+
                 is SessionState.StartFailed -> {
                     if (!hasFailedForTarget(desired) || forceRetryAfterFailure) {
                         if (pendingCleanupRequired || boundDatabaseIdentity != null) {
@@ -647,9 +680,11 @@ class SessionManager(
                     }
                     return
                 }
+
                 SessionState.Initializing,
                 SessionState.Idle,
-                is SessionState.Stopping -> {
+                is SessionState.Stopping,
+                -> {
                     val dbIdentity = boundDatabaseIdentity
                     if (dbIdentity != null && dbIdentity.userId != desired.userId) {
                         try {
@@ -670,7 +705,10 @@ class SessionManager(
                     if (!startForUserLocked(desired)) continue
                     return
                 }
-                is SessionState.Starting -> return
+
+                is SessionState.Starting -> {
+                    return
+                }
             }
         }
     }
@@ -715,17 +753,18 @@ class SessionManager(
             val latestDesired = desiredSession()
             if (latestDesired != desired) {
                 log.info { "[SessionManager] target changed ($desired -> $latestDesired) during startup; rolling back gen=$sessionGen" }
-                val rollbackErr = withContext(NonCancellable) {
-                    rollbackPartialStart(
-                        userId = userId,
-                        serverKey = serverKey,
-                        sessionGen = sessionGen,
-                        dbOpened = true,
-                        userSessionStarted = true,
-                        contactSessionStarted = true,
-                        messageSessionStarted = true,
-                    )
-                }
+                val rollbackErr =
+                    withContext(NonCancellable) {
+                        rollbackPartialStart(
+                            userId = userId,
+                            serverKey = serverKey,
+                            sessionGen = sessionGen,
+                            dbOpened = true,
+                            userSessionStarted = true,
+                            contactSessionStarted = true,
+                            messageSessionStarted = true,
+                        )
+                    }
                 if (rollbackErr != null) {
                     pendingCleanupRequired = true
                     recordStartFailedLocked(
@@ -749,15 +788,16 @@ class SessionManager(
             return true
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
-                val rollbackErr = rollbackPartialStart(
-                    userId = userId,
-                    serverKey = serverKey,
-                    sessionGen = sessionGen,
-                    dbOpened = dbOpened,
-                    userSessionStarted = userSessionStarted,
-                    contactSessionStarted = contactSessionStarted,
-                    messageSessionStarted = messageSessionStarted,
-                )
+                val rollbackErr =
+                    rollbackPartialStart(
+                        userId = userId,
+                        serverKey = serverKey,
+                        sessionGen = sessionGen,
+                        dbOpened = dbOpened,
+                        userSessionStarted = userSessionStarted,
+                        contactSessionStarted = contactSessionStarted,
+                        messageSessionStarted = messageSessionStarted,
+                    )
                 if (rollbackErr != null) {
                     pendingCleanupRequired = true
                     if (rollbackErr !== e) {
@@ -779,15 +819,16 @@ class SessionManager(
         } catch (t: Throwable) {
             log.error(t) { "[SessionManager] session startup failed for user=$userId gen=$sessionGen; rolling back" }
             withContext(NonCancellable) {
-                val rollbackErr = rollbackPartialStart(
-                    userId = userId,
-                    serverKey = serverKey,
-                    sessionGen = sessionGen,
-                    dbOpened = dbOpened,
-                    userSessionStarted = userSessionStarted,
-                    contactSessionStarted = contactSessionStarted,
-                    messageSessionStarted = messageSessionStarted,
-                )
+                val rollbackErr =
+                    rollbackPartialStart(
+                        userId = userId,
+                        serverKey = serverKey,
+                        sessionGen = sessionGen,
+                        dbOpened = dbOpened,
+                        userSessionStarted = userSessionStarted,
+                        contactSessionStarted = contactSessionStarted,
+                        messageSessionStarted = messageSessionStarted,
+                    )
                 if (rollbackErr != null) {
                     pendingCleanupRequired = true
                     if (rollbackErr !== t) {
@@ -820,24 +861,34 @@ class SessionManager(
         contactSessionStarted: Boolean,
         messageSessionStarted: Boolean,
     ): Throwable? {
-        val disconnectErr = runCatching { realtimeApi.disconnect() }
-            .onFailure { log.warn(it) { "[SessionManager] rollback disconnect failed" } }
-            .exceptionOrNull()
-        val stopMsgErr = if (messageSessionStarted) {
-            runCatching { messageRepository.stopSession() }
-                .onFailure { log.warn(it) { "[SessionManager] rollback stopSession failed" } }
+        val disconnectErr =
+            runCatching { realtimeApi.disconnect() }
+                .onFailure { log.warn(it) { "[SessionManager] rollback disconnect failed" } }
                 .exceptionOrNull()
-        } else null
-        val stopContactErr = if (contactSessionStarted) {
-            runCatching { contactRepository.stopSession() }
-                .onFailure { log.warn(it) { "[SessionManager] rollback contact stopSession failed" } }
-                .exceptionOrNull()
-        } else null
-        val stopUserErr = if (userSessionStarted) {
-            runCatching { userRepository.stopSession() }
-                .onFailure { log.warn(it) { "[SessionManager] rollback user stopSession failed" } }
-                .exceptionOrNull()
-        } else null
+        val stopMsgErr =
+            if (messageSessionStarted) {
+                runCatching { messageRepository.stopSession() }
+                    .onFailure { log.warn(it) { "[SessionManager] rollback stopSession failed" } }
+                    .exceptionOrNull()
+            } else {
+                null
+            }
+        val stopContactErr =
+            if (contactSessionStarted) {
+                runCatching { contactRepository.stopSession() }
+                    .onFailure { log.warn(it) { "[SessionManager] rollback contact stopSession failed" } }
+                    .exceptionOrNull()
+            } else {
+                null
+            }
+        val stopUserErr =
+            if (userSessionStarted) {
+                runCatching { userRepository.stopSession() }
+                    .onFailure { log.warn(it) { "[SessionManager] rollback user stopSession failed" } }
+                    .exceptionOrNull()
+            } else {
+                null
+            }
 
         val workerErr = combineErrors(disconnectErr, stopMsgErr, stopContactErr, stopUserErr)
         if (workerErr != null) {

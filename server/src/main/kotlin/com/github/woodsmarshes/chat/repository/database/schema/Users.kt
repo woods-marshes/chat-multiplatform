@@ -12,7 +12,7 @@ object Users : UuidTable(name = "users", uuidVersion = UuidVersion.V7) {
     val avatarUrl = varchar("avatar", length = 512).nullable()
     val bio = varchar("bio", length = 512).nullable()
     val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at").clientDefault{ Clock.System.now() }
+    val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
     val deletedAt = timestamp("deleted_at").nullable()
     val bannedAt = timestamp("banned_at").nullable()
     val role = enumerationByName("role", 32, UserRole::class)

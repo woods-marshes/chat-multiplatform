@@ -18,7 +18,8 @@ data class Conversation(
 )
 
 enum class ConversationType {
-    GROUP, PRIVATE
+    GROUP,
+    PRIVATE,
 }
 
 @Serializable

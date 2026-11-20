@@ -37,9 +37,10 @@ class ServerConfigDataSource(
         val SERVER_BASE_URL = stringPreferencesKey("serverBaseUrl")
     }
 
-    val serverBaseUrl: Flow<String?> = dataStore.data.map { preferences ->
-        preferences[Keys.SERVER_BASE_URL]
-    }
+    val serverBaseUrl: Flow<String?> =
+        dataStore.data.map { preferences ->
+            preferences[Keys.SERVER_BASE_URL]
+        }
 
     override suspend fun currentServerBaseUrl(): String? = serverBaseUrl.first()
 

@@ -1,9 +1,13 @@
 package com.github.woodsmarshes.chat.core.database.dao
 
 import androidx.paging.PagingSource
-import com.github.woodsmarshes.chat.core.database.session.SessionBoundPagingSource
 import app.cash.sqldelight.SuspendingTransactionWithoutReturn
 import app.cash.sqldelight.paging3.QueryPagingSource
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
+import com.github.woodsmarshes.chat.core.database.session.DirectDatabaseSessionGate
+import com.github.woodsmarshes.chat.core.database.session.SessionBoundPagingSource
+import com.github.woodsmarshes.chat.core.database.session.sessionBoundQueryFlow
 import com.github.woodsmarshes.chat.core.model.MessageStatus
 import io.github.woodsmarshes.chat.db.ChatDatabase
 import io.github.woodsmarshes.chat.db.GetLatestMessage
@@ -13,14 +17,9 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByIds
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
-
-import kotlinx.coroutines.flow.Flow
-import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
-import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
-import com.github.woodsmarshes.chat.core.database.session.DirectDatabaseSessionGate
-import com.github.woodsmarshes.chat.core.database.session.sessionBoundQueryFlow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -30,25 +29,30 @@ class MessageDaoImpl(
     private val ioContext: CoroutineContext,
     private val sessionGate: DatabaseSessionGate = DirectDatabaseSessionGate(dbProvider),
 ) : MessageDao {
-
-    private suspend fun writeQueries() = (currentCoroutineContext()[BoundDatabaseElement]?.database ?: dbProvider()).also { currentCoroutineContext().ensureActive() }.messagesQueries
+    private suspend fun writeQueries() =
+        (currentCoroutineContext()[BoundDatabaseElement]?.database ?: dbProvider())
+            .also {
+                currentCoroutineContext().ensureActive()
+            }.messagesQueries
 
     fun pinForPaging(): MessageDaoImpl {
         val db = dbProvider()
-        return MessageDaoImpl({ db }, ioContext, com.github.woodsmarshes.chat.core.database.session.PinnedDatabaseSessionGate(db, sessionGate))
+        return MessageDaoImpl(
+            { db },
+            ioContext,
+            com.github.woodsmarshes.chat.core.database.session
+                .PinnedDatabaseSessionGate(db, sessionGate),
+        )
     }
 
     private val queries
         get() = dbProvider().messagesQueries
 
-    override suspend fun transaction(
-        body: suspend SuspendingTransactionWithoutReturn.() -> Unit,
-    ) {
+    override suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit) {
         writeQueries().transaction(body = body)
     }
 
-    override suspend fun findMessageById(id: Uuid): GetMessageById? =
-        writeQueries().getMessageById(id).executeAsOneOrNull()
+    override suspend fun findMessageById(id: Uuid): GetMessageById? = writeQueries().getMessageById(id).executeAsOneOrNull()
 
     override suspend fun insertMessage(message: MessageEntity) {
         writeQueries().upsertMessage(message)
@@ -64,78 +68,101 @@ class MessageDaoImpl(
     override fun getMessagesPaged(
         conversationId: Uuid,
         beforeTimestamp: Instant,
-        limit: Long
-    ): Flow<List<MessageEntity>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getMessagesPaged(conversationId, beforeTimestamp, limit) }, { it.executeAsList() })
-    }
+        limit: Long,
+    ): Flow<List<MessageEntity>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db ->
+            db.messagesQueries.getMessagesPaged(
+                conversationId,
+                beforeTimestamp,
+                limit,
+            )
+        }, {
+            it.executeAsList()
+        })
 
-    override fun pagingSource(conversationId: Uuid, pageSize: Long): PagingSource<Uuid, KeyedMessagesWithRelations> {
-        return SessionBoundPagingSource(
+    override fun pagingSource(
+        conversationId: Uuid,
+        pageSize: Long,
+    ): PagingSource<Uuid, KeyedMessagesWithRelations> =
+        SessionBoundPagingSource(
             gate = sessionGate,
             boundDatabase = sessionGate.boundDatabase,
-            boundGeneration = sessionGate.currentGeneration
+            boundGeneration = sessionGate.currentGeneration,
         ) { db ->
             val queries = db.messagesQueries
             QueryPagingSource(
                 transacter = queries,
                 context = ioContext,
                 pageBoundariesProvider = { anchorId, limit ->
-                     queries.messageBoundaries(
-                         limit = limit,
-                         referenceId = anchorId ?: Uuid.NIL,
-                         conversationId = conversationId
-                     )
+                    queries.messageBoundaries(
+                        limit = limit,
+                        referenceId = anchorId ?: Uuid.NIL,
+                        conversationId = conversationId,
+                    )
                 },
                 queryProvider = { beginInclusive, endExclusive ->
                     queries.keyedMessagesWithRelations(
                         conversationId = conversationId,
                         beginInclusive = beginInclusive,
-                        endExclusive = endExclusive
+                        endExclusive = endExclusive,
                     )
-                }
+                },
             )
         }
-    }
 
     override fun getMessagesWithRelationsByPage(
         conversationId: Uuid,
         beforeId: Uuid?,
-        limit: Long
-    ): Flow<List<GetMessagesWithAllRelationsByPage>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getMessagesWithAllRelationsByPage(conversationId, beforeId, limit) }, { it.executeAsList() })
-    }
+        limit: Long,
+    ): Flow<List<GetMessagesWithAllRelationsByPage>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db ->
+            db.messagesQueries.getMessagesWithAllRelationsByPage(
+                conversationId,
+                beforeId,
+                limit,
+            )
+        }, {
+            it.executeAsList()
+        })
 
-    override fun getMessagesWithRelationsByIds(ids: List<Uuid>): Flow<List<GetMessagesWithAllRelationsByIds>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getMessagesWithAllRelationsByIds(ids) }, { it.executeAsList() })
-    }
+    override fun getMessagesWithRelationsByIds(ids: List<Uuid>): Flow<List<GetMessagesWithAllRelationsByIds>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getMessagesWithAllRelationsByIds(ids) }, {
+            it.executeAsList()
+        })
 
-    override fun getLatestMessage(conversationId: Uuid): Flow<GetLatestMessage?> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getLatestMessage(conversationId) }, { it.executeAsOneOrNull() })
-    }
+    override fun getLatestMessage(conversationId: Uuid): Flow<GetLatestMessage?> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getLatestMessage(conversationId) }, {
+            it.executeAsOneOrNull()
+        })
 
-    override fun getLatestMessages(conversationIds: List<Uuid>): Flow<List<GetLatestMessages>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getLatestMessages(conversationIds) }, { it.executeAsList() })
-    }
+    override fun getLatestMessages(conversationIds: List<Uuid>): Flow<List<GetLatestMessages>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getLatestMessages(conversationIds) }, {
+            it.executeAsList()
+        })
 
-    override fun getMessageById(id: Uuid): Flow<GetMessageById?> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getMessageById(id) }, { it.executeAsOneOrNull() })
-    }
+    override fun getMessageById(id: Uuid): Flow<GetMessageById?> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getMessageById(id) }, {
+            it.executeAsOneOrNull()
+        })
 
-    override fun getRepliesToMessage(messageId: Uuid): Flow<List<MessageEntity>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getRepliesToMessage(messageId) }, { it.executeAsList() })
-    }
+    override fun getRepliesToMessage(messageId: Uuid): Flow<List<MessageEntity>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.messagesQueries.getRepliesToMessage(messageId) }, {
+            it.executeAsList()
+        })
 
     override suspend fun updateMessageStatus(
         oldId: Uuid,
         newId: Uuid,
         createdAt: Instant,
-        status: MessageStatus
+        status: MessageStatus,
     ) {
         writeQueries().updateMessageStatus(status, createdAt, newId, oldId)
     }
 
-    override suspend fun revokeMessage(id: Uuid, revokedAt: Instant): Boolean =
-        writeQueries().revokeMessage(revokedAt = revokedAt, id = id) > 0L
+    override suspend fun revokeMessage(
+        id: Uuid,
+        revokedAt: Instant,
+    ): Boolean = writeQueries().revokeMessage(revokedAt = revokedAt, id = id) > 0L
 
     override suspend fun getRetryableMessages(retryAfter: Instant): List<MessageEntity> =
         writeQueries().getRetryableMessages(retryAfter.toEpochMilliseconds()).executeAsList()
@@ -147,11 +174,17 @@ class MessageDaoImpl(
 
     private fun Uuid.storageKey(): String = toString().replace("-", "")
 
-    override suspend fun startAttempt(id: Uuid, now: Instant) {
+    override suspend fun startAttempt(
+        id: Uuid,
+        now: Instant,
+    ) {
         writeQueries().startAttempt(id.storageKey(), now.toEpochMilliseconds())
     }
 
-    override suspend fun claimFailedMessage(id: Uuid, now: Instant): Boolean {
+    override suspend fun claimFailedMessage(
+        id: Uuid,
+        now: Instant,
+    ): Boolean {
         val q = writeQueries()
         var claimed = false
         q.transaction {
@@ -165,11 +198,18 @@ class MessageDaoImpl(
         return claimed
     }
 
-    override suspend fun recordAttempt(id: Uuid, createdAt: Instant, now: Instant) {
+    override suspend fun recordAttempt(
+        id: Uuid,
+        createdAt: Instant,
+        now: Instant,
+    ) {
         writeQueries().recordAttempt(id.storageKey(), createdAt.toEpochMilliseconds(), now.toEpochMilliseconds())
     }
 
-    override suspend fun mergeServerMessage(message: MessageEntity, localId: Uuid?) {
+    override suspend fun mergeServerMessage(
+        message: MessageEntity,
+        localId: Uuid?,
+    ) {
         val q = writeQueries()
         q.transaction {
             q.upsertMessage(message.copy(local_send_status = MessageStatus.SENT))
@@ -184,10 +224,16 @@ class MessageDaoImpl(
         }
     }
 
-    override suspend fun getScopeCursor(scope: String, id: Uuid): Long? =
-        writeQueries().getScopeCursor(scope, id.toString()).executeAsOneOrNull()
+    override suspend fun getScopeCursor(
+        scope: String,
+        id: Uuid,
+    ): Long? = writeQueries().getScopeCursor(scope, id.toString()).executeAsOneOrNull()
 
-    override suspend fun setScopeCursor(scope: String, id: Uuid, revision: Long) {
+    override suspend fun setScopeCursor(
+        scope: String,
+        id: Uuid,
+        revision: Long,
+    ) {
         writeQueries().setScopeCursor(scope, id.toString(), revision)
     }
 
@@ -201,9 +247,13 @@ class MessageDaoImpl(
     override suspend fun getUnreadRefreshPendingGeneration(conversationId: Uuid): Long? =
         writeQueries().getUnreadRefreshPendingGeneration(conversationId.toString()).executeAsOneOrNull()
 
-    override suspend fun confirmUnreadRefreshPending(conversationId: Uuid, expectedGeneration: Long) {
+    override suspend fun confirmUnreadRefreshPending(
+        conversationId: Uuid,
+        expectedGeneration: Long,
+    ) {
         writeQueries().confirmUnreadRefreshPending(conversationId.toString(), expectedGeneration)
     }
+
     override suspend fun seedMessage(message: MessageEntity) {
         writeQueries().seedMessage(message)
     }
@@ -230,7 +280,10 @@ class MessageDaoImpl(
     override suspend fun getOldestConfirmedTimelineMessageId(conversationId: Uuid): Uuid? =
         writeQueries().getOldestConfirmedTimelineMessageId(conversationId).executeAsOneOrNull()
 
-    override suspend fun demoteTimelineBefore(conversationId: Uuid, windowOldestId: Uuid) {
+    override suspend fun demoteTimelineBefore(
+        conversationId: Uuid,
+        windowOldestId: Uuid,
+    ) {
         val q = writeQueries()
         q.transaction {
             q.demoteTimelineBefore(conversationId = conversationId, windowOldestId = windowOldestId)

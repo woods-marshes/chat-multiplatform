@@ -10,13 +10,13 @@ actual suspend fun provideDbDriver(
     schema: SqlSchema<QueryResult.AsyncValue<Unit>>,
     context: PlatformContext,
     dbName: String,
-): SqlDriver {
-    return createDefaultWebWorkerDriver().also {
-        it.execute(
-            identifier = null,
-            sql = "PRAGMA foreign_keys = ON;",
-            parameters = 0
-        ).await()
+): SqlDriver =
+    createDefaultWebWorkerDriver().also {
+        it
+            .execute(
+                identifier = null,
+                sql = "PRAGMA foreign_keys = ON;",
+                parameters = 0,
+            ).await()
         schema.create(it).await()
     }
-}

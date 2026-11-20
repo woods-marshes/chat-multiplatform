@@ -40,37 +40,42 @@ class ResourceSession<S : Any>(
 
     suspend fun start() {
         while (true) {
-            val pending = mutex.withLock {
-                when (val state = phase) {
-                    is Phase.Running -> {
-                        validateExisting(state.resource)
-                        return
-                    }
-                    is Phase.Stopping -> state.done
-                    Phase.Stopped -> {
-                        val resource = create()
-                        try {
-                            executor.start()
-                            phase = Phase.Running(resource)
-                            prepare(resource)
-                        } catch (failure: Throwable) {
-                            withContext(NonCancellable) {
-                                try {
-                                    cleanup(resource)
-                                    phase = Phase.Stopped
-                                } catch (cleanupFailure: Throwable) {
-                                    if (cleanupFailure !== failure) failure.addSuppressed(cleanupFailure)
-                                    val failed = CompletableDeferred<Unit>()
-                                    failed.completeExceptionally(cleanupFailure)
-                                    phase = Phase.Stopping(failed)
-                                }
-                            }
-                            throw failure
+            val pending =
+                mutex.withLock {
+                    when (val state = phase) {
+                        is Phase.Running -> {
+                            validateExisting(state.resource)
+                            return
                         }
-                        return
+
+                        is Phase.Stopping -> {
+                            state.done
+                        }
+
+                        Phase.Stopped -> {
+                            val resource = create()
+                            try {
+                                executor.start()
+                                phase = Phase.Running(resource)
+                                prepare(resource)
+                            } catch (failure: Throwable) {
+                                withContext(NonCancellable) {
+                                    try {
+                                        cleanup(resource)
+                                        phase = Phase.Stopped
+                                    } catch (cleanupFailure: Throwable) {
+                                        if (cleanupFailure !== failure) failure.addSuppressed(cleanupFailure)
+                                        val failed = CompletableDeferred<Unit>()
+                                        failed.completeExceptionally(cleanupFailure)
+                                        phase = Phase.Stopping(failed)
+                                    }
+                                }
+                                throw failure
+                            }
+                            return
+                        }
                     }
                 }
-            }
             pending.await()
         }
     }
@@ -80,16 +85,23 @@ class ResourceSession<S : Any>(
             "A resource session cannot stop itself from a managed operation"
         }
         var resource: S? = null
-        val completion = mutex.withLock {
-            when (val state = phase) {
-                is Phase.Running -> {
-                    resource = state.resource
-                    CompletableDeferred<Unit>().also { phase = Phase.Stopping(it) }
+        val completion =
+            mutex.withLock {
+                when (val state = phase) {
+                    is Phase.Running -> {
+                        resource = state.resource
+                        CompletableDeferred<Unit>().also { phase = Phase.Stopping(it) }
+                    }
+
+                    is Phase.Stopping -> {
+                        state.done
+                    }
+
+                    Phase.Stopped -> {
+                        return
+                    }
                 }
-                is Phase.Stopping -> state.done
-                Phase.Stopped -> return
             }
-        }
         val claimed = resource
         if (claimed == null) {
             completion.await()
@@ -113,12 +125,17 @@ class ResourceSession<S : Any>(
 
     private suspend fun cleanup(resource: S) {
         var failure: Throwable? = null
+
         suspend fun attempt(block: suspend () -> Unit) {
             try {
                 block()
             } catch (error: Throwable) {
                 val first = failure
-                if (first == null) failure = error else if (first !== error) first.addSuppressed(error)
+                if (first == null) {
+                    failure = error
+                } else if (first !== error) {
+                    first.addSuppressed(error)
+                }
             }
         }
         attempt { beforeStop(resource) }
@@ -127,16 +144,23 @@ class ResourceSession<S : Any>(
         failure?.let { throw it }
     }
 
-    suspend fun <T> execute(block: suspend (S) -> T): T = executor.execute {
-        val resource = current ?: throw SessionStoppedException()
-        val result = block(resource)
-        currentCoroutineContext().ensureActive()
-        result
-    }
+    suspend fun <T> execute(block: suspend (S) -> T): T =
+        executor.execute {
+            val resource = current ?: throw SessionStoppedException()
+            val result = block(resource)
+            currentCoroutineContext().ensureActive()
+            result
+        }
 
     private sealed interface Phase<out S : Any> {
         data object Stopped : Phase<Nothing>
-        data class Running<S : Any>(val resource: S) : Phase<S>
-        data class Stopping(val done: CompletableDeferred<Unit>) : Phase<Nothing>
+
+        data class Running<S : Any>(
+            val resource: S,
+        ) : Phase<S>
+
+        data class Stopping(
+            val done: CompletableDeferred<Unit>,
+        ) : Phase<Nothing>
     }
 }

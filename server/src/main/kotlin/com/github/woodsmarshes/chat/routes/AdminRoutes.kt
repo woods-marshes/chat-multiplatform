@@ -27,14 +27,16 @@ fun Route.adminRoutes() {
     authenticate {
         get<V1.Admin.Users> { params ->
             val adminId = call.extractUserId()
-            val result = adminService.listUsers(
-                adminId = adminId,
-                keyword = params.keyword,
-                role = params.role,
-                banned = params.banned,
-                page = params.page,
-                limit = params.limit,
-            ).getOrThrow()
+            val result =
+                adminService
+                    .listUsers(
+                        adminId = adminId,
+                        keyword = params.keyword,
+                        role = params.role,
+                        banned = params.banned,
+                        page = params.page,
+                        limit = params.limit,
+                    ).getOrThrow()
             call.respond(result)
         }
 
@@ -123,6 +125,5 @@ fun Route.adminRoutes() {
             val result = adminService.listAuditLogs(adminId, params.limit).getOrThrow()
             call.respond(result)
         }
-
     }
 }

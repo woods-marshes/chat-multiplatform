@@ -14,7 +14,11 @@ import kotlin.math.sign
 object BlurHashEncoder {
     private val ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~".toCharArray()
 
-    fun encode(image: BufferedImage, componentX: Int = 4, componentY: Int = 4): String {
+    fun encode(
+        image: BufferedImage,
+        componentX: Int = 4,
+        componentY: Int = 4,
+    ): String {
         val width = image.width
         val height = image.height
         val pixels = image.getRGB(0, 0, width, height, null, 0, width)
@@ -54,8 +58,19 @@ object BlurHashEncoder {
         return String(hash)
     }
 
-    private fun applyBasisFunction(pixels: IntArray, width: Int, height: Int, norm: Double, i: Int, j: Int, factors: Array<DoubleArray>, index: Int) {
-        var r = 0.0; var g = 0.0; var b = 0.0
+    private fun applyBasisFunction(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        norm: Double,
+        i: Int,
+        j: Int,
+        factors: Array<DoubleArray>,
+        index: Int,
+    ) {
+        var r = 0.0
+        var g = 0.0
+        var b = 0.0
         for (x in 0 until width) {
             for (y in 0 until height) {
                 val basis = norm * cos(PI * i * x / width) * cos(PI * j * y / height)
@@ -78,14 +93,22 @@ object BlurHashEncoder {
         return (r shl 16) + (g shl 8) + b
     }
 
-    private fun encodeAC(value: DoubleArray, maxVal: Double): Long {
+    private fun encodeAC(
+        value: DoubleArray,
+        maxVal: Double,
+    ): Long {
         val r = floor(max(0.0, min(18.0, floor(signSqrt(value[0] / maxVal) * 9 + 9.5))))
         val g = floor(max(0.0, min(18.0, floor(signSqrt(value[1] / maxVal) * 9 + 9.5))))
         val b = floor(max(0.0, min(18.0, floor(signSqrt(value[2] / maxVal) * 9 + 9.5))))
         return (r * 19 * 19 + g * 19 + b).toLong()
     }
 
-    private fun encodeBase83(value: Long, length: Int, buffer: CharArray, offset: Int) {
+    private fun encodeBase83(
+        value: Long,
+        length: Int,
+        buffer: CharArray,
+        offset: Int,
+    ) {
         var exp = 1L
         for (i in 1..length) {
             val digit = (value / exp % 83).toInt()
@@ -101,11 +124,12 @@ object BlurHashEncoder {
 
     private fun linearTosRGB(v: Double): Long {
         val f = v.coerceIn(0.0, 1.0)
-        return if (f <= 0.0031308) (f * 12.92 * 255 + 0.5).toLong()
-        else ((1.055 * f.pow(1 / 2.4) - 0.055) * 255 + 0.5).toLong()
+        return if (f <= 0.0031308) {
+            (f * 12.92 * 255 + 0.5).toLong()
+        } else {
+            ((1.055 * f.pow(1 / 2.4) - 0.055) * 255 + 0.5).toLong()
+        }
     }
 
-    private fun signSqrt(v: Double): Double {
-        return v.sign * kotlin.math.sqrt(v.absoluteValue)
-    }
+    private fun signSqrt(v: Double): Double = v.sign * kotlin.math.sqrt(v.absoluteValue)
 }

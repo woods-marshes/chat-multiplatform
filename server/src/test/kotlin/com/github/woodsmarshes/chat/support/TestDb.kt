@@ -10,9 +10,9 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.PrivateMetadata
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
+import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
-import com.github.woodsmarshes.chat.repository.database.schema.Contacts
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.clearDatabaseData
@@ -50,20 +50,26 @@ object TestDb {
         }
     }
 
-    suspend fun user(name: String): Uuid = transaction(database) {
-        Users.insert {
-            it[id] = Uuid.random()
-            it[username] = name
-            it[email] = "$name-${Uuid.random()}@test.local"
-            it[passwordHash] = "hash"
-            it[salt] = ""
-            it[role] = UserRole.MEMBER
-            it[createdAt] = Clock.System.now()
-            it[updatedAt] = Clock.System.now()
-        }[Users.id].value
-    }
+    suspend fun user(name: String): Uuid =
+        transaction(database) {
+            Users
+                .insert {
+                    it[id] = Uuid.random()
+                    it[username] = name
+                    it[email] = "$name-${Uuid.random()}@test.local"
+                    it[passwordHash] = "hash"
+                    it[salt] = ""
+                    it[role] = UserRole.MEMBER
+                    it[createdAt] = Clock.System.now()
+                    it[updatedAt] = Clock.System.now()
+                }[Users.id]
+                .value
+        }
 
-    suspend fun contacts(a: Uuid, b: Uuid) {
+    suspend fun contacts(
+        a: Uuid,
+        b: Uuid,
+    ) {
         transaction(database) {
             Contacts.insert {
                 it[userId] = a
@@ -78,58 +84,66 @@ object TestDb {
         }
     }
 
-    suspend fun privateConversation(a: Uuid, b: Uuid): Uuid = transaction(database) {
-        val convId = Uuid.random()
-        val memberA = a
-        val memberB = b
-        Conversations.insert {
-            it[id] = convId
-            it[type] = ConversationType.PRIVATE
-            it[metadata] = PrivateMetadata()
-            it[createdAt] = Clock.System.now()
-            it[updatedAt] = Clock.System.now()
-        }
-        listOf(memberA, memberB).forEach { uid ->
-            ConversationParticipants.insert {
-                it[conversationId] = convId
-                it[userId] = uid
-                it[role] = ConversationRole.PARTICIPANT
-                it[lastReadMessageId] = null
-                it[joinedAt] = Clock.System.now()
-                it[settings] = ParticipantSettings()
+    suspend fun privateConversation(
+        a: Uuid,
+        b: Uuid,
+    ): Uuid =
+        transaction(database) {
+            val convId = Uuid.random()
+            val memberA = a
+            val memberB = b
+            Conversations.insert {
+                it[id] = convId
+                it[type] = ConversationType.PRIVATE
+                it[metadata] = PrivateMetadata()
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
             }
+            listOf(memberA, memberB).forEach { uid ->
+                ConversationParticipants.insert {
+                    it[conversationId] = convId
+                    it[userId] = uid
+                    it[role] = ConversationRole.PARTICIPANT
+                    it[lastReadMessageId] = null
+                    it[joinedAt] = Clock.System.now()
+                    it[settings] = ParticipantSettings()
+                }
+            }
+            convId
         }
-        convId
-    }
 
-    suspend fun groupConversation(ownerId: Uuid, members: List<Uuid>): Uuid = transaction(database) {
-        val convId = Uuid.random()
-        val groupOwner = ownerId
-        Conversations.insert {
-            it[id] = convId
-            it[type] = ConversationType.GROUP
-            it[metadata] = GroupMetadata()
-            it[createdAt] = Clock.System.now()
-            it[updatedAt] = Clock.System.now()
-        }
-        GroupProfiles.insert {
-            it[conversationId] = convId
-            it[name] = "group-$convId"
-            it[this.ownerId] = groupOwner
-            it[settings] = GroupSettings()
-            it[createdAt] = Clock.System.now()
-            it[updatedAt] = Clock.System.now()
-        }
-        (listOf(groupOwner to ConversationRole.OWNER) + members.map { it to ConversationRole.MEMBER }).forEach { (uid, memberRole) ->
-            ConversationParticipants.insert {
-                it[conversationId] = convId
-                it[userId] = uid
-                it[role] = memberRole
-                it[lastReadMessageId] = null
-                it[joinedAt] = Clock.System.now()
-                it[settings] = ParticipantSettings()
+    suspend fun groupConversation(
+        ownerId: Uuid,
+        members: List<Uuid>,
+    ): Uuid =
+        transaction(database) {
+            val convId = Uuid.random()
+            val groupOwner = ownerId
+            Conversations.insert {
+                it[id] = convId
+                it[type] = ConversationType.GROUP
+                it[metadata] = GroupMetadata()
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
             }
+            GroupProfiles.insert {
+                it[conversationId] = convId
+                it[name] = "group-$convId"
+                it[this.ownerId] = groupOwner
+                it[settings] = GroupSettings()
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }
+            (listOf(groupOwner to ConversationRole.OWNER) + members.map { it to ConversationRole.MEMBER }).forEach { (uid, memberRole) ->
+                ConversationParticipants.insert {
+                    it[conversationId] = convId
+                    it[userId] = uid
+                    it[role] = memberRole
+                    it[lastReadMessageId] = null
+                    it[joinedAt] = Clock.System.now()
+                    it[settings] = ParticipantSettings()
+                }
+            }
+            convId
         }
-        convId
-    }
 }

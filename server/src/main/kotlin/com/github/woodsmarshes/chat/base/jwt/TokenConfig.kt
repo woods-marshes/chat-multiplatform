@@ -5,5 +5,5 @@ data class TokenConfig(
     val audience: String,
     val realm: String,
     val expiresIn: Long,
-    val secret: String
+    val secret: String,
 )

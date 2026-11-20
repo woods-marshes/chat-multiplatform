@@ -96,22 +96,29 @@ class SessionExecutor(
         check(currentCoroutineContext()[Element]?.executor !== this) {
             "stop() must not be called from inside the session it manages"
         }
-        val claimed = mutex.withLock {
-            when (val p = phase) {
-                is Phase.Running -> {
-                    val done = CompletableDeferred<Unit>()
-                    // Running → Stopping under the lock: start() is now refused
-                    // and the instance being stopped is captured, so no later
-                    // field read can cancel a freshly started session.
-                    phase = Phase.Stopping(p.session, done)
-                    StopClaim.Initiator(p.session, done)
+        val claimed =
+            mutex.withLock {
+                when (val p = phase) {
+                    is Phase.Running -> {
+                        val done = CompletableDeferred<Unit>()
+                        // Running → Stopping under the lock: start() is now refused
+                        // and the instance being stopped is captured, so no later
+                        // field read can cancel a freshly started session.
+                        phase = Phase.Stopping(p.session, done)
+                        StopClaim.Initiator(p.session, done)
+                    }
+
+                    is Phase.Stopping -> {
+                        StopClaim.Joiner(p.done)
+                    }
+
+                    Phase.Stopped -> {
+                        StopClaim.Joiner(null)
+                    }
                 }
-                is Phase.Stopping -> StopClaim.Joiner(p.done)
-                Phase.Stopped -> StopClaim.Joiner(null)
             }
-        }
         when (claimed) {
-            is StopClaim.Initiator ->
+            is StopClaim.Initiator -> {
                 // NonCancellable: the initiator being cancelled mid-wait must
                 // not strand the session in Stopping, flip it to Stopped while
                 // old operations still run, or leave concurrent stop callers
@@ -133,12 +140,15 @@ class SessionExecutor(
                         claimed.done.complete(Unit)
                     }
                 }
-            is StopClaim.Joiner -> claimed.done?.await()
+            }
+
+            is StopClaim.Joiner -> {
+                claimed.done?.await()
+            }
         }
     }
 
-    internal suspend fun isExecutingInCurrentContext(): Boolean =
-        currentCoroutineContext()[Element]?.executor === this
+    internal suspend fun isExecutingInCurrentContext(): Boolean = currentCoroutineContext()[Element]?.executor === this
 
     suspend fun <T> execute(block: suspend () -> T): T {
         val element = currentCoroutineContext()[Element]
@@ -148,9 +158,10 @@ class SessionExecutor(
             // stopping): the nested work then shares the outer operation's fate
             // instead of registering more session-scoped work. A stale session
             // element is refused — never upgraded into a new session.
-            val reusesActiveSession = mutex.withLock {
-                element.sessionId == activeSessionIdLocked()
-            }
+            val reusesActiveSession =
+                mutex.withLock {
+                    element.sessionId == activeSessionIdLocked()
+                }
             if (reusesActiveSession) return block()
             throw SessionStoppedException(
                 "operation belongs to session ${element.sessionId}, which is no longer active",
@@ -158,15 +169,17 @@ class SessionExecutor(
         }
 
         // A new top-level operation: register into the running session, if any.
-        val deferred: Deferred<T> = mutex.withLock {
-            val session = when (val p = phase) {
-                is Phase.Running -> p.session
-                else -> throw SessionStoppedException()
+        val deferred: Deferred<T> =
+            mutex.withLock {
+                val session =
+                    when (val p = phase) {
+                        is Phase.Running -> p.session
+                        else -> throw SessionStoppedException()
+                    }
+                session.scope.async {
+                    withContext(Element(this@SessionExecutor, session.id)) { block() }
+                }
             }
-            session.scope.async {
-                withContext(Element(this@SessionExecutor, session.id)) { block() }
-            }
-        }
         try {
             return deferred.await()
         } catch (e: CancellationException) {
@@ -181,11 +194,12 @@ class SessionExecutor(
     }
 
     /** Only meaningful while holding [mutex]. */
-    private fun activeSessionIdLocked(): Long? = when (val p = phase) {
-        is Phase.Running -> p.session.id
-        is Phase.Stopping -> p.session.id
-        Phase.Stopped -> null
-    }
+    private fun activeSessionIdLocked(): Long? =
+        when (val p = phase) {
+            is Phase.Running -> p.session.id
+            is Phase.Stopping -> p.session.id
+            Phase.Stopped -> null
+        }
 
     /** One start()-to-stop() lifecycle; [id] is shared with [Element] for nesting decisions. */
     private class RunningSession(
@@ -198,13 +212,26 @@ class SessionExecutor(
 
     private sealed interface Phase {
         data object Stopped : Phase
-        data class Running(val session: RunningSession) : Phase
-        data class Stopping(val session: RunningSession, val done: CompletableDeferred<Unit>) : Phase
+
+        data class Running(
+            val session: RunningSession,
+        ) : Phase
+
+        data class Stopping(
+            val session: RunningSession,
+            val done: CompletableDeferred<Unit>,
+        ) : Phase
     }
 
     private sealed interface StopClaim {
-        data class Initiator(val session: RunningSession, val done: CompletableDeferred<Unit>) : StopClaim
-        data class Joiner(val done: CompletableDeferred<Unit>?) : StopClaim
+        data class Initiator(
+            val session: RunningSession,
+            val done: CompletableDeferred<Unit>,
+        ) : StopClaim
+
+        data class Joiner(
+            val done: CompletableDeferred<Unit>?,
+        ) : StopClaim
     }
 
     /**

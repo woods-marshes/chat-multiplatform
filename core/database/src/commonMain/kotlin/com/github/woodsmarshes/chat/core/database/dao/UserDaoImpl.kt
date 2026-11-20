@@ -39,9 +39,10 @@ class UserDaoImpl(
     }
 
     override fun bindToCurrentDatabase(): UserDao {
-        val capturedDb = runCatching { dbProvider() }.getOrElse {
-            throw SessionStoppedException(it.message ?: "Database is not initialized")
-        }
+        val capturedDb =
+            runCatching { dbProvider() }.getOrElse {
+                throw SessionStoppedException(it.message ?: "Database is not initialized")
+            }
         return PinnedUserDao(
             boundDatabase = capturedDb,
             ioContext = ioContext,

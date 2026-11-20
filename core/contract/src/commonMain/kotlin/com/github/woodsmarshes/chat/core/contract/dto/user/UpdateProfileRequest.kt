@@ -7,5 +7,5 @@ import kotlinx.serialization.protobuf.ProtoNumber
 data class UpdateProfileRequest(
     @ProtoNumber(1) val displayName: String? = null,
     @ProtoNumber(2) val avatarUrl: String? = null,
-    @ProtoNumber(3) val bio: String? = null
+    @ProtoNumber(3) val bio: String? = null,
 )

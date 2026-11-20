@@ -74,12 +74,13 @@ class UnreadRefreshCoordinator(
      * [applyListSnapshot] is never called so no per-conversation applied
      * state is falsely advanced.
      */
-    suspend fun captureListGeneration(): ListSnapshotToken = mutex.withLock {
-        ListSnapshotToken(
-            sessionEpoch = sessionEpoch,
-            capturedGeneration = ++globalEpoch,
-        )
-    }
+    suspend fun captureListGeneration(): ListSnapshotToken =
+        mutex.withLock {
+            ListSnapshotToken(
+                sessionEpoch = sessionEpoch,
+                capturedGeneration = ++globalEpoch,
+            )
+        }
 
     /**
      * Applies unread counts from a conversation list snapshot only when the
@@ -138,9 +139,10 @@ class UnreadRefreshCoordinator(
      * Marks that a reconnect anchor's `syncConversations()` call failed so
      * periodic/reconnect retry paths know the list snapshot is still owed.
      */
-    suspend fun markListSyncFailed() = mutex.withLock {
-        pendingListRetry = true
-    }
+    suspend fun markListSyncFailed() =
+        mutex.withLock {
+            pendingListRetry = true
+        }
 
     /**
      * Retries any failed list sync and any conversation detail refreshes that
@@ -172,15 +174,16 @@ class UnreadRefreshCoordinator(
      * [globalEpoch] to zero so late list tokens from a previous session are
      * deterministically rejected.
      */
-    suspend fun clearSessionState() = mutex.withLock {
-        sessionEpoch++
-        sessionFloorEpoch = ++globalEpoch
-        refreshJobs.clear()
-        dirtyConversations.clear()
-        requestedGenerations.clear()
-        appliedGenerations.clear()
-        pendingListRetry = false
-    }
+    suspend fun clearSessionState() =
+        mutex.withLock {
+            sessionEpoch++
+            sessionFloorEpoch = ++globalEpoch
+            refreshJobs.clear()
+            dirtyConversations.clear()
+            requestedGenerations.clear()
+            appliedGenerations.clear()
+            pendingListRetry = false
+        }
 
     private fun ensureWorkerLocked(
         sessionScope: CoroutineScope,
@@ -189,9 +192,10 @@ class UnreadRefreshCoordinator(
         conversationDao: ConversationDao,
     ) {
         if (refreshJobs[conversationId]?.isActive == true) return
-        val job = sessionScope.launch {
-            runRefreshLoop(conversationId, conversationApi, conversationDao)
-        }
+        val job =
+            sessionScope.launch {
+                runRefreshLoop(conversationId, conversationApi, conversationDao)
+            }
         refreshJobs[conversationId] = job
     }
 
@@ -202,40 +206,43 @@ class UnreadRefreshCoordinator(
     ) {
         while (true) {
             currentCoroutineContext().ensureActive()
-            val (targetSession, targetGen) = mutex.withLock {
-                if (conversationId !in dirtyConversations) {
-                    refreshJobs.remove(conversationId)
+            val (targetSession, targetGen) =
+                mutex.withLock {
+                    if (conversationId !in dirtyConversations) {
+                        refreshJobs.remove(conversationId)
+                        return
+                    }
+                    sessionEpoch to (requestedGenerations[conversationId] ?: sessionFloorEpoch)
+                }
+
+            val detail =
+                try {
+                    fetchConcurrency.withPermit {
+                        // Re-read the latest generation right before the HTTP call so
+                        // events that arrived while waiting for a concurrency permit
+                        // are covered by this single request instead of forcing an
+                        // extra round-trip.
+                        val latestGenBeforeFetch =
+                            mutex.withLock {
+                                if (sessionEpoch != targetSession || conversationId !in dirtyConversations) {
+                                    refreshJobs.remove(conversationId)
+                                    return
+                                }
+                                requestedGenerations[conversationId] ?: targetGen
+                            }
+                        val taskGenBeforeFetch = messageDao.getUnreadRefreshPendingGeneration(conversationId)
+                        Triple(latestGenBeforeFetch, taskGenBeforeFetch, conversationApi.getDetail(conversationId))
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    log.warn(e) { "[unread-refresh] failed to fetch detail for $conversationId; will retry" }
+                    mutex.withLock {
+                        // Leave conversationId in dirtyConversations so retryPending or the next event retries it.
+                        refreshJobs.remove(conversationId)
+                    }
                     return
                 }
-                sessionEpoch to (requestedGenerations[conversationId] ?: sessionFloorEpoch)
-            }
-
-            val detail = try {
-                fetchConcurrency.withPermit {
-                    // Re-read the latest generation right before the HTTP call so
-                    // events that arrived while waiting for a concurrency permit
-                    // are covered by this single request instead of forcing an
-                    // extra round-trip.
-                    val latestGenBeforeFetch = mutex.withLock {
-                        if (sessionEpoch != targetSession || conversationId !in dirtyConversations) {
-                            refreshJobs.remove(conversationId)
-                            return
-                        }
-                        requestedGenerations[conversationId] ?: targetGen
-                    }
-                    val taskGenBeforeFetch = messageDao.getUnreadRefreshPendingGeneration(conversationId)
-                    Triple(latestGenBeforeFetch, taskGenBeforeFetch, conversationApi.getDetail(conversationId))
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                log.warn(e) { "[unread-refresh] failed to fetch detail for $conversationId; will retry" }
-                mutex.withLock {
-                    // Leave conversationId in dirtyConversations so retryPending or the next event retries it.
-                    refreshJobs.remove(conversationId)
-                }
-                return
-            }
 
             // The session may have been stopped while this iteration was
             // fetching: without this check the loop would still write to a
@@ -245,49 +252,50 @@ class UnreadRefreshCoordinator(
             currentCoroutineContext().ensureActive()
 
             val (fetchedGen, taskGenBeforeFetch, response) = detail
-            val done = mutex.withLock {
-                if (sessionEpoch != targetSession) {
-                    refreshJobs.remove(conversationId)
-                    return@withLock true
-                }
-                val currentReqGen = requestedGenerations[conversationId] ?: sessionFloorEpoch
-                var confirmed = false
-                if (currentReqGen == fetchedGen && conversationId in dirtyConversations) {
-                    try {
-                        messageDao.transaction {
-                            val currentDbTaskGen = messageDao.getUnreadRefreshPendingGeneration(conversationId)
-                            // If generation changed in DB while fetch was in flight (e.g. newer journal commit),
-                            // this response is stale: do not apply unread count and do not confirm.
-                            if (taskGenBeforeFetch == currentDbTaskGen) {
-                                conversationDao.setUnreadCount(conversationId, response.unreadCount.toLong())
-                                taskGenBeforeFetch?.let { expected ->
-                                    messageDao.confirmUnreadRefreshPending(conversationId, expected)
+            val done =
+                mutex.withLock {
+                    if (sessionEpoch != targetSession) {
+                        refreshJobs.remove(conversationId)
+                        return@withLock true
+                    }
+                    val currentReqGen = requestedGenerations[conversationId] ?: sessionFloorEpoch
+                    var confirmed = false
+                    if (currentReqGen == fetchedGen && conversationId in dirtyConversations) {
+                        try {
+                            messageDao.transaction {
+                                val currentDbTaskGen = messageDao.getUnreadRefreshPendingGeneration(conversationId)
+                                // If generation changed in DB while fetch was in flight (e.g. newer journal commit),
+                                // this response is stale: do not apply unread count and do not confirm.
+                                if (taskGenBeforeFetch == currentDbTaskGen) {
+                                    conversationDao.setUnreadCount(conversationId, response.unreadCount.toLong())
+                                    taskGenBeforeFetch?.let { expected ->
+                                        messageDao.confirmUnreadRefreshPending(conversationId, expected)
+                                    }
+                                    confirmed = true
                                 }
-                                confirmed = true
                             }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            log.warn(e) { "[unread-refresh] failed to persist unread update for $conversationId" }
                         }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        log.warn(e) { "[unread-refresh] failed to persist unread update for $conversationId" }
+                    }
+                    if (confirmed) {
+                        val appliedGen = ++globalEpoch
+                        requestedGenerations[conversationId] = appliedGen
+                        appliedGenerations[conversationId] = appliedGen
+                        dirtyConversations.remove(conversationId)
+                        refreshJobs.remove(conversationId)
+                        true
+                    } else if (conversationId !in dirtyConversations) {
+                        refreshJobs.remove(conversationId)
+                        true
+                    } else {
+                        // Either in-memory requestedGeneration changed or DB task generation changed:
+                        // loop to re-fetch and converge.
+                        false
                     }
                 }
-                if (confirmed) {
-                    val appliedGen = ++globalEpoch
-                    requestedGenerations[conversationId] = appliedGen
-                    appliedGenerations[conversationId] = appliedGen
-                    dirtyConversations.remove(conversationId)
-                    refreshJobs.remove(conversationId)
-                    true
-                } else if (conversationId !in dirtyConversations) {
-                    refreshJobs.remove(conversationId)
-                    true
-                } else {
-                    // Either in-memory requestedGeneration changed or DB task generation changed:
-                    // loop to re-fetch and converge.
-                    false
-                }
-            }
             if (done) return
         }
     }

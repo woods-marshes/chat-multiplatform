@@ -72,12 +72,9 @@ class GroupJoinRequestDaoImpl(
         return dbProvider()
     }
 
-    private suspend fun writeQueries(): GroupJoinRequestsQueries =
-        writeDatabase().groupJoinRequestsQueries
+    private suspend fun writeQueries(): GroupJoinRequestsQueries = writeDatabase().groupJoinRequestsQueries
 
-    override suspend fun transaction(
-        body: suspend SuspendingTransactionWithoutReturn.() -> Unit,
-    ) {
+    override suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit) {
         val targetDb = writeDatabase()
         withContext(BoundDatabaseElement(targetDb)) {
             targetDb.groupJoinRequestsQueries.transaction(body = body)

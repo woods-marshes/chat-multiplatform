@@ -1,5 +1,7 @@
 ﻿package com.github.woodsmarshes.chat.service
 
+import com.github.michaelbull.result.get
+import com.github.michaelbull.result.getError
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
@@ -16,8 +18,6 @@ import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.MessageError
-import com.github.michaelbull.result.get
-import com.github.michaelbull.result.getError
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
 import com.github.woodsmarshes.chat.repository.ContactRepository
@@ -42,7 +42,6 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 class MessageServiceSendTest {
-
     private val groupProfileRepository = mockk<GroupProfileRepository>()
     private val userSettingRepository = mockk<UserSettingRepository>(relaxUnitFun = true)
     private val messageRepository = mockk<MessageRepository>()
@@ -51,15 +50,16 @@ class MessageServiceSendTest {
     private val eventBus = mockk<EventBus>(relaxUnitFun = true)
     private val attachments = mockk<AttachmentLifecycle>()
 
-    private val service = MessageService(
-        groupProfileRepository = groupProfileRepository,
-        userSettingRepository = userSettingRepository,
-        messageRepository = messageRepository,
-        contactRepository = contactRepository,
-        conversationParticipantRepository = participantRepository,
-        eventBus = eventBus,
-        attachments = attachments,
-    )
+    private val service =
+        MessageService(
+            groupProfileRepository = groupProfileRepository,
+            userSettingRepository = userSettingRepository,
+            messageRepository = messageRepository,
+            contactRepository = contactRepository,
+            conversationParticipantRepository = participantRepository,
+            eventBus = eventBus,
+            attachments = attachments,
+        )
 
     private val userId = Uuid.random()
     private val conversationId = Uuid.random()
@@ -67,7 +67,110 @@ class MessageServiceSendTest {
     private val now = Clock.System.now()
 
     private fun givenMembership() {
-        val participant = ConversationParticipant(
+        val participant =
+            ConversationParticipant(
+                conversationId = conversationId,
+                userId = userId,
+                role = ConversationRole.MEMBER,
+                lastReadMessageId = null,
+                joinedAt = now,
+                settings = ParticipantSettings(),
+            )
+        val user =
+            User(
+                id = userId,
+                username = "sender",
+                email = null,
+                displayName = null,
+                avatarUrl = null,
+                bio = null,
+                createdAt = now,
+                updatedAt = now,
+                deletedAt = null,
+            )
+        val conversation =
+            Conversation(
+                id = conversationId,
+                type = ConversationType.GROUP,
+                metadata = GroupMetadata(),
+                createdAt = now,
+                updatedAt = now,
+                deletedAt = null,
+                lastMessageId = null,
+            )
+        coEvery {
+            participantRepository.getParticipantContext(userId, conversationId)
+        } returns Triple(participant, user, conversation)
+        coEvery { groupProfileRepository.getGroupProfile(conversationId) } returns null
+    }
+
+    private fun message(id: Uuid = Uuid.generateV7()) =
+        Message(
+            id = id,
+            conversationId = conversationId,
+            category = MessageCategory.NORMAL,
+            createdAt = now,
+            content = TextContent("hello"),
+            // The server echoes the sender's outbox id back for the rename.
+            clientRequestId = requestId,
+        )
+
+    @Test
+    fun withdrawingAFileMessageDelegatesAttachmentGcToTheLifecycle() =
+        runBlocking {
+            val fileName = "report-${Uuid.random()}.pdf"
+            val fileMessage =
+                message().copy(
+                    content =
+                        FileContent(
+                            url = "$PRIVATE_FILE_URL_PREFIX$fileName",
+                            fileName = fileName,
+                            mimeType = "application/pdf",
+                            size = 3,
+                        ),
+                )
+            coEvery { messageRepository.getMessageRevokeContext(userId, fileMessage.id) } returns
+                Triple(
+                    Pair(userId, fileMessage),
+                    participantForRevocation(),
+                    conversationForRevocation(),
+                )
+            coEvery { messageRepository.revokeMessage(fileMessage.id) } returns true
+            coJustRun { attachments.gcAfterWithdraw(any()) }
+
+            service.withdrawMessage(userId, fileMessage.id)
+
+            // Whether the file is actually deleted is decided inside the
+            // lifecycle (covered by AttachmentLifecycleTest).
+            coVerify(exactly = 1) { attachments.gcAfterWithdraw(fileMessage) }
+        }
+
+    @Test
+    fun retriedWithdrawOfAnAlreadyRevokedMessageSucceeds() =
+        runBlocking {
+            val revokedMessage = message().copy(revokedAt = now)
+            coEvery { messageRepository.getMessageRevokeContext(userId, revokedMessage.id) } returns
+                Triple(
+                    Pair(userId, revokedMessage),
+                    participantForRevocation(),
+                    conversationForRevocation(),
+                )
+            // revokeMessage reports false because the row is already revoked.
+            coEvery { messageRepository.revokeMessage(revokedMessage.id) } returns false
+            coJustRun { attachments.gcAfterWithdraw(revokedMessage) }
+
+            val result = service.withdrawMessage(userId, revokedMessage.id)
+
+            assertTrue(result.isOk)
+            coVerify(exactly = 1) {
+                eventBus.publishMessageEvent(
+                    match { it is MessageEvent.WithdrawMessage && it.messageId == revokedMessage.id },
+                )
+            }
+        }
+
+    private fun participantForRevocation() =
+        ConversationParticipant(
             conversationId = conversationId,
             userId = userId,
             role = ConversationRole.MEMBER,
@@ -75,18 +178,9 @@ class MessageServiceSendTest {
             joinedAt = now,
             settings = ParticipantSettings(),
         )
-        val user = User(
-            id = userId,
-            username = "sender",
-            email = null,
-            displayName = null,
-            avatarUrl = null,
-            bio = null,
-            createdAt = now,
-            updatedAt = now,
-            deletedAt = null,
-        )
-        val conversation = Conversation(
+
+    private fun conversationForRevocation() =
+        Conversation(
             id = conversationId,
             type = ConversationType.GROUP,
             metadata = GroupMetadata(),
@@ -95,192 +189,121 @@ class MessageServiceSendTest {
             deletedAt = null,
             lastMessageId = null,
         )
-        coEvery {
-            participantRepository.getParticipantContext(userId, conversationId)
-        } returns Triple(participant, user, conversation)
-        coEvery { groupProfileRepository.getGroupProfile(conversationId) } returns null
-    }
-
-    private fun message(id: Uuid = Uuid.generateV7()) = Message(
-        id = id,
-        conversationId = conversationId,
-        category = MessageCategory.NORMAL,
-        createdAt = now,
-        content = TextContent("hello"),
-        // The server echoes the sender's outbox id back for the rename.
-        clientRequestId = requestId,
-    )
 
     @Test
-    fun withdrawingAFileMessageDelegatesAttachmentGcToTheLifecycle() = runBlocking {
-        val fileName = "report-${Uuid.random()}.pdf"
-        val fileMessage = message().copy(
-            content = FileContent(
-                url = "$PRIVATE_FILE_URL_PREFIX$fileName",
-                fileName = fileName,
-                mimeType = "application/pdf",
-                size = 3,
-            )
-        )
-        coEvery { messageRepository.getMessageRevokeContext(userId, fileMessage.id) } returns Triple(
-            Pair(userId, fileMessage),
-            participantForRevocation(),
-            conversationForRevocation(),
-        )
-        coEvery { messageRepository.revokeMessage(fileMessage.id) } returns true
-        coJustRun { attachments.gcAfterWithdraw(any()) }
+    fun outboxResendReturnsPersistedMessageWithoutConsumingUploadOrBroadcasting() =
+        runBlocking {
+            givenMembership()
+            val media =
+                ImageContent(
+                    url = "/uploads/image/abc.png",
+                    fileName = "abc.png",
+                    width = 1,
+                    height = 1,
+                    size = 1,
+                )
+            // The outbox resend must repeat the SAME payload: a mismatched
+            // requestId/content pair is a hard rejection (InvalidContent).
+            val persisted = message(requestId).copy(content = media)
+            coEvery {
+                messageRepository.findMessageByRequestId(requestId, conversationId, userId)
+            } returns persisted
 
-        service.withdrawMessage(userId, fileMessage.id)
+            val result =
+                service.sendMessage(
+                    userId = userId,
+                    conversationId = conversationId,
+                    content = media,
+                    requestId = requestId.toString(),
+                )
 
-        // Whether the file is actually deleted is decided inside the
-        // lifecycle (covered by AttachmentLifecycleTest).
-        coVerify(exactly = 1) { attachments.gcAfterWithdraw(fileMessage) }
-    }
-
-    @Test
-    fun retriedWithdrawOfAnAlreadyRevokedMessageSucceeds() = runBlocking {
-        val revokedMessage = message().copy(revokedAt = now)
-        coEvery { messageRepository.getMessageRevokeContext(userId, revokedMessage.id) } returns Triple(
-            Pair(userId, revokedMessage),
-            participantForRevocation(),
-            conversationForRevocation(),
-        )
-        // revokeMessage reports false because the row is already revoked.
-        coEvery { messageRepository.revokeMessage(revokedMessage.id) } returns false
-        coJustRun { attachments.gcAfterWithdraw(revokedMessage) }
-
-        val result = service.withdrawMessage(userId, revokedMessage.id)
-
-        assertTrue(result.isOk)
-        coVerify(exactly = 1) {
-            eventBus.publishMessageEvent(
-                match { it is MessageEvent.WithdrawMessage && it.messageId == revokedMessage.id }
-            )
+            assertTrue(result.isOk)
+            assertEquals(persisted.id, result.get()!!.id)
+            coVerify(exactly = 0) { attachments.resolveTrustedMedia(any(), any()) }
+            coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
         }
-    }
-
-    private fun participantForRevocation() = ConversationParticipant(
-        conversationId = conversationId,
-        userId = userId,
-        role = ConversationRole.MEMBER,
-        lastReadMessageId = null,
-        joinedAt = now,
-        settings = ParticipantSettings(),
-    )
-
-    private fun conversationForRevocation() = Conversation(
-        id = conversationId,
-        type = ConversationType.GROUP,
-        metadata = GroupMetadata(),
-        createdAt = now,
-        updatedAt = now,
-        deletedAt = null,
-        lastMessageId = null,
-    )
 
     @Test
-    fun outboxResendReturnsPersistedMessageWithoutConsumingUploadOrBroadcasting() = runBlocking {
-        givenMembership()
-        val media = ImageContent(
-            url = "/uploads/image/abc.png",
-            fileName = "abc.png",
-            width = 1,
-            height = 1,
-            size = 1,
-        )
-        // The outbox resend must repeat the SAME payload: a mismatched
-        // requestId/content pair is a hard rejection (InvalidContent).
-        val persisted = message(requestId).copy(content = media)
-        coEvery {
-            messageRepository.findMessageByRequestId(requestId, conversationId, userId)
-        } returns persisted
+    fun concurrentDuplicateDoesNotBroadcastASecondTime() =
+        runBlocking {
+            givenMembership()
+            val persisted = message(requestId)
+            coEvery {
+                messageRepository.findMessageByRequestId(requestId, conversationId, userId)
+            } returns null
+            coEvery {
+                messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any())
+            } returns (persisted to false)
 
-        val result = service.sendMessage(
-            userId = userId,
-            conversationId = conversationId,
-            content = media,
-            requestId = requestId.toString(),
-        )
+            val result =
+                service.sendMessage(
+                    userId = userId,
+                    conversationId = conversationId,
+                    content = TextContent("hello"),
+                    requestId = requestId.toString(),
+                )
 
-        assertTrue(result.isOk)
-        assertEquals(persisted.id, result.get()!!.id)
-        coVerify(exactly = 0) { attachments.resolveTrustedMedia(any(), any()) }
-        coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
-        coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
-    }
+            assertTrue(result.isOk)
+            coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
+        }
 
     @Test
-    fun concurrentDuplicateDoesNotBroadcastASecondTime() = runBlocking {
-        givenMembership()
-        val persisted = message(requestId)
-        coEvery {
-            messageRepository.findMessageByRequestId(requestId, conversationId, userId)
-        } returns null
-        coEvery {
-            messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any())
-        } returns (persisted to false)
+    fun firstSendBroadcastsExactlyOnce() =
+        runBlocking {
+            givenMembership()
+            val persisted = message(requestId)
+            coEvery {
+                messageRepository.findMessageByRequestId(requestId, conversationId, userId)
+            } returns null
+            coEvery {
+                messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any())
+            } returns (persisted to true)
 
-        val result = service.sendMessage(
-            userId = userId,
-            conversationId = conversationId,
-            content = TextContent("hello"),
-            requestId = requestId.toString(),
-        )
+            val result =
+                service.sendMessage(
+                    userId = userId,
+                    conversationId = conversationId,
+                    content = TextContent("hello"),
+                    requestId = requestId.toString(),
+                )
 
-        assertTrue(result.isOk)
-        coVerify(exactly = 0) { eventBus.publishMessageEvent(any()) }
-    }
-
-    @Test
-    fun firstSendBroadcastsExactlyOnce() = runBlocking {
-        givenMembership()
-        val persisted = message(requestId)
-        coEvery {
-            messageRepository.findMessageByRequestId(requestId, conversationId, userId)
-        } returns null
-        coEvery {
-            messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any())
-        } returns (persisted to true)
-
-        val result = service.sendMessage(
-            userId = userId,
-            conversationId = conversationId,
-            content = TextContent("hello"),
-            requestId = requestId.toString(),
-        )
-
-        assertTrue(result.isOk)
-        coVerify(exactly = 1) { eventBus.publishMessageEvent(any()) }
-    }
+            assertTrue(result.isOk)
+            coVerify(exactly = 1) { eventBus.publishMessageEvent(any()) }
+        }
 
     @Test
-    fun malformedRequestIdIsRejectedInsteadOfSilentlyLosingIdempotency() = runBlocking {
-        givenMembership()
+    fun malformedRequestIdIsRejectedInsteadOfSilentlyLosingIdempotency() =
+        runBlocking {
+            givenMembership()
 
-        val result = service.sendMessage(
-            userId = userId,
-            conversationId = conversationId,
-            content = TextContent("hello"),
-            requestId = "not-a-uuid",
-        )
+            val result =
+                service.sendMessage(
+                    userId = userId,
+                    conversationId = conversationId,
+                    content = TextContent("hello"),
+                    requestId = "not-a-uuid",
+                )
 
-        assertEquals(MessageError.InvalidContent, result.getError())
-        coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
-    }
+            assertEquals(MessageError.InvalidContent, result.getError())
+            coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
+        }
 
     @Test
-    fun clientSuppliedSystemMessageIsRejected() = runBlocking {
-        givenMembership()
-        val forged = JoinGroupContent(userId = userId, userName = "admin")
+    fun clientSuppliedSystemMessageIsRejected() =
+        runBlocking {
+            givenMembership()
+            val forged = JoinGroupContent(userId = userId, userName = "admin")
 
-        val result = service.sendMessage(
-            userId = userId,
-            conversationId = conversationId,
-            content = forged,
-            requestId = requestId.toString(),
-        )
+            val result =
+                service.sendMessage(
+                    userId = userId,
+                    conversationId = conversationId,
+                    content = forged,
+                    requestId = requestId.toString(),
+                )
 
-        assertEquals(MessageError.InvalidContent, result.getError())
-        coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
-    }
+            assertEquals(MessageError.InvalidContent, result.getError())
+            coVerify(exactly = 0) { messageRepository.insertMessage(any(), any(), any(), any(), any(), any(), any()) }
+        }
 }

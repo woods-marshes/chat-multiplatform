@@ -1,21 +1,21 @@
 package com.github.woodsmarshes.chat.core.data.model
 
-import com.github.woodsmarshes.chat.core.model.AudioContent
-import com.github.woodsmarshes.chat.core.model.Conversation
-import com.github.woodsmarshes.chat.core.model.ConversationRole
-import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
-import com.github.woodsmarshes.chat.core.model.ParticipantSettings
-import com.github.woodsmarshes.chat.core.model.FileContent
-import com.github.woodsmarshes.chat.core.model.ImageContent
-import com.github.woodsmarshes.chat.core.model.Message
-import com.github.woodsmarshes.chat.core.model.MessageRenderType
-import com.github.woodsmarshes.chat.core.model.SimpleUser
-import com.github.woodsmarshes.chat.core.model.TextContent
-import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupInfo
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.SimpleMessage
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo
+import com.github.woodsmarshes.chat.core.model.AudioContent
+import com.github.woodsmarshes.chat.core.model.Conversation
+import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.FileContent
+import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
+import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageRenderType
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings
+import com.github.woodsmarshes.chat.core.model.SimpleUser
+import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.VideoContent
 import io.github.woodsmarshes.chat.db.ConversationEntity
 import io.github.woodsmarshes.chat.db.GetConversationListView
 import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
@@ -24,57 +24,64 @@ import io.github.woodsmarshes.chat.db.MessageEntity
 import io.github.woodsmarshes.chat.db.ParticipantEntity
 import io.github.woodsmarshes.chat.db.UserEntity
 
-fun Conversation.toEntity() = ConversationEntity(
-    id = this.id,
-    type = this.type,
-    last_message_id = this.lastMessageId,
-    metadata = this.metadata,
-    created_at = this.createdAt,
-    updated_at = this.updatedAt,
-    deleted_at = this.deletedAt,
-    // The server model carries no unread state: the column is preserved on
-    // conflict by insertConversation and driven by anchors/live events.
-    unread_count = 0,
-)
+fun Conversation.toEntity() =
+    ConversationEntity(
+        id = this.id,
+        type = this.type,
+        last_message_id = this.lastMessageId,
+        metadata = this.metadata,
+        created_at = this.createdAt,
+        updated_at = this.updatedAt,
+        deleted_at = this.deletedAt,
+        // The server model carries no unread state: the column is preserved on
+        // conflict by insertConversation and driven by anchors/live events.
+        unread_count = 0,
+    )
 
-fun ConversationEntity.toConversation() = Conversation(
-    id = this.id,
-    type = this.type,
-    metadata = this.metadata,
-    createdAt = this.created_at,
-    updatedAt = this.updated_at,
-    deletedAt = this.deleted_at,
-    lastMessageId = this.last_message_id,
-)
+fun ConversationEntity.toConversation() =
+    Conversation(
+        id = this.id,
+        type = this.type,
+        metadata = this.metadata,
+        createdAt = this.created_at,
+        updatedAt = this.updated_at,
+        deletedAt = this.deleted_at,
+        lastMessageId = this.last_message_id,
+    )
 
-fun ConversationResponse.toConversation() = Conversation(
-    id = this.conversationId,
-    type = this.type,
-    metadata = this.metadata,
-    createdAt = when (val info = conversationInfo) {
-        is GroupInfo -> info.createdAt
-        is UserInfo -> info.createdAt
-    },
-    updatedAt = when (val info = conversationInfo) {
-        is GroupInfo -> info.updatedAt
-        is UserInfo -> info.updatedAt
-    },
-    deletedAt = when (val info = conversationInfo) {
-        is GroupInfo -> info.deletedAt
-        is UserInfo -> info.deletedAt
-    },
-    lastMessageId = this.lastMessage?.id,
-)
+fun ConversationResponse.toConversation() =
+    Conversation(
+        id = this.conversationId,
+        type = this.type,
+        metadata = this.metadata,
+        createdAt =
+            when (val info = conversationInfo) {
+                is GroupInfo -> info.createdAt
+                is UserInfo -> info.createdAt
+            },
+        updatedAt =
+            when (val info = conversationInfo) {
+                is GroupInfo -> info.updatedAt
+                is UserInfo -> info.updatedAt
+            },
+        deletedAt =
+            when (val info = conversationInfo) {
+                is GroupInfo -> info.deletedAt
+                is UserInfo -> info.deletedAt
+            },
+        lastMessageId = this.lastMessage?.id,
+    )
 
-fun ConversationResponse.toParticipantEntity() = ParticipantEntity(
-    conversation_id = this.conversationId,
-    user_id = this.participant.userId,
-    role = this.participant.role,
-    last_read_message_id = this.participant.lastReadMessageId,
-    joined_at = this.participant.joinedAt,
-    muted_until = this.participant.mutedUntil,
-    settings = this.participant.settings,
-)
+fun ConversationResponse.toParticipantEntity() =
+    ParticipantEntity(
+        conversation_id = this.conversationId,
+        user_id = this.participant.userId,
+        role = this.participant.role,
+        last_read_message_id = this.participant.lastReadMessageId,
+        joined_at = this.participant.joinedAt,
+        muted_until = this.participant.mutedUntil,
+        settings = this.participant.settings,
+    )
 
 fun ConversationResponse.toMessageEntity(): MessageEntity? {
     val message = this.lastMessage
@@ -94,9 +101,11 @@ fun ConversationResponse.toMessageEntity(): MessageEntity? {
             local_send_status = null,
             // Preview-only seed: the local cursor has not reached this message
             // yet, so it must not become a Paging anchor ahead of the window.
-            in_timeline = false
+            in_timeline = false,
         )
-    } else null
+    } else {
+        null
+    }
 }
 
 fun ConversationResponse.toUserEntity(): UserEntity? {
@@ -111,7 +120,7 @@ fun ConversationResponse.toUserEntity(): UserEntity? {
         created_at = userInfo.createdAt,
         updated_at = userInfo.updatedAt,
         deleted_at = userInfo.deletedAt,
-        role = userInfo.role
+        role = userInfo.role,
     )
 }
 
@@ -127,7 +136,7 @@ fun ConversationResponse.toGroupProfileEntity(): GroupProfileEntity? {
         owner_id = groupInfo.ownerId,
         settings = groupInfo.settings,
         created_at = groupInfo.createdAt,
-        updated_at = groupInfo.updatedAt
+        updated_at = groupInfo.updatedAt,
     )
 }
 
@@ -145,10 +154,11 @@ fun ConversationResponse.toPeerParticipantEntity(): ParticipantEntity? {
         user_id = userInfo.id,
         role = ConversationRole.PARTICIPANT,
         last_read_message_id = null,
-        joined_at = when (val info = conversationInfo) {
-            is GroupInfo -> info.createdAt
-            is UserInfo -> info.createdAt
-        },
+        joined_at =
+            when (val info = conversationInfo) {
+                is GroupInfo -> info.createdAt
+                is UserInfo -> info.createdAt
+            },
         muted_until = null,
         settings = ParticipantSettings(),
     )
@@ -167,7 +177,7 @@ fun ConversationResponse.toGroupOwnerUserEntity(): UserEntity? {
         created_at = userInfo.createdAt,
         updated_at = userInfo.updatedAt,
         deleted_at = userInfo.deletedAt,
-        role = userInfo.role
+        role = userInfo.role,
     )
 }
 
@@ -179,21 +189,22 @@ fun ConversationResponse.toGroupOwnerUserEntity(): UserEntity? {
  * MessageEntity.user_id foreign key and aborts the whole conversation
  * sync — leaving the list stale.
  */
-fun SimpleUser.toUserEntity(): UserEntity = UserEntity(
-    id = this.id,
-    username = this.username,
-    email = null,
-    display_name = this.displayName,
-    avatar = this.avatarUrl,
-    bio = null,
-    created_at = this.createdAt,
-    updated_at = this.updatedAt,
-    deleted_at = this.deletedAt,
-    role = this.role,
-)
+fun SimpleUser.toUserEntity(): UserEntity =
+    UserEntity(
+        id = this.id,
+        username = this.username,
+        email = null,
+        display_name = this.displayName,
+        avatar = this.avatarUrl,
+        bio = null,
+        created_at = this.createdAt,
+        updated_at = this.updatedAt,
+        deleted_at = this.deletedAt,
+        role = this.role,
+    )
 
-private fun SimpleMessage.getRenderType(): MessageRenderType {
-    return when (this.content) {
+private fun SimpleMessage.getRenderType(): MessageRenderType =
+    when (this.content) {
         is TextContent -> MessageRenderType.TEXT
         is ImageContent -> MessageRenderType.IMAGE
         is VideoContent -> MessageRenderType.VIDEO
@@ -201,25 +212,27 @@ private fun SimpleMessage.getRenderType(): MessageRenderType {
         is FileContent -> MessageRenderType.FILE
         else -> MessageRenderType.OTHER
     }
-}
-fun GroupJoinRequest.toEntity() = GroupJoinRequestEntity(
-    id = this.id,
-    conversation_id = this.conversationId,
-    applicant_id = this.applicantId,
-    message = this.message,
-    status = this.status,
-    handled_by = this.handledById,
-    created_at = this.createdAt,
-    updated_at = this.updatedAt,
-)
 
-fun GroupJoinRequestEntity.toGroupJoinRequest() = GroupJoinRequest(
-    id = this.id,
-    conversationId = this.conversation_id,
-    applicantId = this.applicant_id,
-    message = this.message,
-    status = this.status,
-    handledById = this.handled_by,
-    createdAt = this.created_at,
-    updatedAt = this.updated_at,
-)
+fun GroupJoinRequest.toEntity() =
+    GroupJoinRequestEntity(
+        id = this.id,
+        conversation_id = this.conversationId,
+        applicant_id = this.applicantId,
+        message = this.message,
+        status = this.status,
+        handled_by = this.handledById,
+        created_at = this.createdAt,
+        updated_at = this.updatedAt,
+    )
+
+fun GroupJoinRequestEntity.toGroupJoinRequest() =
+    GroupJoinRequest(
+        id = this.id,
+        conversationId = this.conversation_id,
+        applicantId = this.applicant_id,
+        message = this.message,
+        status = this.status,
+        handledById = this.handled_by,
+        createdAt = this.created_at,
+        updatedAt = this.updated_at,
+    )

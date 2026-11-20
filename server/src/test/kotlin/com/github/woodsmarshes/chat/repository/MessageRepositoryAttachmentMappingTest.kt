@@ -34,14 +34,15 @@ import kotlin.uuid.Uuid
  * the same transaction — including one file forwarded into two conversations.
  */
 class MessageRepositoryAttachmentMappingTest {
-
     private val database = connectToH2Database()
     private val repository = MessageDataSourceImpl()
 
     private val senderId = Uuid.random()
     private val conversationA = Uuid.random()
     private val conversationB = Uuid.random()
-    private val now = kotlin.time.Clock.System.now()
+    private val now =
+        kotlin.time.Clock.System
+            .now()
 
     @BeforeTest
     fun seed() {
@@ -86,104 +87,122 @@ class MessageRepositoryAttachmentMappingTest {
     private fun fileContent(url: String): MessageContent =
         FileContent(url = url, fileName = "report.pdf", mimeType = "application/pdf", size = 3)
 
-    private fun mappingsFor(fileName: String): List<Uuid> = transaction(database) {
-        PrivateFiles.selectAll()
-            .where { PrivateFiles.fileName eq fileName }
-            .map { it[PrivateFiles.conversationId].value }
-    }
+    private fun mappingsFor(fileName: String): List<Uuid> =
+        transaction(database) {
+            PrivateFiles
+                .selectAll()
+                .where { PrivateFiles.fileName eq fileName }
+                .map { it[PrivateFiles.conversationId].value }
+        }
 
     @Test
     fun sendingAFileMessageRecordsTheDownloadMapping() {
         runBlocking {
-        val url = "/v1/files/content/report-${Uuid.random()}.pdf"
+            val url = "/v1/files/content/report-${Uuid.random()}.pdf"
 
-        val inserted = repository.insertMessage(
-            conversationId = conversationA,
-            senderId = senderId,
-            content = fileContent(url),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.FILE,
-        )
-        kotlin.test.assertNotNull(inserted)
+            val inserted =
+                repository.insertMessage(
+                    conversationId = conversationA,
+                    senderId = senderId,
+                    content = fileContent(url),
+                    category = MessageCategory.NORMAL,
+                    renderType = MessageRenderType.FILE,
+                )
+            kotlin.test.assertNotNull(inserted)
 
-        assertEquals(listOf(conversationA), mappingsFor(url.substringAfterLast('/')))
+            assertEquals(listOf(conversationA), mappingsFor(url.substringAfterLast('/')))
         }
     }
 
     @Test
     fun forwardingTheSameFileIntoAnotherConversationAddsARow() {
         runBlocking {
-        val url = "/v1/files/content/forwarded-${Uuid.random()}.pdf"
-        val fileName = url.substringAfterLast('/')
+            val url = "/v1/files/content/forwarded-${Uuid.random()}.pdf"
+            val fileName = url.substringAfterLast('/')
 
-        repository.insertMessage(
-            conversationId = conversationA, senderId = senderId,
-            content = fileContent(url), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
-        )
-        repository.insertMessage(
-            conversationId = conversationB, senderId = senderId,
-            content = fileContent(url), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
-        )
+            repository.insertMessage(
+                conversationId = conversationA,
+                senderId = senderId,
+                content = fileContent(url),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.FILE,
+            )
+            repository.insertMessage(
+                conversationId = conversationB,
+                senderId = senderId,
+                content = fileContent(url),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.FILE,
+            )
 
-        assertEquals(setOf(conversationA, conversationB), mappingsFor(fileName).toSet())
+            assertEquals(setOf(conversationA, conversationB), mappingsFor(fileName).toSet())
         }
     }
 
     @Test
     fun textMessagesRecordNoMapping() {
         runBlocking {
-        repository.insertMessage(
-            conversationId = conversationA,
-            senderId = senderId,
-            content = TextContent(text = "hello"),
-            category = MessageCategory.NORMAL,
-            renderType = MessageRenderType.TEXT,
-        )
+            repository.insertMessage(
+                conversationId = conversationA,
+                senderId = senderId,
+                content = TextContent(text = "hello"),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.TEXT,
+            )
 
-        assertEquals(0, transaction(database) { PrivateFiles.selectAll().count() }.toInt())
+            assertEquals(0, transaction(database) { PrivateFiles.selectAll().count() }.toInt())
         }
     }
 
     @Test
     fun liveReferenceCountPrefiltersInSqlButStaysFailClosed() {
         runBlocking {
-        val targetUrl = "/v1/files/content/target-${Uuid.random()}.pdf"
-        val targetFile = targetUrl.substringAfterLast('/')
-        val otherUrl = "/v1/files/content/other-${Uuid.random()}.pdf"
+            val targetUrl = "/v1/files/content/target-${Uuid.random()}.pdf"
+            val targetFile = targetUrl.substringAfterLast('/')
+            val otherUrl = "/v1/files/content/other-${Uuid.random()}.pdf"
 
-        // Note: fileContent() pins fileName="report.pdf" while the URL varies,
-        // so the JSON text — not the search-text mirror — is the only reliable
-        // prefilter key; this test would catch a regression to that idea.
-        repository.insertMessage(
-            conversationId = conversationA, senderId = senderId,
-            content = fileContent(targetUrl), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
-        )
-        repository.insertMessage(
-            conversationId = conversationB, senderId = senderId,
-            content = fileContent(targetUrl), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
-        )
-        repository.insertMessage(
-            conversationId = conversationA, senderId = senderId,
-            content = fileContent(otherUrl), category = MessageCategory.NORMAL, renderType = MessageRenderType.FILE,
-        )
-
-        // A legacy row whose JSON is undecodable but mentions the target: it
-        // must still count — deleting a physical file on a decode failure is
-        // forbidden (fail closed).
-        val corruptId = Uuid.random()
-        transaction(database) {
-            exec(
-                """
-                INSERT INTO messages (id, conversation_id, user_id, content, category, render_type, search_text, created_at)
-                VALUES ('$corruptId', '$conversationA', '$senderId',
-                        '{"broken": "still mentions $targetFile', 'NORMAL', 'FILE', '$targetFile', CURRENT_TIMESTAMP)
-                """.trimIndent(),
+            // Note: fileContent() pins fileName="report.pdf" while the URL varies,
+            // so the JSON text — not the search-text mirror — is the only reliable
+            // prefilter key; this test would catch a regression to that idea.
+            repository.insertMessage(
+                conversationId = conversationA,
+                senderId = senderId,
+                content = fileContent(targetUrl),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.FILE,
             )
-        }
+            repository.insertMessage(
+                conversationId = conversationB,
+                senderId = senderId,
+                content = fileContent(targetUrl),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.FILE,
+            )
+            repository.insertMessage(
+                conversationId = conversationA,
+                senderId = senderId,
+                content = fileContent(otherUrl),
+                category = MessageCategory.NORMAL,
+                renderType = MessageRenderType.FILE,
+            )
 
-        // 2 decodable references + 1 undecodable-but-matching row; the
-        // unrelated file's row is skipped entirely by the SQL prefilter.
-        assertEquals(3L, repository.countLiveFileReferences(targetFile))
+            // A legacy row whose JSON is undecodable but mentions the target: it
+            // must still count — deleting a physical file on a decode failure is
+            // forbidden (fail closed).
+            val corruptId = Uuid.random()
+            transaction(database) {
+                exec(
+                    """
+                    INSERT INTO messages (id, conversation_id, user_id, content, category, render_type, search_text, created_at)
+                    VALUES ('$corruptId', '$conversationA', '$senderId',
+                            '{"broken": "still mentions $targetFile', 'NORMAL', 'FILE', '$targetFile', CURRENT_TIMESTAMP)
+                    """.trimIndent(),
+                )
+            }
+
+            // 2 decodable references + 1 undecodable-but-matching row; the
+            // unrelated file's row is skipped entirely by the SQL prefilter.
+            assertEquals(3L, repository.countLiveFileReferences(targetFile))
         }
     }
 }

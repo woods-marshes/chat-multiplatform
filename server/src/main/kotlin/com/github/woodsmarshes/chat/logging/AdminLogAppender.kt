@@ -13,7 +13,6 @@ import ch.qos.logback.core.AppenderBase
  * [AdminLogBuffer.Entry.detail] — the full trace stays in the console log.
  */
 class AdminLogAppender : AppenderBase<ILoggingEvent>() {
-
     override fun append(event: ILoggingEvent) {
         AppLogBuffer.add(
             level = event.level.levelStr,
@@ -23,8 +22,7 @@ class AdminLogAppender : AppenderBase<ILoggingEvent>() {
         )
     }
 
-    private fun throwableDetail(proxy: IThrowableProxy): String =
-        ThrowableProxyUtil.asString(proxy).take(MAX_DETAIL_CHARS)
+    private fun throwableDetail(proxy: IThrowableProxy): String = ThrowableProxyUtil.asString(proxy).take(MAX_DETAIL_CHARS)
 
     private companion object {
         const val MAX_DETAIL_CHARS = 2000

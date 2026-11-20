@@ -17,37 +17,38 @@ import kotlin.uuid.Uuid
  * other server must not tear down the current one.
  */
 class DatabaseHolderServerKeyTest {
-
     @Test
-    fun sameUserOnDifferentServersGetsSeparateDatabases() = runBlocking {
-        val userId = Uuid.random()
-        val keyA = "s0000aaa1"
-        val keyB = "s0000bbb2"
-        val files = listOf(
-            Path.of("chat_${keyA}_$userId.db"),
-            Path.of("chat_${keyB}_$userId.db"),
-        )
-        val holder = DatabaseHolder(DesktopContext())
-        try {
-            val first = holder.getOrCreateDatabase(userId, keyA)
-            assertSame(first, holder.getOrCreateDatabase(userId, keyA), "same server must reuse the driver")
-            assertTrue(Files.exists(files[0]), "database file must be namespaced by serverKey")
+    fun sameUserOnDifferentServersGetsSeparateDatabases() =
+        runBlocking {
+            val userId = Uuid.random()
+            val keyA = "s0000aaa1"
+            val keyB = "s0000bbb2"
+            val files =
+                listOf(
+                    Path.of("chat_${keyA}_$userId.db"),
+                    Path.of("chat_${keyB}_$userId.db"),
+                )
+            val holder = DatabaseHolder(DesktopContext())
+            try {
+                val first = holder.getOrCreateDatabase(userId, keyA)
+                assertSame(first, holder.getOrCreateDatabase(userId, keyA), "same server must reuse the driver")
+                assertTrue(Files.exists(files[0]), "database file must be namespaced by serverKey")
 
-            val second = holder.getOrCreateDatabase(userId, keyB)
-            assertNotSame(first, second, "another server must not reuse the previous driver")
-            assertSame(second, holder.getActiveDatabase())
-            assertTrue(Files.exists(files[1]), "each server must own its own database file")
+                val second = holder.getOrCreateDatabase(userId, keyB)
+                assertNotSame(first, second, "another server must not reuse the previous driver")
+                assertSame(second, holder.getActiveDatabase())
+                assertTrue(Files.exists(files[1]), "each server must own its own database file")
 
-            holder.closeDatabaseIfCurrent(userId, "s0000ccc3")
-            assertSame(second, holder.getActiveDatabase(), "a close for another server must be ignored")
+                holder.closeDatabaseIfCurrent(userId, "s0000ccc3")
+                assertSame(second, holder.getActiveDatabase(), "a close for another server must be ignored")
 
-            holder.closeDatabaseIfCurrent(userId, keyB)
-            assertFailsWith<IllegalStateException> { holder.getActiveDatabase() }
-            Unit
-        } finally {
-            holder.closeDatabaseIfCurrent(userId, keyA)
-            holder.closeDatabaseIfCurrent(userId, keyB)
-            files.forEach { Files.deleteIfExists(it) }
+                holder.closeDatabaseIfCurrent(userId, keyB)
+                assertFailsWith<IllegalStateException> { holder.getActiveDatabase() }
+                Unit
+            } finally {
+                holder.closeDatabaseIfCurrent(userId, keyA)
+                holder.closeDatabaseIfCurrent(userId, keyB)
+                files.forEach { Files.deleteIfExists(it) }
+            }
         }
-    }
 }

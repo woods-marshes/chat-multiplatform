@@ -18,7 +18,6 @@ external interface TiptapEditorBridgeProps : Props {
     var userInfo: dynamic // JS 动态对象，包含 name 和 color
 }
 
-
 @JsName("TiptapEditorBridge")
 external val TiptapEditorBridge: FC<TiptapEditorBridgeProps>
 

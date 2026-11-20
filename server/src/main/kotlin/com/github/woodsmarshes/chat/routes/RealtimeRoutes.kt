@@ -1,12 +1,12 @@
 package com.github.woodsmarshes.chat.routes
 
 import com.github.michaelbull.result.mapBoth
-import com.github.woodsmarshes.chat.core.model.Message
-import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.contract.dto.events.SocketErrorResponse
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.service.MessageService
 import com.github.woodsmarshes.chat.service.RealtimeService
 import com.github.woodsmarshes.chat.utils.extractUserIdFromWebSocket
@@ -23,12 +23,12 @@ import io.ktor.util.logging.Logger
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.isActive
 import kotlinx.serialization.SerializationException
 import org.koin.ktor.ext.inject
+import kotlin.coroutines.cancellation.CancellationException
 
 fun Route.realtimeRoutes() {
     val realtimeService by inject<RealtimeService>()
@@ -51,83 +51,86 @@ fun Route.realtimeRoutes() {
                 try {
                     when (val result = receiveDeserialized<MessageRequest>()) {
                         is MessageRequest.Send -> {
-                            messageService.sendMessage(
-                                userId = userId,
-                                conversationId = result.conversationId,
-                                content = result.content,
-                                replyToMessageId = result.replyToMessageId,
-                                requestId = result.requestId
-                            ).mapBoth(
-                                success = {
-                                    // Every successful attempt receives its canonical result,
-                                    // including idempotent retries whose original push was lost,
-                                    // enqueued onto the connection's dedicated outbound writer.
-                                    realtimeService.sendToSession(
-                                        this@webSocket,
-                                        MessageEventResponse.Received(
-                                            message = it,
-                                            conversationId = result.conversationId,
-                                            senderId = userId,
-                                            requestId = result.requestId,
+                            messageService
+                                .sendMessage(
+                                    userId = userId,
+                                    conversationId = result.conversationId,
+                                    content = result.content,
+                                    replyToMessageId = result.replyToMessageId,
+                                    requestId = result.requestId,
+                                ).mapBoth(
+                                    success = {
+                                        // Every successful attempt receives its canonical result,
+                                        // including idempotent retries whose original push was lost,
+                                        // enqueued onto the connection's dedicated outbound writer.
+                                        realtimeService.sendToSession(
+                                            this@webSocket,
+                                            MessageEventResponse.Received(
+                                                message = it,
+                                                conversationId = result.conversationId,
+                                                senderId = userId,
+                                                requestId = result.requestId,
+                                            ),
                                         )
-                                    )
-                                },
-                                failure = { error ->
-                                    realtimeService.sendToSession(
-                                        this@webSocket,
-                                        SocketErrorResponse(
-                                            requestId = result.requestId,
-                                            code = error.mapToStatus().value,
-                                            message = "Failed to send message",
-                                            error = error
+                                    },
+                                    failure = { error ->
+                                        realtimeService.sendToSession(
+                                            this@webSocket,
+                                            SocketErrorResponse(
+                                                requestId = result.requestId,
+                                                code = error.mapToStatus().value,
+                                                message = "Failed to send message",
+                                                error = error,
+                                            ),
                                         )
-                                    )
-                                }
-                            )
+                                    },
+                                )
                         }
 
                         is MessageRequest.Withdraw -> {
-                            messageService.withdrawMessage(
-                                userId = userId,
-                                messageId = result.messageId
-                            ).mapBoth({  }) { error ->
-                                realtimeService.sendToSession(
-                                    this@webSocket,
-                                    SocketErrorResponse(
-                                        requestId = null,
-                                        code = error.mapToStatus().value,
-                                        message = "Withdraw failed",
-                                        error = error
+                            messageService
+                                .withdrawMessage(
+                                    userId = userId,
+                                    messageId = result.messageId,
+                                ).mapBoth({ }) { error ->
+                                    realtimeService.sendToSession(
+                                        this@webSocket,
+                                        SocketErrorResponse(
+                                            requestId = null,
+                                            code = error.mapToStatus().value,
+                                            message = "Withdraw failed",
+                                            error = error,
+                                        ),
                                     )
-                                )
-                            }
+                                }
                         }
 
                         is MessageRequest.Read -> {
-                            messageService.markAsRead(
-                                userId = userId,
-                                conversationId = result.conversationId,
-                                messageId = result.messageId
-                            ).mapBoth({ }) { error ->
-                                // Mirror Send/Withdraw: report the failure back
-                                // so the client knows the receipt never landed.
-                                realtimeService.sendToSession(
-                                    this@webSocket,
-                                    SocketErrorResponse(
-                                        requestId = null,
-                                        code = error.mapToStatus().value,
-                                        message = "Read report failed",
-                                        error = error
+                            messageService
+                                .markAsRead(
+                                    userId = userId,
+                                    conversationId = result.conversationId,
+                                    messageId = result.messageId,
+                                ).mapBoth({ }) { error ->
+                                    // Mirror Send/Withdraw: report the failure back
+                                    // so the client knows the receipt never landed.
+                                    realtimeService.sendToSession(
+                                        this@webSocket,
+                                        SocketErrorResponse(
+                                            requestId = null,
+                                            code = error.mapToStatus().value,
+                                            message = "Read report failed",
+                                            error = error,
+                                        ),
                                     )
-                                )
-                            }
+                                }
                         }
 
                         is MessageRequest.Typing -> {
                             messageService.onUserTyping(
                                 senderId = userId,
                                 conversationId = result.conversationId,
-                                isTyping = result.isTyping
+                                isTyping = result.isTyping,
                             )
                         }
                     }

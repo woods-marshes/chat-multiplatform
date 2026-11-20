@@ -22,9 +22,10 @@ fun main() {
     val platformContext = DesktopContext()
     nucleusApplication(backend = NucleusBackend.Tao) {
         initKoin(
-            platformModule = module {
-                single<PlatformContext> { platformContext }
-            }
+            platformModule =
+                module {
+                    single<PlatformContext> { platformContext }
+                },
         )
         DecoratedWindow(
             onCloseRequest = ::exitApplication,

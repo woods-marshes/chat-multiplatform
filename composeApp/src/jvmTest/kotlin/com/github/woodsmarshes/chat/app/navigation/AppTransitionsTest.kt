@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.app.navigation
 
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
@@ -23,7 +23,6 @@ import kotlin.test.assertTrue
  * hierarchy motion.
  */
 class AppTransitionsTest {
-
     // Combined EnterTransition prints its slots as "Fade - <state>, Slide -
     // <state>". A slot set on its own prints the full name ("Fade - Fade(...)"),
     // while a combined transition prints the set slot's content and "null" for
@@ -31,14 +30,14 @@ class AppTransitionsTest {
     // detected as "not None and no slide" only where no other effect is set.
     private fun hasFade(transform: ContentTransform) =
         transform.targetContentEnter.toString().contains("Fade - Fade") ||
-            (!transform.targetContentEnter.toString().contains("Slide - Slide") &&
-                transform.targetContentEnter != EnterTransition.None)
+            (
+                !transform.targetContentEnter.toString().contains("Slide - Slide") &&
+                    transform.targetContentEnter != EnterTransition.None
+            )
 
-    private fun hasSlide(transform: ContentTransform) =
-        transform.targetContentEnter.toString().contains("Slide - Slide")
+    private fun hasSlide(transform: ContentTransform) = transform.targetContentEnter.toString().contains("Slide - Slide")
 
-    private fun isNone(transform: ContentTransform) =
-        transform.targetContentEnter == EnterTransition.None
+    private fun isNone(transform: ContentTransform) = transform.targetContentEnter == EnterTransition.None
 
     @Test
     fun topLevelSwitchIsPureFade() {
@@ -71,10 +70,11 @@ class AppTransitionsTest {
 
     @Test
     fun popFromSettingsDetailIncomingIsOpaque() {
-        val transform = AppTransitions.popTransitionSpec(
-            SettingsDetailNavKey(com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory.PROFILE),
-            SettingsNavKey,
-        )
+        val transform =
+            AppTransitions.popTransitionSpec(
+                SettingsDetailNavKey(com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory.PROFILE),
+                SettingsNavKey,
+            )
         assertFalse(hasFade(transform), "pop from settings detail: incoming must not fade")
     }
 

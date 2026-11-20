@@ -23,8 +23,9 @@ import androidx.navigation3.runtime.NavKey
  *
  * @param state - The navigation state that will be updated in response to navigation events.
  */
-class Navigator(val state: NavigationState) {
-
+class Navigator(
+    val state: NavigationState,
+) {
     /**
      * Navigate to a navigation key
      *
@@ -46,13 +47,19 @@ class Navigator(val state: NavigationState) {
             // Already at the app's start route: nothing to pop. A no-op lets
             // the system default (exiting the app) happen naturally if
             // NavDisplay ever invokes onBack here; erroring would crash.
-            state.startKey -> Unit
+            state.startKey -> {
+                Unit
+            }
+
             state.currentTopLevelKey -> {
                 // We're at the base of the current sub stack, go back to the previous top level
                 // stack.
                 state.topLevelStack.removeLastOrNull()
             }
-            else -> state.currentSubStack.removeLastOrNull()
+
+            else -> {
+                state.currentSubStack.removeLastOrNull()
+            }
         }
     }
 

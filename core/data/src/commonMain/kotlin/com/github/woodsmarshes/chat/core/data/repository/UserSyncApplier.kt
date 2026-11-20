@@ -1,5 +1,10 @@
 package com.github.woodsmarshes.chat.core.data.repository
 
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.data.model.toConversation
 import com.github.woodsmarshes.chat.core.data.model.toEntity
 import com.github.woodsmarshes.chat.core.data.model.toGroupOwnerUserEntity
@@ -22,11 +27,6 @@ import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
-import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
-import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.GroupJoinRequestEntity
 import io.ktor.client.plugins.ResponseException
@@ -41,7 +41,9 @@ import kotlin.uuid.Uuid
  * re-sync from a controlled USER snapshot instead of retrying this batch
  * forever. Transient failures (5xx, IO, timeouts) never raise this.
  */
-internal class UserSyncResetRequiredException(message: String) : IllegalStateException(message)
+internal class UserSyncResetRequiredException(
+    message: String,
+) : IllegalStateException(message)
 
 /**
  * Prepares USER-scope network state before the caller opens its database
@@ -76,15 +78,19 @@ class UserSyncApplier(
     suspend fun prepareBatch(events: List<RealtimeEvent>): Prepared =
         prepare(events, refreshContacts = events.any { it is ContactEventResponse })
 
-    private suspend fun prepare(events: List<RealtimeEvent>, refreshContacts: Boolean): Prepared {
+    private suspend fun prepare(
+        events: List<RealtimeEvent>,
+        refreshContacts: Boolean,
+    ): Prepared {
         events.forEach(::requireSupportedEvent)
         // Joined-conversation details are fetched OUTSIDE any transaction: the
         // journal row alone does not carry the conversation body needed to
         // display it, and HTTP must never run under a database lock.
-        val joinedDetails = events
-            .mapNotNull { (it as? ConversationEventResponse.UserJoinedConversation)?.conversationId }
-            .distinct()
-            .associateWith { fetchJoinedDetail(it) }
+        val joinedDetails =
+            events
+                .mapNotNull { (it as? ConversationEventResponse.UserJoinedConversation)?.conversationId }
+                .distinct()
+                .associateWith { fetchJoinedDetail(it) }
         if (!refreshContacts && joinedDetails.isEmpty()) {
             return Prepared(null, null, joinedDetails, events)
         }
@@ -111,7 +117,7 @@ class UserSyncApplier(
         } catch (e: ResponseException) {
             if (e.response.status == HttpStatusCode.Forbidden || e.response.status == HttpStatusCode.NotFound) {
                 throw UserSyncResetRequiredException(
-                    "Conversation $conversationId is no longer accessible: HTTP ${e.response.status.value}"
+                    "Conversation $conversationId is no longer accessible: HTTP ${e.response.status.value}",
                 )
             }
             throw e
@@ -123,9 +129,11 @@ class UserSyncApplier(
         val requests = prepared.requestRows
         if (contacts != null && requests != null) {
             val remoteContactIds = contacts.mapTo(HashSet(contacts.size)) { it.first.contactId }
-            val staleContactIds = contactDao.selectAllContactsForSync()
-                .map { it.contact_id }
-                .filterNot(remoteContactIds::contains)
+            val staleContactIds =
+                contactDao
+                    .selectAllContactsForSync()
+                    .map { it.contact_id }
+                    .filterNot(remoteContactIds::contains)
             contactDao.deleteContacts(staleContactIds)
 
             val users = contacts.map { it.second.toUserEntity() }.distinctBy { it.id }
@@ -134,9 +142,11 @@ class UserSyncApplier(
             if (contactEntities.isNotEmpty()) contactDao.insertContacts(contactEntities)
 
             val remoteRequestIds = requests.mapTo(HashSet(requests.size)) { it.id }
-            val staleRequestIds = contactRequestDao.selectAllContactRequestsForSync()
-                .map { it.id }
-                .filterNot(remoteRequestIds::contains)
+            val staleRequestIds =
+                contactRequestDao
+                    .selectAllContactRequestsForSync()
+                    .map { it.id }
+                    .filterNot(remoteRequestIds::contains)
             staleRequestIds.forEach { contactRequestDao.deleteContactRequest(it) }
             val requestEntities = requests.map { it.toEntity() }
             if (requestEntities.isNotEmpty()) contactRequestDao.upsertContactRequests(requestEntities)
@@ -144,34 +154,44 @@ class UserSyncApplier(
 
         prepared.events.forEach { event ->
             when (event) {
-                is ConversationEventResponse.GroupJoinRequest -> groupJoinRequestDao.seedGroupJoinRequest(
-                    GroupJoinRequestEntity(
-                        id = event.requestId,
-                        conversation_id = event.conversationId,
-                        applicant_id = event.applicantId,
-                        message = event.message,
-                        status = RequestStatus.PENDING,
-                        handled_by = null,
-                        created_at = event.timestamp,
-                        updated_at = event.timestamp,
+                is ConversationEventResponse.GroupJoinRequest -> {
+                    groupJoinRequestDao.seedGroupJoinRequest(
+                        GroupJoinRequestEntity(
+                            id = event.requestId,
+                            conversation_id = event.conversationId,
+                            applicant_id = event.applicantId,
+                            message = event.message,
+                            status = RequestStatus.PENDING,
+                            handled_by = null,
+                            created_at = event.timestamp,
+                            updated_at = event.timestamp,
+                        ),
                     )
-                )
+                }
+
                 is ConversationEventResponse.GroupJoinRequestHandled -> {
-                    val seed = GroupJoinRequestEntity(
-                        id = event.requestId,
-                        conversation_id = event.conversationId,
-                        applicant_id = event.applicantId,
-                        message = null,
-                        status = if (event.approved) RequestStatus.ACCEPTED else RequestStatus.REJECTED,
-                        handled_by = event.handlerId,
-                        created_at = event.timestamp,
-                        updated_at = event.timestamp,
-                    )
+                    val seed =
+                        GroupJoinRequestEntity(
+                            id = event.requestId,
+                            conversation_id = event.conversationId,
+                            applicant_id = event.applicantId,
+                            message = null,
+                            status = if (event.approved) RequestStatus.ACCEPTED else RequestStatus.REJECTED,
+                            handled_by = event.handlerId,
+                            created_at = event.timestamp,
+                            updated_at = event.timestamp,
+                        )
                     groupJoinRequestDao.upsertGroupJoinRequest(seed)
                 }
-                is MessageEventResponse.Read -> participantDao.updateLastReadMessage(
-                    event.conversationId, event.readerId, event.messageId,
-                )
+
+                is MessageEventResponse.Read -> {
+                    participantDao.updateLastReadMessage(
+                        event.conversationId,
+                        event.readerId,
+                        event.messageId,
+                    )
+                }
+
                 // Membership is restored from the conversation detail: inserts
                 // only, so unrelated conversations and rows are never touched.
                 is ConversationEventResponse.UserJoinedConversation -> {
@@ -181,26 +201,36 @@ class UserSyncApplier(
                     } else {
                         log.warn { "No joined detail available for conversation ${event.conversationId}; resetting USER stream" }
                         throw UserSyncResetRequiredException(
-                            "Missing prepared detail for joined conversation ${event.conversationId}"
+                            "Missing prepared detail for joined conversation ${event.conversationId}",
                         )
                     }
                 }
+
                 is ConversationEventResponse.UserLeftConversation -> {
                     participantDao.removeParticipant(event.conversationId, event.userId)
                     conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                     groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                 }
+
                 is ConversationEventResponse.ConversationDeleted -> {
                     participantDao.removeAllParticipantsFromConversation(event.conversationId)
                     conversationDao.softDeleteConversation(event.conversationId, event.timestamp)
                     groupJoinRequestDao.deleteGroupJoinRequestsForConversation(event.conversationId)
                 }
+
                 // Personal preferences only: never overwrites the read cursor,
                 // role, or join date of the participant row.
-                is ConversationEventResponse.PersonalSettingsUpdated -> participantDao.updateSettings(
-                    event.conversationId, event.userId, event.settings,
-                )
-                else -> Unit
+                is ConversationEventResponse.PersonalSettingsUpdated -> {
+                    participantDao.updateSettings(
+                        event.conversationId,
+                        event.userId,
+                        event.settings,
+                    )
+                }
+
+                else -> {
+                    Unit
+                }
             }
         }
     }
@@ -209,7 +239,10 @@ class UserSyncApplier(
         conversationDao.insertConversation(response.toConversation().toEntity())
         response.toUserEntity()?.let { userDao.insertUser(it) }
         response.toGroupOwnerUserEntity()?.let { userDao.insertUser(it) }
-        response.lastMessage?.sender?.toUserEntity()?.let { userDao.insertUser(it) }
+        response.lastMessage
+            ?.sender
+            ?.toUserEntity()
+            ?.let { userDao.insertUser(it) }
         response.toGroupProfileEntity()?.let { groupProfileDao.insertGroupProfile(it) }
         participantDao.insertParticipant(response.toParticipantEntity())
         response.toPeerParticipantEntity()?.let { participantDao.insertParticipantIfAbsent(it) }
@@ -224,8 +257,11 @@ class UserSyncApplier(
             is ConversationEventResponse.UserJoinedConversation,
             is ConversationEventResponse.UserLeftConversation,
             is ConversationEventResponse.ConversationDeleted,
-            is ConversationEventResponse.PersonalSettingsUpdated -> Unit
+            is ConversationEventResponse.PersonalSettingsUpdated,
+            -> Unit
+
             is MessageEventResponse.Read -> Unit
+
             else -> log.warn { "Skipping unsupported or unknown USER sync event: ${event::class.simpleName}" }
         }
     }

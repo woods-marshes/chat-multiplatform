@@ -1,10 +1,10 @@
 package com.github.woodsmarshes.chat.events
 
+import io.micrometer.core.instrument.MeterRegistry
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import io.micrometer.core.instrument.MeterRegistry
 import java.util.concurrent.atomic.AtomicLong
 
 interface EventBus {
@@ -13,11 +13,16 @@ interface EventBus {
     val messageEvents: SharedFlow<MessageEvent>
 
     fun publishContactEvent(event: ContactEvent)
+
     fun publishConversationEvent(event: ConversationEvent)
+
     fun publishMessageEvent(event: MessageEvent)
 }
 
-class EventBusImpl(private val meterRegistry: MeterRegistry? = null) : EventBus, AutoCloseable {
+class EventBusImpl(
+    private val meterRegistry: MeterRegistry? = null,
+) : EventBus,
+    AutoCloseable {
     private val logger = org.slf4j.LoggerFactory.getLogger(EventBusImpl::class.java)
     private val droppedEvents = AtomicLong()
     private val droppedCounter = meterRegistry?.counter("chat.eventbus.dropped")
@@ -33,22 +38,25 @@ class EventBusImpl(private val meterRegistry: MeterRegistry? = null) : EventBus,
     // events under load. With SUSPEND overflow a saturated buffer makes
     // tryEmit report the drop instead of silently discarding the oldest
     // event; lost events heal through the clients' seq-gap resync.
-    private val _contactEvents = MutableSharedFlow<ContactEvent>(
-        extraBufferCapacity = 256,
-        onBufferOverflow = BufferOverflow.SUSPEND,
-    )
+    private val _contactEvents =
+        MutableSharedFlow<ContactEvent>(
+            extraBufferCapacity = 256,
+            onBufferOverflow = BufferOverflow.SUSPEND,
+        )
     override val contactEvents: SharedFlow<ContactEvent> = _contactEvents.asSharedFlow()
 
-    private val _conversationEvents = MutableSharedFlow<ConversationEvent>(
-        extraBufferCapacity = 256,
-        onBufferOverflow = BufferOverflow.SUSPEND,
-    )
+    private val _conversationEvents =
+        MutableSharedFlow<ConversationEvent>(
+            extraBufferCapacity = 256,
+            onBufferOverflow = BufferOverflow.SUSPEND,
+        )
     override val conversationEvents: SharedFlow<ConversationEvent> = _conversationEvents.asSharedFlow()
 
-    private val _messageEvents = MutableSharedFlow<MessageEvent>(
-        extraBufferCapacity = 256,
-        onBufferOverflow = BufferOverflow.SUSPEND,
-    )
+    private val _messageEvents =
+        MutableSharedFlow<MessageEvent>(
+            extraBufferCapacity = 256,
+            onBufferOverflow = BufferOverflow.SUSPEND,
+        )
     override val messageEvents: SharedFlow<MessageEvent> = _messageEvents.asSharedFlow()
 
     override fun publishContactEvent(event: ContactEvent) {
@@ -63,7 +71,11 @@ class EventBusImpl(private val meterRegistry: MeterRegistry? = null) : EventBus,
         emitCountingDrops(_messageEvents, event, "message")
     }
 
-    private fun <T> emitCountingDrops(flow: MutableSharedFlow<T>, event: T, kind: String) {
+    private fun <T> emitCountingDrops(
+        flow: MutableSharedFlow<T>,
+        event: T,
+        kind: String,
+    ) {
         if (!flow.tryEmit(event)) {
             val total = droppedEvents.incrementAndGet()
             droppedCounter?.increment()

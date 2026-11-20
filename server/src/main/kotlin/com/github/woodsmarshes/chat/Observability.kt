@@ -9,8 +9,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.plugins.callid.CallId
 import io.ktor.server.metrics.micrometer.MicrometerMetrics
+import io.ktor.server.plugins.callid.CallId
 import io.ktor.server.request.header
 import io.ktor.server.request.path
 import io.ktor.server.response.respondText
@@ -43,6 +43,7 @@ private const val HEALTH_CACHE_NANOS = 2_000_000_000L
  */
 private class HealthProbe {
     @Volatile private var checkedAtNanos = 0L
+
     @Volatile private var dbUp = false
 
     suspend fun isDbUp(): Boolean {
@@ -73,12 +74,16 @@ fun Application.configureObservability() {
     // Blank counts as unconfigured: the yaml default is an empty string
     // (compose feeds METRICS_TOKEN), so development without the variable
     // stays open while a deployment that sets it gets the gate.
-    val metricsToken = environment.config.propertyOrNull("metrics.token")?.getString()?.takeIf { it.isNotBlank() }
+    val metricsToken =
+        environment.config
+            .propertyOrNull("metrics.token")
+            ?.getString()
+            ?.takeIf { it.isNotBlank() }
 
     // Cap label cardinality: scanners hitting unregistered paths would
     // otherwise create one request-timer series per URL.
     prometheusRegistry.config().meterFilter(
-        MeterFilter.maximumAllowableTags("ktor.http.server.requests", "route", 100, MeterFilter.deny())
+        MeterFilter.maximumAllowableTags("ktor.http.server.requests", "route", 100, MeterFilter.deny()),
     )
 
     install(MicrometerMetrics) {
@@ -87,14 +92,15 @@ fun Application.configureObservability() {
         // can be added via distributionStatisticConfig once the target
         // Micrometer API stabilizes; the scrape already carries count/sum/max.)
         filter { call -> call.request.path() !in setOf("/health", METRICS_ROUTE) }
-        meterBinders = listOf(
-            JvmGcMetrics(),
-            JvmMemoryMetrics(),
-            JvmThreadMetrics(),
-            ProcessorMetrics(),
-            ClassLoaderMetrics(),
-            UptimeMetrics(),
-        )
+        meterBinders =
+            listOf(
+                JvmGcMetrics(),
+                JvmMemoryMetrics(),
+                JvmThreadMetrics(),
+                ProcessorMetrics(),
+                ClassLoaderMetrics(),
+                UptimeMetrics(),
+            )
     }
 
     install(CallId) {

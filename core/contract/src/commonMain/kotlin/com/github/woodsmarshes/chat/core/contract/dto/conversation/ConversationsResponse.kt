@@ -37,7 +37,7 @@ data class SimpleMessage(
     @ProtoNumber(5) val createdAt: Instant,
     @ProtoNumber(6) val revokedAt: Instant? = null,
     @ProtoNumber(7) val content: MessageContent,
-    @ProtoNumber(8) val senderContext: MessageSenderContext? = null
+    @ProtoNumber(8) val senderContext: MessageSenderContext? = null,
 )
 
 @Serializable
@@ -70,21 +70,22 @@ data class UserInfo(
     @ProtoNumber(7) val createdAt: Instant,
     @ProtoNumber(8) val updatedAt: Instant,
     @ProtoNumber(9) val role: UserRole,
-    @ProtoNumber(10) val deletedAt: Instant?
+    @ProtoNumber(10) val deletedAt: Instant?,
 ) : ConversationInfo
 
-fun User.toUserInfo() = UserInfo(
-    id = id,
-    username = username,
-    email = email,
-    displayName = displayName,
-    avatarUrl = avatarUrl,
-    bio = bio,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-    deletedAt = deletedAt,
-    role = role,
-)
+fun User.toUserInfo() =
+    UserInfo(
+        id = id,
+        username = username,
+        email = email,
+        displayName = displayName,
+        avatarUrl = avatarUrl,
+        bio = bio,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+        role = role,
+    )
 
 fun GroupProfile.toGroupInfo(
     deletedAt: Instant? = null,
@@ -99,6 +100,5 @@ fun GroupProfile.toGroupInfo(
     createdAt = createdAt,
     updatedAt = updatedAt,
     deletedAt = deletedAt,
-    userInfo = userInfo
+    userInfo = userInfo,
 )
-

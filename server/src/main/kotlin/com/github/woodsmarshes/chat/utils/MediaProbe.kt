@@ -14,7 +14,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * timeout — a hung probe could hold a request and a processing slot forever.
  */
 object MediaProbe {
-    data class Result(val durationMs: Long, val width: Int?, val height: Int?)
+    data class Result(
+        val durationMs: Long,
+        val width: Int?,
+        val height: Int?,
+    )
 
     enum class FailureReason {
         TIMED_OUT,
@@ -25,8 +29,13 @@ object MediaProbe {
     }
 
     sealed interface Outcome {
-        data class Success(val result: Result) : Outcome
-        data class Failure(val reason: FailureReason) : Outcome
+        data class Success(
+            val result: Result,
+        ) : Outcome
+
+        data class Failure(
+            val reason: FailureReason,
+        ) : Outcome
     }
 
     /** Hard wall-clock limit before a hung ffmpeg probe is killed. */
@@ -43,9 +52,10 @@ object MediaProbe {
     internal const val MAX_REPORT_BYTES = 256 * 1024
 
     // Serializes the tiny watchdog tasks that kill probes past their deadline.
-    private val watchdogExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "ffmpeg-probe-watchdog").apply { isDaemon = true }
-    }
+    private val watchdogExecutor =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "ffmpeg-probe-watchdog").apply { isDaemon = true }
+        }
 
     /**
      * Probes [file] under a hard wall-clock limit: a hung ffmpeg is destroyed
@@ -53,26 +63,30 @@ object MediaProbe {
      */
     fun probe(file: File): Outcome = probe(file, PROBE_TIMEOUT_MS)
 
-    fun probe(file: File, timeoutMs: Long): Outcome =
-        probe(file, timeoutMs, executableResolver = { FfmpegExecutableResolver.resolve() })
+    fun probe(
+        file: File,
+        timeoutMs: Long,
+    ): Outcome = probe(file, timeoutMs, executableResolver = { FfmpegExecutableResolver.resolve() })
 
     internal fun probe(
         file: File,
         timeoutMs: Long,
         executableResolver: () -> String,
     ): Outcome {
-        val executablePath = try {
-            executableResolver()
-        } catch (e: Exception) {
-            return Outcome.Failure(FailureReason.LAUNCH_FAILED)
-        }
+        val executablePath =
+            try {
+                executableResolver()
+            } catch (e: Exception) {
+                return Outcome.Failure(FailureReason.LAUNCH_FAILED)
+            }
         return probeWithCommand(
-            command = listOf(
-                executablePath,
-                "-hide_banner",
-                "-i",
-                file.absolutePath,
-            ),
+            command =
+                listOf(
+                    executablePath,
+                    "-hide_banner",
+                    "-i",
+                    file.absolutePath,
+                ),
             timeoutMs = timeoutMs,
         )
     }
@@ -84,38 +98,41 @@ object MediaProbe {
         if (timeoutMs <= 0L) {
             return Outcome.Failure(FailureReason.TIMED_OUT)
         }
-        val process = try {
-            ProcessBuilder(command)
-                // No output file is passed, so ffmpeg exits non-zero — but only
-                // after dumping the container metadata to stderr. stdout is
-                // discarded; stderr carries the (bounded) report.
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                .start()
-        } catch (e: Exception) {
-            return Outcome.Failure(FailureReason.LAUNCH_FAILED)
-        }
+        val process =
+            try {
+                ProcessBuilder(command)
+                    // No output file is passed, so ffmpeg exits non-zero — but only
+                    // after dumping the container metadata to stderr. stdout is
+                    // discarded; stderr carries the (bounded) report.
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+            } catch (e: Exception) {
+                return Outcome.Failure(FailureReason.LAUNCH_FAILED)
+            }
 
         val killedByWatchdog = AtomicBoolean(false)
         return try {
-            val watchdog = watchdogExecutor.schedule(
-                {
-                    killedByWatchdog.set(true)
-                    process.destroyForcibly()
-                },
-                timeoutMs,
-                TimeUnit.MILLISECONDS,
-            )
+            val watchdog =
+                watchdogExecutor.schedule(
+                    {
+                        killedByWatchdog.set(true)
+                        process.destroyForcibly()
+                    },
+                    timeoutMs,
+                    TimeUnit.MILLISECONDS,
+                )
             try {
-                val report = try {
-                    readBounded(process.errorStream, MAX_REPORT_BYTES)
-                } catch (e: Exception) {
-                    if (killedByWatchdog.get()) {
+                val report =
+                    try {
+                        readBounded(process.errorStream, MAX_REPORT_BYTES)
+                    } catch (e: Exception) {
+                        if (killedByWatchdog.get()) {
+                            confirmProcessExit(process)
+                            return Outcome.Failure(FailureReason.TIMED_OUT)
+                        }
                         confirmProcessExit(process)
-                        return Outcome.Failure(FailureReason.TIMED_OUT)
+                        return Outcome.Failure(FailureReason.UNPARSEABLE)
                     }
-                    confirmProcessExit(process)
-                    return Outcome.Failure(FailureReason.UNPARSEABLE)
-                }
                 when {
                     // The cap tripped mid-read: the process would block on a
                     // full stderr pipe forever, so kill it before unwinding.
@@ -123,10 +140,12 @@ object MediaProbe {
                         confirmProcessExit(process)
                         Outcome.Failure(FailureReason.OUTPUT_EXCEEDED)
                     }
+
                     killedByWatchdog.get() -> {
                         confirmProcessExit(process)
                         Outcome.Failure(FailureReason.TIMED_OUT)
                     }
+
                     else -> {
                         // The report may be complete while the process is not
                         // done (it closes stderr before exiting). Confirm the
@@ -141,9 +160,12 @@ object MediaProbe {
                                 confirmProcessExit(process)
                                 Outcome.Failure(FailureReason.TIMED_OUT)
                             }
-                            else -> parseReport(report.decodeToString())
-                                ?.let { Outcome.Success(it) }
-                                ?: Outcome.Failure(FailureReason.UNPARSEABLE)
+
+                            else -> {
+                                parseReport(report.decodeToString())
+                                    ?.let { Outcome.Success(it) }
+                                    ?: Outcome.Failure(FailureReason.UNPARSEABLE)
+                            }
                         }
                     }
                 }
@@ -177,7 +199,10 @@ object MediaProbe {
      * soon as the source exceeds the cap — the caller must terminate the
      * producing process, or a full pipe will deadlock it.
      */
-    internal fun readBounded(stream: InputStream, maxBytes: Int): ByteArray? {
+    internal fun readBounded(
+        stream: InputStream,
+        maxBytes: Int,
+    ): ByteArray? {
         val collected = ByteArrayOutputStream(minOf(maxBytes, 16 * 1024))
         val chunk = ByteArray(16 * 1024)
         var total = 0
@@ -192,14 +217,15 @@ object MediaProbe {
 
     /** Parses an `ffmpeg -i` metadata report; null when no duration was found. */
     fun parseReport(report: String): Result? {
-        val durationMs = Regex("Duration:\\s*(\\d+):(\\d+):(\\d+)\\.(\\d+)")
-            .find(report)
-            ?.destructured
-            ?.let { (h, m, s, fraction) ->
-                h.toLong() * 3_600_000 + m.toLong() * 60_000 + s.toLong() * 1_000 +
+        val durationMs =
+            Regex("Duration:\\s*(\\d+):(\\d+):(\\d+)\\.(\\d+)")
+                .find(report)
+                ?.destructured
+                ?.let { (h, m, s, fraction) ->
+                    h.toLong() * 3_600_000 + m.toLong() * 60_000 + s.toLong() * 1_000 +
                         fraction.padEnd(3, '0').take(3).toLong()
-            }
-            ?: return null
+                }
+                ?: return null
         // Dimensions live on the first Video: stream line. Hex stream ids
         // like "0x31637661" cannot match: the digit group before 'x' needs
         // at least two digits.

@@ -5,5 +5,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.koin.dsl.module
 
-class AndroidContext(val context: Context): PlatformContext
+class AndroidContext(
+    val context: Context,
+) : PlatformContext
+
 actual fun provideIODispatcher(): CoroutineDispatcher = Dispatchers.IO

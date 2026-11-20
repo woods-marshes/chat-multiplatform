@@ -9,33 +9,33 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.contract.dto.article.UpdateArticleRequest
 import com.github.woodsmarshes.chat.core.data.model.toArticleListUiModel
 import com.github.woodsmarshes.chat.core.data.model.toCoreArticle
 import com.github.woodsmarshes.chat.core.data.model.toDBArticle
 import com.github.woodsmarshes.chat.core.data.paging.ArticleMediatorFactory
 import com.github.woodsmarshes.chat.core.database.dao.ArticleDao
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
 import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.network.api.rest.ArticleApi
-import com.github.woodsmarshes.chat.core.contract.dto.article.UpdateArticleRequest
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
-import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
@@ -44,7 +44,7 @@ class OfflineFirstArticleRepositoryImpl(
     private val articleApi: ArticleApi,
     private val articleDao: ArticleDao,
     private val databaseHolder: DatabaseHolder,
-    private val mediatorFactory: ArticleMediatorFactory
+    private val mediatorFactory: ArticleMediatorFactory,
 ) : ArticleRepository {
     private suspend fun <T> sessionOperation(block: suspend () -> Result<T, ArticleError>): Result<T, ArticleError> =
         databaseHolder.sessionGate.executeResult(
@@ -53,45 +53,47 @@ class OfflineFirstArticleRepositoryImpl(
             block,
         )
 
-    private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> =
-        databaseHolder.sessionGate.observeSession(factory)
+    private fun <T> sessionFlow(factory: suspend () -> Flow<T>): Flow<T> = databaseHolder.sessionGate.observeSession(factory)
 
     private val log = KotlinLogging.logger {}
 
     override suspend fun getArticle(
         getMyArticle: Boolean,
-        articleId: Uuid
-    ): Flow<Result<Article?, ArticleError>> = sessionFlow { flow {
-        var fetchedFromNetwork = false
+        articleId: Uuid,
+    ): Flow<Result<Article?, ArticleError>> =
+        sessionFlow {
+            flow {
+                var fetchedFromNetwork = false
 
-        articleDao.getByIdWithAuthor(articleId).collect { row ->
-            if (row?.content != null) {
-                // DB has content — emit immediately
-                emit(Ok(row.toCoreArticle()))
-            } else if (!fetchedFromNetwork) {
-                // No content cached — emit null, then fetch from network
-                emit(Ok(null))
-                fetchedFromNetwork = true
+                articleDao.getByIdWithAuthor(articleId).collect { row ->
+                    if (row?.content != null) {
+                        // DB has content — emit immediately
+                        emit(Ok(row.toCoreArticle()))
+                    } else if (!fetchedFromNetwork) {
+                        // No content cached — emit null, then fetch from network
+                        emit(Ok(null))
+                        fetchedFromNetwork = true
 
-                try {
-                    val networkArticle = if (getMyArticle) {
-                        articleApi.getMyArticle(articleId)
-                    } else {
-                        articleApi.getArticle(articleId)
+                        try {
+                            val networkArticle =
+                                if (getMyArticle) {
+                                    articleApi.getMyArticle(articleId)
+                                } else {
+                                    articleApi.getArticle(articleId)
+                                }
+                            // Upsert to DB — will trigger re-emit via the collect
+                            articleDao.upsert(networkArticle.toDBArticle())
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            log.error(e) { "Failed to fetch article $articleId: ${e.message}" }
+                            emit(Err(ArticleError.NotFound))
+                        }
                     }
-                    // Upsert to DB — will trigger re-emit via the collect
-                    articleDao.upsert(networkArticle.toDBArticle())
-                } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-                    log.error(e) { "Failed to fetch article $articleId: ${e.message}" }
-                    emit(Err(ArticleError.NotFound))
+                    // else: content is still null after network — stay silent (article doesn't exist)
                 }
             }
-            // else: content is still null after network — stay silent (article doesn't exist)
         }
-    }
-    }
 //    override val invalidationEvents: Flow<Unit>
 //        get() = _invalidationEvents.asSharedFlow()
 
@@ -99,14 +101,15 @@ class OfflineFirstArticleRepositoryImpl(
     override fun getArticles(
         getMyArticle: Boolean,
         limit: Int,
-        authorId: Uuid?
+        authorId: Uuid?,
     ): Flow<PagingData<ArticleListUiModel>> {
         val pagingDao = (articleDao as? com.github.woodsmarshes.chat.core.database.dao.ArticleDaoImpl)?.pinForPaging() ?: articleDao
         return Pager(
-            config = PagingConfig(
-                pageSize = limit,
-                enablePlaceholders = false,
-            ),
+            config =
+                PagingConfig(
+                    pageSize = limit,
+                    enablePlaceholders = false,
+                ),
             remoteMediator = mediatorFactory.create(getMyArticle, authorId),
             pagingSourceFactory = {
                 pagingDao.pagingSource(
@@ -117,7 +120,7 @@ class OfflineFirstArticleRepositoryImpl(
                     // would show up there and take the place of real articles.
                     status = if (getMyArticle) null else ArticleStatus.PUBLISHED,
                 )
-            }
+            },
         ).flow.map { pagingData ->
             pagingData.map { it.toArticleListUiModel() }
         }
@@ -129,38 +132,48 @@ class OfflineFirstArticleRepositoryImpl(
         content: JsonElement?,
         status: ArticleStatus,
         excerpt: String?,
-    ): Result<Unit, ArticleError> = sessionOperation { coroutineBinding {
-        val article = bindApi(ArticleError::Unknown) {
-            articleApi.saveArticle(
-                id = id,
-                request = UpdateArticleRequest(
-                    title = title,
-                    content = content,
-                    status = status,
-                    excerpt = excerpt,
-                )
-            )
-        }
-        articleDao.upsert(article.toDBArticle())
-    } }
-
-    override suspend fun createBlankArticle(): Result<Article, ArticleError> = sessionOperation { coroutineBinding {
-        bindApi(ArticleError::Unknown) {
-            articleApi.createBlank()
-        }
-            .also {
-                articleDao.upsert(it.toDBArticle())
+    ): Result<Unit, ArticleError> =
+        sessionOperation {
+            coroutineBinding {
+                val article =
+                    bindApi(ArticleError::Unknown) {
+                        articleApi.saveArticle(
+                            id = id,
+                            request =
+                                UpdateArticleRequest(
+                                    title = title,
+                                    content = content,
+                                    status = status,
+                                    excerpt = excerpt,
+                                ),
+                        )
+                    }
+                articleDao.upsert(article.toDBArticle())
             }
-    } }
-
-    override suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError> = sessionOperation { coroutineBinding {
-        bindApi(ArticleError::Unknown) {
-            articleApi.deleteArticle(id)
-        }.also {
-            articleDao.softDelete(
-                id = id,
-                deletedAt = Clock.System.now()
-            )
         }
-    } }
+
+    override suspend fun createBlankArticle(): Result<Article, ArticleError> =
+        sessionOperation {
+            coroutineBinding {
+                bindApi(ArticleError::Unknown) {
+                    articleApi.createBlank()
+                }.also {
+                    articleDao.upsert(it.toDBArticle())
+                }
+            }
+        }
+
+    override suspend fun deleteArticle(id: Uuid): Result<Unit, ArticleError> =
+        sessionOperation {
+            coroutineBinding {
+                bindApi(ArticleError::Unknown) {
+                    articleApi.deleteArticle(id)
+                }.also {
+                    articleDao.softDelete(
+                        id = id,
+                        deletedAt = Clock.System.now(),
+                    )
+                }
+            }
+        }
 }

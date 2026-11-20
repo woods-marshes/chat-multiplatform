@@ -31,9 +31,8 @@ data class Article(
     @ProtoNumber(7) val createdAt: Instant,
     @ProtoNumber(8) val updatedAt: Instant,
     @ProtoNumber(9) val publishedAt: Instant? = null,
-
-    @ProtoNumber(10) val coverImage: String? = null,              // 封面图
-    @ProtoNumber(11) val deletedAt: Instant? = null,               // 软删除时间
-    @ProtoNumber(12) val slug: String? = null,                     // 友好 URL 别名
-    @ProtoNumber(13) val stats: ArticleStats = ArticleStats(),     // 统计信息（JSONB）
+    @ProtoNumber(10) val coverImage: String? = null, // 封面图
+    @ProtoNumber(11) val deletedAt: Instant? = null, // 软删除时间
+    @ProtoNumber(12) val slug: String? = null, // 友好 URL 别名
+    @ProtoNumber(13) val stats: ArticleStats = ArticleStats(), // 统计信息（JSONB）
 )

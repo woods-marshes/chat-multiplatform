@@ -15,26 +15,27 @@ import kotlin.test.assertTrue
  * HTTP timers) and /health pings the database.
  */
 class ObservabilityEndpointsTest {
+    @Test
+    fun metricsEndpointServesPrometheusScrape() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
+
+            val response = client.get("/metrics")
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.bodyAsText()
+            assertTrue("jvm_memory" in body || "jvm_gc" in body, "JVM metrics must be present")
+            assertTrue("ktor_http_server_requests" in body || "http_server" in body, "HTTP timers expected")
+        }
 
     @Test
-    fun metricsEndpointServesPrometheusScrape() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun healthEndpointReportsDatabaseStatus() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val response = client.get("/metrics")
+            val response = client.get("/health")
 
-        assertEquals(HttpStatusCode.OK, response.status)
-        val body = response.bodyAsText()
-        assertTrue("jvm_memory" in body || "jvm_gc" in body, "JVM metrics must be present")
-        assertTrue("ktor_http_server_requests" in body || "http_server" in body, "HTTP timers expected")
-    }
-
-    @Test
-    fun healthEndpointReportsDatabaseStatus() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
-
-        val response = client.get("/health")
-
-        assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("\"status\":\"ok\""))
-    }
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"status\":\"ok\""))
+        }
 }

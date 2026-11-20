@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.repository.database.schema
 
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.model.ConversationMetadata
 import com.github.woodsmarshes.chat.core.model.ConversationType
-import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.json.jsonb
@@ -13,6 +13,6 @@ object Conversations : UuidTable(name = "conversations", uuidVersion = UuidVersi
     val lastMessageId = uuid("last_message_id").nullable()
     val metadata = jsonb<ConversationMetadata>("metadata", ProjectJson).nullable()
     val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at").clientDefault{ Clock.System.now() }
+    val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
     val deletedAt = timestamp("deleted_at").nullable()
 }

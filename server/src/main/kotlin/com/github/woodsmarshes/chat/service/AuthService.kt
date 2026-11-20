@@ -10,21 +10,21 @@ import com.github.woodsmarshes.chat.base.hashing.HashingService
 import com.github.woodsmarshes.chat.base.hashing.SaltedHash
 import com.github.woodsmarshes.chat.base.jwt.TokenClaim
 import com.github.woodsmarshes.chat.base.jwt.TokenService
-import com.github.woodsmarshes.chat.core.model.UserRole
-import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
 import com.github.woodsmarshes.chat.core.contract.dto.auth.LoginRequest
 import com.github.woodsmarshes.chat.core.contract.dto.auth.RegisterRequest
+import com.github.woodsmarshes.chat.core.model.UserRole
+import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
-import com.github.woodsmarshes.chat.utils.inTransaction
 import com.github.woodsmarshes.chat.utils.Keys
+import com.github.woodsmarshes.chat.utils.inTransaction
+import kotlinx.coroutines.CancellationException
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.sql.SQLException
-import kotlinx.coroutines.CancellationException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.uuid.Uuid
@@ -47,154 +47,184 @@ class AuthService(
     private val tokenConfig get() = appConfig.tokenConfig
     private val secureRandom = SecureRandom()
 
-    suspend fun register(request: RegisterRequest, deviceInfo: DeviceInfo = DeviceInfo()): Result<AuthResponse, AuthError> = coroutineBinding {
-        if (request.password.length < MIN_PASSWORD_LENGTH) {
-            Err(AuthError.WeakPassword).bind()
-        }
-        // Fast path for the friendly error; the unique constraint stays the
-        // real guard against concurrent registrations (mapped below).
-        if (userRepository.checkExists(request.email, request.username)) {
-            Err(AuthError.UserAlreadyExists).bind()
-        }
-        // CPU-bound hashing stays outside the transaction so it never holds a
-        // pooled connection for the duration of the KDF.
-        val saltedHash = hashingService.generateSaltedHash(request.password)
-
-        // One unit of work: user, settings row and refresh session commit
-        // together or not at all. Repository dbQuery calls join this
-        // transaction, and failures must THROW (bind does) so Exposed rolls
-        // the partial account back instead of leaving a half-registered user.
-        val registered = try {
-            inTransaction {
-                val user = userRepository.insertUser(
-                    username = request.username,
-                    email = request.email,
-                    passwordHash = saltedHash.hash,
-                    salt = saltedHash.salt,
-                    role = if (request.email.lowercase() in appConfig.adminEmails) UserRole.ADMIN else UserRole.MEMBER
-                ) ?: Err(AuthError.InsertionFailed).bind()
-                userSettingRepository.initSettings(user.id)
-                    ?: Err(AuthError.InsertionFailed).bind()
-                val (refreshToken, sessionId) = issueRefreshToken(user.id, deviceInfo)
-                    ?: Err(AuthError.InsertionFailed).bind()
-                Triple(user, refreshToken, sessionId)
+    suspend fun register(
+        request: RegisterRequest,
+        deviceInfo: DeviceInfo = DeviceInfo(),
+    ): Result<AuthResponse, AuthError> =
+        coroutineBinding {
+            if (request.password.length < MIN_PASSWORD_LENGTH) {
+                Err(AuthError.WeakPassword).bind()
             }
-        } catch (e: Exception) {
-            // A concurrent registration with the same identity lost the race
-            // to the unique index — a client error, not a 500. Everything
-            // else keeps propagating; cancellation is never swallowed.
-            if (e is CancellationException) throw e
-            if (e.hasUniqueConstraintViolation()) Err(AuthError.UserAlreadyExists).bind() else throw e
+            // Fast path for the friendly error; the unique constraint stays the
+            // real guard against concurrent registrations (mapped below).
+            if (userRepository.checkExists(request.email, request.username)) {
+                Err(AuthError.UserAlreadyExists).bind()
+            }
+            // CPU-bound hashing stays outside the transaction so it never holds a
+            // pooled connection for the duration of the KDF.
+            val saltedHash = hashingService.generateSaltedHash(request.password)
+
+            // One unit of work: user, settings row and refresh session commit
+            // together or not at all. Repository dbQuery calls join this
+            // transaction, and failures must THROW (bind does) so Exposed rolls
+            // the partial account back instead of leaving a half-registered user.
+            val registered =
+                try {
+                    inTransaction {
+                        val user =
+                            userRepository.insertUser(
+                                username = request.username,
+                                email = request.email,
+                                passwordHash = saltedHash.hash,
+                                salt = saltedHash.salt,
+                                role = if (request.email.lowercase() in appConfig.adminEmails) UserRole.ADMIN else UserRole.MEMBER,
+                            ) ?: Err(AuthError.InsertionFailed).bind()
+                        userSettingRepository.initSettings(user.id)
+                            ?: Err(AuthError.InsertionFailed).bind()
+                        val (refreshToken, sessionId) =
+                            issueRefreshToken(user.id, deviceInfo)
+                                ?: Err(AuthError.InsertionFailed).bind()
+                        Triple(user, refreshToken, sessionId)
+                    }
+                } catch (e: Exception) {
+                    // A concurrent registration with the same identity lost the race
+                    // to the unique index — a client error, not a 500. Everything
+                    // else keeps propagating; cancellation is never swallowed.
+                    if (e is CancellationException) throw e
+                    if (e.hasUniqueConstraintViolation()) Err(AuthError.UserAlreadyExists).bind() else throw e
+                }
+
+            AuthResponse(
+                user = registered.first,
+                accessToken = issueAccessToken(registered.first.id, registered.third),
+                refreshToken = registered.second,
+            )
         }
 
-        AuthResponse(
-            user = registered.first,
-            accessToken = issueAccessToken(registered.first.id, registered.third),
-            refreshToken = registered.second,
-        )
-    }
-
-    suspend fun login(request: LoginRequest, deviceInfo: DeviceInfo = DeviceInfo()): Result<AuthResponse, AuthError> = coroutineBinding {
-        val authInfo = userRepository.findAuthInfoByEmail(request.email)
-            ?: Err(AuthError.InvalidCredentials).bind()
-        val isValidPassword = hashingService.verify(
-            request.password,
-            SaltedHash(
-                hash = authInfo.passwordHash,
-                salt = authInfo.salt,
-            ),
-        )
-        if (!isValidPassword) {
-            Err(AuthError.InvalidCredentials).bind()
+    suspend fun login(
+        request: LoginRequest,
+        deviceInfo: DeviceInfo = DeviceInfo(),
+    ): Result<AuthResponse, AuthError> =
+        coroutineBinding {
+            val authInfo =
+                userRepository.findAuthInfoByEmail(request.email)
+                    ?: Err(AuthError.InvalidCredentials).bind()
+            val isValidPassword =
+                hashingService.verify(
+                    request.password,
+                    SaltedHash(
+                        hash = authInfo.passwordHash,
+                        salt = authInfo.salt,
+                    ),
+                )
+            if (!isValidPassword) {
+                Err(AuthError.InvalidCredentials).bind()
+            }
+            // Ban is checked only after the password verifies, so the account
+            // state is never revealed to someone who only knows the email.
+            if (authInfo.domainUser.bannedAt != null) {
+                Err(AuthError.AccountBanned).bind()
+            }
+            val (refreshToken, sessionId) =
+                issueRefreshToken(authInfo.userId, deviceInfo)
+                    ?: Err(AuthError.InsertionFailed).bind()
+            AuthResponse(
+                user = authInfo.domainUser,
+                accessToken = issueAccessToken(authInfo.userId, sessionId),
+                refreshToken = refreshToken,
+            )
         }
-        // Ban is checked only after the password verifies, so the account
-        // state is never revealed to someone who only knows the email.
-        if (authInfo.domainUser.bannedAt != null) {
-            Err(AuthError.AccountBanned).bind()
-        }
-        val (refreshToken, sessionId) = issueRefreshToken(authInfo.userId, deviceInfo)
-            ?: Err(AuthError.InsertionFailed).bind()
-        AuthResponse(
-            user = authInfo.domainUser,
-            accessToken = issueAccessToken(authInfo.userId, sessionId),
-            refreshToken = refreshToken,
-        )
-    }
 
     /**
      * Exchanges a live refresh token for a fresh access JWT and a rotated
      * refresh token. The old session is revoked inside the same transaction,
      * so a replayed token stops working immediately.
      */
-    suspend fun refreshSession(refreshToken: String): Result<AuthResponse, AuthError> = coroutineBinding {
-        val tokenHash = sha256(refreshToken)
-        val session = authSessionRepository.findActiveSession(tokenHash)
-            ?: Err(AuthError.InvalidCredentials).bind()
-        val user = userRepository.getUserById(session.userId)
-            ?: Err(AuthError.InvalidCredentials).bind()
-        // A banned account must not mint new access tokens even if a refresh
-        // session survived (e.g. the ban-time revocation raced a rotation).
-        if (user.bannedAt != null) Err(AuthError.AccountBanned).bind()
+    suspend fun refreshSession(refreshToken: String): Result<AuthResponse, AuthError> =
+        coroutineBinding {
+            val tokenHash = sha256(refreshToken)
+            val session =
+                authSessionRepository.findActiveSession(tokenHash)
+                    ?: Err(AuthError.InvalidCredentials).bind()
+            val user =
+                userRepository.getUserById(session.userId)
+                    ?: Err(AuthError.InvalidCredentials).bind()
+            // A banned account must not mint new access tokens even if a refresh
+            // session survived (e.g. the ban-time revocation raced a rotation).
+            if (user.bannedAt != null) Err(AuthError.AccountBanned).bind()
 
-        val rotated = inTransaction {
-            val revoked = authSessionRepository.revokeSession(tokenHash)
-            val newRefreshToken = newOpaqueToken()
-            // Rotation keeps the same device identity: the new session row
-            // inherits the metadata of the one it replaces.
-            val newSessionId = authSessionRepository.createSession(
-                userId = session.userId,
-                tokenHash = sha256(newRefreshToken),
-                expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
-                deviceName = session.deviceName,
-                userAgent = session.userAgent,
-                ipAddress = session.ipAddress,
+            val rotated =
+                inTransaction {
+                    val revoked = authSessionRepository.revokeSession(tokenHash)
+                    val newRefreshToken = newOpaqueToken()
+                    // Rotation keeps the same device identity: the new session row
+                    // inherits the metadata of the one it replaces.
+                    val newSessionId =
+                        authSessionRepository.createSession(
+                            userId = session.userId,
+                            tokenHash = sha256(newRefreshToken),
+                            expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
+                            deviceName = session.deviceName,
+                            userAgent = session.userAgent,
+                            ipAddress = session.ipAddress,
+                        )
+                    if (!revoked || newSessionId == null) throw AppException(AuthError.InsertionFailed)
+                    newRefreshToken to newSessionId
+                }
+
+            AuthResponse(
+                user = user,
+                accessToken = issueAccessToken(session.userId, rotated.second),
+                refreshToken = rotated.first,
             )
-            if (!revoked || newSessionId == null) throw AppException(AuthError.InsertionFailed)
-            newRefreshToken to newSessionId
         }
 
-        AuthResponse(
-            user = user,
-            accessToken = issueAccessToken(session.userId, rotated.second),
-            refreshToken = rotated.first,
-        )
-    }
-
     /** Revokes the session behind [refreshToken]; idempotent. */
-    suspend fun logoutSession(refreshToken: String): Result<Unit, AuthError> = coroutineBinding {
-        authSessionRepository.revokeSession(sha256(refreshToken))
-    }
+    suspend fun logoutSession(refreshToken: String): Result<Unit, AuthError> =
+        coroutineBinding {
+            authSessionRepository.revokeSession(sha256(refreshToken))
+        }
 
     /**
      * Mints an opaque refresh token and persists only its hash. Returns the
      * raw token together with the new session id (needed for the access
      * token's session claim); null when the session row could not be stored.
      */
-    private suspend fun issueRefreshToken(userId: Uuid, deviceInfo: DeviceInfo): Pair<String, Uuid>? {
+    private suspend fun issueRefreshToken(
+        userId: Uuid,
+        deviceInfo: DeviceInfo,
+    ): Pair<String, Uuid>? {
         val raw = newOpaqueToken()
-        val sessionId = authSessionRepository.createSession(
-            userId = userId,
-            tokenHash = sha256(raw),
-            expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
-            deviceName = deviceInfo.deviceName,
-            userAgent = deviceInfo.userAgent,
-            ipAddress = deviceInfo.ipAddress,
-        ) ?: return null
+        val sessionId =
+            authSessionRepository.createSession(
+                userId = userId,
+                tokenHash = sha256(raw),
+                expiresAt = Clock.System.now() + REFRESH_TOKEN_TTL_DAYS.days,
+                deviceName = deviceInfo.deviceName,
+                userAgent = deviceInfo.userAgent,
+                ipAddress = deviceInfo.ipAddress,
+            ) ?: return null
         return raw to sessionId
     }
 
-    private fun issueAccessToken(userId: Uuid, sessionId: Uuid): String = tokenService.generateToken(
-        config = tokenConfig,
-        TokenClaim(name = Keys.USER_ID, value = userId.toString()),
-        TokenClaim(name = Keys.SESSION_ID, value = sessionId.toString()),
-    )
+    private fun issueAccessToken(
+        userId: Uuid,
+        sessionId: Uuid,
+    ): String =
+        tokenService.generateToken(
+            config = tokenConfig,
+            TokenClaim(name = Keys.USER_ID, value = userId.toString()),
+            TokenClaim(name = Keys.SESSION_ID, value = sessionId.toString()),
+        )
 
     private fun newOpaqueToken(): String =
-        ByteArray(REFRESH_TOKEN_BYTES).also { secureRandom.nextBytes(it) }
+        ByteArray(REFRESH_TOKEN_BYTES)
+            .also { secureRandom.nextBytes(it) }
             .joinToString("") { "%02x".format(it) }
 
     private fun sha256(value: String): String =
-        MessageDigest.getInstance("SHA-256")
+        MessageDigest
+            .getInstance("SHA-256")
             .digest(value.toByteArray())
             .joinToString("") { "%02x".format(it) }
 

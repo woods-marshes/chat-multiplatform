@@ -13,14 +13,14 @@ import com.github.woodsmarshes.chat.core.data.model.toUserEntity
 import com.github.woodsmarshes.chat.core.database.dao.MessageDao
 import com.github.woodsmarshes.chat.core.database.dao.ParticipantDao
 import com.github.woodsmarshes.chat.core.database.dao.UserDao
+import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
+import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
 import com.github.woodsmarshes.chat.core.network.api.rest.ConversationApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
-import kotlinx.coroutines.withContext
-import com.github.woodsmarshes.chat.core.database.di.DatabaseHolder
-import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
 @ExperimentalPagingApi
@@ -42,12 +42,12 @@ class MessageRemoteMediator(
         expectedGeneration: Long,
         actualGeneration: Long,
     ) : IllegalStateException(
-        "Timeline window generation changed for $conversationId during history load (expected=$expectedGeneration, actual=$actualGeneration)",
-    )
+            "Timeline window generation changed for $conversationId during history load (expected=$expectedGeneration, actual=$actualGeneration)",
+        )
 
     override suspend fun loadInSession(
         loadType: LoadType,
-        state: PagingState<Uuid, KeyedMessagesWithRelations>
+        state: PagingState<Uuid, KeyedMessagesWithRelations>,
     ): MediatorResult {
         if (loadType == LoadType.PREPEND) {
             log.debug(tag = "MessageRemoteMediator", message = "loadType is PREPEND")
@@ -61,123 +61,133 @@ class MessageRemoteMediator(
         // whose client requestId does not exist as a server cursor; when no
         // confirmed timeline row exists yet (e.g. only outbox rows are cached),
         // beforeId falls back to null to fetch the newest server page.
-        val (expectedGeneration, lastMsgId) = withContext(appDispatchers.io) {
-            var generation = 0L
-            var cursorId: Uuid? = null
-            messageDao.transaction {
-                generation = messageDao.getWindowGeneration(conversationId)
-                cursorId = when (loadType) {
-                    LoadType.REFRESH -> null
-                    LoadType.APPEND -> messageDao.getOldestConfirmedTimelineMessageId(conversationId)
-                    LoadType.PREPEND -> null
+        val (expectedGeneration, lastMsgId) =
+            withContext(appDispatchers.io) {
+                var generation = 0L
+                var cursorId: Uuid? = null
+                messageDao.transaction {
+                    generation = messageDao.getWindowGeneration(conversationId)
+                    cursorId =
+                        when (loadType) {
+                            LoadType.REFRESH -> null
+                            LoadType.APPEND -> messageDao.getOldestConfirmedTimelineMessageId(conversationId)
+                            LoadType.PREPEND -> null
+                        }
                 }
+                generation to cursorId
             }
-            generation to cursorId
-        }
         log.debug(
             tag = "MessageRemoteMediator",
             message = "loadType=$loadType expectedGeneration=$expectedGeneration lastMsgId=$lastMsgId",
         )
 
         val pageSize = state.config.pageSize
-        val response = conversationApi.getMessages(
-            conversationId = conversationId,
-            limit = pageSize,
-            beforeId = lastMsgId,
-        )
+        val response =
+            conversationApi.getMessages(
+                conversationId = conversationId,
+                limit = pageSize,
+                beforeId = lastMsgId,
+            )
         currentCoroutineContext().ensureActive()
 
-        val staleFailure: StaleWindowGenerationException? = if (response.isEmpty()) {
-            withContext(appDispatchers.io) {
-                var err: StaleWindowGenerationException? = null
-                messageDao.transaction {
-                    val currentGen = messageDao.getWindowGeneration(conversationId)
-                    if (currentGen != expectedGeneration) {
-                        err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+        val staleFailure: StaleWindowGenerationException? =
+            if (response.isEmpty()) {
+                withContext(appDispatchers.io) {
+                    var err: StaleWindowGenerationException? = null
+                    messageDao.transaction {
+                        val currentGen = messageDao.getWindowGeneration(conversationId)
+                        if (currentGen != expectedGeneration) {
+                            err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+                        }
                     }
+                    err
                 }
-                err
-            }
-        } else if (isGroup) {
-            // Reply targets must be persisted with THEIR OWN content, so map
-            // the referenced message directly (toReplyMessageEntity would
-            // walk to reply.replyTo and store the grandparent instead).
+            } else if (isGroup) {
+                // Reply targets must be persisted with THEIR OWN content, so map
+                // the referenced message directly (toReplyMessageEntity would
+                // walk to reply.replyTo and store the grandparent instead).
                 // They are seeded (INSERT OR IGNORE, in_timeline=false): they sit
                 // outside the local timeline window and must never become Paging
                 // anchors ahead of the window (see ScopeSyncCursor).
-            val replyEntities = response
-                .mapNotNull { it.replyTo }
-                // A reply target without a sender cannot be persisted; skip
-                // it instead of aborting the whole page.
-                .filter { it.sender != null }
-                .map { reply ->
-                    Triple(
-                        reply.toMessageEntity(inTimeline = false),
-                        reply.toUserEntity(),
-                        reply.toParticipantEntity(),
-                    )
-                }
+                val replyEntities =
+                    response
+                        .mapNotNull { it.replyTo }
+                        // A reply target without a sender cannot be persisted; skip
+                        // it instead of aborting the whole page.
+                        .filter { it.sender != null }
+                        .map { reply ->
+                            Triple(
+                                reply.toMessageEntity(inTimeline = false),
+                                reply.toUserEntity(),
+                                reply.toParticipantEntity(),
+                            )
+                        }
 
-            val mainEntities = response
-                .map { message ->
-                    Triple(
-                        message.toMessageEntity(),
-                        message.toUserEntity(),
-                        message.toParticipantEntity(),
-                    )
-                }
-            val userEntities = (replyEntities + mainEntities)
-                .mapNotNull { it.second }
-                .filter { it.id != ownUserId }
-                .distinct()
-            val participantEntities = (replyEntities + mainEntities)
-                .mapNotNull { it.third }
-                .distinct()
-            val replyMessageEntities = replyEntities.mapNotNull { it.first }
-            val mainMessageEntities = mainEntities.mapNotNull { it.first }
+                val mainEntities =
+                    response
+                        .map { message ->
+                            Triple(
+                                message.toMessageEntity(),
+                                message.toUserEntity(),
+                                message.toParticipantEntity(),
+                            )
+                        }
+                val userEntities =
+                    (replyEntities + mainEntities)
+                        .mapNotNull { it.second }
+                        .filter { it.id != ownUserId }
+                        .distinct()
+                val participantEntities =
+                    (replyEntities + mainEntities)
+                        .mapNotNull { it.third }
+                        .distinct()
+                val replyMessageEntities = replyEntities.mapNotNull { it.first }
+                val mainMessageEntities = mainEntities.mapNotNull { it.first }
 
-            withContext(appDispatchers.io) {
-                var err: StaleWindowGenerationException? = null
-                messageDao.transaction {
-                    val currentGen = messageDao.getWindowGeneration(conversationId)
-                    if (currentGen != expectedGeneration) {
-                        err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
-                        return@transaction
+                withContext(appDispatchers.io) {
+                    var err: StaleWindowGenerationException? = null
+                    messageDao.transaction {
+                        val currentGen = messageDao.getWindowGeneration(conversationId)
+                        if (currentGen != expectedGeneration) {
+                            err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+                            return@transaction
+                        }
+                        userDao.insertUsers(userEntities)
+                        participantDao.insertParticipants(participantEntities)
+                        messageDao.seedMessages(replyMessageEntities)
+                        messageDao.insertMessages(mainMessageEntities)
                     }
-                    userDao.insertUsers(userEntities)
-                    participantDao.insertParticipants(participantEntities)
-                    messageDao.seedMessages(replyMessageEntities)
-                    messageDao.insertMessages(mainMessageEntities)
+                    err
                 }
-                err
-            }
-        } else {
-            // Private chats need sender users cached too, or the sender join
-            // in keyedMessagesWithRelations returns null names.
-            val replyEntities = response
-                .mapNotNull { it.replyTo }
-                .filter { it.sender != null }
-                .map { reply -> reply.toMessageEntity(inTimeline = false) }
-            val userEntities = (response.mapNotNull { it.replyTo } + response)
-                .mapNotNull { it.toUserEntity() }
-                .filter { it.id != ownUserId }
-                .distinct()
-            val mainEntities = response.map { it.toMessageEntity() }
-            withContext(appDispatchers.io) {
-                var err: StaleWindowGenerationException? = null
-                messageDao.transaction {
-                    val currentGen = messageDao.getWindowGeneration(conversationId)
-                    if (currentGen != expectedGeneration) {
-                        err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
-                        return@transaction
+            } else {
+                // Private chats need sender users cached too, or the sender join
+                // in keyedMessagesWithRelations returns null names.
+                val replyEntities =
+                    response
+                        .mapNotNull { it.replyTo }
+                        .filter { it.sender != null }
+                        .map { reply -> reply.toMessageEntity(inTimeline = false) }
+                val userEntities =
+                    (response.mapNotNull { it.replyTo } + response)
+                        .mapNotNull { it.toUserEntity() }
+                        .filter { it.id != ownUserId }
+                        .distinct()
+                val mainEntities = response.map { it.toMessageEntity() }
+                withContext(appDispatchers.io) {
+                    var err: StaleWindowGenerationException? = null
+                    messageDao.transaction {
+                        val currentGen = messageDao.getWindowGeneration(conversationId)
+                        if (currentGen != expectedGeneration) {
+                            err = StaleWindowGenerationException(conversationId, expectedGeneration, currentGen)
+                            return@transaction
+                        }
+                        userDao.insertUsers(userEntities)
+                        messageDao.seedMessages(replyEntities.filterNotNull())
+                        messageDao.insertMessages(mainEntities.filterNotNull())
                     }
-                    userDao.insertUsers(userEntities)
-                    messageDao.seedMessages(replyEntities.filterNotNull())
-                    messageDao.insertMessages(mainEntities.filterNotNull())
+                    err
                 }
-                err
             }
-        }
 
         if (staleFailure != null) {
             onLoadFailure(staleFailure)

@@ -2,9 +2,9 @@ package com.github.woodsmarshes.chat.base.jwt
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.auth0.jwt.exceptions.TokenExpiredException
 import com.auth0.jwt.exceptions.JWTVerificationException
 import com.auth0.jwt.exceptions.SignatureVerificationException
+import com.auth0.jwt.exceptions.TokenExpiredException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -12,26 +12,28 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TokenServiceTest {
-
     private val service: TokenService = TokenServiceImpl()
 
-    private val config = TokenConfig(
-        issuer = "test-issuer",
-        audience = "test-audience",
-        realm = "test-realm",
-        expiresIn = 60_000L,
-        secret = "test-secret"
-    )
+    private val config =
+        TokenConfig(
+            issuer = "test-issuer",
+            audience = "test-audience",
+            realm = "test-realm",
+            expiresIn = 60_000L,
+            secret = "test-secret",
+        )
 
     @Test
     fun `generated token carries issuer, audience and custom claims`() {
         val token = service.generateToken(config, TokenClaim("userId", "user-123"))
 
-        val decoded = JWT.require(Algorithm.HMAC256(config.secret))
-            .withIssuer(config.issuer)
-            .withAudience(config.audience)
-            .build()
-            .verify(token)
+        val decoded =
+            JWT
+                .require(Algorithm.HMAC256(config.secret))
+                .withIssuer(config.issuer)
+                .withAudience(config.audience)
+                .build()
+                .verify(token)
 
         assertEquals("test-issuer", decoded.issuer)
         assertEquals(listOf("test-audience"), decoded.audience)
@@ -40,16 +42,19 @@ class TokenServiceTest {
 
     @Test
     fun `multiple claims are all present in the token`() {
-        val token = service.generateToken(
-            config,
-            TokenClaim("userId", "u1"),
-            TokenClaim("role", "admin")
-        )
+        val token =
+            service.generateToken(
+                config,
+                TokenClaim("userId", "u1"),
+                TokenClaim("role", "admin"),
+            )
 
-        val decoded = JWT.require(Algorithm.HMAC256(config.secret))
-            .withIssuer(config.issuer)
-            .build()
-            .verify(token)
+        val decoded =
+            JWT
+                .require(Algorithm.HMAC256(config.secret))
+                .withIssuer(config.issuer)
+                .build()
+                .verify(token)
 
         assertEquals("u1", decoded.getClaim("userId").asString())
         assertEquals("admin", decoded.getClaim("role").asString())
@@ -59,11 +64,13 @@ class TokenServiceTest {
     fun `token with no claims still verifies`() {
         val token = service.generateToken(config)
 
-        val decoded = JWT.require(Algorithm.HMAC256(config.secret))
-            .withIssuer(config.issuer)
-            .withAudience(config.audience)
-            .build()
-            .verify(token)
+        val decoded =
+            JWT
+                .require(Algorithm.HMAC256(config.secret))
+                .withIssuer(config.issuer)
+                .withAudience(config.audience)
+                .build()
+                .verify(token)
 
         assertEquals("test-issuer", decoded.issuer)
         assertNull(decoded.getClaim("userId").asLong())
@@ -86,7 +93,8 @@ class TokenServiceTest {
         val token = service.generateToken(config)
 
         assertFailsWith<SignatureVerificationException> {
-            JWT.require(Algorithm.HMAC256("different-secret"))
+            JWT
+                .require(Algorithm.HMAC256("different-secret"))
                 .withIssuer(config.issuer)
                 .build()
                 .verify(token)
@@ -98,7 +106,8 @@ class TokenServiceTest {
         val token = service.generateToken(config)
 
         assertFailsWith<JWTVerificationException> {
-            JWT.require(Algorithm.HMAC256(config.secret))
+            JWT
+                .require(Algorithm.HMAC256(config.secret))
                 .withIssuer("other-issuer")
                 .build()
                 .verify(token)
@@ -111,7 +120,8 @@ class TokenServiceTest {
         val token = service.generateToken(expiredConfig, TokenClaim("userId", "u1"))
 
         assertFailsWith<TokenExpiredException> {
-            JWT.require(Algorithm.HMAC256(config.secret))
+            JWT
+                .require(Algorithm.HMAC256(config.secret))
                 .withIssuer(config.issuer)
                 .acceptExpiresAt(0)
                 .build()

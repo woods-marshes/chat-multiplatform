@@ -5,5 +5,5 @@ import kotlinx.serialization.protobuf.ProtoNumber
 
 @Serializable
 data class JoinGroupRequest(
-    @ProtoNumber(1) val message: String? = null
+    @ProtoNumber(1) val message: String? = null,
 )

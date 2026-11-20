@@ -34,13 +34,17 @@ import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
  */
 object AppTransitions {
     /** Tab-level destinations switch without hierarchy motion. */
-    private fun isTopLevelSwitch(initial: Any?, target: Any?): Boolean {
-        val topLevel = setOf(
-            ArticleListNavKey::class,
-            ConversationsNavKey::class,
-            ContactsNavKey::class,
-            SettingsNavKey::class,
-        )
+    private fun isTopLevelSwitch(
+        initial: Any?,
+        target: Any?,
+    ): Boolean {
+        val topLevel =
+            setOf(
+                ArticleListNavKey::class,
+                ConversationsNavKey::class,
+                ContactsNavKey::class,
+                SettingsNavKey::class,
+            )
         return initial != null && target != null &&
             initial::class in topLevel && target::class in topLevel
     }
@@ -48,32 +52,55 @@ object AppTransitions {
     private fun isChatKey(key: Any?): Boolean = key is ChatNavKey
 
     /** Push: incoming detail slides over with a subtle parallax from the right. */
-    fun transitionSpec(initial: Any?, target: Any?): ContentTransform = when {
-        isTopLevelSwitch(initial, target) ->
-            fadeIn(tween(AppMotion.PageMillis)) togetherWith fadeOut(tween(AppMotion.PageMillis))
-        else -> (slideInHorizontally(tween(AppMotion.PageMillis)) { it / 4 } +
-            fadeIn(tween(AppMotion.PageMillis))) togetherWith
-            fadeOut(tween(AppMotion.FeedbackMillis))
-    }
+    fun transitionSpec(
+        initial: Any?,
+        target: Any?,
+    ): ContentTransform =
+        when {
+            isTopLevelSwitch(initial, target) -> {
+                fadeIn(tween(AppMotion.PageMillis)) togetherWith fadeOut(tween(AppMotion.PageMillis))
+            }
+
+            else -> {
+                (
+                    slideInHorizontally(tween(AppMotion.PageMillis)) { it / 4 } +
+                        fadeIn(tween(AppMotion.PageMillis))
+                ) togetherWith
+                    fadeOut(tween(AppMotion.FeedbackMillis))
+            }
+        }
 
     /**
      * Pop: incoming (lower) screen is fully opaque immediately — no fade-in —
      * while the outgoing one fades out on top. The incoming screen only ever
      * slides if the popped screen was a chat (list parallax).
      */
-    fun popTransitionSpec(initial: Any?, target: Any?): ContentTransform = when {
-        isTopLevelSwitch(initial, target) ->
-            fadeIn(tween(AppMotion.PageMillis)) togetherWith fadeOut(tween(AppMotion.PageMillis))
-        isChatKey(initial) -> (slideInHorizontally(tween(AppMotion.PageMillis)) { -it / 4 }) togetherWith
-            fadeOut(tween(AppMotion.FeedbackMillis))
-        else -> EnterTransition.None togetherWith fadeOut(tween(AppMotion.FeedbackMillis))
-    }
+    fun popTransitionSpec(
+        initial: Any?,
+        target: Any?,
+    ): ContentTransform =
+        when {
+            isTopLevelSwitch(initial, target) -> {
+                fadeIn(tween(AppMotion.PageMillis)) togetherWith fadeOut(tween(AppMotion.PageMillis))
+            }
+
+            isChatKey(initial) -> {
+                (slideInHorizontally(tween(AppMotion.PageMillis)) { -it / 4 }) togetherWith
+                    fadeOut(tween(AppMotion.FeedbackMillis))
+            }
+
+            else -> {
+                EnterTransition.None togetherWith fadeOut(tween(AppMotion.FeedbackMillis))
+            }
+        }
 
     /**
      * Predictive back: the gesture already seeks the pop animation; a fast
      * spec would be visible only as a flash on commit. Keep the parallax
      * directions from [popTransitionSpec] but let the commit be near-instant.
      */
-    fun predictivePopTransitionSpec(initial: Any?, target: Any?): ContentTransform =
-        popTransitionSpec(initial, target)
+    fun predictivePopTransitionSpec(
+        initial: Any?,
+        target: Any?,
+    ): ContentTransform = popTransitionSpec(initial, target)
 }

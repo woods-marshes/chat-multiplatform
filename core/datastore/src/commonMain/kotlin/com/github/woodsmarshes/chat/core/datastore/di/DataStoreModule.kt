@@ -21,15 +21,16 @@ import org.koin.dsl.module
 
 internal const val DATA_STORE_FILE_NAME = "chat-multiplatform.preferences_pb"
 
-val dataStoreModule = module {
-    single<DataStore<Preferences>> {
-        createDataStore(get<PlatformContext>())
+val dataStoreModule =
+    module {
+        single<DataStore<Preferences>> {
+            createDataStore(get<PlatformContext>())
+        }
+        singleOf(::UserSettingDataSource)
+        singleOf(::AuthTokenDataSource)
+        singleOf(::ServerConfigDataSource)
+        single<ServerConfigStore> { get<ServerConfigDataSource>() }
     }
-    singleOf(::UserSettingDataSource)
-    singleOf(::AuthTokenDataSource)
-    singleOf(::ServerConfigDataSource)
-    single<ServerConfigStore> { get<ServerConfigDataSource>() }
-}
 
 data class PreferenceDataSources(
     val authTokenDataSource: AuthTokenDataSource,
@@ -42,11 +43,12 @@ fun createPreferenceDataSources(
     scope: CoroutineScope,
     json: Json,
 ): PreferenceDataSources {
-    val dataStore = PreferenceDataStoreFactory.createWithPath(
-        scope = scope,
-        corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
-        produceFile = { filePath.toPath() },
-    )
+    val dataStore =
+        PreferenceDataStoreFactory.createWithPath(
+            scope = scope,
+            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+            produceFile = { filePath.toPath() },
+        )
     val userSettingDataSource = UserSettingDataSource(dataStore, json)
     val authTokenDataSource = AuthTokenDataSource(dataStore, userSettingDataSource)
     val serverConfigDataSource = ServerConfigDataSource(dataStore)

@@ -1,36 +1,38 @@
 package com.github.woodsmarshes.chat.utils
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ExcerptUtilsTest {
-
-    private fun docOf(vararg paragraphs: String) = buildJsonObject {
-        put("type", "doc")
-        putJsonArray("content") {
-            paragraphs.forEach { text ->
-                add(
-                    buildJsonObject {
-                        put("type", "paragraph")
-                        putJsonArray("content") {
-                            add(buildJsonObject {
-                                put("type", "text")
-                                put("text", text)
-                            })
-                        }
-                    }
-                )
+    private fun docOf(vararg paragraphs: String) =
+        buildJsonObject {
+            put("type", "doc")
+            putJsonArray("content") {
+                paragraphs.forEach { text ->
+                    add(
+                        buildJsonObject {
+                            put("type", "paragraph")
+                            putJsonArray("content") {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "text")
+                                        put("text", text)
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }
             }
         }
-    }
 
     // ── JsonElement overload ────────────────────────────────────────────
 
@@ -48,44 +50,56 @@ class ExcerptUtilsTest {
 
     @Test
     fun `whitespace runs collapse to a single space`() {
-        val doc = buildJsonObject {
-            put("type", "doc")
-            putJsonArray("content") {
-                add(buildJsonObject {
-                    put("type", "paragraph")
-                    putJsonArray("content") {
-                        add(buildJsonObject {
-                            put("type", "text")
-                            put("text", "  Hello\t\tWorld \n\n! ")
-                        })
-                    }
-                })
+        val doc =
+            buildJsonObject {
+                put("type", "doc")
+                putJsonArray("content") {
+                    add(
+                        buildJsonObject {
+                            put("type", "paragraph")
+                            putJsonArray("content") {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "text")
+                                        put("text", "  Hello\t\tWorld \n\n! ")
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }
             }
-        }
 
         assertEquals("Hello World !", ExcerptUtils.generateFromTipTap(doc))
     }
 
     @Test
     fun `non-text structures are ignored`() {
-        val doc = buildJsonObject {
-            put("type", "doc")
-            putJsonArray("content") {
-                add(buildJsonObject {
-                    put("type", "image")
-                    put("src", "pic.png")
-                })
-                add(buildJsonObject {
-                    put("type", "paragraph")
-                    putJsonArray("content") {
-                        add(buildJsonObject {
-                            put("type", "text")
-                            put("text", "after image")
-                        })
-                    }
-                })
+        val doc =
+            buildJsonObject {
+                put("type", "doc")
+                putJsonArray("content") {
+                    add(
+                        buildJsonObject {
+                            put("type", "image")
+                            put("src", "pic.png")
+                        },
+                    )
+                    add(
+                        buildJsonObject {
+                            put("type", "paragraph")
+                            putJsonArray("content") {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "text")
+                                        put("text", "after image")
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }
             }
-        }
 
         assertEquals("after image", ExcerptUtils.generateFromTipTap(doc))
     }
@@ -115,30 +129,36 @@ class ExcerptUtilsTest {
 
     @Test
     fun `empty document yields null`() {
-        val doc = buildJsonObject {
-            put("type", "doc")
-            putJsonArray("content") {}
-        }
+        val doc =
+            buildJsonObject {
+                put("type", "doc")
+                putJsonArray("content") {}
+            }
 
         assertNull(ExcerptUtils.generateFromTipTap(doc))
     }
 
     @Test
     fun `blank text document yields null`() {
-        val doc = buildJsonObject {
-            put("type", "doc")
-            putJsonArray("content") {
-                add(buildJsonObject {
-                    put("type", "paragraph")
-                    putJsonArray("content") {
-                        add(buildJsonObject {
-                            put("type", "text")
-                            put("text", "   ")
-                        })
-                    }
-                })
+        val doc =
+            buildJsonObject {
+                put("type", "doc")
+                putJsonArray("content") {
+                    add(
+                        buildJsonObject {
+                            put("type", "paragraph")
+                            putJsonArray("content") {
+                                add(
+                                    buildJsonObject {
+                                        put("type", "text")
+                                        put("text", "   ")
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }
             }
-        }
 
         assertNull(ExcerptUtils.generateFromTipTap(doc))
     }
@@ -148,9 +168,14 @@ class ExcerptUtilsTest {
     @Test
     fun `string overload parses JSON and extracts text`() {
         val doc = docOf("from string")
-        val excerpt = ExcerptUtils.generateFromTipTap(Json.encodeToString(
-            kotlinx.serialization.json.JsonElement.serializer(), doc
-        ))
+        val excerpt =
+            ExcerptUtils.generateFromTipTap(
+                Json.encodeToString(
+                    kotlinx.serialization.json.JsonElement
+                        .serializer(),
+                    doc,
+                ),
+            )
 
         assertEquals("from string", excerpt)
     }

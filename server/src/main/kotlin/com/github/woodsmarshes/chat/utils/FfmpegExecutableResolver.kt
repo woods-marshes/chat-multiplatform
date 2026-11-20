@@ -42,17 +42,17 @@ object FfmpegExecutableResolver {
             val file = File(configured)
             if (!file.exists()) {
                 throw IllegalStateException(
-                    "Configured $ENV_VAR_NAME does not exist: '$configured'"
+                    "Configured $ENV_VAR_NAME does not exist: '$configured'",
                 )
             }
             if (!file.isFile) {
                 throw IllegalStateException(
-                    "Configured $ENV_VAR_NAME is not a regular file: '$configured'"
+                    "Configured $ENV_VAR_NAME is not a regular file: '$configured'",
                 )
             }
             if (!file.canExecute()) {
                 throw IllegalStateException(
-                    "Configured $ENV_VAR_NAME is not executable: '$configured'"
+                    "Configured $ENV_VAR_NAME is not executable: '$configured'",
                 )
             }
             return file.absolutePath

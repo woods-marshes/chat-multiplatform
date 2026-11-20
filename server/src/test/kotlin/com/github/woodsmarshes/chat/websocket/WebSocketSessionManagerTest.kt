@@ -4,6 +4,11 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketExtension
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
+import java.util.concurrent.CountDownLatch
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,11 +16,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
-import java.util.concurrent.CountDownLatch
 
 /**
  * Minimal stand-in for [WebSocketServerSession]: the session index only uses
@@ -29,13 +29,15 @@ private class FakeSession : WebSocketServerSession {
     override val incoming: ReceiveChannel<Frame> = Channel()
     override val outgoing: SendChannel<Frame> = Channel()
     override val extensions: List<WebSocketExtension<*>> = emptyList()
+
     override suspend fun send(frame: Frame) {}
+
     override suspend fun flush() {}
+
     override fun terminate() {}
 }
 
 class WebSocketSessionManagerTest {
-
     private val manager = WebSocketSessionManager()
 
     private val userA = Uuid.random()
@@ -142,10 +144,17 @@ class WebSocketSessionManagerTest {
             manager.addUserSession(userA, oldSession)
 
             val start = CountDownLatch(1)
-            val threads = listOf(
-                Thread { start.await(); manager.removeUserSession(oldSession) },
-                Thread { start.await(); manager.addUserSession(userA, newSession) },
-            )
+            val threads =
+                listOf(
+                    Thread {
+                        start.await()
+                        manager.removeUserSession(oldSession)
+                    },
+                    Thread {
+                        start.await()
+                        manager.addUserSession(userA, newSession)
+                    },
+                )
             threads.forEach { it.start() }
             start.countDown()
             threads.forEach { it.join() }
@@ -165,18 +174,19 @@ class WebSocketSessionManagerTest {
         val threads = 8
         val rounds = 200
         val start = CountDownLatch(1)
-        val workers = (0 until threads).map { t ->
-            Thread {
-                start.await()
-                repeat(rounds) { r ->
-                    val user = users[(t + r) % users.size]
-                    val session = FakeSession()
-                    manager.addUserSession(user, session)
-                    check(manager.getUserIdBySession(session) == user) { "session lost its owner" }
-                    manager.removeUserSession(session)
+        val workers =
+            (0 until threads).map { t ->
+                Thread {
+                    start.await()
+                    repeat(rounds) { r ->
+                        val user = users[(t + r) % users.size]
+                        val session = FakeSession()
+                        manager.addUserSession(user, session)
+                        check(manager.getUserIdBySession(session) == user) { "session lost its owner" }
+                        manager.removeUserSession(session)
+                    }
                 }
             }
-        }
         workers.forEach { it.start() }
         start.countDown()
         workers.forEach { it.join() }

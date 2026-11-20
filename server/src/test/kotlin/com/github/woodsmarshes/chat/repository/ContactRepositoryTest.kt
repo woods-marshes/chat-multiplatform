@@ -25,7 +25,6 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class ContactRepositoryTest {
-
     private val database = connectToH2Database()
     private val repository = ContactSourceImpl()
     private val userA = Uuid.random()
@@ -44,48 +43,52 @@ class ContactRepositoryTest {
         }
     }
 
-    private fun seed() = runBlocking {
-        val now = Clock.System.now()
-        transaction(database) {
-            SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
-            listOf(userA, userB).forEach { id ->
-                Users.insert {
-                    it[this.id] = id
-                    it[username] = "user-$id"
-                    it[email] = "user-$id@test.local"
-                    it[passwordHash] = "hash"
-                    it[salt] = ""
-                    it[role] = UserRole.MEMBER
-                    it[createdAt] = now
-                    it[updatedAt] = now
+    private fun seed() =
+        runBlocking {
+            val now = Clock.System.now()
+            transaction(database) {
+                SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
+                listOf(userA, userB).forEach { id ->
+                    Users.insert {
+                        it[this.id] = id
+                        it[username] = "user-$id"
+                        it[email] = "user-$id@test.local"
+                        it[passwordHash] = "hash"
+                        it[salt] = ""
+                        it[role] = UserRole.MEMBER
+                        it[createdAt] = now
+                        it[updatedAt] = now
+                    }
                 }
             }
         }
-    }
 
     @Test
-    fun upsertContactDoesNotResetCreatedAtOnUpdate() = runBlocking {
-        seed()
+    fun upsertContactDoesNotResetCreatedAtOnUpdate() =
+        runBlocking {
+            seed()
 
-        assertTrue(repository.upsertContact(userA, userB, status = ContactStatus.FRIEND))
+            assertTrue(repository.upsertContact(userA, userB, status = ContactStatus.FRIEND))
 
-        // Pin created_at to a fixed past value so a reset cannot pass by
-        // coincidence of two timestamps landing in the same instant.
-        transaction(database) {
-            Contacts.update({ (Contacts.userId eq userA) and (Contacts.contactId eq userB) }) {
-                it[createdAt] = fixedCreatedAt
+            // Pin created_at to a fixed past value so a reset cannot pass by
+            // coincidence of two timestamps landing in the same instant.
+            transaction(database) {
+                Contacts.update({ (Contacts.userId eq userA) and (Contacts.contactId eq userB) }) {
+                    it[createdAt] = fixedCreatedAt
+                }
+            }
+
+            assertTrue(repository.upsertContact(userA, userB, nickname = "updated", status = ContactStatus.FRIEND))
+
+            transaction(database) {
+                val row =
+                    Contacts
+                        .selectAll()
+                        .where { (Contacts.userId eq userA) and (Contacts.contactId eq userB) }
+                        .single()
+                assertEquals(fixedCreatedAt, row[Contacts.createdAt])
+                assertEquals("updated", row[Contacts.nickname])
+                assertEquals(ContactStatus.FRIEND, row[Contacts.status])
             }
         }
-
-        assertTrue(repository.upsertContact(userA, userB, nickname = "updated", status = ContactStatus.FRIEND))
-
-        transaction(database) {
-            val row = Contacts.selectAll()
-                .where { (Contacts.userId eq userA) and (Contacts.contactId eq userB) }
-                .single()
-            assertEquals(fixedCreatedAt, row[Contacts.createdAt])
-            assertEquals("updated", row[Contacts.nickname])
-            assertEquals(ContactStatus.FRIEND, row[Contacts.status])
-        }
-    }
 }

@@ -15,7 +15,10 @@ object JsonElementSerializer : KSerializer<JsonElement> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("JsonElement", PrimitiveKind.STRING)
 
-    override fun serialize(encoder: Encoder, value: JsonElement) {
+    override fun serialize(
+        encoder: Encoder,
+        value: JsonElement,
+    ) {
         if (encoder is JsonEncoder) {
             encoder.encodeJsonElement(value)
         } else {
@@ -23,11 +26,10 @@ object JsonElementSerializer : KSerializer<JsonElement> {
         }
     }
 
-    override fun deserialize(decoder: Decoder): JsonElement {
-        return if (decoder is JsonDecoder) {
+    override fun deserialize(decoder: Decoder): JsonElement =
+        if (decoder is JsonDecoder) {
             decoder.decodeJsonElement()
         } else {
             Json.parseToJsonElement(decoder.decodeString())
         }
-    }
 }

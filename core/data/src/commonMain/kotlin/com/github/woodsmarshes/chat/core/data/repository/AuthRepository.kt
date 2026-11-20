@@ -18,9 +18,16 @@ interface AuthRepository {
      */
     fun observeAuthSession(): Flow<AuthSessionSnapshot>? = null
 
-    suspend fun login(email: String, password: String): Result<User, AuthError>
+    suspend fun login(
+        email: String,
+        password: String,
+    ): Result<User, AuthError>
 
-    suspend fun register(username: String, email: String, password: String): Result<User, AuthError>
+    suspend fun register(
+        username: String,
+        email: String,
+        password: String,
+    ): Result<User, AuthError>
 
     suspend fun logout()
 

@@ -3,6 +3,8 @@ package com.github.woodsmarshes.chat.core.data.repository
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
+import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.data.model.toContact
 import com.github.woodsmarshes.chat.core.data.model.toContactRequest
 import com.github.woodsmarshes.chat.core.data.model.toEntity
@@ -20,8 +22,6 @@ import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ContactError
 import com.github.woodsmarshes.chat.core.network.api.rest.ContactApi
 import com.github.woodsmarshes.chat.core.network.api.websocket.RealtimeApi
-import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
-import com.github.woodsmarshes.chat.core.contract.dto.events.ContactEventResponse
 import com.github.woodsmarshes.chat.core.network.ktor.bindApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.woodsmarshes.chat.db.ChatDatabase
@@ -39,8 +39,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlin.coroutines.ContinuationInterceptor
 import kotlin.concurrent.Volatile
+import kotlin.coroutines.ContinuationInterceptor
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -53,7 +53,6 @@ class ContactRepositoryImpl(
     private val realtimeApi: RealtimeApi? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : ContactRepository {
-
     private val log = KotlinLogging.logger {}
 
     /**
@@ -62,12 +61,18 @@ class ContactRepositoryImpl(
      * backpressured by a slow refresh (the shared event flow uses suspending
      * emit with a bounded buffer that both collectors share).
      */
-    private val requestSyncSignal = MutableSharedFlow<Unit>(
-        replay = 0, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-    private val friendsSyncSignal = MutableSharedFlow<Unit>(
-        replay = 0, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
+    private val requestSyncSignal =
+        MutableSharedFlow<Unit>(
+            replay = 0,
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+    private val friendsSyncSignal =
+        MutableSharedFlow<Unit>(
+            replay = 0,
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
 
     private var realtimeJob: Job? = null
 
@@ -81,40 +86,44 @@ class ContactRepositoryImpl(
         val contactRequestDao: ContactRequestDao,
     )
 
-    private val sessionRunner = RepositorySessionRunner(
-        dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default,
-        ownerName = "ContactRepository",
-        captureState = {
-            val pinnedContactDao = contactDao.bindToCurrentDatabase()
-            val pinnedUserDao = userDao.bindToCurrentDatabase()
-            val pinnedContactRequestDao = contactRequestDao.bindToCurrentDatabase()
-            val contactDb = checkNotNull(pinnedContactDao.boundDatabase) {
-                "ContactDao.bindToCurrentDatabase() must return a DAO bound to a non-null ChatDatabase instance"
-            }
-            val userDb = checkNotNull(pinnedUserDao.boundDatabase) {
-                "UserDao.bindToCurrentDatabase() must return a DAO bound to a non-null ChatDatabase instance"
-            }
-            val requestDb = checkNotNull(pinnedContactRequestDao.boundDatabase) {
-                "ContactRequestDao.bindToCurrentDatabase() must return a DAO bound to a non-null ChatDatabase instance"
-            }
-            check(contactDb === userDb && contactDb === requestDb) {
-                "ContactDao, UserDao and ContactRequestDao must resolve to the same session database instance"
-            }
-            BoundContactResources(
-                database = contactDb,
-                contactDao = pinnedContactDao,
-                userDao = pinnedUserDao,
-                contactRequestDao = pinnedContactRequestDao,
-            )
-        },
-        isSameState = { existing, candidate ->
-            existing.database === candidate.database &&
-                existing.contactDao.boundDatabase === candidate.contactDao.boundDatabase &&
-                existing.userDao.boundDatabase === candidate.userDao.boundDatabase &&
-                existing.contactRequestDao.boundDatabase === candidate.contactRequestDao.boundDatabase
-        },
-        databaseOf = { it.database },
-    )
+    private val sessionRunner =
+        RepositorySessionRunner(
+            dispatcher = scope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.Default,
+            ownerName = "ContactRepository",
+            captureState = {
+                val pinnedContactDao = contactDao.bindToCurrentDatabase()
+                val pinnedUserDao = userDao.bindToCurrentDatabase()
+                val pinnedContactRequestDao = contactRequestDao.bindToCurrentDatabase()
+                val contactDb =
+                    checkNotNull(pinnedContactDao.boundDatabase) {
+                        "ContactDao.bindToCurrentDatabase() must return a DAO bound to a non-null ChatDatabase instance"
+                    }
+                val userDb =
+                    checkNotNull(pinnedUserDao.boundDatabase) {
+                        "UserDao.bindToCurrentDatabase() must return a DAO bound to a non-null ChatDatabase instance"
+                    }
+                val requestDb =
+                    checkNotNull(pinnedContactRequestDao.boundDatabase) {
+                        "ContactRequestDao.bindToCurrentDatabase() must return a DAO bound to a non-null ChatDatabase instance"
+                    }
+                check(contactDb === userDb && contactDb === requestDb) {
+                    "ContactDao, UserDao and ContactRequestDao must resolve to the same session database instance"
+                }
+                BoundContactResources(
+                    database = contactDb,
+                    contactDao = pinnedContactDao,
+                    userDao = pinnedUserDao,
+                    contactRequestDao = pinnedContactRequestDao,
+                )
+            },
+            isSameState = { existing, candidate ->
+                existing.database === candidate.database &&
+                    existing.contactDao.boundDatabase === candidate.contactDao.boundDatabase &&
+                    existing.userDao.boundDatabase === candidate.userDao.boundDatabase &&
+                    existing.contactRequestDao.boundDatabase === candidate.contactRequestDao.boundDatabase
+            },
+            databaseOf = { it.database },
+        )
 
     override suspend fun startSession() {
         sessionRunner.startSession()
@@ -128,65 +137,79 @@ class ContactRepositoryImpl(
             // Refresh the request ledger on every session start so badges are
             // current even when no realtime event fires.
             requestSyncSignal.tryEmit(Unit)
-            realtimeJob = scope.launch {
-                launch {
-                    rt.events.collect { event ->
-                        val requestDao = pinnedRequestDao
-                        when (event) {
-                            is ContactEventResponse.FriendRequestSent -> {
-                                // Seed the ledger immediately; the verification
-                                // message (not in the event payload) arrives with
-                                // the follow-up sync. Seed semantics keep any
-                                // already-known message and never downgrade a
-                                // handled row on replay.
-                                runCatching {
-                                    requestDao?.seedContactRequest(
-                                        ContactRequestEntity(
-                                            id = event.requestId,
-                                            sender_id = event.senderId,
-                                            receiver_id = event.receiverId,
-                                            message = null,
-                                            status = RequestStatus.PENDING,
-                                            created_at = event.timestamp,
-                                            updated_at = event.timestamp,
+            realtimeJob =
+                scope.launch {
+                    launch {
+                        rt.events.collect { event ->
+                            val requestDao = pinnedRequestDao
+                            when (event) {
+                                is ContactEventResponse.FriendRequestSent -> {
+                                    // Seed the ledger immediately; the verification
+                                    // message (not in the event payload) arrives with
+                                    // the follow-up sync. Seed semantics keep any
+                                    // already-known message and never downgrade a
+                                    // handled row on replay.
+                                    runCatching {
+                                        requestDao?.seedContactRequest(
+                                            ContactRequestEntity(
+                                                id = event.requestId,
+                                                sender_id = event.senderId,
+                                                receiver_id = event.receiverId,
+                                                message = null,
+                                                status = RequestStatus.PENDING,
+                                                created_at = event.timestamp,
+                                                updated_at = event.timestamp,
+                                            ),
                                         )
-                                    )
-                                }.onFailure { log.warn(it) { "Failed to record FriendRequestSent ${event.requestId}" } }
-                                requestSyncSignal.tryEmit(Unit)
-                            }
-                            is ContactEventResponse.FriendRequestAccepted -> {
-                                runCatching {
-                                    requestDao?.updateContactRequestStatus(
-                                        event.requestId, RequestStatus.ACCEPTED, event.timestamp,
-                                    )
+                                    }.onFailure { log.warn(it) { "Failed to record FriendRequestSent ${event.requestId}" } }
+                                    requestSyncSignal.tryEmit(Unit)
                                 }
-                                friendsSyncSignal.tryEmit(Unit)
-                                requestSyncSignal.tryEmit(Unit)
-                            }
-                            is ContactEventResponse.FriendRequestRejected -> {
-                                runCatching {
-                                    requestDao?.updateContactRequestStatus(
-                                        event.requestId, RequestStatus.REJECTED, event.timestamp,
-                                    )
+
+                                is ContactEventResponse.FriendRequestAccepted -> {
+                                    runCatching {
+                                        requestDao?.updateContactRequestStatus(
+                                            event.requestId,
+                                            RequestStatus.ACCEPTED,
+                                            event.timestamp,
+                                        )
+                                    }
+                                    friendsSyncSignal.tryEmit(Unit)
+                                    requestSyncSignal.tryEmit(Unit)
                                 }
-                                requestSyncSignal.tryEmit(Unit)
+
+                                is ContactEventResponse.FriendRequestRejected -> {
+                                    runCatching {
+                                        requestDao?.updateContactRequestStatus(
+                                            event.requestId,
+                                            RequestStatus.REJECTED,
+                                            event.timestamp,
+                                        )
+                                    }
+                                    requestSyncSignal.tryEmit(Unit)
+                                }
+
+                                is ContactEventResponse.ContactAdded,
+                                is ContactEventResponse.ContactDeleted,
+                                is ContactEventResponse.UserBlocked,
+                                is ContactEventResponse.UserUnblocked,
+                                is ContactEventResponse.ContactUpdated,
+                                -> {
+                                    friendsSyncSignal.tryEmit(Unit)
+                                }
+
+                                else -> {
+                                    Unit
+                                }
                             }
-                            is ContactEventResponse.ContactAdded,
-                            is ContactEventResponse.ContactDeleted,
-                            is ContactEventResponse.UserBlocked,
-                            is ContactEventResponse.UserUnblocked,
-                            is ContactEventResponse.ContactUpdated -> friendsSyncSignal.tryEmit(Unit)
-                            else -> Unit
                         }
                     }
+                    launch {
+                        requestSyncSignal.collect { syncContactRequests() }
+                    }
+                    launch {
+                        friendsSyncSignal.collect { syncFriends() }
+                    }
                 }
-                launch {
-                    requestSyncSignal.collect { syncContactRequests() }
-                }
-                launch {
-                    friendsSyncSignal.collect { syncFriends() }
-                }
-            }
         }
     }
 
@@ -228,9 +251,10 @@ class ContactRepositoryImpl(
     override suspend fun syncFriends(): Result<Unit, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val contacts = bindApi(ContactError::Unknown) {
-                    contactApi.getContacts()
-                }
+                val contacts =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.getContacts()
+                    }
                 session.ensureCurrent()
                 resources.contactDao.transaction {
                     contacts.forEach { (contact, friend) ->
@@ -257,12 +281,16 @@ class ContactRepositoryImpl(
             Ok(rows.map { it.toFriend() })
         }
 
-    override suspend fun sendFriendRequest(targetId: Uuid, message: String?): Result<Boolean, ContactError> =
+    override suspend fun sendFriendRequest(
+        targetId: Uuid,
+        message: String?,
+    ): Result<Boolean, ContactError> =
         executeSessionOperation { session, _ ->
             coroutineBinding {
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.addContact(targetId, message)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.addContact(targetId, message)
+                    }
                 session.ensureCurrent()
                 // The response carries no request id; the ledger refreshes via
                 // the conflated sync and the FriendRequestSent event.
@@ -275,9 +303,10 @@ class ContactRepositoryImpl(
 
     override fun observeIncomingRequests(): Flow<List<ContactRequest>> {
         val ownFlow = userSettingDataSource?.user
-        val all = contactRequestDao.selectAllContactRequests().map { rows ->
-            rows.map { it.toContactRequest() }
-        }
+        val all =
+            contactRequestDao.selectAllContactRequests().map { rows ->
+                rows.map { it.toContactRequest() }
+            }
         return if (ownFlow != null) {
             combine(all, ownFlow) { requests, me ->
                 if (me == null) {
@@ -299,9 +328,10 @@ class ContactRepositoryImpl(
     override suspend fun syncContactRequests(): Result<List<ContactRequest>, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val requests = bindApi(ContactError::Unknown) {
-                    contactApi.getContactRequests()
-                }
+                val requests =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.getContactRequests()
+                    }
                 session.ensureCurrent()
                 persistContactRequests(resources.contactRequestDao, requests)
                 requests
@@ -325,14 +355,15 @@ class ContactRepositoryImpl(
     override suspend fun handleFriendRequest(
         requestId: Uuid,
         accept: Boolean,
-        remark: String?
+        remark: String?,
     ): Result<Boolean, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
                 val action = if (accept) ContactRequestAction.APPROVE else ContactRequestAction.REJECT
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.handleRequest(requestId, action, remark)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.handleRequest(requestId, action, remark)
+                    }
                 session.ensureCurrent()
                 if (result) {
                     resources.contactRequestDao.updateContactRequestStatus(
@@ -352,9 +383,10 @@ class ContactRepositoryImpl(
     override suspend fun cancelFriendRequest(requestId: Uuid): Result<Boolean, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.handleRequest(requestId, ContactRequestAction.CANCEL, null)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.handleRequest(requestId, ContactRequestAction.CANCEL, null)
+                    }
                 session.ensureCurrent()
                 if (result) {
                     resources.contactRequestDao.updateContactRequestStatus(
@@ -375,9 +407,10 @@ class ContactRepositoryImpl(
     ): Result<Boolean, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.updateContactInfo(userId, nickname, alias)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.updateContactInfo(userId, nickname, alias)
+                    }
                 session.ensureCurrent()
                 if (result) {
                     resources.contactDao.updateAlias(userId, alias, Clock.System.now())
@@ -389,20 +422,23 @@ class ContactRepositoryImpl(
     override suspend fun blockUser(userId: Uuid): Result<Boolean, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.blockUser(userId)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.blockUser(userId)
+                    }
                 session.ensureCurrent()
                 if (result) {
                     val now = Clock.System.now()
                     val existing = resources.contactDao.getContactById(userId).first()
                     when {
-                        existing != null ->
+                        existing != null -> {
                             resources.contactDao.updateStatus(userId, ContactStatus.BLOCKED, now)
+                        }
+
                         // ProfileScreen always runs fetchUserDetail first, so the
                         // UserEntity parent row is usually present and the mirror
                         // insert is foreign-key safe.
-                        resources.userDao.getUserById(userId).first() != null ->
+                        resources.userDao.getUserById(userId).first() != null -> {
                             resources.contactDao.insertContact(
                                 io.github.woodsmarshes.chat.db.ContactEntity(
                                     contact_id = userId,
@@ -411,12 +447,16 @@ class ContactRepositoryImpl(
                                     alias = null,
                                     created_at = now,
                                     updated_at = now,
-                                )
+                                ),
                             )
+                        }
+
                         // Truly unknown user: skip the mirror rather than violate
                         // the foreign key and mask the successful server-side
                         // block; the friends sync repairs the cache.
-                        else -> log.warn { "[contacts] blocked user $userId has no local row; cache repairs via sync" }
+                        else -> {
+                            log.warn { "[contacts] blocked user $userId has no local row; cache repairs via sync" }
+                        }
                     }
                     // Authoritative repair regardless of which mirror path ran.
                     friendsSyncSignal.tryEmit(Unit)
@@ -428,9 +468,10 @@ class ContactRepositoryImpl(
     override suspend fun unblockUser(userId: Uuid): Result<Boolean, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.unblockUser(userId)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.unblockUser(userId)
+                    }
                 session.ensureCurrent()
                 if (result) {
                     // Leave the blocked list immediately; the authoritative friend
@@ -446,9 +487,10 @@ class ContactRepositoryImpl(
     override suspend fun removeFriend(userId: Uuid): Result<Boolean, ContactError> =
         executeSessionOperation { session, resources ->
             coroutineBinding {
-                val result = bindApi(ContactError::Unknown) {
-                    contactApi.deleteContact(userId)
-                }
+                val result =
+                    bindApi(ContactError::Unknown) {
+                        contactApi.deleteContact(userId)
+                    }
                 session.ensureCurrent()
                 if (result) {
                     resources.contactDao.updateStatus(userId, ContactStatus.DELETED, Clock.System.now())
@@ -457,4 +499,3 @@ class ContactRepositoryImpl(
             }
         }
 }
-

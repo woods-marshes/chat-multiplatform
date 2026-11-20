@@ -31,9 +31,15 @@ object AdminRepository {
 
     suspend fun getUser(id: Uuid): AdminUserDetailResponse = koinInject<AdminApi>().getUser(id)
 
-    suspend fun setBanned(id: Uuid, banned: Boolean) = koinInject<AdminApi>().setBanned(id, banned)
+    suspend fun setBanned(
+        id: Uuid,
+        banned: Boolean,
+    ) = koinInject<AdminApi>().setBanned(id, banned)
 
-    suspend fun changeRole(id: Uuid, newRole: UserRole) = koinInject<AdminApi>().changeRole(id, newRole)
+    suspend fun changeRole(
+        id: Uuid,
+        newRole: UserRole,
+    ) = koinInject<AdminApi>().changeRole(id, newRole)
 
     suspend fun listUserSessions(id: Uuid): AuthSessionListResponse = koinInject<AdminApi>().listUserSessions(id)
 
@@ -61,8 +67,10 @@ object AdminRepository {
 
     suspend fun getStats(): AdminStatsResponse = koinInject<AdminApi>().getStats()
 
-    suspend fun listLogs(level: String?, limit: Int = 100): AdminLogListResponse =
-        koinInject<AdminApi>().listLogs(level, limit)
+    suspend fun listLogs(
+        level: String?,
+        limit: Int = 100,
+    ): AdminLogListResponse = koinInject<AdminApi>().listLogs(level, limit)
 
     suspend fun listAuditLogs(limit: Int = 100): AdminLogListResponse = koinInject<AdminApi>().listAuditLogs(limit)
 }

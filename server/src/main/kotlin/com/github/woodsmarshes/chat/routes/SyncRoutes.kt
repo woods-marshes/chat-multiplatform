@@ -23,30 +23,34 @@ fun Route.syncRoutes() {
                 SyncStateResponse.Heads(
                     entries = entries,
                     timestamp = Clock.System.now(),
-                )
+                ),
             )
         }
 
         get<V1.Sync.Changes> { params ->
             val userId = call.extractUserId()
-            val batch = syncService.getChanges(
-                callerUserId = userId,
-                scope = params.scope,
-                id = params.id,
-                afterRevision = params.afterRevision,
-                limit = params.limit,
-            ).getOrThrow()
+            val batch =
+                syncService
+                    .getChanges(
+                        callerUserId = userId,
+                        scope = params.scope,
+                        id = params.id,
+                        afterRevision = params.afterRevision,
+                        limit = params.limit,
+                    ).getOrThrow()
             call.respond(batch)
         }
 
         get<V1.Sync.Snapshot> { params ->
             val userId = call.extractUserId()
-            val snapshot = syncService.getSnapshot(
-                callerUserId = userId,
-                scope = params.scope,
-                id = params.id,
-                limit = params.limit,
-            ).getOrThrow()
+            val snapshot =
+                syncService
+                    .getSnapshot(
+                        callerUserId = userId,
+                        scope = params.scope,
+                        id = params.id,
+                        limit = params.limit,
+                    ).getOrThrow()
             call.respond(snapshot)
         }
     }

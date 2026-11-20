@@ -17,7 +17,6 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 
 class TemporaryUploadStoreTest {
-
     private val store = TemporaryUploadStoreImpl()
     private val tempFiles = mutableListOf<File>()
     private val tempDirs = mutableListOf<File>()
@@ -32,12 +31,15 @@ class TemporaryUploadStoreTest {
         }
     }
 
-    private fun newTempFile(): File =
-        File.createTempFile("upload-store-test", ".bin").also { tempFiles.add(it) }
+    private fun newTempFile(): File = File.createTempFile("upload-store-test", ".bin").also { tempFiles.add(it) }
 
-    private fun media(url: String) = FileContent(
-        url = url, fileName = "report.pdf", mimeType = "application/pdf", size = 1,
-    )
+    private fun media(url: String) =
+        FileContent(
+            url = url,
+            fileName = "report.pdf",
+            mimeType = "application/pdf",
+            size = 1,
+        )
 
     @Test
     fun confirmIsIdempotentSoForwardingKeepsWorking() {
@@ -114,13 +116,14 @@ class TemporaryUploadStoreTest {
     @Test
     fun publicPendingUploadWithoutOwnerRemainsClaimableWhileFileExists() {
         val file = newTempFile()
-        val content = ImageContent(
-            url = "/uploads/image/public-ownerless.png",
-            fileName = "public.png",
-            width = 1,
-            height = 1,
-            size = 1,
-        )
+        val content =
+            ImageContent(
+                url = "/uploads/image/public-ownerless.png",
+                fileName = "public.png",
+                width = 1,
+                height = 1,
+                size = 1,
+            )
         store.register(content, listOf(file.absolutePath), uploaderId = null)
 
         assertNotNull(store.retrieveAndConfirm(content.url, senderId = uploader))
@@ -152,15 +155,17 @@ class TemporaryUploadStoreTest {
 
     @Test
     fun cleanupRetainsEntryForRetryWhenFileDeletionFails() {
-        val nonEmptyDir = File.createTempFile("upload-dir-test", "").apply {
-            delete()
-            mkdirs()
-            tempDirs.add(this)
-        }
-        val childInsideDir = File(nonEmptyDir, "child.bin").apply {
-            writeBytes(byteArrayOf(1))
-            tempFiles.add(this)
-        }
+        val nonEmptyDir =
+            File.createTempFile("upload-dir-test", "").apply {
+                delete()
+                mkdirs()
+                tempDirs.add(this)
+            }
+        val childInsideDir =
+            File(nonEmptyDir, "child.bin").apply {
+                writeBytes(byteArrayOf(1))
+                tempFiles.add(this)
+            }
         // File.delete() on a non-empty directory returns false while exists() stays true.
         val url = "/v1/files/content/undeletable.pdf"
         store.register(media(url), listOf(nonEmptyDir.absolutePath), uploaderId = uploader)
@@ -186,14 +191,18 @@ class TemporaryUploadStoreTest {
                 Thread.sleep(2)
 
                 val startLatch = CountDownLatch(1)
-                val confirmFuture = pool.submit(Callable<MediaContent?> {
-                    startLatch.await()
-                    store.retrieveAndConfirm(url, senderId = uploader)
-                })
-                val cleanFuture = pool.submit {
-                    startLatch.await()
-                    store.cleanExpiredFiles(0)
-                }
+                val confirmFuture =
+                    pool.submit(
+                        Callable<MediaContent?> {
+                            startLatch.await()
+                            store.retrieveAndConfirm(url, senderId = uploader)
+                        },
+                    )
+                val cleanFuture =
+                    pool.submit {
+                        startLatch.await()
+                        store.cleanExpiredFiles(0)
+                    }
                 startLatch.countDown()
 
                 val confirmed = confirmFuture.get(5, TimeUnit.SECONDS)

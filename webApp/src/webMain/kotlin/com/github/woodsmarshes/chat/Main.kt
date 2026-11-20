@@ -12,9 +12,10 @@ import org.koin.dsl.module
 suspend fun main() {
     val platformContext = WebContext()
     initKoin(
-        platformModule = module {
-            single<PlatformContext> { platformContext }
-        }
+        platformModule =
+            module {
+                single<PlatformContext> { platformContext }
+            },
     )
     ComposeViewport {
         ChatApp()

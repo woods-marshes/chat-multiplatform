@@ -12,21 +12,22 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
-//actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> = createDataStore {
+// actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> = createDataStore {
 //    DATA_STORE_FILE_NAME
-//}
+// }
 
 val log = KotlinLogging.logger {}
-actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> {
-    return try {
-        createDataStore (
-            storage = WebLocalStorage(
-                serializer = PreferencesSerializer,
-                name = DATA_STORE_FILE_NAME
-            )
+
+actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> =
+    try {
+        createDataStore(
+            storage =
+                WebLocalStorage(
+                    serializer = PreferencesSerializer,
+                    name = DATA_STORE_FILE_NAME,
+                ),
         )
     } catch (e: Exception) {
         log.error("WebLocalStorage failed, using memory fallback", throwable = e)
         throw e
     }
-}

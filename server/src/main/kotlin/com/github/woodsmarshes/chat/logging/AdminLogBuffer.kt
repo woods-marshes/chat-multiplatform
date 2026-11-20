@@ -14,7 +14,9 @@ import kotlin.time.Instant
  * Entries are lost on restart — admin audit actions live in
  * `admin_audit_logs` instead, this buffer is only the WARN+ app tail.
  */
-class AdminLogBuffer(private val capacity: Int) {
+class AdminLogBuffer(
+    private val capacity: Int,
+) {
     data class Entry(
         val timestamp: Instant,
         val level: String,
@@ -27,7 +29,12 @@ class AdminLogBuffer(private val capacity: Int) {
     private val entries = ConcurrentLinkedDeque<Entry>()
     private val size = AtomicInteger(0)
 
-    fun add(level: String, logger: String, message: String, detail: String? = null) {
+    fun add(
+        level: String,
+        logger: String,
+        message: String,
+        detail: String? = null,
+    ) {
         entries.addLast(Entry(timestamp = Clock.System.now(), level = level, logger = logger, message = message, detail = detail))
         size.incrementAndGet()
         while (size.get() > capacity) {
@@ -36,7 +43,10 @@ class AdminLogBuffer(private val capacity: Int) {
     }
 
     /** Newest first; [level] filters by exact level name (e.g. "ERROR"). */
-    fun list(level: String?, limit: Int): List<Entry> {
+    fun list(
+        level: String?,
+        limit: Int,
+    ): List<Entry> {
         val max = limit.coerceIn(1, capacity)
         val result = ArrayList<Entry>(max)
         val iterator = entries.descendingIterator()

@@ -36,20 +36,20 @@ import kotlin.uuid.Uuid
  * instance); re-measure both dialects before adopting.
  */
 class SchemaDiffTest {
+    private fun freshH2(): Database = Database.connect("jdbc:h2:mem:spike-${Uuid.random()};DB_CLOSE_DELAY=-1", driver = "org.h2.Driver")
 
-    private fun freshH2(): Database =
-        Database.connect("jdbc:h2:mem:spike-${Uuid.random()};DB_CLOSE_DELAY=-1", driver = "org.h2.Driver")
+    private fun diff(db: Database): List<String> =
+        transaction(db) {
+            MigrationUtils.statementsRequiredForDatabaseMigration(
+                *ALL_SCHEMA_TABLES.toTypedArray(),
+                withLogs = false,
+            )
+        }
 
-    private fun diff(db: Database): List<String> = transaction(db) {
-        MigrationUtils.statementsRequiredForDatabaseMigration(
-            *ALL_SCHEMA_TABLES.toTypedArray(),
-            withLogs = false,
-        )
-    }
-
-    private fun createAll(db: Database) = transaction(db) {
-        SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
-    }
+    private fun createAll(db: Database) =
+        transaction(db) {
+            SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
+        }
 
     @Test
     fun `fresh h2 database gets create statements without drops`() {
@@ -58,7 +58,7 @@ class SchemaDiffTest {
         assertTrue(statements.isNotEmpty())
         assertTrue(
             statements.none { it.trimStart().startsWith("DROP", ignoreCase = true) },
-            "fresh-database diff should never drop anything:\n${statements.joinToString("\n")}"
+            "fresh-database diff should never drop anything:\n${statements.joinToString("\n")}",
         )
     }
 
@@ -68,20 +68,21 @@ class SchemaDiffTest {
         createAll(db)
         val statements = diff(db)
         val drops = statements.filter { it.trimStart().startsWith("DROP", ignoreCase = true) }
-        val reissuedConstraints = statements.filter {
-            it.contains("ADD CONSTRAINT", ignoreCase = true) && it.contains("UNIQUE", ignoreCase = true)
-        }
+        val reissuedConstraints =
+            statements.filter {
+                it.contains("ADD CONSTRAINT", ignoreCase = true) && it.contains("UNIQUE", ignoreCase = true)
+            }
         assertTrue(
             drops.isNotEmpty(),
             "Exposed 1.5.0 no longer wants to drop H2's auto-created FK indices on a synced " +
                 "database — its metadata readback was fixed; re-evaluate diff-based schema " +
-                "maintenance for configureSchema."
+                "maintenance for configureSchema.",
         )
         assertTrue(
             reissuedConstraints.isNotEmpty(),
             "Exposed 1.5.0 no longer re-issues existing named unique constraints on a synced " +
                 "database — its metadata readback was fixed; re-evaluate diff-based schema " +
-                "maintenance for configureSchema."
+                "maintenance for configureSchema.",
         )
     }
 
@@ -97,7 +98,11 @@ class SchemaDiffTest {
             exec("ALTER TABLE messages DROP COLUMN IF EXISTS client_request_id")
         }
         val statements = diff(db)
-        val adds = statements.filter { it.trimStart().startsWith("ALTER TABLE", ignoreCase = true) && it.contains(" ADD ", ignoreCase = true) }
+        val adds =
+            statements.filter {
+                it.trimStart().startsWith("ALTER TABLE", ignoreCase = true) &&
+                    it.contains(" ADD ", ignoreCase = true)
+            }
         assertTrue(adds.any { it.contains("MESSAGES") && it.contains("CLIENT_REQUEST_ID") })
     }
 
@@ -112,7 +117,7 @@ class SchemaDiffTest {
         assertTrue(
             statements.any { it.contains("DROP COLUMN", ignoreCase = true) && it.contains("LEGACY_NOTE", ignoreCase = true) },
             "Unmapped columns are no longer dropped by the default diff — the data-loss " +
-                "warning attached to boot-time auto-apply no longer applies; re-evaluate."
+                "warning attached to boot-time auto-apply no longer applies; re-evaluate.",
         )
     }
 }

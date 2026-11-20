@@ -1,7 +1,10 @@
 package com.github.woodsmarshes.chat.core.data.model
 
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupInfo
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.SimpleMessage
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.GroupSettings
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.Message
 import com.github.woodsmarshes.chat.core.model.MessageCategory
@@ -12,9 +15,6 @@ import com.github.woodsmarshes.chat.core.model.SimpleUser
 import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.GroupInfo
-import com.github.woodsmarshes.chat.core.model.GroupSettings
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.SimpleMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -29,29 +29,30 @@ import kotlin.uuid.Uuid
  * (missing sender, missing context, null replies) are load-bearing.
  */
 class ModelMapperTest {
-
     private val t0 = Instant.fromEpochSeconds(1_700_000_000)
 
-    private fun sender(name: String = "alice") = SimpleUser(
-        id = Uuid.parse("018f0000-0000-7000-8000-000000000001"),
-        username = name,
-        displayName = "Alice",
-        avatarUrl = "https://example.com/a.png",
-        createdAt = t0,
-        updatedAt = t0,
-        deletedAt = null,
-        role = UserRole.MEMBER,
-    )
+    private fun sender(name: String = "alice") =
+        SimpleUser(
+            id = Uuid.parse("018f0000-0000-7000-8000-000000000001"),
+            username = name,
+            displayName = "Alice",
+            avatarUrl = "https://example.com/a.png",
+            createdAt = t0,
+            updatedAt = t0,
+            deletedAt = null,
+            role = UserRole.MEMBER,
+        )
 
     private fun message(
         sender: SimpleUser? = sender(),
         content: com.github.woodsmarshes.chat.core.model.MessageContent = TextContent("hello"),
         replyTo: Message? = null,
-        senderContext: MessageSenderContext? = MessageSenderContext(
-            conversationRole = ConversationRole.MEMBER,
-            joinedAt = t0,
-            participantSettings = ParticipantSettings(nickname = "nick", bubbleColor = "#123456"),
-        ),
+        senderContext: MessageSenderContext? =
+            MessageSenderContext(
+                conversationRole = ConversationRole.MEMBER,
+                joinedAt = t0,
+                participantSettings = ParticipantSettings(nickname = "nick", bubbleColor = "#123456"),
+            ),
     ) = Message(
         id = Uuid.parse("018f0000-0000-7000-8000-000000000100"),
         conversationId = Uuid.parse("018f0000-0000-7000-8000-000000000200"),
@@ -109,15 +110,21 @@ class ModelMapperTest {
         assertEquals(
             com.github.woodsmarshes.chat.core.model.MessageRenderType.IMAGE,
             message(
-                content = ImageContent(
-                    url = "u", fileName = "f", width = 1, height = 1, size = 1L, mimeType = "image/png",
-                )
+                content =
+                    ImageContent(
+                        url = "u",
+                        fileName = "f",
+                        width = 1,
+                        height = 1,
+                        size = 1L,
+                        mimeType = "image/png",
+                    ),
             ).toMessageEntity()!!.render_type,
         )
         assertEquals(
             com.github.woodsmarshes.chat.core.model.MessageRenderType.AUDIO,
             message(
-                content = AudioContent(url = "u", fileName = "f", duration = 1L, size = 1L)
+                content = AudioContent(url = "u", fileName = "f", duration = 1L, size = 1L),
             ).toMessageEntity()!!.render_type,
         )
     }
@@ -185,11 +192,12 @@ class ModelMapperTest {
 
     @Test
     fun `participant entity falls back to default settings when context has none`() {
-        val contextlessSettings = MessageSenderContext(
-            conversationRole = ConversationRole.ADMIN,
-            joinedAt = t0,
-            participantSettings = null,
-        )
+        val contextlessSettings =
+            MessageSenderContext(
+                conversationRole = ConversationRole.ADMIN,
+                joinedAt = t0,
+                participantSettings = null,
+            )
 
         val entity = message(senderContext = contextlessSettings).toParticipantEntity()
 
@@ -240,51 +248,55 @@ class ModelMapperTest {
 
     private fun conversationResponse(
         sender: SimpleUser? = sender(),
-        lastMessage: SimpleMessage? = SimpleMessage(
-            id = Uuid.parse("018f0000-0000-7000-8000-000000000300"),
-            sender = sender,
-            category = MessageCategory.NORMAL,
-            createdAt = t0,
-            revokedAt = null,
-            content = TextContent("last message"),
-            senderContext = null,
-        ),
+        lastMessage: SimpleMessage? =
+            SimpleMessage(
+                id = Uuid.parse("018f0000-0000-7000-8000-000000000300"),
+                sender = sender,
+                category = MessageCategory.NORMAL,
+                createdAt = t0,
+                revokedAt = null,
+                content = TextContent("last message"),
+                senderContext = null,
+            ),
     ) = com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse(
         conversationId = Uuid.parse("018f0000-0000-7000-8000-000000000200"),
         type = com.github.woodsmarshes.chat.core.model.ConversationType.GROUP,
         lastMessage = lastMessage,
         metadata = null,
-        participant = com.github.woodsmarshes.chat.core.model.ConversationParticipant(
-            conversationId = Uuid.parse("018f0000-0000-7000-8000-000000000200"),
-            userId = sender().id,
-            role = ConversationRole.MEMBER,
-            lastReadMessageId = null,
-            joinedAt = t0,
-            mutedUntil = null,
-            settings = ParticipantSettings(),
-        ),
-        conversationInfo = GroupInfo(
-            name = "group",
-            handle = null,
-            description = null,
-            avatarUrl = null,
-            ownerId = sender().id,
-            settings = GroupSettings(),
-            createdAt = t0,
-            updatedAt = t0,
-            deletedAt = null,
-            userInfo = com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo(
-                id = sender().id,
-                username = "alice",
-                email = null,
-                displayName = "Alice",
+        participant =
+            com.github.woodsmarshes.chat.core.model.ConversationParticipant(
+                conversationId = Uuid.parse("018f0000-0000-7000-8000-000000000200"),
+                userId = sender().id,
+                role = ConversationRole.MEMBER,
+                lastReadMessageId = null,
+                joinedAt = t0,
+                mutedUntil = null,
+                settings = ParticipantSettings(),
+            ),
+        conversationInfo =
+            GroupInfo(
+                name = "group",
+                handle = null,
+                description = null,
                 avatarUrl = null,
-                bio = null,
+                ownerId = sender().id,
+                settings = GroupSettings(),
                 createdAt = t0,
                 updatedAt = t0,
-                role = UserRole.MEMBER,
                 deletedAt = null,
+                userInfo =
+                    com.github.woodsmarshes.chat.core.contract.dto.conversation.UserInfo(
+                        id = sender().id,
+                        username = "alice",
+                        email = null,
+                        displayName = "Alice",
+                        avatarUrl = null,
+                        bio = null,
+                        createdAt = t0,
+                        updatedAt = t0,
+                        role = UserRole.MEMBER,
+                        deletedAt = null,
+                    ),
             ),
-        ),
     )
 }

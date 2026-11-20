@@ -25,96 +25,108 @@ import react.useEffect
 import react.useState
 import web.cssom.ClassName
 
-private fun logLevelClass(level: String): String = when (level.uppercase()) {
-    "ERROR" -> "admin-badge admin-badge-banned"
-    "WARN" -> "admin-badge admin-badge-guest"
-    else -> "admin-badge admin-badge-normal"
-}
+private fun logLevelClass(level: String): String =
+    when (level.uppercase()) {
+        "ERROR" -> "admin-badge admin-badge-banned"
+        "WARN" -> "admin-badge admin-badge-guest"
+        else -> "admin-badge admin-badge-normal"
+    }
 
-val AdminLogsPage = FC<Props> {
-    AdminShell {
-        var level by useState("")
-        var reload by useState(0)
-        var result by useState<AdminLogListResponse?>(null)
-        var loading by useState(true)
-        var error by useState<String?>(null)
+val AdminLogsPage =
+    FC<Props> {
+        AdminShell {
+            var level by useState("")
+            var reload by useState(0)
+            var result by useState<AdminLogListResponse?>(null)
+            var loading by useState(true)
+            var error by useState<String?>(null)
 
-        useEffect(level, reload) {
-            loading = true
-            error = null
-            try {
-                result = AdminRepository.listLogs(level = level.ifBlank { null }, limit = 100)
-            } catch (e: Exception) {
-                error = describeAdminError(e)
-                result = null
-            } finally {
-                loading = false
+            useEffect(level, reload) {
+                loading = true
+                error = null
+                try {
+                    result = AdminRepository.listLogs(level = level.ifBlank { null }, limit = 100)
+                } catch (e: Exception) {
+                    error = describeAdminError(e)
+                    result = null
+                } finally {
+                    loading = false
+                }
             }
-        }
 
-        div {
-            className = ClassName("toolbar")
-            h2 { +"日志监控" }
-            div { className = ClassName("toolbar-spacer") }
-            select {
-                className = ClassName("admin-filter-select")
-                value = level
-                onChange = { event -> level = event.target.value.unsafeCast<String>() }
-                option { value = ""; +"全部级别" }
-                option { value = "WARN"; +"WARN" }
-                option { value = "ERROR"; +"ERROR" }
+            div {
+                className = ClassName("toolbar")
+                h2 { +"日志监控" }
+                div { className = ClassName("toolbar-spacer") }
+                select {
+                    className = ClassName("admin-filter-select")
+                    value = level
+                    onChange = { event -> level = event.target.value.unsafeCast<String>() }
+                    option {
+                        value = ""
+                        +"全部级别"
+                    }
+                    option {
+                        value = "WARN"
+                        +"WARN"
+                    }
+                    option {
+                        value = "ERROR"
+                        +"ERROR"
+                    }
+                }
+                button {
+                    className = ClassName("btn btn-sm")
+                    onClick = { reload++ }
+                    +"刷新"
+                }
             }
-            button {
-                className = ClassName("btn btn-sm")
-                onClick = { reload++ }
-                +"刷新"
+            AdminLogContent.invoke {
+                logResult = result
+                isLoading = loading
+                errorMessage = error
             }
-        }
-        AdminLogContent.invoke {
-            logResult = result
-            isLoading = loading
-            errorMessage = error
         }
     }
-}
 
-val AdminAuditLogsPage = FC<Props> {
-    AdminShell {
-        var reload by useState(0)
-        var result by useState<AdminLogListResponse?>(null)
-        var loading by useState(true)
-        var error by useState<String?>(null)
+val AdminAuditLogsPage =
+    FC<Props> {
+        AdminShell {
+            var reload by useState(0)
+            var result by useState<AdminLogListResponse?>(null)
+            var loading by useState(true)
+            var error by useState<String?>(null)
 
-        useEffect(reload) {
-            loading = true
-            error = null
-            try {
-                result = AdminRepository.listAuditLogs(limit = 100)
-            } catch (e: Exception) {
-                error = describeAdminError(e)
-                result = null
-            } finally {
-                loading = false
+            useEffect(reload) {
+                loading = true
+                error = null
+                try {
+                    result = AdminRepository.listAuditLogs(limit = 100)
+                } catch (e: Exception) {
+                    error = describeAdminError(e)
+                    result = null
+                } finally {
+                    loading = false
+                }
             }
-        }
 
-        div {
-            className = ClassName("toolbar")
-            h2 { +"审计日志" }
-            div { className = ClassName("toolbar-spacer") }
-            button {
-                className = ClassName("btn btn-sm")
-                onClick = { reload++ }
-                +"刷新"
+            div {
+                className = ClassName("toolbar")
+                h2 { +"审计日志" }
+                div { className = ClassName("toolbar-spacer") }
+                button {
+                    className = ClassName("btn btn-sm")
+                    onClick = { reload++ }
+                    +"刷新"
+                }
             }
-        }
-        AdminLogContent.invoke {
-            logResult = result
-            isLoading = loading
-            errorMessage = error
+            AdminLogContent.invoke {
+                logResult = result
+                isLoading = loading
+                errorMessage = error
+            }
         }
     }
-}
 
 private external interface AdminLogContentProps : Props {
     var logResult: AdminLogListResponse?
@@ -122,53 +134,61 @@ private external interface AdminLogContentProps : Props {
     var errorMessage: String?
 }
 
-private val AdminLogContent = FC<AdminLogContentProps> { props ->
-    when {
-        props.isLoading -> div {
-            className = ClassName("loading-container")
-            div { className = ClassName("loading-spinner") }
-        }
-        props.errorMessage != null -> div {
-            className = ClassName("error-message")
-            p { +(props.errorMessage ?: "") }
-        }
-        props.logResult != null -> {
-            val items = props.logResult!!.items
-            if (items.isEmpty()) {
+private val AdminLogContent =
+    FC<AdminLogContentProps> { props ->
+        when {
+            props.isLoading -> {
                 div {
-                    className = ClassName("empty-state")
-                    p { +"没有日志" }
+                    className = ClassName("loading-container")
+                    div { className = ClassName("loading-spinner") }
                 }
-            } else {
+            }
+
+            props.errorMessage != null -> {
                 div {
-                    className = ClassName("admin-table-wrap")
-                    table {
-                        className = ClassName("admin-table")
-                        thead {
-                            tr {
-                                th { +"时间" }
-                                th { +"级别" }
-                                th { +"Logger" }
-                                th { +"消息" }
-                                th { +"详情" }
-                            }
-                        }
-                        tbody {
-                            items.forEachIndexed { index, item ->
+                    className = ClassName("error-message")
+                    p { +(props.errorMessage ?: "") }
+                }
+            }
+
+            props.logResult != null -> {
+                val items = props.logResult!!.items
+                if (items.isEmpty()) {
+                    div {
+                        className = ClassName("empty-state")
+                        p { +"没有日志" }
+                    }
+                } else {
+                    div {
+                        className = ClassName("admin-table-wrap")
+                        table {
+                            className = ClassName("admin-table")
+                            thead {
                                 tr {
-                                    key = Key(index.toString())
-                                    td { +formatAdminTime(item.timestamp) }
-                                    td {
-                                        span {
-                                            className = ClassName(logLevelClass(item.level))
-                                            +item.level
+                                    th { +"时间" }
+                                    th { +"级别" }
+                                    th { +"Logger" }
+                                    th { +"消息" }
+                                    th { +"详情" }
+                                }
+                            }
+                            tbody {
+                                items.forEachIndexed { index, item ->
+                                    tr {
+                                        key = Key(index.toString())
+                                        td { +formatAdminTime(item.timestamp) }
+                                        td {
+                                            span {
+                                                className = ClassName(logLevelClass(item.level))
+                                                +item.level
+                                            }
                                         }
-                                    }
-                                    td { +item.logger }
-                                    td { +item.message }
-                                    td {
-                                        className = ClassName("admin-cell-secondary")
-                                        +(item.detail ?: "—")
+                                        td { +item.logger }
+                                        td { +item.message }
+                                        td {
+                                            className = ClassName("admin-cell-secondary")
+                                            +(item.detail ?: "—")
+                                        }
                                     }
                                 }
                             }
@@ -178,4 +198,3 @@ private val AdminLogContent = FC<AdminLogContentProps> { props ->
             }
         }
     }
-}

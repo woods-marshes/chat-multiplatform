@@ -17,6 +17,7 @@ interface UserSettingRepository {
     suspend fun initSettings(userId: Uuid): UserSetting?
 
     suspend fun getSettings(userId: Uuid): UserSetting?
+
     suspend fun updateSettings(
         userId: Uuid,
         allowSearch: Boolean? = null,
@@ -29,22 +30,25 @@ interface UserSettingRepository {
 }
 
 class UserSettingDataSourceImpl : UserSettingRepository {
-    override suspend fun initSettings(userId: Uuid): UserSetting? = dbQuery {
-        UserSettings.insert {
-            it[this.userId] = userId
-            it[updatedAt] = Clock.System.now()
+    override suspend fun initSettings(userId: Uuid): UserSetting? =
+        dbQuery {
+            UserSettings
+                .insert {
+                    it[this.userId] = userId
+                    it[updatedAt] = Clock.System.now()
+                }.resultedValues
+                ?.singleOrNull()
+                ?.toUserSetting()
         }
-            .resultedValues
-            ?.singleOrNull()
-            ?.toUserSetting()
-    }
 
-    override suspend fun getSettings(userId: Uuid): UserSetting? = dbQuery {
-        UserSettings.selectAll()
-            .where { UserSettings.userId eq userId }
-            .map { it.toUserSetting() }
-            .singleOrNull()
-    }
+    override suspend fun getSettings(userId: Uuid): UserSetting? =
+        dbQuery {
+            UserSettings
+                .selectAll()
+                .where { UserSettings.userId eq userId }
+                .map { it.toUserSetting() }
+                .singleOrNull()
+        }
 
     override suspend fun updateSettings(
         userId: Uuid,
@@ -53,18 +57,19 @@ class UserSettingDataSourceImpl : UserSettingRepository {
         showOnlineStatus: Boolean?,
         profileVisibility: ProfileVisibility?,
         friendRequestPolicy: FriendRequestPolicy?,
-        preferences: UserPreference?
-    ): Boolean = dbQuery {
-        UserSettings.update(where = {
-            UserSettings.userId eq userId
-        }) {
-            allowSearch?.let { allowSearch ->  it[UserSettings.allowSearch] = allowSearch }
-            allowStrangerChat?.let { allowStrangerChat -> it[UserSettings.allowStrangerChat] = allowStrangerChat }
-            showOnlineStatus?.let { showOnlineStatus -> it[UserSettings.showOnlineStatus] = showOnlineStatus }
-            profileVisibility?.let { profileVisibility -> it[UserSettings.profileVisibility] = profileVisibility }
-            friendRequestPolicy?.let { friendRequestPolicy -> it[UserSettings.friendRequestPolicy] = friendRequestPolicy }
-            preferences?.let { preferences -> it[UserSettings.preferences] = preferences }
-            it[updatedAt] = Clock.System.now()
-        } > 0
-    }
+        preferences: UserPreference?,
+    ): Boolean =
+        dbQuery {
+            UserSettings.update(where = {
+                UserSettings.userId eq userId
+            }) {
+                allowSearch?.let { allowSearch -> it[UserSettings.allowSearch] = allowSearch }
+                allowStrangerChat?.let { allowStrangerChat -> it[UserSettings.allowStrangerChat] = allowStrangerChat }
+                showOnlineStatus?.let { showOnlineStatus -> it[UserSettings.showOnlineStatus] = showOnlineStatus }
+                profileVisibility?.let { profileVisibility -> it[UserSettings.profileVisibility] = profileVisibility }
+                friendRequestPolicy?.let { friendRequestPolicy -> it[UserSettings.friendRequestPolicy] = friendRequestPolicy }
+                preferences?.let { preferences -> it[UserSettings.preferences] = preferences }
+                it[updatedAt] = Clock.System.now()
+            } > 0
+        }
 }

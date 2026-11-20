@@ -15,11 +15,14 @@ interface GroupProfileDao {
 
     // 写入与同步
     suspend fun insertGroupProfile(groupProfile: GroupProfileEntity)
+
     suspend fun insertGroupProfiles(groupProfiles: List<GroupProfileEntity>)
 
     // 查询
     fun getGroupProfile(conversationId: Uuid): Flow<GroupProfileEntity?>
+
     fun getGroupProfiles(conversationIds: List<Uuid>): Flow<List<GroupProfileEntity>>
+
     fun getGroupByHandle(handle: String): Flow<GroupProfileEntity?>
 
     // 关联查询
@@ -31,19 +34,19 @@ interface GroupProfileDao {
         name: String,
         description: String?,
         avatarUrl: String?,
-        updatedAt: Instant
+        updatedAt: Instant,
     )
 
     suspend fun updateGroupSettings(
         conversationId: Uuid,
         settings: GroupSettings,
-        updatedAt: Instant
+        updatedAt: Instant,
     )
 
     suspend fun transferOwnership(
         conversationId: Uuid,
         newOwnerId: Uuid,
-        updatedAt: Instant
+        updatedAt: Instant,
     )
 
     // 删除

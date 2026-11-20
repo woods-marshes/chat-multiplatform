@@ -15,10 +15,10 @@ import kotlin.test.assertNull
  * bounded-read contract that guards against runaway process output.
  */
 class MediaProbeTest {
-
     @Test
     fun parsesDurationAndDimensionsFromAVideoReport() {
-        val report = """
+        val report =
+            """
             Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/uploads/video/x.mp4':
               Metadata:
                 major_brand     : isom
@@ -29,7 +29,7 @@ class MediaProbeTest {
               Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 1024 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
               Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x63700061), 44100 Hz, stereo, fltp, 128 kb/s (default)
             At least one output file must be specified
-        """.trimIndent()
+            """.trimIndent()
 
         val probe = MediaProbe.parseReport(report)
 
@@ -41,12 +41,13 @@ class MediaProbeTest {
 
     @Test
     fun parsesAudioOnlyReportsWithoutDimensions() {
-        val report = """
+        val report =
+            """
             Input #0, aac, from '/uploads/audio/x.aac':
               Duration: 00:01:02.34, start: 0.023056, bitrate: 63 kb/s
               Stream #0:0: Audio: aac (LC), 44100 Hz, mono, fltp, 62 kb/s
             At least one output file must be specified
-        """.trimIndent()
+            """.trimIndent()
 
         val probe = MediaProbe.parseReport(report)
 
@@ -73,9 +74,10 @@ class MediaProbeTest {
 
     @Test
     fun boundedReadRejectsSourcesBeyondTheCapInsteadOfBlockingForever() {
-        val endlessSource = object : InputStream() {
-            override fun read(): Int = 'x'.code
-        }
+        val endlessSource =
+            object : InputStream() {
+                override fun read(): Int = 'x'.code
+            }
 
         // Must return promptly once the cap is exceeded (the caller then
         // kills the producing process), never block collecting to EOF.
@@ -84,31 +86,34 @@ class MediaProbeTest {
 
     @Test
     fun probeReturnsLaunchFailedWhenExecutableResolutionFails() {
-        val outcome = MediaProbe.probe(
-            file = File("dummy.mp4"),
-            timeoutMs = 5_000L,
-            executableResolver = { throw IllegalStateException("Explicit FFMPEG_EXEC_PATH invalid") },
-        )
+        val outcome =
+            MediaProbe.probe(
+                file = File("dummy.mp4"),
+                timeoutMs = 5_000L,
+                executableResolver = { throw IllegalStateException("Explicit FFMPEG_EXEC_PATH invalid") },
+            )
 
         assertEquals(MediaProbe.Outcome.Failure(MediaProbe.FailureReason.LAUNCH_FAILED), outcome)
     }
 
     @Test
     fun probeReturnsLaunchFailedWhenProcessCannotStart() {
-        val outcome = MediaProbe.probeWithCommand(
-            command = listOf("/definitely/nonexistent/ffmpeg-binary-xyz-987654"),
-            timeoutMs = 5_000L,
-        )
+        val outcome =
+            MediaProbe.probeWithCommand(
+                command = listOf("/definitely/nonexistent/ffmpeg-binary-xyz-987654"),
+                timeoutMs = 5_000L,
+            )
 
         assertEquals(MediaProbe.Outcome.Failure(MediaProbe.FailureReason.LAUNCH_FAILED), outcome)
     }
 
     @Test
     fun probeReturnsTimedOutWhenBudgetIsNonPositive() {
-        val outcome = MediaProbe.probeWithCommand(
-            command = listOf("ffmpeg"),
-            timeoutMs = 0L,
-        )
+        val outcome =
+            MediaProbe.probeWithCommand(
+                command = listOf("ffmpeg"),
+                timeoutMs = 0L,
+            )
 
         assertEquals(MediaProbe.Outcome.Failure(MediaProbe.FailureReason.TIMED_OUT), outcome)
     }

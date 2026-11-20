@@ -22,25 +22,27 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 
-val navConfiguration = SavedStateConfiguration {
-    serializersModule = SerializersModule {
-        polymorphic(NavKey::class) {
-            subclass(ConversationsNavKey::class)
-            subclass(ContactsNavKey::class)
-            subclass(SettingsNavKey::class)
-            subclass(SettingsDetailNavKey::class)
-            subclass(OpenSourceLicensesNavKey::class)
-            subclass(EditProfileNavKey::class)
-            subclass(ChatEditProfileNavKey::class)
-            subclass(ChatNavKey::class)
-            subclass(GroupInfoNavKey::class)
-            subclass(ChatGroupInfoNavKey::class)
-            subclass(ProfileNavKey::class)
-            subclass(ChatProfileNavKey::class)
-            subclass(SearchNavKey::class)
-            subclass(ArticleListNavKey::class)
-            subclass(ArticleDetailNavKey::class)
-            subclass(ArticleEditorNavKey::class)
-        }
+val navConfiguration =
+    SavedStateConfiguration {
+        serializersModule =
+            SerializersModule {
+                polymorphic(NavKey::class) {
+                    subclass(ConversationsNavKey::class)
+                    subclass(ContactsNavKey::class)
+                    subclass(SettingsNavKey::class)
+                    subclass(SettingsDetailNavKey::class)
+                    subclass(OpenSourceLicensesNavKey::class)
+                    subclass(EditProfileNavKey::class)
+                    subclass(ChatEditProfileNavKey::class)
+                    subclass(ChatNavKey::class)
+                    subclass(GroupInfoNavKey::class)
+                    subclass(ChatGroupInfoNavKey::class)
+                    subclass(ProfileNavKey::class)
+                    subclass(ChatProfileNavKey::class)
+                    subclass(SearchNavKey::class)
+                    subclass(ArticleListNavKey::class)
+                    subclass(ArticleDetailNavKey::class)
+                    subclass(ArticleEditorNavKey::class)
+                }
+            }
     }
-}

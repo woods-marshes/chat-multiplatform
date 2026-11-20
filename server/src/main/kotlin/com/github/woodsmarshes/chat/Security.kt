@@ -6,14 +6,13 @@ import com.github.woodsmarshes.chat.base.ServerConfig
 import com.github.woodsmarshes.chat.base.UserAccessCache
 import com.github.woodsmarshes.chat.utils.Keys
 import io.ktor.http.*
-import io.ktor.http.auth.AuthScheme
-import io.ktor.http.auth.HttpAuthHeader
+import io.ktor.http.auth.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.response.*
-import kotlin.uuid.Uuid
 import org.koin.ktor.ext.inject
+import kotlin.uuid.Uuid
 
 fun Application.configureSecurity() {
     val appConfig by inject<ServerConfig>()

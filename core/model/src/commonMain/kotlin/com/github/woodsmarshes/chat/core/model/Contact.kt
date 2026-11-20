@@ -13,12 +13,12 @@ data class Contact(
     @ProtoNumber(4) val nickname: String? = null,
     @ProtoNumber(5) val alias: String? = null,
     @ProtoNumber(6) val createdAt: Instant,
-    @ProtoNumber(7) val updatedAt: Instant
+    @ProtoNumber(7) val updatedAt: Instant,
 )
 
 enum class ContactStatus {
     FRIEND,
     BLOCKED,
     BLOCKED_BY, // 只有客户端使用
-    DELETED
+    DELETED,
 }

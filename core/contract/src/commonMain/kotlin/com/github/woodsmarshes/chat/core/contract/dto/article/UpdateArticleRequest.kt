@@ -1,7 +1,7 @@
 package com.github.woodsmarshes.chat.core.contract.dto.article
 
-import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.contract.serialization.JsonElementSerializer
+import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement

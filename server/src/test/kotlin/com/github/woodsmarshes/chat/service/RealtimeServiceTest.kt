@@ -1,13 +1,13 @@
 package com.github.woodsmarshes.chat.service
 
-import com.github.woodsmarshes.chat.core.model.ConversationType
-import com.github.woodsmarshes.chat.core.model.Message
-import com.github.woodsmarshes.chat.core.model.MessageCategory
-import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncHead
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageCategory
+import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
@@ -37,11 +37,11 @@ import kotlin.uuid.Uuid
  * the DB).
  */
 class RealtimeServiceTest {
-
-    private val delivery = mockk<RealtimeDelivery>(relaxed = true) {
-        io.mockk.every { registerSession(any()) } returns true
-        coEvery { sendToSession(any(), any()) } returns true
-    }
+    private val delivery =
+        mockk<RealtimeDelivery>(relaxed = true) {
+            io.mockk.every { registerSession(any()) } returns true
+            coEvery { sendToSession(any(), any()) } returns true
+        }
     private val sessionManager = mockk<WebSocketSessionManager>(relaxUnitFun = true)
     private val logger = mockk<Logger>(relaxUnitFun = true)
     private val bus: EventBus = EventBusImpl()
@@ -50,25 +50,28 @@ class RealtimeServiceTest {
     private val senderId = Uuid.random()
     private val now = Clock.System.now()
 
-    private fun newService(typingDebounceMs: Long = 1_000L): RealtimeService = RealtimeService(
-        log = logger,
-        eventBus = bus,
-        delivery = delivery,
-        sessionManager = sessionManager,
-        scope = CoroutineScope(Dispatchers.Unconfined),
-        syncService = mockk<SyncService> {
-            coEvery { getHeads(any()) } returns emptyList()
-        },
-        typingDebounceMs = typingDebounceMs,
-    )
+    private fun newService(typingDebounceMs: Long = 1_000L): RealtimeService =
+        RealtimeService(
+            log = logger,
+            eventBus = bus,
+            delivery = delivery,
+            sessionManager = sessionManager,
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            syncService =
+                mockk<SyncService> {
+                    coEvery { getHeads(any()) } returns emptyList()
+                },
+            typingDebounceMs = typingDebounceMs,
+        )
 
-    private fun message() = Message(
-        id = Uuid.random(),
-        conversationId = conversationId,
-        category = MessageCategory.NORMAL,
-        createdAt = now,
-        content = TextContent("hello"),
-    )
+    private fun message() =
+        Message(
+            id = Uuid.random(),
+            conversationId = conversationId,
+            category = MessageCategory.NORMAL,
+            createdAt = now,
+            content = TextContent("hello"),
+        )
 
     @Test
     fun sendMessageEventIsDeliveredAsReceivedWithServerIdentityAndRequestId() {
@@ -78,43 +81,51 @@ class RealtimeServiceTest {
         bus.publishMessageEvent(MessageEvent.SendMessage(message, conversationId, senderId, now, "req-1"))
 
         coVerify(exactly = 1) {
-            delivery.sendToConversation(conversationId, match {
-                it is MessageEventResponse.Received &&
-                    it.message.id == message.id &&
-                    it.senderId == senderId &&
-                    it.requestId == "req-1"
-            })
+            delivery.sendToConversation(
+                conversationId,
+                match {
+                    it is MessageEventResponse.Received &&
+                        it.message.id == message.id &&
+                        it.senderId == senderId &&
+                        it.requestId == "req-1"
+                },
+            )
         }
         verify { sessionManager wasNot Called }
     }
 
     @Test
-    fun websocketInitializationSendsHeadsOnlyToTheNewSession() = runBlocking {
-        val userId = Uuid.random()
-        val session = mockk<io.ktor.server.websocket.WebSocketServerSession>()
-        val heads = listOf(SyncHead(SyncScope.USER, userId, 7L))
-        val syncService = mockk<SyncService>()
-        coEvery { syncService.getHeads(userId) } returns heads
-        val service = RealtimeService(
-            log = logger,
-            eventBus = bus,
-            delivery = delivery,
-            sessionManager = sessionManager,
-            scope = CoroutineScope(Dispatchers.Unconfined),
-            syncService = syncService,
-        )
+    fun websocketInitializationSendsHeadsOnlyToTheNewSession() =
+        runBlocking {
+            val userId = Uuid.random()
+            val session = mockk<io.ktor.server.websocket.WebSocketServerSession>()
+            val heads = listOf(SyncHead(SyncScope.USER, userId, 7L))
+            val syncService = mockk<SyncService>()
+            coEvery { syncService.getHeads(userId) } returns heads
+            val service =
+                RealtimeService(
+                    log = logger,
+                    eventBus = bus,
+                    delivery = delivery,
+                    sessionManager = sessionManager,
+                    scope = CoroutineScope(Dispatchers.Unconfined),
+                    syncService = syncService,
+                )
 
-        service.initializeWebSocketConnection(userId, session)
+            service.initializeWebSocketConnection(userId, session)
 
-        coVerify(exactly = 1) { sessionManager.addUserSession(userId, session) }
-        coVerify(exactly = 1) {
-            delivery.sendToSession(session, match {
-                it is SyncStateResponse.Heads && it.entries == heads
-            })
+            coVerify(exactly = 1) { sessionManager.addUserSession(userId, session) }
+            coVerify(exactly = 1) {
+                delivery.sendToSession(
+                    session,
+                    match {
+                        it is SyncStateResponse.Heads && it.entries == heads
+                    },
+                )
+            }
+            coVerify(exactly = 0) { delivery.sendToUser(any(), any()) }
+            coVerify(exactly = 0) { delivery.sendToConversation(any(), any()) }
         }
-        coVerify(exactly = 0) { delivery.sendToUser(any(), any()) }
-        coVerify(exactly = 0) { delivery.sendToConversation(any(), any()) }
-    }
 
     @Test
     fun withdrawAndReadEventsAreDeliveredToTheConversation() {
@@ -133,22 +144,23 @@ class RealtimeServiceTest {
     }
 
     @Test
-    fun typingBurstsDebounceToASingleDelivery() = runBlocking {
-        // Shortened debounce so the test stays fast; the burst cancels and
-        // reschedules it on every event, converging on one delivery.
-        newService(typingDebounceMs = 50)
+    fun typingBurstsDebounceToASingleDelivery() =
+        runBlocking {
+            // Shortened debounce so the test stays fast; the burst cancels and
+            // reschedules it on every event, converging on one delivery.
+            newService(typingDebounceMs = 50)
 
-        repeat(5) {
-            bus.publishMessageEvent(
-                MessageEvent.UserTyping(conversationId, senderId, isTyping = true, timestamp = now)
-            )
-        }
-        delay(200)
+            repeat(5) {
+                bus.publishMessageEvent(
+                    MessageEvent.UserTyping(conversationId, senderId, isTyping = true, timestamp = now),
+                )
+            }
+            delay(200)
 
-        coVerify(exactly = 1) {
-            delivery.sendToConversation(conversationId, match { it is MessageEventResponse.UserTyping })
+            coVerify(exactly = 1) {
+                delivery.sendToConversation(conversationId, match { it is MessageEventResponse.UserTyping })
+            }
         }
-    }
 
     @Test
     fun conversationEventsRoutePurelyThroughDelivery() {
@@ -156,13 +168,13 @@ class RealtimeServiceTest {
         val creatorId = Uuid.random()
 
         bus.publishConversationEvent(
-            ConversationEvent.ConversationCreated(conversationId, ConversationType.PRIVATE, creatorId, now)
+            ConversationEvent.ConversationCreated(conversationId, ConversationType.PRIVATE, creatorId, now),
         )
         bus.publishConversationEvent(
-            ConversationEvent.UserJoinedConversation(conversationId, listOf(creatorId), null, now)
+            ConversationEvent.UserJoinedConversation(conversationId, listOf(creatorId), null, now),
         )
         bus.publishConversationEvent(
-            ConversationEvent.ConversationDeleted(conversationId, creatorId, now)
+            ConversationEvent.ConversationDeleted(conversationId, creatorId, now),
         )
 
         // Three conversation events -> three conversation deliveries, and the
@@ -185,7 +197,7 @@ class RealtimeServiceTest {
                 approved = true,
                 reason = null,
                 timestamp = now,
-            )
+            ),
         )
 
         coVerify(exactly = 1) { delivery.sendToUser(applicantId, any()) }

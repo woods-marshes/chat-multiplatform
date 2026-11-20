@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.repository.database.schema
 
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import com.github.woodsmarshes.chat.core.model.ArticleStats
 import com.github.woodsmarshes.chat.core.model.ArticleStatus
-import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
 import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.dao.id.UuidTable
 import org.jetbrains.exposed.v1.datetime.timestamp

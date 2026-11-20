@@ -48,7 +48,11 @@ interface ContactRequestDao {
      */
     suspend fun seedContactRequest(request: ContactRequestEntity)
 
-    suspend fun updateContactRequestStatus(id: Uuid, status: RequestStatus, updatedAt: Instant)
+    suspend fun updateContactRequestStatus(
+        id: Uuid,
+        status: RequestStatus,
+        updatedAt: Instant,
+    )
 
     fun selectAllContactRequests(): Flow<List<ContactRequestEntity>>
 
@@ -74,15 +78,15 @@ class ContactRequestDaoImpl(
         return dbProvider()
     }
 
-    private suspend fun writeQueries(): ContactRequestsQueries =
-        writeDatabase().contactRequestsQueries
+    private suspend fun writeQueries(): ContactRequestsQueries = writeDatabase().contactRequestsQueries
 
     override fun bindToCurrentDatabase(): ContactRequestDao {
-        val capturedDb = runCatching { dbProvider() }.getOrElse {
-            throw com.github.woodsmarshes.chat.core.common.session.SessionStoppedException(
-                it.message ?: "Database is not initialized"
-            )
-        }
+        val capturedDb =
+            runCatching { dbProvider() }.getOrElse {
+                throw com.github.woodsmarshes.chat.core.common.session.SessionStoppedException(
+                    it.message ?: "Database is not initialized",
+                )
+            }
         return PinnedContactRequestDao(
             boundDatabase = capturedDb,
             ioContext = ioContext,
@@ -90,9 +94,7 @@ class ContactRequestDaoImpl(
         )
     }
 
-    override suspend fun transaction(
-        body: suspend SuspendingTransactionWithoutReturn.() -> Unit,
-    ) {
+    override suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit) {
         val targetDb = writeDatabase()
         withContext(BoundDatabaseElement(targetDb)) {
             targetDb.contactRequestsQueries.transaction(body = body)
@@ -117,7 +119,11 @@ class ContactRequestDaoImpl(
         writeQueries().seedContactRequest(request)
     }
 
-    override suspend fun updateContactRequestStatus(id: Uuid, status: RequestStatus, updatedAt: Instant) {
+    override suspend fun updateContactRequestStatus(
+        id: Uuid,
+        status: RequestStatus,
+        updatedAt: Instant,
+    ) {
         writeQueries().updateContactRequestStatus(status, updatedAt, id)
     }
 
@@ -149,9 +155,7 @@ private class PinnedContactRequestDao(
 
     override fun bindToCurrentDatabase(): ContactRequestDao = this
 
-    override suspend fun transaction(
-        body: suspend SuspendingTransactionWithoutReturn.() -> Unit,
-    ) {
+    override suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit) {
         val q = writeQueries()
         withContext(BoundDatabaseElement(boundDatabase)) {
             q.transaction(body = body)
@@ -176,7 +180,11 @@ private class PinnedContactRequestDao(
         writeQueries().seedContactRequest(request)
     }
 
-    override suspend fun updateContactRequestStatus(id: Uuid, status: RequestStatus, updatedAt: Instant) {
+    override suspend fun updateContactRequestStatus(
+        id: Uuid,
+        status: RequestStatus,
+        updatedAt: Instant,
+    ) {
         writeQueries().updateContactRequestStatus(status, updatedAt, id)
     }
 

@@ -41,16 +41,16 @@ fun main() {
 fun loadJsNetworkConfig(): NetworkConfig {
     val hostname = window.location.hostname.takeIf { it.isNotEmpty() } ?: "127.0.0.1"
 
-
     val protocolString = window.location.protocol
     val isTls = protocolString.startsWith("https", ignoreCase = true)
 
     val portString = window.location.port
-    var port = if (portString.isNotEmpty()) {
-        portString.toIntOrNull() ?: if (isTls) 443 else 80
-    } else {
-        if (isTls) 443 else 80
-    }
+    var port =
+        if (portString.isNotEmpty()) {
+            portString.toIntOrNull() ?: if (isTls) 443 else 80
+        } else {
+            if (isTls) 443 else 80
+        }
 
     if ((hostname == "localhost" || hostname == "127.0.0.1") && port != 9051) {
         port = 9051
@@ -59,6 +59,6 @@ fun loadJsNetworkConfig(): NetworkConfig {
     return NetworkConfig(
         host = hostname,
         port = port,
-        useTls = isTls
+        useTls = isTls,
     )
 }

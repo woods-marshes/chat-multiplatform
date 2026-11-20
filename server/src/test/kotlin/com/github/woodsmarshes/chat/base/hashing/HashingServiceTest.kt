@@ -7,7 +7,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class HashingServiceTest {
-
     private val service: HashingService = HashingServiceImpl()
 
     @Test

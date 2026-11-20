@@ -47,14 +47,14 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 
 class FileRoutesTest {
-
-    private val tokenConfig = TokenConfig(
-        issuer = "chat-server-test",
-        audience = "API-test",
-        realm = "Ktor Server Test",
-        expiresIn = 3_600_000,
-        secret = "test-secret-key-for-unit-tests-only",
-    )
+    private val tokenConfig =
+        TokenConfig(
+            issuer = "chat-server-test",
+            audience = "API-test",
+            realm = "Ktor Server Test",
+            expiresIn = 3_600_000,
+            secret = "test-secret-key-for-unit-tests-only",
+        )
 
     private fun tokenFor(userId: Uuid = Uuid.random()): String =
         TokenServiceImpl().generateToken(tokenConfig, TokenClaim(Keys.USER_ID, userId.toString()))
@@ -66,246 +66,296 @@ class FileRoutesTest {
         }
 
     @Test
-    fun oversizedUploadIsRejectedWithPayloadTooLarge() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun oversizedUploadIsRejectedWithPayloadTooLarge() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val imageDir = File("uploads/image").apply { mkdirs() }
-        val before = imageDir.listFiles()?.size ?: 0
-        val oversizedImage = ByteArray(5 * 1024 * 1024 + 1)
+            val imageDir = File("uploads/image").apply { mkdirs() }
+            val before = imageDir.listFiles()?.size ?: 0
+            val oversizedImage = ByteArray(5 * 1024 * 1024 + 1)
 
-        val response = client.post("/v1/files/upload?type=IMAGE") {
-            bearerAuth(tokenFor())
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append(
-                            key = "file",
-                            value = oversizedImage,
-                            headers = Headers.build {
-                                append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                                append(HttpHeaders.ContentDisposition, "filename=\"big.png\"")
+            val response =
+                client.post("/v1/files/upload?type=IMAGE") {
+                    bearerAuth(tokenFor())
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    key = "file",
+                                    value = oversizedImage,
+                                    headers =
+                                        Headers.build {
+                                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                            append(HttpHeaders.ContentDisposition, "filename=\"big.png\"")
+                                        },
+                                )
                             },
-                        )
-                    }
-                )
-            )
+                        ),
+                    )
+                }
+
+            assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+            // The cap trips after part of the body is already on disk; the
+            // half-written file must not survive the rejected request.
+            assertEquals(before, imageDir.listFiles()?.size ?: 0)
         }
 
-        assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
-        // The cap trips after part of the body is already on disk; the
-        // half-written file must not survive the rejected request.
-        assertEquals(before, imageDir.listFiles()?.size ?: 0)
-    }
-
     @Test
-    fun secondFilePartIsRejectedWithBadRequest() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun secondFilePartIsRejectedWithBadRequest() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val bytes = smallPng()
-        val response = client.post("/v1/files/upload?type=FILE") {
-            bearerAuth(tokenFor())
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append("file", bytes, Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"one.bin\"")
-                        })
-                        append("file", bytes, Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"two.bin\"")
-                        })
-                    }
-                )
-            )
+            val bytes = smallPng()
+            val response =
+                client.post("/v1/files/upload?type=FILE") {
+                    bearerAuth(tokenFor())
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    "file",
+                                    bytes,
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"one.bin\"")
+                                    },
+                                )
+                                append(
+                                    "file",
+                                    bytes,
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"two.bin\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+            // The first part used to be fully processed and silently overwritten
+            // by the second; now the request itself is refused.
+            assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-        // The first part used to be fully processed and silently overwritten
-        // by the second; now the request itself is refused.
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-    }
-
     @Test
-    fun groupAvatarForNonParticipantWritesNoFile() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun groupAvatarForNonParticipantWritesNoFile() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val avatarDir = File("uploads/avatar").apply { mkdirs() }
-        val before = avatarDir.listFiles()?.size ?: 0
+            val avatarDir = File("uploads/avatar").apply { mkdirs() }
+            val before = avatarDir.listFiles()?.size ?: 0
 
-        val response = client.post("/v1/files/avatar?isGroup=true&targetId=${Uuid.random()}") {
-            bearerAuth(tokenFor())
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append("file", smallPng(), Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                        })
-                    }
-                )
-            )
+            val response =
+                client.post("/v1/files/avatar?isGroup=true&targetId=${Uuid.random()}") {
+                    bearerAuth(tokenFor())
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    "file",
+                                    smallPng(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+            // The permission precheck runs before any bytes are written, so a
+            // refused upload leaves no orphaned avatar behind.
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(before, avatarDir.listFiles()?.size ?: 0)
         }
 
-        // The permission precheck runs before any bytes are written, so a
-        // refused upload leaves no orphaned avatar behind.
-        assertEquals(HttpStatusCode.Forbidden, response.status)
-        assertEquals(before, avatarDir.listFiles()?.size ?: 0)
-    }
-
     @Test
-    fun secondAvatarPartRemovesTheFirstAvatarFromDisk() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun secondAvatarPartRemovesTheFirstAvatarFromDisk() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val avatarDir = File("uploads/avatar").apply { mkdirs() }
-        val before = avatarDir.listFiles()?.size ?: 0
-        val bytes = smallPng()
+            val avatarDir = File("uploads/avatar").apply { mkdirs() }
+            val before = avatarDir.listFiles()?.size ?: 0
+            val bytes = smallPng()
 
-        val response = client.post("/v1/files/avatar?isGroup=false") {
-            bearerAuth(tokenFor())
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append("file", bytes, Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                        })
-                        append("file", bytes, Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                        })
-                    }
-                )
-            )
+            val response =
+                client.post("/v1/files/avatar?isGroup=false") {
+                    bearerAuth(tokenFor())
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    "file",
+                                    bytes,
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                    },
+                                )
+                                append(
+                                    "file",
+                                    bytes,
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+            // The first avatar was fully written before the second part was
+            // refused; avatars are excluded from the temp store, so the route
+            // must delete the orphan itself.
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertEquals(before, avatarDir.listFiles()?.size ?: 0)
         }
 
-        // The first avatar was fully written before the second part was
-        // refused; avatars are excluded from the temp store, so the route
-        // must delete the orphan itself.
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertEquals(before, avatarDir.listFiles()?.size ?: 0)
-    }
-
     @Test
-    fun avatarReferenceUpdateErrRemovesTheFile() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun avatarReferenceUpdateErrRemovesTheFile() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val avatarDir = File("uploads/avatar").apply { mkdirs() }
-        val before = avatarDir.listFiles()?.size ?: 0
+            val avatarDir = File("uploads/avatar").apply { mkdirs() }
+            val before = avatarDir.listFiles()?.size ?: 0
 
-        // The token user does not exist, so updateProfile returns Err only
-        // AFTER the avatar bytes are on disk. A returned Err means the
-        // reference was definitely not written, so the file must go.
-        val response = client.post("/v1/files/avatar?isGroup=false") {
-            bearerAuth(tokenFor())
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append("file", smallPng(), Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                        })
-                    }
-                )
-            )
+            // The token user does not exist, so updateProfile returns Err only
+            // AFTER the avatar bytes are on disk. A returned Err means the
+            // reference was definitely not written, so the file must go.
+            val response =
+                client.post("/v1/files/avatar?isGroup=false") {
+                    bearerAuth(tokenFor())
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    "file",
+                                    smallPng(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+            assertEquals(HttpStatusCode.InternalServerError, response.status)
+            assertEquals(before, avatarDir.listFiles()?.size ?: 0)
         }
 
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
-        assertEquals(before, avatarDir.listFiles()?.size ?: 0)
-    }
-
     @Test
-    fun avatarReferenceUpdateCrashKeepsTheFileForReconciliation() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun avatarReferenceUpdateCrashKeepsTheFileForReconciliation() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        // A thrown exception does NOT prove the reference failed to commit —
-        // commit-phase failures are indeterminate — so the route keeps the
-        // file for reconciliation instead of risking a dangling reference.
-        val crashingUserService = mockk<UserService>()
-        coEvery { crashingUserService.updateProfile(any(), any()) } throws IllegalStateException("repository exploded")
-        application {
-            // Swap UserService once the app's Koin is fully installed; the
-            // route resolves its dependency lazily per call, so the avatar
-            // request below sees the crashing fake.
-            monitor.subscribe(ApplicationStarted) { app ->
-                app.getKoin().loadModules(listOf(module { single { crashingUserService } }))
+            // A thrown exception does NOT prove the reference failed to commit —
+            // commit-phase failures are indeterminate — so the route keeps the
+            // file for reconciliation instead of risking a dangling reference.
+            val crashingUserService = mockk<UserService>()
+            coEvery { crashingUserService.updateProfile(any(), any()) } throws IllegalStateException("repository exploded")
+            application {
+                // Swap UserService once the app's Koin is fully installed; the
+                // route resolves its dependency lazily per call, so the avatar
+                // request below sees the crashing fake.
+                monitor.subscribe(ApplicationStarted) { app ->
+                    app.getKoin().loadModules(listOf(module { single { crashingUserService } }))
+                }
             }
+
+            val avatarDir = File("uploads/avatar").apply { mkdirs() }
+            val before = avatarDir.listFiles()?.size ?: 0
+
+            val response =
+                client.post("/v1/files/avatar?isGroup=false") {
+                    bearerAuth(tokenFor())
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    "file",
+                                    smallPng(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+            assertEquals(HttpStatusCode.InternalServerError, response.status)
+            assertEquals(before + 1, avatarDir.listFiles()?.size ?: 0)
         }
-
-        val avatarDir = File("uploads/avatar").apply { mkdirs() }
-        val before = avatarDir.listFiles()?.size ?: 0
-
-        val response = client.post("/v1/files/avatar?isGroup=false") {
-            bearerAuth(tokenFor())
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append("file", smallPng(), Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                        })
-                    }
-                )
-            )
-        }
-
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
-        assertEquals(before + 1, avatarDir.listFiles()?.size ?: 0)
-    }
 
     @Test
-    fun groupAvatarEventFailureAfterCommitKeepsFileAndReference() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun groupAvatarEventFailureAfterCommitKeepsFileAndReference() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        // Seed the owner and their group before boot; the app shares this
-        // JVM's in-memory H2 instance.
-        TestDb.reset()
-        val owner = TestDb.user("group-owner")
-        val conversationId = TestDb.groupConversation(owner, emptyList())
+            // Seed the owner and their group before boot; the app shares this
+            // JVM's in-memory H2 instance.
+            TestDb.reset()
+            val owner = TestDb.user("group-owner")
+            val conversationId = TestDb.groupConversation(owner, emptyList())
 
-        // Real repositories + an event bus that explodes AFTER the profile
-        // row has committed: the exception surfaces while the reference is
-        // already in the database, so the file must NOT be cleaned up —
-        // deleting it would leave a dangling reference.
-        val crashingSettings = ConversationSettingsService(
-            conversationParticipantRepository = ConversationParticipantDataSourceImpl(),
-            groupProfileRepository = GroupProfileDataSourceImpl(),
-            eventBus = ExplodingConversationEventBus(),
-        )
-        application {
-            monitor.subscribe(ApplicationStarted) { app ->
-                app.getKoin().loadModules(listOf(module { single { crashingSettings } }))
-            }
-        }
-
-        val avatarDir = File("uploads/avatar").apply { mkdirs() }
-        val before = avatarDir.listFiles()?.size ?: 0
-
-        val response = client.post("/v1/files/avatar?isGroup=true&targetId=$conversationId") {
-            bearerAuth(tokenFor(owner))
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append("file", smallPng(), Headers.build {
-                            append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
-                            append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                        })
-                    }
+            // Real repositories + an event bus that explodes AFTER the profile
+            // row has committed: the exception surfaces while the reference is
+            // already in the database, so the file must NOT be cleaned up —
+            // deleting it would leave a dangling reference.
+            val crashingSettings =
+                ConversationSettingsService(
+                    conversationParticipantRepository = ConversationParticipantDataSourceImpl(),
+                    groupProfileRepository = GroupProfileDataSourceImpl(),
+                    eventBus = ExplodingConversationEventBus(),
                 )
-            )
-        }
+            application {
+                monitor.subscribe(ApplicationStarted) { app ->
+                    app.getKoin().loadModules(listOf(module { single { crashingSettings } }))
+                }
+            }
 
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
-        // The file survives: the exception does not prove non-commit.
-        assertEquals(before + 1, avatarDir.listFiles()?.size ?: 0)
+            val avatarDir = File("uploads/avatar").apply { mkdirs() }
+            val before = avatarDir.listFiles()?.size ?: 0
 
-        val avatarUrl = transaction(TestDb.database) {
-            GroupProfiles.selectAll()
-                .where { GroupProfiles.conversationId eq conversationId }
-                .single()[GroupProfiles.avatarUrl]
+            val response =
+                client.post("/v1/files/avatar?isGroup=true&targetId=$conversationId") {
+                    bearerAuth(tokenFor(owner))
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                append(
+                                    "file",
+                                    smallPng(),
+                                    Headers.build {
+                                        append(HttpHeaders.ContentType, ContentType.Image.PNG.toString())
+                                        append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                    },
+                                )
+                            },
+                        ),
+                    )
+                }
+
+            assertEquals(HttpStatusCode.InternalServerError, response.status)
+            // The file survives: the exception does not prove non-commit.
+            assertEquals(before + 1, avatarDir.listFiles()?.size ?: 0)
+
+            val avatarUrl =
+                transaction(TestDb.database) {
+                    GroupProfiles
+                        .selectAll()
+                        .where { GroupProfiles.conversationId eq conversationId }
+                        .single()[GroupProfiles.avatarUrl]
+                }
+            assertNotNull(avatarUrl)
+            assertTrue(File(avatarUrl.removePrefix("/")).isFile, "the referenced avatar file must survive")
         }
-        assertNotNull(avatarUrl)
-        assertTrue(File(avatarUrl.removePrefix("/")).isFile, "the referenced avatar file must survive")
-    }
 }
 
 /**
@@ -318,6 +368,8 @@ private class ExplodingConversationEventBus : EventBus {
     override val messageEvents: SharedFlow<MessageEvent> = MutableSharedFlow()
 
     override fun publishContactEvent(event: ContactEvent) {}
+
     override fun publishConversationEvent(event: ConversationEvent) = error("event bus exploded after commit")
+
     override fun publishMessageEvent(event: MessageEvent) {}
 }

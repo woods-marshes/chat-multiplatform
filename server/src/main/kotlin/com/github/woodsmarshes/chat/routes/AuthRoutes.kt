@@ -42,14 +42,16 @@ fun Route.authRoutes() {
         }
 
         post<V1.Auth.Refresh> {
-            val authHeader = call.request.header(HttpHeaders.Authorization)
-                ?.removePrefix("Bearer ") ?: run {
-                call.respond(
-                    io.ktor.http.HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Missing token")
-                )
-                return@post
-            }
+            val authHeader =
+                call.request
+                    .header(HttpHeaders.Authorization)
+                    ?.removePrefix("Bearer ") ?: run {
+                    call.respond(
+                        io.ktor.http.HttpStatusCode.Unauthorized,
+                        mapOf("error" to "Missing token"),
+                    )
+                    return@post
+                }
             val res = authService.refreshSession(authHeader).getOrThrow()
             call.respond(res)
         }
@@ -57,8 +59,10 @@ fun Route.authRoutes() {
         // Revokes the session behind the presented refresh token; idempotent
         // and cheap, so it shares the auth limiter's budget.
         post<V1.Auth.Logout> {
-            val authHeader = call.request.header(HttpHeaders.Authorization)
-                ?.removePrefix("Bearer ")
+            val authHeader =
+                call.request
+                    .header(HttpHeaders.Authorization)
+                    ?.removePrefix("Bearer ")
             if (authHeader != null) {
                 authService.logoutSession(authHeader).getOrThrow()
             }
@@ -73,14 +77,16 @@ fun Route.authRoutes() {
         }
     }
 }
+
 /**
  * Device metadata for the session row: the client's own device name when it
  * sends one, plus connection-derived User-Agent and remote host. The UA is
  * truncated to the column width; the IP comes from request.origin, which
  * already honors forwarded-header plugins when a reverse proxy is present.
  */
-private fun ApplicationCall.deviceInfo(deviceName: String?): DeviceInfo = DeviceInfo(
-    deviceName = deviceName?.take(100),
-    userAgent = request.header(HttpHeaders.UserAgent)?.take(500),
-    ipAddress = request.origin.remoteHost.take(64),
-)
+private fun ApplicationCall.deviceInfo(deviceName: String?): DeviceInfo =
+    DeviceInfo(
+        deviceName = deviceName?.take(100),
+        userAgent = request.header(HttpHeaders.UserAgent)?.take(500),
+        ipAddress = request.origin.remoteHost.take(64),
+    )

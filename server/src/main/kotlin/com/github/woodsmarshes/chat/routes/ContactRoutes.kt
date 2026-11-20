@@ -1,10 +1,10 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.model.RequestType
 import com.github.woodsmarshes.chat.core.contract.api.V1
 import com.github.woodsmarshes.chat.core.contract.dto.contact.AddContactRequest
 import com.github.woodsmarshes.chat.core.contract.dto.contact.HandleContactRequest
 import com.github.woodsmarshes.chat.core.contract.dto.contact.UpdateContactRequest
+import com.github.woodsmarshes.chat.core.model.RequestType
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ContactService
 import com.github.woodsmarshes.chat.utils.extractUserId
@@ -38,12 +38,13 @@ fun Route.contactRoutes() {
     // 获取好友请求列表
     get<V1.Contacts.Requests> { params ->
         val userId = call.extractUserId()
-        val requests = when(params.type) {
-            RequestType.SENT -> contactService.getSentRequests(userId)
-            RequestType.RECEIVED -> contactService.getReceivedRequests(userId)
-            RequestType.ALL  -> contactService.getAllRequests(userId)
-            null -> contactService.getAllRequests(userId)
-        }.getOrThrow()
+        val requests =
+            when (params.type) {
+                RequestType.SENT -> contactService.getSentRequests(userId)
+                RequestType.RECEIVED -> contactService.getReceivedRequests(userId)
+                RequestType.ALL -> contactService.getAllRequests(userId)
+                null -> contactService.getAllRequests(userId)
+            }.getOrThrow()
         call.respond(requests)
     }
 

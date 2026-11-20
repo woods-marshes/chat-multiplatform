@@ -8,21 +8,22 @@ import org.jetbrains.exposed.v1.core.Table
  * drops it in reverse — adding a table here is what wires both, so the two
  * lists can never drift apart again.
  */
-val ALL_SCHEMA_TABLES: List<Table> = listOf(
-    Users,
-    AuthSessions,
-    Conversations,
-    UserSettings,
-    GroupProfiles,
-    Messages,
-    GroupJoinRequests,
-    ConversationParticipants,
-    Contacts,
-    ContactRequests,
-    PrivateFiles,
-    Articles,
-    YjsDocuments,
-    SyncStreams,
-    SyncChanges,
-    AdminAuditLogs,
-)
+val ALL_SCHEMA_TABLES: List<Table> =
+    listOf(
+        Users,
+        AuthSessions,
+        Conversations,
+        UserSettings,
+        GroupProfiles,
+        Messages,
+        GroupJoinRequests,
+        ConversationParticipants,
+        Contacts,
+        ContactRequests,
+        PrivateFiles,
+        Articles,
+        YjsDocuments,
+        SyncStreams,
+        SyncChanges,
+        AdminAuditLogs,
+    )

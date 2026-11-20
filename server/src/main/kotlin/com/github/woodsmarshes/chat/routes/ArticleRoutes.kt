@@ -1,12 +1,12 @@
 package com.github.woodsmarshes.chat.routes
 
-import com.github.woodsmarshes.chat.core.model.Article
-import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.contract.api.V1
 import com.github.woodsmarshes.chat.core.contract.dto.article.ArticleAuthorDto
 import com.github.woodsmarshes.chat.core.contract.dto.article.ArticleListResponse
 import com.github.woodsmarshes.chat.core.contract.dto.article.CreateArticleRequest
 import com.github.woodsmarshes.chat.core.contract.dto.article.UpdateArticleRequest
+import com.github.woodsmarshes.chat.core.model.Article
+import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.exceptions.getOrThrow
 import com.github.woodsmarshes.chat.service.ArticleService
 import com.github.woodsmarshes.chat.utils.MAX_PAGE_SIZE
@@ -26,11 +26,13 @@ fun Route.articleRoutes() {
 
     // Public: list and view articles
     get<V1.Articles> { params ->
-        val articles = articleService.listArticles(
-            beforeId = params.beforeId,
-            limit = params.limit.coerceIn(1, MAX_PAGE_SIZE),
-            authorId = params.authorId,
-        ).getOrThrow()
+        val articles =
+            articleService
+                .listArticles(
+                    beforeId = params.beforeId,
+                    limit = params.limit.coerceIn(1, MAX_PAGE_SIZE),
+                    authorId = params.authorId,
+                ).getOrThrow()
         call.respond(articles.map { it.toListResponse() })
     }
 
@@ -43,11 +45,13 @@ fun Route.articleRoutes() {
     authenticate {
         get<V1.Articles.My> { params ->
             val userId = call.extractUserId()
-            val articles = articleService.listMyArticles(
-                userId = userId,
-                beforeId = params.parent.beforeId,
-                limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE)
-            ).getOrThrow()
+            val articles =
+                articleService
+                    .listMyArticles(
+                        userId = userId,
+                        beforeId = params.parent.beforeId,
+                        limit = params.parent.limit.coerceIn(1, MAX_PAGE_SIZE),
+                    ).getOrThrow()
             call.respond(articles.map { it.toListResponse() })
         }
 
@@ -59,25 +63,29 @@ fun Route.articleRoutes() {
         post<V1.Articles> {
             val userId = call.extractUserId()
             val req = call.receive<CreateArticleRequest>()
-            val article = articleService.createArticle(
-                userId = userId,
-                title = req.title,
-                content = req.content,
-                excerpt = req.excerpt,
-                status = req.status,
-            ).getOrThrow()
+            val article =
+                articleService
+                    .createArticle(
+                        userId = userId,
+                        title = req.title,
+                        content = req.content,
+                        excerpt = req.excerpt,
+                        status = req.status,
+                    ).getOrThrow()
             call.respond(article)
         }
 
         post<V1.Articles.CreateBlank> {
             val userId = call.extractUserId()
-            val article = articleService.createArticle(
-                userId = userId,
-                title = "Untitled", // 默认标题
-                content = kotlinx.serialization.json.JsonObject(emptyMap()), // 传入空 JSON 对象 {}
-                excerpt = null,
-                status = ArticleStatus.DRAFT // 默认设为草稿状态
-            ).getOrThrow()
+            val article =
+                articleService
+                    .createArticle(
+                        userId = userId,
+                        title = "Untitled", // 默认标题
+                        content = kotlinx.serialization.json.JsonObject(emptyMap()), // 传入空 JSON 对象 {}
+                        excerpt = null,
+                        status = ArticleStatus.DRAFT, // 默认设为草稿状态
+                    ).getOrThrow()
 
             call.respond(article)
         }
@@ -85,14 +93,16 @@ fun Route.articleRoutes() {
         put<V1.Articles.Id> { params ->
             val userId = call.extractUserId()
             val req = call.receive<UpdateArticleRequest>()
-            val article = articleService.saveArticle(
-                userId = userId,
-                id = params.id,
-                title = req.title,
-                content = req.content,
-                status = req.status,
-                excerpt = req.excerpt,
-            ).getOrThrow()
+            val article =
+                articleService
+                    .saveArticle(
+                        userId = userId,
+                        id = params.id,
+                        title = req.title,
+                        content = req.content,
+                        status = req.status,
+                        excerpt = req.excerpt,
+                    ).getOrThrow()
             call.respond(article)
         }
 
@@ -112,24 +122,26 @@ fun Route.articleRoutes() {
  * client decode the deletion timestamp as the slug. Mapping here also keeps
  * the document body out of list responses, which is what the DTO documents.
  */
-private fun Article.toListResponse(): ArticleListResponse = ArticleListResponse(
-    id = id,
-    title = title,
-    content = null,
-    author = ArticleAuthorDto(
-        id = author.id,
-        username = author.username,
-        displayName = author.displayName,
-        avatarUrl = author.avatarUrl,
-        createdAt = author.createdAt,
-        updatedAt = author.updatedAt,
-        deletedAt = author.deletedAt,
-    ),
-    status = status,
-    excerpt = excerpt,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-    publishedAt = publishedAt,
-    coverImage = coverImage,
-    slug = slug,
-)
+private fun Article.toListResponse(): ArticleListResponse =
+    ArticleListResponse(
+        id = id,
+        title = title,
+        content = null,
+        author =
+            ArticleAuthorDto(
+                id = author.id,
+                username = author.username,
+                displayName = author.displayName,
+                avatarUrl = author.avatarUrl,
+                createdAt = author.createdAt,
+                updatedAt = author.updatedAt,
+                deletedAt = author.deletedAt,
+            ),
+        status = status,
+        excerpt = excerpt,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        publishedAt = publishedAt,
+        coverImage = coverImage,
+        slug = slug,
+    )

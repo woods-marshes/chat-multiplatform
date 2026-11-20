@@ -19,139 +19,140 @@ import react.useEffect
 import react.useState
 import web.cssom.ClassName
 
-val UserMenu = FC<Props> {
-    val user = useCurrentContext().user
-    val (open, setOpen) = useState(false)
-    val (loggingOut, setLoggingOut) = useState(false)
+val UserMenu =
+    FC<Props> {
+        val user = useCurrentContext().user
+        val (open, setOpen) = useState(false)
+        val (loggingOut, setLoggingOut) = useState(false)
 
-    // Close the dropdown when clicking outside it.
-    // The effect callback runs in a suspend CoroutineScope that is cancelled on
-    // unmount/dependency change, so use awaitCancellation() + try/finally.
-    useEffect(open) {
-        if (!open) return@useEffect
+        // Close the dropdown when clicking outside it.
+        // The effect callback runs in a suspend CoroutineScope that is cancelled on
+        // unmount/dependency change, so use awaitCancellation() + try/finally.
+        useEffect(open) {
+            if (!open) return@useEffect
 
-        val handler: (org.w3c.dom.events.Event) -> Unit = { event ->
-            val target = event.target
-            if (target is org.w3c.dom.HTMLElement && target.closest(".user-menu") == null) {
+            val handler: (org.w3c.dom.events.Event) -> Unit = { event ->
+                val target = event.target
+                if (target is org.w3c.dom.HTMLElement && target.closest(".user-menu") == null) {
+                    setOpen(false)
+                }
+            }
+            document.addEventListener("click", handler)
+            try {
+                awaitCancellation()
+            } finally {
+                document.removeEventListener("click", handler)
+            }
+        }
+
+        if (user == null) {
+            button {
+                className = ClassName("btn btn-primary btn-sm user-menu-login")
+                onClick = { Router.navigate("/login") }
+                +"登录"
+            }
+            return@FC
+        }
+
+        val handleLogout = {
+            if (!loggingOut) {
+                setLoggingOut(true)
                 setOpen(false)
-            }
-        }
-        document.addEventListener("click", handler)
-        try {
-            awaitCancellation()
-        } finally {
-            document.removeEventListener("click", handler)
-        }
-    }
-
-    if (user == null) {
-        button {
-            className = ClassName("btn btn-primary btn-sm user-menu-login")
-            onClick = { Router.navigate("/login") }
-            +"登录"
-        }
-        return@FC
-    }
-
-    val handleLogout = {
-        if (!loggingOut) {
-            setLoggingOut(true)
-            setOpen(false)
-            koinInject<CoroutineScope>().promise {
-                try {
-                    // One atomic write: token, profile and generation clear together.
-                    koinInject<AuthTokenDataSource>().clearLoginSession()
-                } catch (e: Exception) {
-                    console.log("Logout failed: ${e.message}")
-                }
-                // UserProvider observes the Flow and updates to logged-out state.
-                Router.navigate("/login")
-                setLoggingOut(false)
-            }
-        }
-    }
-
-    div {
-        className = ClassName("user-menu")
-
-        button {
-            className = ClassName("user-menu-trigger")
-            onClick = { event ->
-                event.stopPropagation()
-                setOpen(!open)
-            }
-            Avatar.invoke {
-                this.user = user
-                this.sizeClass = "avatar-sm"
-            }
-            span {
-                className = ClassName("user-menu-name")
-                +(user.displayName ?: user.username)
-            }
-        }
-
-        if (open) {
-            div {
-                className = ClassName("user-menu-dropdown")
-
-                a {
-                    href = "#/me"
-                    className = ClassName("user-menu-item")
-                    onClick = { event ->
-                        event.preventDefault()
-                        setOpen(false)
-                        Router.navigate("/me")
+                koinInject<CoroutineScope>().promise {
+                    try {
+                        // One atomic write: token, profile and generation clear together.
+                        koinInject<AuthTokenDataSource>().clearLoginSession()
+                    } catch (e: Exception) {
+                        console.log("Logout failed: ${e.message}")
                     }
-                    +"Profile"
+                    // UserProvider observes the Flow and updates to logged-out state.
+                    Router.navigate("/login")
+                    setLoggingOut(false)
                 }
+            }
+        }
 
-                a {
-                    href = "#/my/articles"
-                    className = ClassName("user-menu-item")
-                    onClick = { event ->
-                        event.preventDefault()
-                        setOpen(false)
-                        Router.navigate("/my/articles")
-                    }
-                    +"文章"
+        div {
+            className = ClassName("user-menu")
+
+            button {
+                className = ClassName("user-menu-trigger")
+                onClick = { event ->
+                    event.stopPropagation()
+                    setOpen(!open)
                 }
-
-                a {
-                    href = "#/settings"
-                    className = ClassName("user-menu-item")
-                    onClick = { event ->
-                        event.preventDefault()
-                        setOpen(false)
-                        Router.navigate("/settings")
-                    }
-                    +"设置"
+                Avatar.invoke {
+                    this.user = user
+                    this.sizeClass = "avatar-sm"
                 }
+                span {
+                    className = ClassName("user-menu-name")
+                    +(user.displayName ?: user.username)
+                }
+            }
 
-                if (user.role == UserRole.ADMIN) {
+            if (open) {
+                div {
+                    className = ClassName("user-menu-dropdown")
+
                     a {
-                        href = "#/admin"
+                        href = "#/me"
                         className = ClassName("user-menu-item")
                         onClick = { event ->
                             event.preventDefault()
                             setOpen(false)
-                            Router.navigate("/admin")
+                            Router.navigate("/me")
                         }
-                        +"管理后台"
+                        +"Profile"
                     }
-                }
 
-                div { className = ClassName("user-menu-divider") }
-
-                a {
-                    href = "#"
-                    className = ClassName("user-menu-item user-menu-item-danger")
-                    onClick = { event ->
-                        event.preventDefault()
-                        handleLogout()
+                    a {
+                        href = "#/my/articles"
+                        className = ClassName("user-menu-item")
+                        onClick = { event ->
+                            event.preventDefault()
+                            setOpen(false)
+                            Router.navigate("/my/articles")
+                        }
+                        +"文章"
                     }
-                    +if (loggingOut) "退出中..." else "退出登录"
+
+                    a {
+                        href = "#/settings"
+                        className = ClassName("user-menu-item")
+                        onClick = { event ->
+                            event.preventDefault()
+                            setOpen(false)
+                            Router.navigate("/settings")
+                        }
+                        +"设置"
+                    }
+
+                    if (user.role == UserRole.ADMIN) {
+                        a {
+                            href = "#/admin"
+                            className = ClassName("user-menu-item")
+                            onClick = { event ->
+                                event.preventDefault()
+                                setOpen(false)
+                                Router.navigate("/admin")
+                            }
+                            +"管理后台"
+                        }
+                    }
+
+                    div { className = ClassName("user-menu-divider") }
+
+                    a {
+                        href = "#"
+                        className = ClassName("user-menu-item user-menu-item-danger")
+                        onClick = { event ->
+                            event.preventDefault()
+                            handleLogout()
+                        }
+                        +if (loggingOut) "退出中..." else "退出登录"
+                    }
                 }
             }
         }
     }
-}

@@ -9,7 +9,7 @@ import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 import java.io.File
 
-//actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> = createDataStore(
+// actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> = createDataStore(
 //    producePath = {
 //        val homeDir = System.getProperty("user.home")
 //        val appName = ".chat-multiplatform"
@@ -22,7 +22,7 @@ import java.io.File
 //        val file = File(dataDir, DATA_STORE_FILE_NAME)
 //        file.absolutePath
 //    }
-//)
+// )
 
 actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> {
     val homeDir = System.getProperty("user.home")
@@ -35,10 +35,11 @@ actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferen
 
     val file = File(dataDir, DATA_STORE_FILE_NAME)
     return createDataStore(
-        storage = OkioStorage(
-            fileSystem = FileSystem.SYSTEM,
-            serializer = PreferencesSerializer,
-            producePath = { file.toOkioPath() }
-        )
+        storage =
+            OkioStorage(
+                fileSystem = FileSystem.SYSTEM,
+                serializer = PreferencesSerializer,
+                producePath = { file.toOkioPath() },
+            ),
     )
 }

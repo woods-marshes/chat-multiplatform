@@ -4,5 +4,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.koin.dsl.module
 
-class WebContext() : PlatformContext
+class WebContext : PlatformContext
+
 actual fun provideIODispatcher(): CoroutineDispatcher = Dispatchers.Default

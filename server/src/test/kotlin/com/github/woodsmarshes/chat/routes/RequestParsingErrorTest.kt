@@ -16,29 +16,32 @@ import kotlin.test.assertEquals
  * 500, polluting server-error metrics with client mistakes.
  */
 class RequestParsingErrorTest {
-
     @Test
-    fun malformedJsonBodyIsABadRequestNotAServerError() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun malformedJsonBodyIsABadRequestNotAServerError() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        val response = client.post("/v1/auth/login") {
-            contentType(ContentType.Application.Json)
-            setBody("{ not valid json")
+            val response =
+                client.post("/v1/auth/login") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{ not valid json")
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-    }
-
     @Test
-    fun jsonBodyWithMissingFieldsIsABadRequest() = testApplication {
-        environment { config = ApplicationConfig("application-test.conf") }
+    fun jsonBodyWithMissingFieldsIsABadRequest() =
+        testApplication {
+            environment { config = ApplicationConfig("application-test.conf") }
 
-        // Valid JSON, but LoginRequest requires email and password.
-        val response = client.post("/v1/auth/login") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"wrong": "shape"}""")
+            // Valid JSON, but LoginRequest requires email and password.
+            val response =
+                client.post("/v1/auth/login") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"wrong": "shape"}""")
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
         }
-
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-    }
 }

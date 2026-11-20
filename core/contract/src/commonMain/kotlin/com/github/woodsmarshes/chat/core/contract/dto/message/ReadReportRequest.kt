@@ -6,5 +6,5 @@ import kotlin.uuid.Uuid
 
 @Serializable
 data class ReadReportRequest(
-    @ProtoNumber(1) val messageId: Uuid
+    @ProtoNumber(1) val messageId: Uuid,
 )

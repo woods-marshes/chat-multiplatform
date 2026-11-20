@@ -10,32 +10,35 @@ import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByIds
 import io.github.woodsmarshes.chat.db.GetMessagesWithAllRelationsByPage
 import io.github.woodsmarshes.chat.db.KeyedMessagesWithRelations
 import io.github.woodsmarshes.chat.db.MessageEntity
-
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 interface MessageDao {
+    suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit)
 
-    suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit,)
     // 写入
     suspend fun insertMessage(message: MessageEntity)
+
     suspend fun insertMessages(messages: List<MessageEntity>)
 
     // 查询 - 基础分页
     fun getMessagesPaged(
         conversationId: Uuid,
         beforeTimestamp: Instant,
-        limit: Long
+        limit: Long,
     ): Flow<List<MessageEntity>>
 
-    fun pagingSource(conversationId: Uuid, pageSize: Long): PagingSource<Uuid, KeyedMessagesWithRelations>
+    fun pagingSource(
+        conversationId: Uuid,
+        pageSize: Long,
+    ): PagingSource<Uuid, KeyedMessagesWithRelations>
 
     // 查询 - 核心关联分页 (带发送者信息)
     fun getMessagesWithRelationsByPage(
         conversationId: Uuid,
         beforeId: Uuid?,
-        limit: Long
+        limit: Long,
     ): Flow<List<GetMessagesWithAllRelationsByPage>>
 
     // 查询 - 批量补全回复引用
@@ -55,13 +58,21 @@ interface MessageDao {
     fun getRepliesToMessage(messageId: Uuid): Flow<List<MessageEntity>>
 
     // 更新与状态管理
-    suspend fun updateMessageStatus(oldId: Uuid, newId: Uuid, createdAt: Instant, status: MessageStatus)
+    suspend fun updateMessageStatus(
+        oldId: Uuid,
+        newId: Uuid,
+        createdAt: Instant,
+        status: MessageStatus,
+    )
 
     /**
      * Marks the message revoked. Returns false for an already-revoked row so
      * duplicate withdraw events do not retract the unread badge twice.
      */
-    suspend fun revokeMessage(id: Uuid, revokedAt: Instant): Boolean
+    suspend fun revokeMessage(
+        id: Uuid,
+        revokedAt: Instant,
+    ): Boolean
 
     /**
      * Demotes confirmed messages older than [windowOldestId] to
@@ -71,7 +82,10 @@ interface MessageDao {
      * responses. Outbox rows (SENDING/FAILED) are never demoted so their reply
      * targets survive; demoted rows stay on disk for reply-preview joins.
      */
-    suspend fun demoteTimelineBefore(conversationId: Uuid, windowOldestId: Uuid)
+    suspend fun demoteTimelineBefore(
+        conversationId: Uuid,
+        windowOldestId: Uuid,
+    )
 
     /**
      * Demotes all confirmed messages in [conversationId] to
@@ -105,10 +119,26 @@ interface MessageDao {
 
     suspend fun failStaleMessages(giveUpBefore: Instant)
 
-    suspend fun startAttempt(id: Uuid, now: Instant)
-    suspend fun claimFailedMessage(id: Uuid, now: Instant): Boolean
-    suspend fun recordAttempt(id: Uuid, createdAt: Instant, now: Instant)
-    suspend fun mergeServerMessage(message: MessageEntity, localId: Uuid?)
+    suspend fun startAttempt(
+        id: Uuid,
+        now: Instant,
+    )
+
+    suspend fun claimFailedMessage(
+        id: Uuid,
+        now: Instant,
+    ): Boolean
+
+    suspend fun recordAttempt(
+        id: Uuid,
+        createdAt: Instant,
+        now: Instant,
+    )
+
+    suspend fun mergeServerMessage(
+        message: MessageEntity,
+        localId: Uuid?,
+    )
 
     /**
      * Event/preview seed: INSERT OR IGNORE with [MessageEntity.in_timeline]
@@ -118,8 +148,16 @@ interface MessageDao {
 
     suspend fun seedMessages(messages: List<MessageEntity>)
 
-    suspend fun getScopeCursor(scope: String, id: Uuid): Long?
-    suspend fun setScopeCursor(scope: String, id: Uuid, revision: Long)
+    suspend fun getScopeCursor(
+        scope: String,
+        id: Uuid,
+    ): Long?
+
+    suspend fun setScopeCursor(
+        scope: String,
+        id: Uuid,
+        revision: Long,
+    )
 
     /**
      * Crash-safe unread recovery task for a conversation, kept separate from
@@ -129,9 +167,15 @@ interface MessageDao {
      * only when the generation still matches the one the request read.
      */
     suspend fun markUnreadRefreshPending(conversationId: Uuid)
+
     suspend fun getUnreadRefreshPendingConversations(): List<Uuid>
+
     suspend fun getUnreadRefreshPendingGeneration(conversationId: Uuid): Long?
-    suspend fun confirmUnreadRefreshPending(conversationId: Uuid, expectedGeneration: Long)
+
+    suspend fun confirmUnreadRefreshPending(
+        conversationId: Uuid,
+        expectedGeneration: Long,
+    )
 
     // 删除
     suspend fun deleteMessage(id: Uuid)

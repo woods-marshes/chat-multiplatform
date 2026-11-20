@@ -1,5 +1,8 @@
 package com.github.woodsmarshes.chat.repository
 
+import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.core.model.Conversation
 import com.github.woodsmarshes.chat.core.model.ConversationParticipant
 import com.github.woodsmarshes.chat.core.model.ConversationRole
@@ -8,9 +11,6 @@ import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.ProfileVisibility
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
-import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
-import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
@@ -46,7 +46,10 @@ enum class ReadCursorUpdate { ADVANCED, UNCHANGED, INVALID }
  * transaction, so callers never recount — it is meaningful only for
  * [ReadCursorUpdate.ADVANCED] and is 0 otherwise.
  */
-data class ReadCursorResult(val outcome: ReadCursorUpdate, val unreadCount: Long)
+data class ReadCursorResult(
+    val outcome: ReadCursorUpdate,
+    val unreadCount: Long,
+)
 
 interface ConversationParticipantRepository {
     suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant?
@@ -55,36 +58,57 @@ interface ConversationParticipantRepository {
      * true = a matching row was updated; false = no matching row (the target
      * is missing or not visible to this actor) — never a validation failure.
      */
-    suspend fun updateParticipantSettings(userId: Uuid, conversationId: Uuid, settings: ParticipantSettings): Boolean
+    suspend fun updateParticipantSettings(
+        userId: Uuid,
+        conversationId: Uuid,
+        settings: ParticipantSettings,
+    ): Boolean
 
     /** Valid repeated or older receipts succeed without advancing or broadcasting. */
-    suspend fun updateReadLastMessage(userId: Uuid, conversationId: Uuid, messageId: Uuid): ReadCursorResult
+    suspend fun updateReadLastMessage(
+        userId: Uuid,
+        conversationId: Uuid,
+        messageId: Uuid,
+    ): ReadCursorResult
 
     /** Same contract as [updateParticipantSettings]. */
-    suspend fun updateConversationParticipantRole(userId: Uuid, conversationId: Uuid, role: ConversationRole): Boolean
+    suspend fun updateConversationParticipantRole(
+        userId: Uuid,
+        conversationId: Uuid,
+        role: ConversationRole,
+    ): Boolean
 
     /** Same contract as [updateParticipantSettings]. */
-    suspend fun deleteConversationParticipant(userId: Uuid, conversationId: Uuid): Boolean
+    suspend fun deleteConversationParticipant(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): Boolean
 
-    suspend fun getConversationParticipant(userId: Uuid, conversationId: Uuid): ConversationParticipant?
+    suspend fun getConversationParticipant(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): ConversationParticipant?
 
     suspend fun getUserConversationParticipants(userId: Uuid): List<ConversationParticipant>
 
-    suspend fun getConversationParticipants(userId: Uuid, conversationIds: List<Uuid>): List<ConversationParticipant>
+    suspend fun getConversationParticipants(
+        userId: Uuid,
+        conversationIds: List<Uuid>,
+    ): List<ConversationParticipant>
 
     suspend fun getConversationParticipantWithConversation(
         userId: Uuid,
-        conversationId: Uuid
+        conversationId: Uuid,
     ): Pair<ConversationParticipant, Conversation>?
 
     suspend fun getParticipantContext(
         userId: Uuid,
-        conversationId: Uuid
+        conversationId: Uuid,
     ): Triple<ConversationParticipant, User, Conversation>?
 
     suspend fun getGroupParticipantContext(
         userId: Uuid,
-        conversationId: Uuid
+        conversationId: Uuid,
     ): Triple<ConversationParticipant, GroupProfile, Conversation>?
 
     suspend fun getConversationParticipants(conversationId: Uuid): List<ConversationParticipant>
@@ -93,457 +117,495 @@ interface ConversationParticipantRepository {
 
     suspend fun getPrivateConversationOtherParticipantsWithUser(
         userId: Uuid,
-        conversationId: Uuid
+        conversationId: Uuid,
     ): Pair<ConversationParticipant, User>?
 
     suspend fun getConversationParticipantByUserId(
         userId: Uuid,
-        roles: List<ConversationRole> = emptyList()
+        roles: List<ConversationRole> = emptyList(),
     ): List<ConversationParticipant>
 
     suspend fun inviteUsersToConversation(
         conversationId: Uuid,
         inviterId: Uuid,
-        userIds: Set<Uuid>
+        userIds: Set<Uuid>,
     ): List<ConversationParticipant>
 
     suspend fun inviteUserToConversation(
         conversationId: Uuid,
         inviterId: Uuid,
-        userId: Uuid
+        userId: Uuid,
     ): ConversationParticipant?
 
-    suspend fun getUserConversationRole(userId: Uuid, conversationId: Uuid): ConversationRole?
+    suspend fun getUserConversationRole(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): ConversationRole?
 }
 
 class ConversationParticipantDataSourceImpl(
     private val syncRepository: SyncRepository = SyncDataSourceImpl(),
 ) : ConversationParticipantRepository {
+    override suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant? =
+        dbQuery {
+            val inserted =
+                ConversationParticipants
+                    .insert {
+                        it[this.conversationId] = conversationParticipant.conversationId
+                        it[this.userId] = conversationParticipant.userId
+                        it[this.role] = conversationParticipant.role
+                        it[this.settings] = conversationParticipant.settings
+                    }.resultedValues
+                    ?.singleOrNull()
+                    ?.toConversationParticipant()
 
-    override suspend fun insertConversationParticipant(conversationParticipant: ConversationParticipant): ConversationParticipant? = dbQuery {
-        val inserted = ConversationParticipants.insert {
-            it[this.conversationId] = conversationParticipant.conversationId
-            it[this.userId] = conversationParticipant.userId
-            it[this.role] = conversationParticipant.role
-            it[this.settings] = conversationParticipant.settings
-        }
-            .resultedValues
-            ?.singleOrNull()
-            ?.toConversationParticipant()
-
-        if (inserted != null) {
-            val event = ConversationEventResponse.UserJoinedConversation(
-                conversationId = inserted.conversationId,
-                userId = listOf(inserted.userId),
-                inviterId = null,
-                timestamp = inserted.joinedAt,
-            )
-            syncRepository.appendChanges(
-                listOf(
-                    SyncAppendTarget(SyncScope.CONVERSATION, inserted.conversationId, event),
-                    SyncAppendTarget(SyncScope.USER, inserted.userId, event),
+            if (inserted != null) {
+                val event =
+                    ConversationEventResponse.UserJoinedConversation(
+                        conversationId = inserted.conversationId,
+                        userId = listOf(inserted.userId),
+                        inviterId = null,
+                        timestamp = inserted.joinedAt,
+                    )
+                syncRepository.appendChanges(
+                    listOf(
+                        SyncAppendTarget(SyncScope.CONVERSATION, inserted.conversationId, event),
+                        SyncAppendTarget(SyncScope.USER, inserted.userId, event),
+                    ),
                 )
-            )
+            }
+            inserted
         }
-        inserted
-    }
 
     override suspend fun updateParticipantSettings(
         userId: Uuid,
         conversationId: Uuid,
-        settings: ParticipantSettings
-    ): Boolean = dbQuery {
-        val updated = ConversationParticipants.update(
-            where = {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId)
+        settings: ParticipantSettings,
+    ): Boolean =
+        dbQuery {
+            val updated =
+                ConversationParticipants.update(
+                    where = {
+                        (ConversationParticipants.userId eq userId) and
+                            (ConversationParticipants.conversationId eq conversationId)
+                    },
+                ) {
+                    it[this.settings] = settings
+                } > 0
+            if (updated) {
+                syncRepository.appendChange(
+                    scope = SyncScope.USER,
+                    id = userId,
+                    event =
+                        ConversationEventResponse.PersonalSettingsUpdated(
+                            conversationId = conversationId,
+                            userId = userId,
+                            settings = settings,
+                            timestamp = Clock.System.now(),
+                        ),
+                )
             }
-        ) {
-            it[this.settings] = settings
-        } > 0
-        if (updated) {
-            syncRepository.appendChange(
-                scope = SyncScope.USER,
-                id = userId,
-                event = ConversationEventResponse.PersonalSettingsUpdated(
-                    conversationId = conversationId,
-                    userId = userId,
-                    settings = settings,
-                    timestamp = Clock.System.now(),
-                ),
-            )
+            updated
         }
-        updated
-    }
 
     override suspend fun updateReadLastMessage(
         userId: Uuid,
         conversationId: Uuid,
-        messageId: Uuid
-    ): ReadCursorResult = dbQuery {
-        // The cursor column has no foreign key, so a read receipt could point
-        // at a message from another conversation (or at nothing at all).
-        Messages.selectAll()
-            .where { Messages.id eq messageId }
-            .singleOrNull()
-            ?.takeIf { it[Messages.conversationId].value == conversationId }
-            ?: return@dbQuery ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
-        ConversationParticipants.selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId)
-            }
-            .singleOrNull()
-            ?: return@dbQuery ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
-
-        // Message ids are UUIDv7, so "greater" is chronological. A receipt for
-        // an already-covered message is a no-op rather than a failure: several
-        // devices report the same position.
-        val updated = ConversationParticipants.update(
-            where = {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId) and
-                        (
-                                ConversationParticipants.lastReadMessageId.isNull() or
-                                        (ConversationParticipants.lastReadMessageId less messageId)
-                                )
-            }
-        ) {
-            it[this.lastReadMessageId] = messageId
-        }
-        if (updated > 0) {
-            val unreadCount = Messages
-                .join(
-                    ConversationParticipants,
-                    JoinType.INNER,
-                    additionalConstraint = {
-                        (ConversationParticipants.conversationId eq Messages.conversationId) and
-                            (ConversationParticipants.userId eq userId)
-                    },
-                )
-                .select(Messages.id.count())
+        messageId: Uuid,
+    ): ReadCursorResult =
+        dbQuery {
+            // The cursor column has no foreign key, so a read receipt could point
+            // at a message from another conversation (or at nothing at all).
+            Messages
+                .selectAll()
+                .where { Messages.id eq messageId }
+                .singleOrNull()
+                ?.takeIf { it[Messages.conversationId].value == conversationId }
+                ?: return@dbQuery ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
+            ConversationParticipants
+                .selectAll()
                 .where {
-                    (Messages.conversationId eq conversationId) and
-                        (Messages.senderId neq userId) and
-                        Messages.revokedAt.isNull() and
-                        (ConversationParticipants.lastReadMessageId.isNull() or
-                            (Messages.id greater ConversationParticipants.lastReadMessageId))
-                }
-                .firstOrNull()
-                ?.get(Messages.id.count()) ?: 0L
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId)
+                }.singleOrNull()
+                ?: return@dbQuery ReadCursorResult(ReadCursorUpdate.INVALID, 0L)
 
-            syncRepository.appendChange(
-                scope = SyncScope.USER,
-                id = userId,
-                event = MessageEventResponse.Read(
-                    messageId = messageId,
-                    conversationId = conversationId,
-                    readerId = userId,
-                    timestamp = Clock.System.now(),
-                    unreadCount = unreadCount.toInt(),
-                ),
-            )
-            ReadCursorResult(ReadCursorUpdate.ADVANCED, unreadCount)
-        } else {
-            ReadCursorResult(ReadCursorUpdate.UNCHANGED, 0L)
+            // Message ids are UUIDv7, so "greater" is chronological. A receipt for
+            // an already-covered message is a no-op rather than a failure: several
+            // devices report the same position.
+            val updated =
+                ConversationParticipants.update(
+                    where = {
+                        (ConversationParticipants.userId eq userId) and
+                            (ConversationParticipants.conversationId eq conversationId) and
+                            (
+                                ConversationParticipants.lastReadMessageId.isNull() or
+                                    (ConversationParticipants.lastReadMessageId less messageId)
+                            )
+                    },
+                ) {
+                    it[this.lastReadMessageId] = messageId
+                }
+            if (updated > 0) {
+                val unreadCount =
+                    Messages
+                        .join(
+                            ConversationParticipants,
+                            JoinType.INNER,
+                            additionalConstraint = {
+                                (ConversationParticipants.conversationId eq Messages.conversationId) and
+                                    (ConversationParticipants.userId eq userId)
+                            },
+                        ).select(Messages.id.count())
+                        .where {
+                            (Messages.conversationId eq conversationId) and
+                                (Messages.senderId neq userId) and
+                                Messages.revokedAt.isNull() and
+                                (
+                                    ConversationParticipants.lastReadMessageId.isNull() or
+                                        (Messages.id greater ConversationParticipants.lastReadMessageId)
+                                )
+                        }.firstOrNull()
+                        ?.get(Messages.id.count()) ?: 0L
+
+                syncRepository.appendChange(
+                    scope = SyncScope.USER,
+                    id = userId,
+                    event =
+                        MessageEventResponse.Read(
+                            messageId = messageId,
+                            conversationId = conversationId,
+                            readerId = userId,
+                            timestamp = Clock.System.now(),
+                            unreadCount = unreadCount.toInt(),
+                        ),
+                )
+                ReadCursorResult(ReadCursorUpdate.ADVANCED, unreadCount)
+            } else {
+                ReadCursorResult(ReadCursorUpdate.UNCHANGED, 0L)
+            }
         }
-    }
 
     override suspend fun updateConversationParticipantRole(
         userId: Uuid,
         conversationId: Uuid,
-        role: ConversationRole
-    ): Boolean = dbQuery {
-        ConversationParticipants.update(
-            where = {
-                (ConversationParticipants.userId eq userId) and
+        role: ConversationRole,
+    ): Boolean =
+        dbQuery {
+            ConversationParticipants.update(
+                where = {
+                    (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId)
-            }
-        ) {
-            it[this.role] = role
-        } > 0
-    }
-
-    override suspend fun deleteConversationParticipant(userId: Uuid, conversationId: Uuid): Boolean = dbQuery {
-        val deleted = ConversationParticipants.deleteWhere {
-            (ConversationParticipants.userId eq userId) and
-                    (ConversationParticipants.conversationId eq conversationId)
-        } > 0
-        if (deleted) {
-            val event = ConversationEventResponse.UserLeftConversation(
-                conversationId = conversationId,
-                userId = userId,
-                timestamp = Clock.System.now(),
-            )
-            syncRepository.appendChanges(
-                listOf(
-                    SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event),
-                    SyncAppendTarget(SyncScope.USER, userId, event),
-                )
-            )
-        }
-        deleted
-    }
-
-    override suspend fun getConversationParticipant(
-        userId: Uuid,
-        conversationId: Uuid
-    ): ConversationParticipant? = dbQuery {
-        ConversationParticipants
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId)
-            }
-            .singleOrNull()
-            ?.toConversationParticipant()
-    }
-
-    override suspend fun getUserConversationParticipants(userId: Uuid): List<ConversationParticipant> = dbQuery {
-        ConversationParticipants
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId)
-            }
-            .map {
-                it.toConversationParticipant()
-            }
-    }
-
-    override suspend fun getConversationParticipants(
-        userId: Uuid,
-        conversationIds: List<Uuid>
-    ): List<ConversationParticipant> = dbQuery {
-        ConversationParticipants
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId inList conversationIds)
-            }
-            .map {
-                it.toConversationParticipant()
-            }
-    }
-
-    override suspend fun getConversationParticipantWithConversation(
-        userId: Uuid,
-        conversationId: Uuid
-    ): Pair<ConversationParticipant, Conversation>? = dbQuery {
-        (ConversationParticipants innerJoin Conversations)
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId)
-            }
-            .singleOrNull()
-            ?.let {
-                it.toConversationParticipant() to it.toConversation()
-            }
-    }
-
-    override suspend fun getParticipantContext(
-        userId: Uuid,
-        conversationId: Uuid
-    ): Triple<ConversationParticipant, User, Conversation>? = dbQuery {
-        (ConversationParticipants innerJoin Users innerJoin Conversations)
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId)
-            }
-            .singleOrNull()
-            ?.let {
-                Triple(
-                    it.toConversationParticipant(),
-                    it.toUser(),
-                    it.toConversation()
-                )
-            }
-    }
-
-    override suspend fun getGroupParticipantContext(
-        userId: Uuid,
-        conversationId: Uuid
-    ): Triple<ConversationParticipant, GroupProfile, Conversation>? = dbQuery {
-        (ConversationParticipants innerJoin Conversations innerJoin GroupProfiles)
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and
-                        (ConversationParticipants.conversationId eq conversationId) and
-                        (Conversations.type eq ConversationType.GROUP)
-            }
-            .singleOrNull()
-            ?.let {
-                Triple(
-                    it.toConversationParticipant(),
-                    it.toGroupProfile(),
-                    it.toConversation()
-                )
-            }
-    }
-
-    override suspend fun getConversationParticipants(conversationId: Uuid): List<ConversationParticipant> = dbQuery {
-        ConversationParticipants
-            .selectAll()
-            .where {
-                ConversationParticipants.conversationId eq conversationId
-            }
-            .map { it.toConversationParticipant() }
-    }
-
-    override suspend fun getConversationParticipantsWithUser(conversationId: Uuid): List<Pair<ConversationParticipant, User>> = dbQuery {
-        (ConversationParticipants innerJoin Users)
-            .selectAll()
-            .where {
-                ConversationParticipants.conversationId eq conversationId
-            }
-            .map {
-                it.toConversationParticipant() to it.toUser()
-            }
-    }
-
-    override suspend fun getPrivateConversationOtherParticipantsWithUser(
-        userId: Uuid,
-        conversationId: Uuid
-    ): Pair<ConversationParticipant, User>? = dbQuery {
-        (ConversationParticipants innerJoin Users innerJoin UserSettings)
-            .selectAll()
-            .where {
-                (ConversationParticipants.conversationId eq conversationId) and
-                        (ConversationParticipants.userId neq userId)
-            }
-            .singleOrNull()
-            ?.let {
-                val user = it.toUser()
-                val shouldHideEmail = it[UserSettings.profileVisibility] == ProfileVisibility.PRIVATE
-                it.toConversationParticipant() to if (shouldHideEmail) user.copy(email = null) else user
-            }
-    }
-
-    override suspend fun getConversationParticipantByUserId(userId: Uuid, roles: List<ConversationRole>): List<ConversationParticipant> = dbQuery {
-        val query = ConversationParticipants.selectAll()
-            .where { ConversationParticipants.userId eq userId }
-
-        if (roles.isNotEmpty()) {
-            query.andWhere { ConversationParticipants.role inList roles }
+                },
+            ) {
+                it[this.role] = role
+            } > 0
         }
 
-        query.map { it.toConversationParticipant() }
-    }
-
-    override suspend fun inviteUsersToConversation(
+    override suspend fun deleteConversationParticipant(
+        userId: Uuid,
         conversationId: Uuid,
-        inviterId: Uuid,
-        userIds: Set<Uuid>
-    ): List<ConversationParticipant> = dbQuery {
-        val existingUserIds = ConversationParticipants
-            .select(ConversationParticipants.userId)
-            .where {
-                (ConversationParticipants.conversationId eq conversationId) and
-                        (ConversationParticipants.userId inList userIds)
-            }
-            .map { it[ConversationParticipants.userId].value }
-            .toSet()
-
-        val newUserIds = userIds - existingUserIds
-        if (newUserIds.isEmpty()) return@dbQuery emptyList()
-        // 批量插入参与者
-        val participants = newUserIds.map { userId ->
-            ConversationParticipant(
-                conversationId = conversationId,
-                userId = userId,
-                role = ConversationRole.MEMBER,
-                lastReadMessageId = null,
-                joinedAt = Clock.System.now(),
-                settings = ParticipantSettings(),
-            )
-        }
-
-        ConversationParticipants.batchInsert(participants) { participant ->
-            this[ConversationParticipants.conversationId] = participant.conversationId
-            this[ConversationParticipants.userId] = participant.userId
-            this[ConversationParticipants.role] = participant.role
-            this[ConversationParticipants.lastReadMessageId] = participant.lastReadMessageId
-            this[ConversationParticipants.joinedAt] = participant.joinedAt
-            this[ConversationParticipants.settings] = participant.settings
-        }
-
-        val event = ConversationEventResponse.UserJoinedConversation(
-            conversationId = conversationId,
-            userId = participants.map { it.userId },
-            inviterId = inviterId,
-            timestamp = Clock.System.now(),
-        )
-        val targets = buildList {
-            add(SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event))
-            participants.forEach { p ->
-                add(SyncAppendTarget(SyncScope.USER, p.userId, event))
-            }
-        }
-        syncRepository.appendChanges(targets)
-
-        participants
-    }
-
-    override suspend fun inviteUserToConversation(
-        conversationId: Uuid,
-        inviterId: Uuid,
-        userId: Uuid
-    ): ConversationParticipant? = dbQuery {
-        val notInGroup = ConversationParticipants
-            .select(ConversationParticipants.userId)
-            .where {
-                (ConversationParticipants.conversationId eq conversationId) and
-                        (ConversationParticipants.userId eq userId)
-            }
-            .empty()
-
-        if (notInGroup) {
-            val participant = ConversationParticipant(
-                conversationId = conversationId,
-                userId = userId,
-                role = ConversationRole.MEMBER,
-                lastReadMessageId = null,
-                joinedAt = Clock.System.now(),
-                settings = ParticipantSettings()
-            )
-
-            ConversationParticipants.insert {
-                it[ConversationParticipants.conversationId] = participant.conversationId
-                it[ConversationParticipants.userId] = participant.userId
-                it[ConversationParticipants.role] = participant.role
-                it[ConversationParticipants.lastReadMessageId] = participant.lastReadMessageId
-                it[ConversationParticipants.joinedAt] = participant.joinedAt
-                it[ConversationParticipants.settings] = participant.settings
-            }.resultedValues?.singleOrNull()?.let {
-                val event = ConversationEventResponse.UserJoinedConversation(
-                    conversationId = conversationId,
-                    userId = listOf(userId),
-                    inviterId = inviterId,
-                    timestamp = participant.joinedAt,
-                )
+    ): Boolean =
+        dbQuery {
+            val deleted =
+                ConversationParticipants.deleteWhere {
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId)
+                } > 0
+            if (deleted) {
+                val event =
+                    ConversationEventResponse.UserLeftConversation(
+                        conversationId = conversationId,
+                        userId = userId,
+                        timestamp = Clock.System.now(),
+                    )
                 syncRepository.appendChanges(
                     listOf(
                         SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event),
                         SyncAppendTarget(SyncScope.USER, userId, event),
-                    )
+                    ),
                 )
-                participant
             }
-        } else null
-    }
+            deleted
+        }
+
+    override suspend fun getConversationParticipant(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): ConversationParticipant? =
+        dbQuery {
+            ConversationParticipants
+                .selectAll()
+                .where {
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId)
+                }.singleOrNull()
+                ?.toConversationParticipant()
+        }
+
+    override suspend fun getUserConversationParticipants(userId: Uuid): List<ConversationParticipant> =
+        dbQuery {
+            ConversationParticipants
+                .selectAll()
+                .where {
+                    (ConversationParticipants.userId eq userId)
+                }.map {
+                    it.toConversationParticipant()
+                }
+        }
+
+    override suspend fun getConversationParticipants(
+        userId: Uuid,
+        conversationIds: List<Uuid>,
+    ): List<ConversationParticipant> =
+        dbQuery {
+            ConversationParticipants
+                .selectAll()
+                .where {
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId inList conversationIds)
+                }.map {
+                    it.toConversationParticipant()
+                }
+        }
+
+    override suspend fun getConversationParticipantWithConversation(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): Pair<ConversationParticipant, Conversation>? =
+        dbQuery {
+            (ConversationParticipants innerJoin Conversations)
+                .selectAll()
+                .where {
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId)
+                }.singleOrNull()
+                ?.let {
+                    it.toConversationParticipant() to it.toConversation()
+                }
+        }
+
+    override suspend fun getParticipantContext(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): Triple<ConversationParticipant, User, Conversation>? =
+        dbQuery {
+            (ConversationParticipants innerJoin Users innerJoin Conversations)
+                .selectAll()
+                .where {
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId)
+                }.singleOrNull()
+                ?.let {
+                    Triple(
+                        it.toConversationParticipant(),
+                        it.toUser(),
+                        it.toConversation(),
+                    )
+                }
+        }
+
+    override suspend fun getGroupParticipantContext(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): Triple<ConversationParticipant, GroupProfile, Conversation>? =
+        dbQuery {
+            (ConversationParticipants innerJoin Conversations innerJoin GroupProfiles)
+                .selectAll()
+                .where {
+                    (ConversationParticipants.userId eq userId) and
+                        (ConversationParticipants.conversationId eq conversationId) and
+                        (Conversations.type eq ConversationType.GROUP)
+                }.singleOrNull()
+                ?.let {
+                    Triple(
+                        it.toConversationParticipant(),
+                        it.toGroupProfile(),
+                        it.toConversation(),
+                    )
+                }
+        }
+
+    override suspend fun getConversationParticipants(conversationId: Uuid): List<ConversationParticipant> =
+        dbQuery {
+            ConversationParticipants
+                .selectAll()
+                .where {
+                    ConversationParticipants.conversationId eq conversationId
+                }.map { it.toConversationParticipant() }
+        }
+
+    override suspend fun getConversationParticipantsWithUser(conversationId: Uuid): List<Pair<ConversationParticipant, User>> =
+        dbQuery {
+            (ConversationParticipants innerJoin Users)
+                .selectAll()
+                .where {
+                    ConversationParticipants.conversationId eq conversationId
+                }.map {
+                    it.toConversationParticipant() to it.toUser()
+                }
+        }
+
+    override suspend fun getPrivateConversationOtherParticipantsWithUser(
+        userId: Uuid,
+        conversationId: Uuid,
+    ): Pair<ConversationParticipant, User>? =
+        dbQuery {
+            (ConversationParticipants innerJoin Users innerJoin UserSettings)
+                .selectAll()
+                .where {
+                    (ConversationParticipants.conversationId eq conversationId) and
+                        (ConversationParticipants.userId neq userId)
+                }.singleOrNull()
+                ?.let {
+                    val user = it.toUser()
+                    val shouldHideEmail = it[UserSettings.profileVisibility] == ProfileVisibility.PRIVATE
+                    it.toConversationParticipant() to if (shouldHideEmail) user.copy(email = null) else user
+                }
+        }
+
+    override suspend fun getConversationParticipantByUserId(
+        userId: Uuid,
+        roles: List<ConversationRole>,
+    ): List<ConversationParticipant> =
+        dbQuery {
+            val query =
+                ConversationParticipants
+                    .selectAll()
+                    .where { ConversationParticipants.userId eq userId }
+
+            if (roles.isNotEmpty()) {
+                query.andWhere { ConversationParticipants.role inList roles }
+            }
+
+            query.map { it.toConversationParticipant() }
+        }
+
+    override suspend fun inviteUsersToConversation(
+        conversationId: Uuid,
+        inviterId: Uuid,
+        userIds: Set<Uuid>,
+    ): List<ConversationParticipant> =
+        dbQuery {
+            val existingUserIds =
+                ConversationParticipants
+                    .select(ConversationParticipants.userId)
+                    .where {
+                        (ConversationParticipants.conversationId eq conversationId) and
+                            (ConversationParticipants.userId inList userIds)
+                    }.map { it[ConversationParticipants.userId].value }
+                    .toSet()
+
+            val newUserIds = userIds - existingUserIds
+            if (newUserIds.isEmpty()) return@dbQuery emptyList()
+            // 批量插入参与者
+            val participants =
+                newUserIds.map { userId ->
+                    ConversationParticipant(
+                        conversationId = conversationId,
+                        userId = userId,
+                        role = ConversationRole.MEMBER,
+                        lastReadMessageId = null,
+                        joinedAt = Clock.System.now(),
+                        settings = ParticipantSettings(),
+                    )
+                }
+
+            ConversationParticipants.batchInsert(participants) { participant ->
+                this[ConversationParticipants.conversationId] = participant.conversationId
+                this[ConversationParticipants.userId] = participant.userId
+                this[ConversationParticipants.role] = participant.role
+                this[ConversationParticipants.lastReadMessageId] = participant.lastReadMessageId
+                this[ConversationParticipants.joinedAt] = participant.joinedAt
+                this[ConversationParticipants.settings] = participant.settings
+            }
+
+            val event =
+                ConversationEventResponse.UserJoinedConversation(
+                    conversationId = conversationId,
+                    userId = participants.map { it.userId },
+                    inviterId = inviterId,
+                    timestamp = Clock.System.now(),
+                )
+            val targets =
+                buildList {
+                    add(SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event))
+                    participants.forEach { p ->
+                        add(SyncAppendTarget(SyncScope.USER, p.userId, event))
+                    }
+                }
+            syncRepository.appendChanges(targets)
+
+            participants
+        }
+
+    override suspend fun inviteUserToConversation(
+        conversationId: Uuid,
+        inviterId: Uuid,
+        userId: Uuid,
+    ): ConversationParticipant? =
+        dbQuery {
+            val notInGroup =
+                ConversationParticipants
+                    .select(ConversationParticipants.userId)
+                    .where {
+                        (ConversationParticipants.conversationId eq conversationId) and
+                            (ConversationParticipants.userId eq userId)
+                    }.empty()
+
+            if (notInGroup) {
+                val participant =
+                    ConversationParticipant(
+                        conversationId = conversationId,
+                        userId = userId,
+                        role = ConversationRole.MEMBER,
+                        lastReadMessageId = null,
+                        joinedAt = Clock.System.now(),
+                        settings = ParticipantSettings(),
+                    )
+
+                ConversationParticipants
+                    .insert {
+                        it[ConversationParticipants.conversationId] = participant.conversationId
+                        it[ConversationParticipants.userId] = participant.userId
+                        it[ConversationParticipants.role] = participant.role
+                        it[ConversationParticipants.lastReadMessageId] = participant.lastReadMessageId
+                        it[ConversationParticipants.joinedAt] = participant.joinedAt
+                        it[ConversationParticipants.settings] = participant.settings
+                    }.resultedValues
+                    ?.singleOrNull()
+                    ?.let {
+                        val event =
+                            ConversationEventResponse.UserJoinedConversation(
+                                conversationId = conversationId,
+                                userId = listOf(userId),
+                                inviterId = inviterId,
+                                timestamp = participant.joinedAt,
+                            )
+                        syncRepository.appendChanges(
+                            listOf(
+                                SyncAppendTarget(SyncScope.CONVERSATION, conversationId, event),
+                                SyncAppendTarget(SyncScope.USER, userId, event),
+                            ),
+                        )
+                        participant
+                    }
+            } else {
+                null
+            }
+        }
 
     override suspend fun getUserConversationRole(
         userId: Uuid,
-        conversationId: Uuid
-    ): ConversationRole? = dbQuery {
-        ConversationParticipants
-            .select(ConversationParticipants.role)
-            .where {
-                (ConversationParticipants.userId eq userId) and
+        conversationId: Uuid,
+    ): ConversationRole? =
+        dbQuery {
+            ConversationParticipants
+                .select(ConversationParticipants.role)
+                .where {
+                    (ConversationParticipants.userId eq userId) and
                         (ConversationParticipants.conversationId eq conversationId)
-            }
-            .map { it[ConversationParticipants.role] }
-            .singleOrNull()
-    }
+                }.map { it[ConversationParticipants.role] }
+                .singleOrNull()
+        }
 }

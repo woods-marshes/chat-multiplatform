@@ -19,7 +19,10 @@ class UserAccessCache(
     private val userRepository: UserRepository,
     private val ttlMillis: Long = DEFAULT_TTL_MILLIS,
 ) {
-    private data class Entry(val bannedAt: Instant?, val checkedAtMillis: Long)
+    private data class Entry(
+        val bannedAt: Instant?,
+        val checkedAtMillis: Long,
+    )
 
     private val entries = ConcurrentHashMap<Uuid, Entry>()
 

@@ -2,8 +2,8 @@ package com.github.woodsmarshes.chat.routes
 
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageRequest
 import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
-import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.serialization.WebsocketDeserializeException
+import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.websocket.Frame
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -16,7 +16,6 @@ import kotlin.test.assertFailsWith
  * branch depends on.
  */
 class RealtimeFrameDecodingTest {
-
     private val converter = KotlinxWebsocketSerializationConverter(ProjectProtobuf)
 
     @Test
@@ -25,7 +24,8 @@ class RealtimeFrameDecodingTest {
             assertFailsWith<WebsocketDeserializeException> {
                 converter.deserialize(
                     Charsets.UTF_8,
-                    io.ktor.util.reflect.typeInfo<MessageRequest>(),
+                    io.ktor.util.reflect
+                        .typeInfo<MessageRequest>(),
                     Frame.Text(fin = true, data = "not-protobuf".encodeToByteArray()),
                 )
             }

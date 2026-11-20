@@ -6,5 +6,5 @@ import kotlin.uuid.Uuid
 
 @Serializable
 data class InviteUsersRequest(
-    @ProtoNumber(1) val userIds: List<Uuid>
+    @ProtoNumber(1) val userIds: List<Uuid>,
 )

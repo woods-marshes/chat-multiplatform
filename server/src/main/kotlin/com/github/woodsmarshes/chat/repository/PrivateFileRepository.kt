@@ -10,7 +10,10 @@ import kotlin.uuid.Uuid
 
 interface PrivateFileRepository {
     /** Records that [fileName] was sent into [conversationId]; idempotent. */
-    suspend fun registerMapping(fileName: String, conversationId: Uuid)
+    suspend fun registerMapping(
+        fileName: String,
+        conversationId: Uuid,
+    )
 
     /** Conversations the file was sent to (drives download authorization). */
     suspend fun getConversationsForFile(fileName: String): List<Uuid>
@@ -25,7 +28,10 @@ interface PrivateFileRepository {
 }
 
 class PrivateFileSourceImpl : PrivateFileRepository {
-    override suspend fun registerMapping(fileName: String, conversationId: Uuid) {
+    override suspend fun registerMapping(
+        fileName: String,
+        conversationId: Uuid,
+    ) {
         dbQuery {
             PrivateFiles.upsert {
                 it[this.fileName] = fileName
@@ -34,20 +40,22 @@ class PrivateFileSourceImpl : PrivateFileRepository {
         }
     }
 
-    override suspend fun getConversationsForFile(fileName: String): List<Uuid> = dbQuery {
-        PrivateFiles
-            .selectAll()
-            .where { PrivateFiles.fileName eq fileName }
-            .map { it[PrivateFiles.conversationId].value }
-    }
+    override suspend fun getConversationsForFile(fileName: String): List<Uuid> =
+        dbQuery {
+            PrivateFiles
+                .selectAll()
+                .where { PrivateFiles.fileName eq fileName }
+                .map { it[PrivateFiles.conversationId].value }
+        }
 
-    override suspend fun hasMapping(fileName: String): Boolean = dbQuery {
-        PrivateFiles
-            .selectAll()
-            .where { PrivateFiles.fileName eq fileName }
-            .limit(1)
-            .count() > 0
-    }
+    override suspend fun hasMapping(fileName: String): Boolean =
+        dbQuery {
+            PrivateFiles
+                .selectAll()
+                .where { PrivateFiles.fileName eq fileName }
+                .limit(1)
+                .count() > 0
+        }
 
     override suspend fun deleteMappings(fileName: String) {
         dbQuery {
@@ -55,7 +63,8 @@ class PrivateFileSourceImpl : PrivateFileRepository {
         }
     }
 
-    override suspend fun count(): Long = dbQuery {
-        PrivateFiles.selectAll().count()
-    }
+    override suspend fun count(): Long =
+        dbQuery {
+            PrivateFiles.selectAll().count()
+        }
 }

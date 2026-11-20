@@ -49,7 +49,7 @@ interface MessageRepository {
         ownUserId: Uuid,
         conversationId: Uuid,
         isGroup: Boolean,
-        limit: Int = 20
+        limit: Int = 20,
     ): Flow<PagingData<MessageUiModel>>
 
     suspend fun sendMessage(
@@ -65,7 +65,10 @@ interface MessageRepository {
      */
     suspend fun revokeMessage(messageId: Uuid): Result<Unit, MessageError>
 
-    suspend fun markAsRead(conversationId: Uuid, messageId: Uuid)
+    suspend fun markAsRead(
+        conversationId: Uuid,
+        messageId: Uuid,
+    )
 
     /**
      * Who is currently typing in a conversation: userId -> last typing-event
@@ -76,5 +79,8 @@ interface MessageRepository {
     fun getTypingUsersFlow(conversationId: Uuid): Flow<Map<Uuid, Long>>
 
     /** Broadcasts the local user's typing state to conversation members. */
-    suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean)
+    suspend fun sendTyping(
+        conversationId: Uuid,
+        isTyping: Boolean,
+    )
 }

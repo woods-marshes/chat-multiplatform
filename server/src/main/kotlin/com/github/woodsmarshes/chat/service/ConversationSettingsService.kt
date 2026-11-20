@@ -4,10 +4,10 @@ import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
-import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.exceptions.AppException
@@ -31,59 +31,73 @@ class ConversationSettingsService(
         conversationId: Uuid,
         userId: Uuid,
     ): Result<Unit, ConversationError> {
-        val (participant, conversation) = conversationParticipantRepository.getConversationParticipantWithConversation(
-            userId, conversationId
-        ) ?: return Err(ConversationError.NotParticipant)
+        val (participant, conversation) =
+            conversationParticipantRepository.getConversationParticipantWithConversation(
+                userId,
+                conversationId,
+            ) ?: return Err(ConversationError.NotParticipant)
         if (conversation.deletedAt != null) return Err(ConversationError.Deleted)
         if (participant.role != ConversationRole.OWNER) return Err(ConversationError.PermissionDenied)
         return Ok(Unit)
     }
 
-    suspend fun updateGroupSettings(conversationId: Uuid, userId: Uuid, req: UpdateConversationSettingsRequest): Result<Unit, ConversationError> = coroutineBinding {
-        val (participant, conversation) = conversationParticipantRepository.getConversationParticipantWithConversation(
-            userId, conversationId
-        ) ?: Err(ConversationError.NotParticipant).bind()
-        if (conversation.deletedAt != null) Err(ConversationError.Deleted).bind()
-        if (participant.role != ConversationRole.OWNER) {
-            Err(ConversationError.PermissionDenied).bind()
-        }
-
-        // An ownerId different from the caller is an ownership transfer, which
-        // is validated and applied atomically together with the plain profile
-        // fields in a single transaction; self-ownership just rewrites the
-        // same value.
-        val transferRequested = req.ownerId != null && req.ownerId != userId
-        if (transferRequested) {
-            if (conversationParticipantRepository.getConversationParticipant(req.ownerId!!, conversationId) == null) {
-                throw AppException(ConversationError.NotParticipant)
+    suspend fun updateGroupSettings(
+        conversationId: Uuid,
+        userId: Uuid,
+        req: UpdateConversationSettingsRequest,
+    ): Result<Unit, ConversationError> =
+        coroutineBinding {
+            val (participant, conversation) =
+                conversationParticipantRepository.getConversationParticipantWithConversation(
+                    userId,
+                    conversationId,
+                ) ?: Err(ConversationError.NotParticipant).bind()
+            if (conversation.deletedAt != null) Err(ConversationError.Deleted).bind()
+            if (participant.role != ConversationRole.OWNER) {
+                Err(ConversationError.PermissionDenied).bind()
             }
-        }
 
-        inTransaction {
+            // An ownerId different from the caller is an ownership transfer, which
+            // is validated and applied atomically together with the plain profile
+            // fields in a single transaction; self-ownership just rewrites the
+            // same value.
+            val transferRequested = req.ownerId != null && req.ownerId != userId
             if (transferRequested) {
-                transferOwnership(conversationId, currentOwnerId = userId, newOwnerId = req.ownerId!!)
+                if (conversationParticipantRepository.getConversationParticipant(req.ownerId!!, conversationId) == null) {
+                    throw AppException(ConversationError.NotParticipant)
+                }
             }
 
-            val success = groupProfileRepository.updateGroupProfile(
-                conversationId = conversationId,
-                name = req.name, handle = req.handle,
-                // The new owner is already persisted by the transfer above.
-                ownerId = if (transferRequested) null else req.ownerId,
-                description = req.description, avatarUrl = req.avatarUrl,
-                settings = req.settings
-            )
-            if (!success) {
-                Err(ConversationError.OperationFailed).bind()
+            inTransaction {
+                if (transferRequested) {
+                    transferOwnership(conversationId, currentOwnerId = userId, newOwnerId = req.ownerId!!)
+                }
+
+                val success =
+                    groupProfileRepository.updateGroupProfile(
+                        conversationId = conversationId,
+                        name = req.name,
+                        handle = req.handle,
+                        // The new owner is already persisted by the transfer above.
+                        ownerId = if (transferRequested) null else req.ownerId,
+                        description = req.description,
+                        avatarUrl = req.avatarUrl,
+                        settings = req.settings,
+                    )
+                if (!success) {
+                    Err(ConversationError.OperationFailed).bind()
+                }
             }
+
+            eventBus.publishConversationEvent(
+                ConversationEvent.GroupProfileUpdated(
+                    conversationId = conversationId,
+                    updaterId = userId,
+                    profile = req,
+                    timestamp = Clock.System.now(),
+                ),
+            )
         }
-
-        eventBus.publishConversationEvent(
-            ConversationEvent.GroupProfileUpdated(
-                conversationId = conversationId, updaterId = userId,
-                profile = req, timestamp = Clock.System.now()
-            )
-        )
-    }
 
     /**
      * Swaps group ownership inside the enclosing transaction: the outgoing
@@ -93,36 +107,60 @@ class ConversationSettingsService(
      * transaction; committing only half of this used to lock the new owner
      * out of every owner-only operation while the old owner kept their rights.
      */
-    private suspend fun transferOwnership(conversationId: Uuid, currentOwnerId: Uuid, newOwnerId: Uuid) {
-        val demoted = conversationParticipantRepository.updateConversationParticipantRole(
-            userId = currentOwnerId, conversationId = conversationId, role = ConversationRole.ADMIN
-        )
-        val promoted = demoted && conversationParticipantRepository.updateConversationParticipantRole(
-            userId = newOwnerId, conversationId = conversationId, role = ConversationRole.OWNER
-        )
-        val profileUpdated = promoted && groupProfileRepository.updateGroupProfile(
-            conversationId = conversationId, ownerId = newOwnerId
-        )
+    private suspend fun transferOwnership(
+        conversationId: Uuid,
+        currentOwnerId: Uuid,
+        newOwnerId: Uuid,
+    ) {
+        val demoted =
+            conversationParticipantRepository.updateConversationParticipantRole(
+                userId = currentOwnerId,
+                conversationId = conversationId,
+                role = ConversationRole.ADMIN,
+            )
+        val promoted =
+            demoted &&
+                conversationParticipantRepository.updateConversationParticipantRole(
+                    userId = newOwnerId,
+                    conversationId = conversationId,
+                    role = ConversationRole.OWNER,
+                )
+        val profileUpdated =
+            promoted &&
+                groupProfileRepository.updateGroupProfile(
+                    conversationId = conversationId,
+                    ownerId = newOwnerId,
+                )
         if (!profileUpdated) {
             throw AppException(ConversationError.OperationFailed)
         }
     }
 
-    suspend fun updatePersonalSettings(conversationId: Uuid, userId: Uuid, req: ParticipantSettings): Result<Unit, ConversationError> = coroutineBinding {
-        // Per the repository contract, false means no matching participant
-        // row — the caller is not a member, not a generic failure.
-        val success = conversationParticipantRepository.updateParticipantSettings(
-            userId = userId, conversationId = conversationId, settings = req
-        )
-        if (success) {
-            eventBus.publishConversationEvent(
-                ConversationEvent.PersonalSettingsUpdated(
-                    conversationId = conversationId, userId = userId,
-                    settings = req, timestamp = Clock.System.now()
+    suspend fun updatePersonalSettings(
+        conversationId: Uuid,
+        userId: Uuid,
+        req: ParticipantSettings,
+    ): Result<Unit, ConversationError> =
+        coroutineBinding {
+            // Per the repository contract, false means no matching participant
+            // row — the caller is not a member, not a generic failure.
+            val success =
+                conversationParticipantRepository.updateParticipantSettings(
+                    userId = userId,
+                    conversationId = conversationId,
+                    settings = req,
                 )
-            )
-        } else {
-            Err(ConversationError.NotParticipant).bind()
+            if (success) {
+                eventBus.publishConversationEvent(
+                    ConversationEvent.PersonalSettingsUpdated(
+                        conversationId = conversationId,
+                        userId = userId,
+                        settings = req,
+                        timestamp = Clock.System.now(),
+                    ),
+                )
+            } else {
+                Err(ConversationError.NotParticipant).bind()
+            }
         }
-    }
 }

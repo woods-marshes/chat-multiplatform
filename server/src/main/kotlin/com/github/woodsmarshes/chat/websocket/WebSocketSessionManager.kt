@@ -12,7 +12,10 @@ class SessionIndex {
     private val byUser = ConcurrentHashMap<Uuid, MutableSet<WebSocketServerSession>>()
     private val bySession = ConcurrentHashMap<WebSocketServerSession, Uuid>()
 
-    fun add(userId: Uuid, session: WebSocketServerSession) {
+    fun add(
+        userId: Uuid,
+        session: WebSocketServerSession,
+    ) {
         // Register in the session index first so remove() always finds the
         // owner once byUser knows about the session.
         bySession[session] = userId
@@ -31,7 +34,10 @@ class SessionIndex {
         val userId = bySession.remove(session) ?: return null
         byUser.compute(userId) { _, userSessions ->
             when (userSessions) {
-                null -> null
+                null -> {
+                    null
+                }
+
                 else -> {
                     userSessions.remove(session)
                     // Drop the per-user entry once its last session is gone so
@@ -43,8 +49,7 @@ class SessionIndex {
         return userId
     }
 
-    fun getSessions(userId: Uuid): List<WebSocketServerSession> =
-        byUser[userId]?.toList() ?: emptyList()
+    fun getSessions(userId: Uuid): List<WebSocketServerSession> = byUser[userId]?.toList() ?: emptyList()
 
     fun getUser(session: WebSocketServerSession): Uuid? = bySession[session]
 
@@ -58,7 +63,10 @@ class SessionIndex {
 class WebSocketSessionManager(
     private val sessions: SessionIndex = SessionIndex(),
 ) {
-    fun addUserSession(userId: Uuid, session: WebSocketServerSession) {
+    fun addUserSession(
+        userId: Uuid,
+        session: WebSocketServerSession,
+    ) {
         sessions.add(userId, session)
     }
 
@@ -66,17 +74,16 @@ class WebSocketSessionManager(
         sessions.remove(session)
     }
 
-    fun getUserSessions(userId: Uuid): List<WebSocketServerSession> =
-        sessions.getSessions(userId)
+    fun getUserSessions(userId: Uuid): List<WebSocketServerSession> = sessions.getSessions(userId)
 
-    fun getUserIdBySession(session: WebSocketServerSession): Uuid? =
-        sessions.getUser(session)
+    fun getUserIdBySession(session: WebSocketServerSession): Uuid? = sessions.getUser(session)
 
     fun getActiveUsers(): Set<Uuid> = sessions.getActiveUsers()
 
     fun isUserOnline(userId: Uuid): Boolean = sessions.isOnline(userId)
 
-    fun getSessionStats(): Map<String, Int> = buildMap {
-        put("activeUsers", sessions.size())
-    }
+    fun getSessionStats(): Map<String, Int> =
+        buildMap {
+            put("activeUsers", sessions.size())
+        }
 }

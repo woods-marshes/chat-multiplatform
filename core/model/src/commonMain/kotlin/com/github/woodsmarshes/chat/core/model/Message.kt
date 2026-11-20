@@ -9,7 +9,7 @@ import kotlin.uuid.Uuid
 enum class MessageStatus {
     SENDING,
     SENT,
-    FAILED
+    FAILED,
 }
 
 @Serializable
@@ -52,7 +52,6 @@ data class MessageSenderContext(
     @ProtoNumber(5) val mutedUntil: Instant? = null,
 )
 
-
 @Serializable
 sealed interface MessageContent
 
@@ -66,7 +65,7 @@ sealed interface Normal : MessageContent
 @SerialName("TEXT")
 data class TextContent(
     @ProtoNumber(1) val text: String,
-    @ProtoNumber(2) val entities: List<FormattingEntity> = emptyList()
+    @ProtoNumber(2) val entities: List<FormattingEntity> = emptyList(),
 ) : Normal
 
 @Serializable
@@ -89,6 +88,7 @@ data class ImageContent(
     @ProtoNumber(7) val thumbnailUrl: String? = null,
     @ProtoNumber(8) override val mimeType: String = "image/jpeg",
 ) : MediaContent
+
 @Serializable
 @SerialName("VIDEO")
 data class VideoContent(
@@ -99,7 +99,7 @@ data class VideoContent(
     @ProtoNumber(5) val height: Int,
     @ProtoNumber(6) val duration: Long,
     @ProtoNumber(7) override val size: Long,
-    @ProtoNumber(8) override val mimeType: String = "video/mp4"
+    @ProtoNumber(8) override val mimeType: String = "video/mp4",
 ) : MediaContent
 
 @Serializable
@@ -110,7 +110,7 @@ data class AudioContent(
     @ProtoNumber(3) val duration: Long,
     @ProtoNumber(4) val waveform: List<Int> = emptyList(),
     @ProtoNumber(5) override val size: Long,
-    @ProtoNumber(6) override val mimeType: String = "audio/aac"
+    @ProtoNumber(6) override val mimeType: String = "audio/aac",
 ) : MediaContent
 
 @Serializable
@@ -119,7 +119,7 @@ data class FileContent(
     @ProtoNumber(1) override val url: String,
     @ProtoNumber(2) override val fileName: String,
     @ProtoNumber(3) override val mimeType: String? = null,
-    @ProtoNumber(4) override val size: Long
+    @ProtoNumber(4) override val size: Long,
 ) : MediaContent
 
 @Serializable
@@ -133,7 +133,7 @@ data class JoinGroupContent(
 
 enum class MessageCategory {
     NORMAL,
-    SYSTEM
+    SYSTEM,
 }
 
 enum class MessageRenderType {
@@ -150,6 +150,5 @@ enum class FileType {
     AUDIO,
     VIDEO,
     FILE,
-    AVATAR
+    AVATAR,
 }
-

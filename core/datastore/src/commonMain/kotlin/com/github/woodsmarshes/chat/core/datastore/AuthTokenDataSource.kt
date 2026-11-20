@@ -47,57 +47,64 @@ class AuthTokenDataSource(
         val AUTH_REQUEST_EPOCH = longPreferencesKey("authToken_requestEpoch")
     }
 
-    val authToken: Flow<AuthToken> = dataStore.data.map { preferences ->
-        AuthToken(
-            jwtToken = preferences[Keys.JWT_TOKEN],
-            refreshToken = preferences[Keys.REFRESH_TOKEN],
-            expiryTimestamp = preferences[Keys.EXPIRY_TIMESTAMP]
-        )
-    }
+    val authToken: Flow<AuthToken> =
+        dataStore.data.map { preferences ->
+            AuthToken(
+                jwtToken = preferences[Keys.JWT_TOKEN],
+                refreshToken = preferences[Keys.REFRESH_TOKEN],
+                expiryTimestamp = preferences[Keys.EXPIRY_TIMESTAMP],
+            )
+        }
 
-    val jwtToken: Flow<String?> = dataStore.data.map { preferences ->
-        preferences[Keys.JWT_TOKEN]
-    }
+    val jwtToken: Flow<String?> =
+        dataStore.data.map { preferences ->
+            preferences[Keys.JWT_TOKEN]
+        }
 
-    val refreshToken: Flow<String?> = dataStore.data.map { preferences ->
-        preferences[Keys.REFRESH_TOKEN]
-    }
+    val refreshToken: Flow<String?> =
+        dataStore.data.map { preferences ->
+            preferences[Keys.REFRESH_TOKEN]
+        }
 
-    val expiryTimestamp: Flow<Long?> = dataStore.data.map { preferences ->
-        preferences[Keys.EXPIRY_TIMESTAMP]
-    }
+    val expiryTimestamp: Flow<Long?> =
+        dataStore.data.map { preferences ->
+            preferences[Keys.EXPIRY_TIMESTAMP]
+        }
 
-    val generation: Flow<Long> = dataStore.data.map { preferences ->
-        preferences[Keys.GENERATION] ?: 0L
-    }
+    val generation: Flow<Long> =
+        dataStore.data.map { preferences ->
+            preferences[Keys.GENERATION] ?: 0L
+        }
 
-    val snapshot: Flow<AuthTokenSnapshot> = dataStore.data.map { preferences ->
-        AuthTokenSnapshot(
-            generation = preferences[Keys.GENERATION] ?: 0L,
-            jwtToken = preferences[Keys.JWT_TOKEN],
-            refreshToken = preferences[Keys.REFRESH_TOKEN],
-            expiryTimestamp = preferences[Keys.EXPIRY_TIMESTAMP],
-        )
-    }
+    val snapshot: Flow<AuthTokenSnapshot> =
+        dataStore.data.map { preferences ->
+            AuthTokenSnapshot(
+                generation = preferences[Keys.GENERATION] ?: 0L,
+                jwtToken = preferences[Keys.JWT_TOKEN],
+                refreshToken = preferences[Keys.REFRESH_TOKEN],
+                expiryTimestamp = preferences[Keys.EXPIRY_TIMESTAMP],
+            )
+        }
 
     /**
      * Emits a coherent [AuthSessionSnapshot] mapped from a single
      * [Preferences] snapshot in the shared [dataStore].
      */
-    val sessionSnapshot: Flow<AuthSessionSnapshot> = dataStore.data.map { preferences ->
-        AuthSessionSnapshot(
-            generation = preferences[Keys.GENERATION] ?: 0L,
-            user = userSettingDataSource.decodeUserFromPreferences(preferences),
-            jwtToken = preferences[Keys.JWT_TOKEN],
-            refreshToken = preferences[Keys.REFRESH_TOKEN],
-            expiryTimestamp = preferences[Keys.EXPIRY_TIMESTAMP],
-        )
-    }.distinctUntilChanged()
+    val sessionSnapshot: Flow<AuthSessionSnapshot> =
+        dataStore.data
+            .map { preferences ->
+                AuthSessionSnapshot(
+                    generation = preferences[Keys.GENERATION] ?: 0L,
+                    user = userSettingDataSource.decodeUserFromPreferences(preferences),
+                    jwtToken = preferences[Keys.JWT_TOKEN],
+                    refreshToken = preferences[Keys.REFRESH_TOKEN],
+                    expiryTimestamp = preferences[Keys.EXPIRY_TIMESTAMP],
+                )
+            }.distinctUntilChanged()
 
     suspend fun currentSnapshot(): AuthTokenSnapshot = snapshot.first()
 
-    suspend fun <T> withCredentialLock(block: suspend () -> T): T =
-        credentialMutex.withLock { block() }
+    suspend fun <T> withCredentialLock(block: suspend () -> T): T = credentialMutex.withLock { block() }
 
     /**
      * Issues a monotonically increasing validity ticket for a new login or
@@ -105,15 +112,16 @@ class AuthTokenDataSource(
      * [beginAuthRequest] or [invalidateAndClearLocked] advances the epoch and
      * invalidates earlier in-flight requests.
      */
-    suspend fun beginAuthRequest(): Long = credentialMutex.withLock {
-        var issuedEpoch = 0L
-        dataStore.edit { preferences ->
-            val next = (preferences[Keys.AUTH_REQUEST_EPOCH] ?: 0L) + 1L
-            preferences[Keys.AUTH_REQUEST_EPOCH] = next
-            issuedEpoch = next
+    suspend fun beginAuthRequest(): Long =
+        credentialMutex.withLock {
+            var issuedEpoch = 0L
+            dataStore.edit { preferences ->
+                val next = (preferences[Keys.AUTH_REQUEST_EPOCH] ?: 0L) + 1L
+                preferences[Keys.AUTH_REQUEST_EPOCH] = next
+                issuedEpoch = next
+            }
+            issuedEpoch
         }
-        issuedEpoch
-    }
 
     /** Must be called while holding [withCredentialLock]. */
     suspend fun isAuthRequestValidLocked(requestEpoch: Long): Boolean {
@@ -159,23 +167,24 @@ class AuthTokenDataSource(
         expectedRefreshToken: String?,
         user: User,
         token: AuthToken,
-    ): Boolean = credentialMutex.withLock {
-        var updated = false
-        dataStore.edit { preferences ->
-            val currentGen = preferences[Keys.GENERATION] ?: 0L
-            val currentRefresh = preferences[Keys.REFRESH_TOKEN]
-            val currentJwt = preferences[Keys.JWT_TOKEN]
-            if (currentGen == expectedGeneration &&
-                !currentJwt.isNullOrEmpty() &&
-                currentRefresh == expectedRefreshToken
-            ) {
-                userSettingDataSource.writeUserInPlace(preferences, user)
-                writeTokenInPlace(preferences, token)
-                updated = true
+    ): Boolean =
+        credentialMutex.withLock {
+            var updated = false
+            dataStore.edit { preferences ->
+                val currentGen = preferences[Keys.GENERATION] ?: 0L
+                val currentRefresh = preferences[Keys.REFRESH_TOKEN]
+                val currentJwt = preferences[Keys.JWT_TOKEN]
+                if (currentGen == expectedGeneration &&
+                    !currentJwt.isNullOrEmpty() &&
+                    currentRefresh == expectedRefreshToken
+                ) {
+                    userSettingDataSource.writeUserInPlace(preferences, user)
+                    writeTokenInPlace(preferences, token)
+                    updated = true
+                }
             }
+            updated
         }
-        updated
-    }
 
     /**
      * Invalidates any in-flight login/register requests, advances the
@@ -207,22 +216,23 @@ class AuthTokenDataSource(
         expectedGeneration: Long,
         expectedRefreshToken: String,
         token: AuthToken,
-    ): Boolean = credentialMutex.withLock {
-        var updated = false
-        dataStore.edit { preferences ->
-            val currentGen = preferences[Keys.GENERATION] ?: 0L
-            val currentRefresh = preferences[Keys.REFRESH_TOKEN]
-            val currentJwt = preferences[Keys.JWT_TOKEN]
-            if (currentGen == expectedGeneration &&
-                !currentJwt.isNullOrEmpty() &&
-                currentRefresh == expectedRefreshToken
-            ) {
-                writeTokenInPlace(preferences, token)
-                updated = true
+    ): Boolean =
+        credentialMutex.withLock {
+            var updated = false
+            dataStore.edit { preferences ->
+                val currentGen = preferences[Keys.GENERATION] ?: 0L
+                val currentRefresh = preferences[Keys.REFRESH_TOKEN]
+                val currentJwt = preferences[Keys.JWT_TOKEN]
+                if (currentGen == expectedGeneration &&
+                    !currentJwt.isNullOrEmpty() &&
+                    currentRefresh == expectedRefreshToken
+                ) {
+                    writeTokenInPlace(preferences, token)
+                    updated = true
+                }
             }
+            updated
         }
-        updated
-    }
 
     /**
      * Clears the stored session when a refresh is rejected with 401 if and
@@ -234,20 +244,21 @@ class AuthTokenDataSource(
     suspend fun clearIfCurrent(
         expectedGeneration: Long,
         expectedRefreshToken: String,
-    ): Boolean = credentialMutex.withLock {
-        var cleared = false
-        dataStore.edit { preferences ->
-            val currentGen = preferences[Keys.GENERATION] ?: 0L
-            val currentRefresh = preferences[Keys.REFRESH_TOKEN]
-            if (currentGen == expectedGeneration && currentRefresh == expectedRefreshToken) {
-                preferences[Keys.GENERATION] = currentGen + 1L
-                clearTokenInPlace(preferences)
-                userSettingDataSource.clearPreferencesInPlace(preferences)
-                cleared = true
+    ): Boolean =
+        credentialMutex.withLock {
+            var cleared = false
+            dataStore.edit { preferences ->
+                val currentGen = preferences[Keys.GENERATION] ?: 0L
+                val currentRefresh = preferences[Keys.REFRESH_TOKEN]
+                if (currentGen == expectedGeneration && currentRefresh == expectedRefreshToken) {
+                    preferences[Keys.GENERATION] = currentGen + 1L
+                    clearTokenInPlace(preferences)
+                    userSettingDataSource.clearPreferencesInPlace(preferences)
+                    cleared = true
+                }
             }
+            cleared
         }
-        cleared
-    }
 
     /**
      * Persists all token fields in one DataStore transaction and advances the
@@ -270,7 +281,10 @@ class AuthTokenDataSource(
      * result; per-field token setters were removed on purpose because their
      * partial writes silently defeat the generation guards.
      */
-    suspend fun commitLoginSession(token: AuthToken, user: User) {
+    suspend fun commitLoginSession(
+        token: AuthToken,
+        user: User,
+    ) {
         credentialMutex.withLock {
             dataStore.edit { preferences ->
                 preferences[Keys.GENERATION] = (preferences[Keys.GENERATION] ?: 0L) + 1L
@@ -297,7 +311,10 @@ class AuthTokenDataSource(
         }
     }
 
-    private fun writeTokenInPlace(preferences: MutablePreferences, token: AuthToken) {
+    private fun writeTokenInPlace(
+        preferences: MutablePreferences,
+        token: AuthToken,
+    ) {
         token.jwtToken?.let { preferences[Keys.JWT_TOKEN] = it } ?: preferences.remove(Keys.JWT_TOKEN)
         token.refreshToken?.let { preferences[Keys.REFRESH_TOKEN] = it } ?: preferences.remove(Keys.REFRESH_TOKEN)
         token.expiryTimestamp?.let { preferences[Keys.EXPIRY_TIMESTAMP] = it }

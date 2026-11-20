@@ -23,10 +23,11 @@ actual suspend fun provideDbDriver(
         schema = schema,
         context = androidContext,
         name = dbName,
-        callback = object : AndroidSqliteDriver.Callback(schema) {
-            override fun onOpen(db: SupportSQLiteDatabase) {
-                db.setForeignKeyConstraintsEnabled(true)
-            }
-        }
+        callback =
+            object : AndroidSqliteDriver.Callback(schema) {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    db.setForeignKeyConstraintsEnabled(true)
+                }
+            },
     )
 }

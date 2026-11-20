@@ -14,5 +14,5 @@ data class GroupJoinRequest(
     @ProtoNumber(5) val message: String?,
     @ProtoNumber(6) val status: RequestStatus,
     @ProtoNumber(7) val createdAt: Instant,
-    @ProtoNumber(8) val updatedAt: Instant
+    @ProtoNumber(8) val updatedAt: Instant,
 )

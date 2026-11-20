@@ -16,13 +16,17 @@ import react.useState
 data class Status(
     val user: User?,
     val isLoggedIn: Boolean,
-    val jwtToken: String? = null
+    val jwtToken: String? = null,
 )
-val Context: Context<Status> = createContext(Status(
-    user = null,
-    isLoggedIn = false,
-    jwtToken = null
-))
+
+val Context: Context<Status> =
+    createContext(
+        Status(
+            user = null,
+            isLoggedIn = false,
+            jwtToken = null,
+        ),
+    )
 
 fun useCurrentContext(): Status = use(Context)
 
@@ -30,30 +34,33 @@ fun useCurrentContext(): Status = use(Context)
  * 在组件树根部订阅一次 DataStore 的 user Flow 和 jwtToken Flow，
  * 通过 [Context]下发给整棵组件树。
  */
-val ContextProvider = FC<PropsWithChildren> { props ->
-    var status by useState(Status(
-        user = null,
-        isLoggedIn = false,
-        jwtToken = null
-    ))
-
-    useEffectOnce {
-        combine(
-            koinInject<AuthTokenDataSource>().jwtToken,
-            koinInject<UserSettingDataSource>().user
-        ) { token, u ->
+val ContextProvider =
+    FC<PropsWithChildren> { props ->
+        var status by useState(
             Status(
-                user = u,
-                isLoggedIn = token != null,
-                jwtToken = token
-            )
-        }.collect { newStatus ->
-            status = newStatus // 3. 统一更新状态
+                user = null,
+                isLoggedIn = false,
+                jwtToken = null,
+            ),
+        )
+
+        useEffectOnce {
+            combine(
+                koinInject<AuthTokenDataSource>().jwtToken,
+                koinInject<UserSettingDataSource>().user,
+            ) { token, u ->
+                Status(
+                    user = u,
+                    isLoggedIn = token != null,
+                    jwtToken = token,
+                )
+            }.collect { newStatus ->
+                status = newStatus // 3. 统一更新状态
+            }
+        }
+
+        Context.Provider {
+            value = status
+            +props.children
         }
     }
-
-    Context.Provider {
-        value = status
-        +props.children
-    }
-}

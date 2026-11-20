@@ -21,5 +21,8 @@ data class User(
 )
 
 enum class UserRole {
-    ADMIN, MEMBER, GUEST, BOT
+    ADMIN,
+    MEMBER,
+    GUEST,
+    BOT,
 }

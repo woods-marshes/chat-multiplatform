@@ -22,68 +22,69 @@ import com.github.woodsmarshes.chat.repository.MessageDataSourceImpl
 import com.github.woodsmarshes.chat.repository.MessageRepository
 import com.github.woodsmarshes.chat.repository.PrivateFileRepository
 import com.github.woodsmarshes.chat.repository.PrivateFileSourceImpl
+import com.github.woodsmarshes.chat.repository.SyncDataSourceImpl
+import com.github.woodsmarshes.chat.repository.SyncRepository
 import com.github.woodsmarshes.chat.repository.UserDataSourceImpl
 import com.github.woodsmarshes.chat.repository.UserRepository
 import com.github.woodsmarshes.chat.repository.UserSettingDataSourceImpl
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
-import com.github.woodsmarshes.chat.repository.SyncRepository
-import com.github.woodsmarshes.chat.repository.SyncDataSourceImpl
 import org.koin.dsl.module
-val repositoryModule = module {
-    single<SyncRepository> { SyncDataSourceImpl() }
 
-    singleOf(::UserDataSourceImpl){
-        bind<UserRepository>()
+val repositoryModule =
+    module {
+        single<SyncRepository> { SyncDataSourceImpl() }
+
+        singleOf(::UserDataSourceImpl) {
+            bind<UserRepository>()
+        }
+
+        singleOf(::ConversationDataSourceImpl) {
+            bind<ConversationRepository>()
+        }
+
+        singleOf(::MessageDataSourceImpl) {
+            bind<MessageRepository>()
+        }
+
+        singleOf(::UserSettingDataSourceImpl) {
+            bind<UserSettingRepository>()
+        }
+
+        singleOf(::GroupProfileDataSourceImpl) {
+            bind<GroupProfileRepository>()
+        }
+
+        singleOf(::ConversationParticipantDataSourceImpl) {
+            bind<ConversationParticipantRepository>()
+        }
+
+        singleOf(::ContactSourceImpl) {
+            bind<ContactRepository>()
+        }
+
+        singleOf(::GroupJoinRequestSourceImpl) {
+            bind<GroupJoinRequestRepository>()
+        }
+
+        singleOf(::ContactRequestSourceImpl) {
+            bind<ContactRequestRepository>()
+        }
+
+        singleOf(::ArticleDataSourceImpl) {
+            bind<ArticleRepository>()
+        }
+
+        singleOf(::PrivateFileSourceImpl) {
+            bind<PrivateFileRepository>()
+        }
+
+        singleOf(::AuthSessionSourceImpl) {
+            bind<AuthSessionRepository>()
+        }
+
+        singleOf(::AdminAuditLogDataSourceImpl) {
+            bind<AdminAuditLogRepository>()
+        }
     }
-
-    singleOf(::ConversationDataSourceImpl) {
-        bind<ConversationRepository>()
-    }
-
-    singleOf(::MessageDataSourceImpl) {
-        bind<MessageRepository>()
-    }
-
-    singleOf(::UserSettingDataSourceImpl) {
-        bind<UserSettingRepository>()
-    }
-
-    singleOf(::GroupProfileDataSourceImpl) {
-        bind<GroupProfileRepository>()
-    }
-
-    singleOf(::ConversationParticipantDataSourceImpl) {
-        bind<ConversationParticipantRepository>()
-    }
-
-    singleOf(::ContactSourceImpl) {
-        bind<ContactRepository>()
-    }
-
-    singleOf(::GroupJoinRequestSourceImpl) {
-        bind<GroupJoinRequestRepository>()
-    }
-
-    singleOf(::ContactRequestSourceImpl) {
-        bind<ContactRequestRepository>()
-    }
-
-    singleOf(::ArticleDataSourceImpl) {
-        bind<ArticleRepository>()
-    }
-
-    singleOf(::PrivateFileSourceImpl) {
-        bind<PrivateFileRepository>()
-    }
-
-    singleOf(::AuthSessionSourceImpl) {
-        bind<AuthSessionRepository>()
-    }
-
-    singleOf(::AdminAuditLogDataSourceImpl) {
-        bind<AdminAuditLogRepository>()
-    }
-
-}

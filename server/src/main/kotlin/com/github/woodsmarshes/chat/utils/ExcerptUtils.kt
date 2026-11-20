@@ -8,7 +8,10 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 object ExcerptUtils {
-    fun generateFromTipTap(contentJson: JsonElement?, maxLength: Int = 150): String? {
+    fun generateFromTipTap(
+        contentJson: JsonElement?,
+        maxLength: Int = 150,
+    ): String? {
         if (contentJson == null) return null
         return try {
             val sb = StringBuilder()
@@ -25,19 +28,30 @@ object ExcerptUtils {
         }
     }
 
-    fun generateFromTipTap(contentJson: String?, maxLength: Int = 150): String? {
+    fun generateFromTipTap(
+        contentJson: String?,
+        maxLength: Int = 150,
+    ): String? {
         if (contentJson.isNullOrBlank()) return null
         return try {
-            val element = kotlinx.serialization.json.Json.parseToJsonElement(contentJson)
+            val element =
+                kotlinx.serialization.json.Json
+                    .parseToJsonElement(contentJson)
             generateFromTipTap(element, maxLength)
         } catch (e: Exception) {
             // 如果不是有效的 JSON，当作普通文本截取
-            if (contentJson.length <= maxLength) contentJson.trim().takeIf { it.isNotBlank() }
-            else contentJson.take(maxLength).trim() + "..."
+            if (contentJson.length <= maxLength) {
+                contentJson.trim().takeIf { it.isNotBlank() }
+            } else {
+                contentJson.take(maxLength).trim() + "..."
+            }
         }
     }
 
-    private fun extractText(element: JsonElement, sb: StringBuilder) {
+    private fun extractText(
+        element: JsonElement,
+        sb: StringBuilder,
+    ) {
         when (element) {
             is JsonObject -> {
                 val type = element["type"]?.jsonPrimitive?.contentOrNull
@@ -50,9 +64,11 @@ object ExcerptUtils {
                     sb.append(" ")
                 }
             }
+
             is JsonArray -> {
                 element.forEach { extractText(it, sb) }
             }
+
             else -> { /* 忽略其他类型 */ }
         }
     }

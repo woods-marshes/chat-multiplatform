@@ -9,11 +9,12 @@ import org.koin.dsl.module
 
 interface PlatformContext
 
-val commonModule = module {
-    single<AppDispatchers> { AppDispatchers }
-    single<CoroutineScope> {
-        CoroutineScope(SupervisorJob() + AppDispatchers.default)
+val commonModule =
+    module {
+        single<AppDispatchers> { AppDispatchers }
+        single<CoroutineScope> {
+            CoroutineScope(SupervisorJob() + AppDispatchers.default)
+        }
     }
-}
 
 expect fun provideIODispatcher(): CoroutineDispatcher

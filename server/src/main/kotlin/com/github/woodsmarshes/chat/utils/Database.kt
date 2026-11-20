@@ -49,35 +49,37 @@ suspend fun clearDatabaseData(database: Database) {
 
 fun connectToH2Database(): Database {
     // Connecting to H2 embedded database
-    val hikariConfig = HikariConfig().apply {
-        // MODE=MySQL: Exposed insertIgnore (sync stream init) is only supported
-        // on H2 in MySQL compatibility mode, which the test suite already runs.
-        jdbcUrl = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;MODE=MySQL"
-        driverClassName = "org.h2.Driver"
-        username = "root"
-        password = ""
-        maximumPoolSize = 6
-        // as of version 0.46.0, if these options are set here, they do not need to be duplicated in DatabaseConfig
-        isReadOnly = false
-        transactionIsolation = "TRANSACTION_SERIALIZABLE"
-    }
+    val hikariConfig =
+        HikariConfig().apply {
+            // MODE=MySQL: Exposed insertIgnore (sync stream init) is only supported
+            // on H2 in MySQL compatibility mode, which the test suite already runs.
+            jdbcUrl = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;MODE=MySQL"
+            driverClassName = "org.h2.Driver"
+            username = "root"
+            password = ""
+            maximumPoolSize = 6
+            // as of version 0.46.0, if these options are set here, they do not need to be duplicated in DatabaseConfig
+            isReadOnly = false
+            transactionIsolation = "TRANSACTION_SERIALIZABLE"
+        }
     return connectThroughHikari(HikariDataSource(hikariConfig))
 }
 
 fun connectToPostgresDatabase(config: DatabaseConfig): Database {
-    val hikariConfig = HikariConfig().apply {
-        jdbcUrl = config.url
-        driverClassName = "org.postgresql.Driver"
-        username = config.username
-        password = config.password
-        maximumPoolSize = 10
-        // READ_COMMITTED: SERIALIZABLE aborts concurrent OLTP writes with
-        // serialization failures that nothing retries.
-        isReadOnly = false
-        transactionIsolation = "TRANSACTION_READ_COMMITTED"
-        // Pool saturation/latency straight into the Prometheus registry.
-        metricsTrackerFactory = MicrometerMetricsTrackerFactory(prometheusRegistry)
-    }
+    val hikariConfig =
+        HikariConfig().apply {
+            jdbcUrl = config.url
+            driverClassName = "org.postgresql.Driver"
+            username = config.username
+            password = config.password
+            maximumPoolSize = 10
+            // READ_COMMITTED: SERIALIZABLE aborts concurrent OLTP writes with
+            // serialization failures that nothing retries.
+            isReadOnly = false
+            transactionIsolation = "TRANSACTION_READ_COMMITTED"
+            // Pool saturation/latency straight into the Prometheus registry.
+            metricsTrackerFactory = MicrometerMetricsTrackerFactory(prometheusRegistry)
+        }
     return connectThroughHikari(HikariDataSource(hikariConfig))
 }
 

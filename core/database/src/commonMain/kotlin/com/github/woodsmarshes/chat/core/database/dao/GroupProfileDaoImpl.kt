@@ -36,9 +36,10 @@ class GroupProfileDaoImpl(
     }
 
     override fun bindToCurrentDatabase(): GroupProfileDao {
-        val capturedDb = runCatching { dbProvider() }.getOrElse {
-            throw SessionStoppedException(it.message ?: "Database is not initialized")
-        }
+        val capturedDb =
+            runCatching { dbProvider() }.getOrElse {
+                throw SessionStoppedException(it.message ?: "Database is not initialized")
+            }
         return PinnedGroupProfileDao(
             boundDatabase = capturedDb,
             ioContext = ioContext,

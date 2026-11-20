@@ -27,6 +27,7 @@ import kotlin.uuid.Uuid
 class ParticipantReadCursorTest {
     private val conversation = Uuid.parse("018f0000-0000-7000-8000-000000000100")
     private val user = Uuid.parse("018f0000-0000-7000-8000-000000000200")
+
     // Same-millisecond UUIDv7 ids: the low bits still order these two.
     private val older = Uuid.parse("018f0000-0000-7000-8000-00000000000a")
     private val newer = Uuid.parse("018f0000-0000-7000-8000-00000000000b")
@@ -34,10 +35,16 @@ class ParticipantReadCursorTest {
 
     private suspend fun fixture(block: suspend (ParticipantDaoImpl) -> Unit) {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY, Properties().apply { put("foreign_keys", "true") })
-        val db = createDatabase { schema -> schema.create(driver).await(); driver }
+        val db =
+            createDatabase { schema ->
+                schema.create(driver).await()
+                driver
+            }
         try {
             db.usersQueries.upsertUser(UserEntity(user, "user", null, null, null, null, now, now, null, UserRole.MEMBER))
-            db.conversationsQueries.upsertConversation(ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0))
+            db.conversationsQueries.upsertConversation(
+                ConversationEntity(conversation, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0),
+            )
             block(ParticipantDaoImpl({ db }, Dispatchers.Unconfined))
         } finally {
             driver.close()
@@ -48,45 +55,48 @@ class ParticipantReadCursorTest {
         insertParticipant(ParticipantEntity(conversation, user, ConversationRole.MEMBER, null, now, null, ParticipantSettings()))
     }
 
-    private suspend fun ParticipantDaoImpl.cursor(): Uuid? =
-        getParticipant(conversation, user).first()?.last_read_message_id
+    private suspend fun ParticipantDaoImpl.cursor(): Uuid? = getParticipant(conversation, user).first()?.last_read_message_id
 
     @Test
-    fun nullCursorAdvancesToFirstReceipt() = runBlocking {
-        fixture { dao ->
-            dao.seedRow()
-            dao.updateLastReadMessage(conversation, user, older)
-            assertEquals(older, dao.cursor())
+    fun nullCursorAdvancesToFirstReceipt() =
+        runBlocking {
+            fixture { dao ->
+                dao.seedRow()
+                dao.updateLastReadMessage(conversation, user, older)
+                assertEquals(older, dao.cursor())
+            }
         }
-    }
 
     @Test
-    fun olderReceiptDoesNotRegressTheCursor() = runBlocking {
-        fixture { dao ->
-            dao.seedRow()
-            dao.updateLastReadMessage(conversation, user, newer)
-            dao.updateLastReadMessage(conversation, user, older)
-            assertEquals(newer, dao.cursor(), "an out-of-order older receipt must not move the cursor back")
+    fun olderReceiptDoesNotRegressTheCursor() =
+        runBlocking {
+            fixture { dao ->
+                dao.seedRow()
+                dao.updateLastReadMessage(conversation, user, newer)
+                dao.updateLastReadMessage(conversation, user, older)
+                assertEquals(newer, dao.cursor(), "an out-of-order older receipt must not move the cursor back")
+            }
         }
-    }
 
     @Test
-    fun nullReceiptDoesNotClearTheCursor() = runBlocking {
-        fixture { dao ->
-            dao.seedRow()
-            dao.updateLastReadMessage(conversation, user, newer)
-            dao.updateLastReadMessage(conversation, user, null)
-            assertEquals(newer, dao.cursor(), "a malformed receipt must not clear the cursor")
+    fun nullReceiptDoesNotClearTheCursor() =
+        runBlocking {
+            fixture { dao ->
+                dao.seedRow()
+                dao.updateLastReadMessage(conversation, user, newer)
+                dao.updateLastReadMessage(conversation, user, null)
+                assertEquals(newer, dao.cursor(), "a malformed receipt must not clear the cursor")
+            }
         }
-    }
 
     @Test
-    fun repeatedReceiptIsAnIdempotentNoOp() = runBlocking {
-        fixture { dao ->
-            dao.seedRow()
-            dao.updateLastReadMessage(conversation, user, newer)
-            dao.updateLastReadMessage(conversation, user, newer)
-            assertEquals(newer, dao.cursor())
+    fun repeatedReceiptIsAnIdempotentNoOp() =
+        runBlocking {
+            fixture { dao ->
+                dao.seedRow()
+                dao.updateLastReadMessage(conversation, user, newer)
+                dao.updateLastReadMessage(conversation, user, newer)
+                assertEquals(newer, dao.cursor())
+            }
         }
-    }
 }

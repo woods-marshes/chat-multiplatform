@@ -4,5 +4,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.koin.dsl.module
 
-class DesktopContext() : PlatformContext
+class DesktopContext : PlatformContext
+
 actual fun provideIODispatcher(): CoroutineDispatcher = Dispatchers.IO

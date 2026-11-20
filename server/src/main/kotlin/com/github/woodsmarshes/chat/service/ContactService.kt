@@ -3,6 +3,8 @@ package com.github.woodsmarshes.chat.service
 import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
+import com.github.woodsmarshes.chat.core.contract.dto.contact.AddContactRequest
+import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
 import com.github.woodsmarshes.chat.core.model.Contact
 import com.github.woodsmarshes.chat.core.model.ContactRequest
 import com.github.woodsmarshes.chat.core.model.ContactStatus
@@ -15,8 +17,6 @@ import com.github.woodsmarshes.chat.core.model.PrivateMetadata
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.ContactError
-import com.github.woodsmarshes.chat.core.contract.dto.contact.AddContactRequest
-import com.github.woodsmarshes.chat.core.contract.dto.contact.ContactRequestAction
 import com.github.woodsmarshes.chat.events.ContactEvent
 import com.github.woodsmarshes.chat.events.ConversationEvent
 import com.github.woodsmarshes.chat.events.EventBus
@@ -37,312 +37,357 @@ class ContactService(
     private val eventBus: EventBus,
     private val userSettingRepository: UserSettingRepository,
 ) {
+    suspend fun getContacts(userId: Uuid): Result<List<Pair<Contact, User>>, ContactError> =
+        coroutineBinding {
+            contactRepository.getContactsWithUser(userId)
+        }
 
-    suspend fun getContacts(userId: Uuid): Result<List<Pair<Contact, User>>, ContactError> = coroutineBinding {
-        contactRepository.getContactsWithUser(userId)
-    }
-
-    suspend fun sendFriendRequest(userId: Uuid, req: AddContactRequest): Result<Unit, ContactError> = coroutineBinding {
-        val existingContact1 = contactRepository.getContact(userId, req.targetId)
-        val existingContact2 = contactRepository.getContact(req.targetId, userId)
-        if (existingContact1?.status == ContactStatus.BLOCKED) {
-            Err(ContactError.UserBlocked).bind()
-        }
-        if (existingContact2?.status == ContactStatus.BLOCKED) {
-            Err(ContactError.BlockedByTarget).bind()
-        }
-        if (existingContact1?.status == ContactStatus.FRIEND || existingContact2?.status == ContactStatus.FRIEND) {
-            Err(ContactError.AlreadyFriends).bind()
-        }
-        val targetPolicy = userSettingRepository.getSettings(req.targetId)?.privacy?.friendRequestPolicy
-            ?: FriendRequestPolicy.NEED_APPROVAL
-        if (targetPolicy == FriendRequestPolicy.DENY_ANY) {
-            Err(ContactError.PermissionDenied).bind()
-        }
-        val existingRequests = contactRequestRepository.getRequestsBySenderAndReceiver(userId, req.targetId)
-        val pendingRequest = existingRequests.find { it.status == RequestStatus.PENDING }
-        if (pendingRequest != null) {
-            Err(ContactError.RequestAlreadySent).bind()
-        }
-        if (targetPolicy == FriendRequestPolicy.AUTO_ACCEPT) {
-            // Insert and auto-approve must commit together: a crash in between
-            // would leave a dangling PENDING request that nobody will ever
-            // handle. handleFriendRequest's own inTransaction joins this one
-            // (see dbQuery's join-the-outer-transaction contract).
-            inTransaction {
-                val autoRequest = contactRequestRepository.insertContactRequest(
+    suspend fun sendFriendRequest(
+        userId: Uuid,
+        req: AddContactRequest,
+    ): Result<Unit, ContactError> =
+        coroutineBinding {
+            val existingContact1 = contactRepository.getContact(userId, req.targetId)
+            val existingContact2 = contactRepository.getContact(req.targetId, userId)
+            if (existingContact1?.status == ContactStatus.BLOCKED) {
+                Err(ContactError.UserBlocked).bind()
+            }
+            if (existingContact2?.status == ContactStatus.BLOCKED) {
+                Err(ContactError.BlockedByTarget).bind()
+            }
+            if (existingContact1?.status == ContactStatus.FRIEND || existingContact2?.status == ContactStatus.FRIEND) {
+                Err(ContactError.AlreadyFriends).bind()
+            }
+            val targetPolicy =
+                userSettingRepository.getSettings(req.targetId)?.privacy?.friendRequestPolicy
+                    ?: FriendRequestPolicy.NEED_APPROVAL
+            if (targetPolicy == FriendRequestPolicy.DENY_ANY) {
+                Err(ContactError.PermissionDenied).bind()
+            }
+            val existingRequests = contactRequestRepository.getRequestsBySenderAndReceiver(userId, req.targetId)
+            val pendingRequest = existingRequests.find { it.status == RequestStatus.PENDING }
+            if (pendingRequest != null) {
+                Err(ContactError.RequestAlreadySent).bind()
+            }
+            if (targetPolicy == FriendRequestPolicy.AUTO_ACCEPT) {
+                // Insert and auto-approve must commit together: a crash in between
+                // would leave a dangling PENDING request that nobody will ever
+                // handle. handleFriendRequest's own inTransaction joins this one
+                // (see dbQuery's join-the-outer-transaction contract).
+                inTransaction {
+                    val autoRequest =
+                        contactRequestRepository.insertContactRequest(
+                            senderId = userId,
+                            receiverId = req.targetId,
+                            message = req.message,
+                        ) ?: Err(ContactError.OperationFailed).bind()
+                    handleFriendRequest(
+                        userId = req.targetId,
+                        contactRequestId = autoRequest.id,
+                        action = ContactRequestAction.APPROVE,
+                        remark = null,
+                    ).bind()
+                }
+                return@coroutineBinding
+            }
+            val contactRequest =
+                contactRequestRepository.insertContactRequest(
                     senderId = userId,
                     receiverId = req.targetId,
-                    message = req.message
+                    message = req.message,
                 ) ?: Err(ContactError.OperationFailed).bind()
-                handleFriendRequest(
-                    userId = req.targetId,
-                    contactRequestId = autoRequest.id,
-                    action = ContactRequestAction.APPROVE,
-                    remark = null,
-                ).bind()
-            }
-            return@coroutineBinding
-        }
-        val contactRequest = contactRequestRepository.insertContactRequest(
-            senderId = userId,
-            receiverId = req.targetId,
-            message = req.message
-        ) ?: Err(ContactError.OperationFailed).bind()
 
-        eventBus.publishContactEvent(
-            ContactEvent.FriendRequestSent(
-                requestId = contactRequest.id,
-                senderId = contactRequest.senderId,
-                receiverId = contactRequest.receiverId,
-                timestamp = Clock.System.now()
+            eventBus.publishContactEvent(
+                ContactEvent.FriendRequestSent(
+                    requestId = contactRequest.id,
+                    senderId = contactRequest.senderId,
+                    receiverId = contactRequest.receiverId,
+                    timestamp = Clock.System.now(),
+                ),
             )
-        )
-    }
+        }
 
-    suspend fun getSentRequests(userId: Uuid): Result<List<ContactRequest>, ContactError> = coroutineBinding {
-        contactRequestRepository.getRequestsBySender(userId)
-    }
-    suspend fun getReceivedRequests(userId: Uuid): Result<List<ContactRequest>, ContactError> = coroutineBinding {
-        contactRequestRepository.getRequestsByReceiver(userId)
-    }
-    suspend fun getAllRequests(userId: Uuid): Result<List<ContactRequest>, ContactError> = coroutineBinding {
-        val sentRequests = contactRequestRepository.getRequestsBySender(userId)
-        val receivedRequests = contactRequestRepository.getRequestsByReceiver(userId)
-        (sentRequests + receivedRequests).sortedByDescending { it.createdAt }
-    }
+    suspend fun getSentRequests(userId: Uuid): Result<List<ContactRequest>, ContactError> =
+        coroutineBinding {
+            contactRequestRepository.getRequestsBySender(userId)
+        }
+
+    suspend fun getReceivedRequests(userId: Uuid): Result<List<ContactRequest>, ContactError> =
+        coroutineBinding {
+            contactRequestRepository.getRequestsByReceiver(userId)
+        }
+
+    suspend fun getAllRequests(userId: Uuid): Result<List<ContactRequest>, ContactError> =
+        coroutineBinding {
+            val sentRequests = contactRequestRepository.getRequestsBySender(userId)
+            val receivedRequests = contactRequestRepository.getRequestsByReceiver(userId)
+            (sentRequests + receivedRequests).sortedByDescending { it.createdAt }
+        }
 
     suspend fun handleFriendRequest(
         userId: Uuid,
         contactRequestId: Uuid,
         action: ContactRequestAction,
-        remark: String?
-    ): Result<Unit, ContactError> = coroutineBinding {
-        val contactRequest = contactRequestRepository.getRequestById(contactRequestId)
-            ?: Err(ContactError.RequestNotFound).bind()
-        when (action) {
-            ContactRequestAction.APPROVE -> {
-                if (contactRequest.receiverId != userId) {
-                    Err(ContactError.PermissionDenied).bind()
-                }
+        remark: String?,
+    ): Result<Unit, ContactError> =
+        coroutineBinding {
+            val contactRequest =
+                contactRequestRepository.getRequestById(contactRequestId)
+                    ?: Err(ContactError.RequestNotFound).bind()
+            when (action) {
+                ContactRequestAction.APPROVE -> {
+                    if (contactRequest.receiverId != userId) {
+                        Err(ContactError.PermissionDenied).bind()
+                    }
 
-                // Atomic acceptance: the request update, both contact rows
-                // and (when new) the conversation + participants commit
-                // together or not at all — see inTransaction's contract.
-                val conversationId = inTransaction {
-                    val updated = contactRequestRepository.updateRequestStatus(
-                        contactRequestId, RequestStatus.ACCEPTED, remark
-                    )
-                    if (!updated) {
-                        Err(ContactError.OperationFailed).bind()
-                    }
-                    // A false upsert would leave the request ACCEPTED without
-                    // the contact rows it promises; failing here rolls the
-                    // whole block back.
-                    val bothContactsUpserted = contactRepository.upsertContact(
-                        userId = userId,
-                        contactId = contactRequest.senderId,
-                        status = ContactStatus.FRIEND,
-                    ) && contactRepository.upsertContact(
-                        userId = contactRequest.senderId,
-                        contactId = userId,
-                        status = ContactStatus.FRIEND,
-                    )
-                    if (!bothContactsUpserted) {
-                        Err(ContactError.OperationFailed).bind()
-                    }
-                    // A pending request in the opposite direction is moot once
-                    // the friendship exists: cancel it in the same transaction
-                    // so it cannot be approved later into a duplicate pair.
-                    contactRequestRepository
-                        .getRequestsBySenderAndReceiver(contactRequest.senderId, userId)
-                        .find { it.status == RequestStatus.PENDING }
-                        ?.let { reverse ->
-                            contactRequestRepository.updateRequestStatus(reverse.id, RequestStatus.CANCELED, null)
-                        }
-                    conversationRepository.getExistingPrivateConversation(userId, contactRequest.senderId)?.id
-                        ?: conversationRepository.insertConversation(
-                            ConversationType.PRIVATE,
-                            PrivateMetadata()
-                        ).also { conversation ->
-                            val participants = listOf(
-                                ConversationParticipant(
-                                    conversationId = conversation.id,
-                                    userId = userId,
-                                    role = ConversationRole.PARTICIPANT,
-                                    lastReadMessageId = null,
-                                    joinedAt = Clock.System.now(),
-                                    settings = ParticipantSettings(),
-                                ), ConversationParticipant(
-                                    conversationId = conversation.id,
-                                    userId = contactRequest.senderId,
-                                    role = ConversationRole.PARTICIPANT,
-                                    lastReadMessageId = null,
-                                    joinedAt = Clock.System.now(),
-                                    settings = ParticipantSettings(),
+                    // Atomic acceptance: the request update, both contact rows
+                    // and (when new) the conversation + participants commit
+                    // together or not at all — see inTransaction's contract.
+                    val conversationId =
+                        inTransaction {
+                            val updated =
+                                contactRequestRepository.updateRequestStatus(
+                                    contactRequestId,
+                                    RequestStatus.ACCEPTED,
+                                    remark,
                                 )
-                            )
-                            participants.forEach { participant ->
-                                conversationParticipantRepository.insertConversationParticipant(participant)
-                                    ?: Err(ContactError.OperationFailed).bind()
+                            if (!updated) {
+                                Err(ContactError.OperationFailed).bind()
                             }
-                        }.id
-                }
+                            // A false upsert would leave the request ACCEPTED without
+                            // the contact rows it promises; failing here rolls the
+                            // whole block back.
+                            val bothContactsUpserted =
+                                contactRepository.upsertContact(
+                                    userId = userId,
+                                    contactId = contactRequest.senderId,
+                                    status = ContactStatus.FRIEND,
+                                ) &&
+                                    contactRepository.upsertContact(
+                                        userId = contactRequest.senderId,
+                                        contactId = userId,
+                                        status = ContactStatus.FRIEND,
+                                    )
+                            if (!bothContactsUpserted) {
+                                Err(ContactError.OperationFailed).bind()
+                            }
+                            // A pending request in the opposite direction is moot once
+                            // the friendship exists: cancel it in the same transaction
+                            // so it cannot be approved later into a duplicate pair.
+                            contactRequestRepository
+                                .getRequestsBySenderAndReceiver(contactRequest.senderId, userId)
+                                .find { it.status == RequestStatus.PENDING }
+                                ?.let { reverse ->
+                                    contactRequestRepository.updateRequestStatus(reverse.id, RequestStatus.CANCELED, null)
+                                }
+                            conversationRepository.getExistingPrivateConversation(userId, contactRequest.senderId)?.id
+                                ?: conversationRepository
+                                    .insertConversation(
+                                        ConversationType.PRIVATE,
+                                        PrivateMetadata(),
+                                    ).also { conversation ->
+                                        val participants =
+                                            listOf(
+                                                ConversationParticipant(
+                                                    conversationId = conversation.id,
+                                                    userId = userId,
+                                                    role = ConversationRole.PARTICIPANT,
+                                                    lastReadMessageId = null,
+                                                    joinedAt = Clock.System.now(),
+                                                    settings = ParticipantSettings(),
+                                                ),
+                                                ConversationParticipant(
+                                                    conversationId = conversation.id,
+                                                    userId = contactRequest.senderId,
+                                                    role = ConversationRole.PARTICIPANT,
+                                                    lastReadMessageId = null,
+                                                    joinedAt = Clock.System.now(),
+                                                    settings = ParticipantSettings(),
+                                                ),
+                                            )
+                                        participants.forEach { participant ->
+                                            conversationParticipantRepository.insertConversationParticipant(participant)
+                                                ?: Err(ContactError.OperationFailed).bind()
+                                        }
+                                    }.id
+                        }
 
-                eventBus.publishConversationEvent(
-                    ConversationEvent.UserJoinedConversation(
-                        conversationId = conversationId,
-                        userId = listOf(userId, contactRequest.senderId),
-                        inviterId = userId,
-                        timestamp = Clock.System.now()
+                    eventBus.publishConversationEvent(
+                        ConversationEvent.UserJoinedConversation(
+                            conversationId = conversationId,
+                            userId = listOf(userId, contactRequest.senderId),
+                            inviterId = userId,
+                            timestamp = Clock.System.now(),
+                        ),
                     )
-                )
 
-                eventBus.publishContactEvent(
-                    ContactEvent.FriendRequestAccepted(
-                        requestId = contactRequestId,
-                        senderId = contactRequest.senderId,
-                        receiverId = userId,
-                        timestamp = Clock.System.now()
-                    )
-                )
-            }
-            ContactRequestAction.REJECT -> {
-                if (contactRequest.receiverId != userId) {
-                    Err(ContactError.PermissionDenied).bind()
-                }
-                val updated = contactRequestRepository.updateRequestStatus(contactRequestId, RequestStatus.REJECTED, remark)
-                if (updated) {
                     eventBus.publishContactEvent(
-                        ContactEvent.FriendRequestRejected(
+                        ContactEvent.FriendRequestAccepted(
                             requestId = contactRequestId,
                             senderId = contactRequest.senderId,
                             receiverId = userId,
-                            reason = remark,
-                            timestamp = Clock.System.now()
-                        )
+                            timestamp = Clock.System.now(),
+                        ),
                     )
-                } else {
+                }
+
+                ContactRequestAction.REJECT -> {
+                    if (contactRequest.receiverId != userId) {
+                        Err(ContactError.PermissionDenied).bind()
+                    }
+                    val updated = contactRequestRepository.updateRequestStatus(contactRequestId, RequestStatus.REJECTED, remark)
+                    if (updated) {
+                        eventBus.publishContactEvent(
+                            ContactEvent.FriendRequestRejected(
+                                requestId = contactRequestId,
+                                senderId = contactRequest.senderId,
+                                receiverId = userId,
+                                reason = remark,
+                                timestamp = Clock.System.now(),
+                            ),
+                        )
+                    } else {
+                        Err(ContactError.OperationFailed).bind()
+                    }
+                }
+
+                ContactRequestAction.CANCEL -> {
+                    if (contactRequest.senderId != userId) {
+                        Err(ContactError.PermissionDenied).bind()
+                    }
+                    val updated = contactRequestRepository.updateRequestStatus(contactRequestId, RequestStatus.CANCELED, remark)
+                    if (!updated) Err(ContactError.OperationFailed).bind()
+                }
+            }
+        }
+
+    suspend fun deleteContact(
+        userId: Uuid,
+        id: Uuid,
+    ): Result<Unit, ContactError> =
+        coroutineBinding {
+            // Atomic teardown: both contact rows and the private conversation
+            // (when present) commit together or not at all. Failures must throw
+            // via bind() so inTransaction rolls back any earlier update instead of
+            // returning null and committing a half-deleted contact pair.
+            inTransaction {
+                val result1 = contactRepository.updateContact(userId = userId, contactId = id, status = ContactStatus.DELETED)
+                val result2 = contactRepository.updateContact(userId = id, contactId = userId, status = ContactStatus.DELETED)
+                if (!result1 || !result2) {
+                    Err(ContactError.OperationFailed).bind()
+                }
+                val existingConversation = conversationRepository.getExistingPrivateConversation(userId, id)
+                if (existingConversation != null && !conversationRepository.softDeleteConversation(existingConversation.id, userId)) {
                     Err(ContactError.OperationFailed).bind()
                 }
             }
-            ContactRequestAction.CANCEL -> {
-                if (contactRequest.senderId != userId) {
-                    Err(ContactError.PermissionDenied).bind()
-                }
-                val updated = contactRequestRepository.updateRequestStatus(contactRequestId, RequestStatus.CANCELED, remark)
-                if (!updated) Err(ContactError.OperationFailed).bind()
-            }
-        }
-    }
-
-    suspend fun deleteContact(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {
-        // Atomic teardown: both contact rows and the private conversation
-        // (when present) commit together or not at all. Failures must throw
-        // via bind() so inTransaction rolls back any earlier update instead of
-        // returning null and committing a half-deleted contact pair.
-        inTransaction {
-            val result1 = contactRepository.updateContact(userId = userId, contactId = id, status = ContactStatus.DELETED)
-            val result2 = contactRepository.updateContact(userId = id, contactId = userId, status = ContactStatus.DELETED)
-            if (!result1 || !result2) {
-                Err(ContactError.OperationFailed).bind()
-            }
-            val existingConversation = conversationRepository.getExistingPrivateConversation(userId, id)
-            if (existingConversation != null && !conversationRepository.softDeleteConversation(existingConversation.id, userId)) {
-                Err(ContactError.OperationFailed).bind()
-            }
-        }
-        eventBus.publishContactEvent(
-            ContactEvent.ContactDeleted(
-                userId = userId,
-                contactId = id,
-                timestamp = Clock.System.now()
-            )
-        )
-    }
-
-    suspend fun blockUser(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {
-        val success = contactRepository.upsertContactStatus(userId = userId, contactId = id, status = ContactStatus.BLOCKED)
-        if (success) {
             eventBus.publishContactEvent(
-                ContactEvent.UserBlocked(
-                    userId = userId,
-                    blockedUserId = id,
-                    timestamp = Clock.System.now()
-                )
-            )
-        } else {
-            Err(ContactError.OperationFailed).bind()
-        }
-    }
-
-    suspend fun unblockUser(userId: Uuid, id: Uuid): Result<Unit, ContactError> = coroutineBinding {
-        // Unblock only operates on an existing BLOCKED row. This used to be an
-        // unconditional upsert of FRIEND, which let any user fabricate a
-        // one-way friendship with a stranger they had never contacted.
-        //
-        // The whole read-then-write decision runs in one transaction with row
-        // locks (SELECT ... FOR UPDATE) on BOTH sides: blocking rewrites the
-        // blocker's own row only, so the mirror row records the pre-block
-        // relationship — but without a lock on it, a concurrent blockUser
-        // could commit between our read and write and leave a one-way
-        // FRIEND/BLOCKED pair. Both rows are locked in a canonical (user_id
-        // ascending) order so two simultaneous unblocks of the same pair
-        // serialize instead of deadlocking against each other.
-        // Friendship is restored only if the pair were actually friends;
-        // unblocking a blocked stranger leaves no friendship behind.
-        inTransaction {
-            val (lockFirst, lockSecond) = if (userId < id) userId to id else id to userId
-            val rowOf = mapOf(
-                lockFirst to contactRepository.getContactForUpdate(lockFirst, lockSecond),
-                lockSecond to contactRepository.getContactForUpdate(lockSecond, lockFirst),
-            )
-            val current = rowOf.getValue(userId)
-            val mirror = rowOf.getValue(id)
-            if (current?.status != ContactStatus.BLOCKED) {
-                Err(ContactError.NotBlocked).bind()
-            }
-            val restoredStatus = if (mirror?.status == ContactStatus.FRIEND) {
-                ContactStatus.FRIEND
-            } else {
-                ContactStatus.DELETED
-            }
-            // Conditional update: never create or blindly overwrite.
-            val success = contactRepository.updateContactStatusIf(
-                userId = userId,
-                contactId = id,
-                expected = ContactStatus.BLOCKED,
-                newStatus = restoredStatus,
-            )
-            if (!success) {
-                Err(ContactError.OperationFailed).bind()
-            }
-            restoredStatus
-        }
-        eventBus.publishContactEvent(
-            ContactEvent.UserUnblocked(
-                userId = userId,
-                unblockedUserId = id,
-                timestamp = Clock.System.now()
-            )
-        )
-    }
-
-    suspend fun updateContactInfo(userId: Uuid, id: Uuid, nickname: String?, alias: String?): Result<Unit, ContactError> = coroutineBinding {
-        val success = contactRepository.updateContact(userId, id, nickname, alias)
-        if (success) {
-            eventBus.publishContactEvent(
-                ContactEvent.ContactUpdated(
+                ContactEvent.ContactDeleted(
                     userId = userId,
                     contactId = id,
-                    nickname = nickname,
-                    alias = alias,
-                    timestamp = Clock.System.now()
-                )
+                    timestamp = Clock.System.now(),
+                ),
             )
-        } else {
-            Err(ContactError.OperationFailed).bind()
         }
-    }
 
+    suspend fun blockUser(
+        userId: Uuid,
+        id: Uuid,
+    ): Result<Unit, ContactError> =
+        coroutineBinding {
+            val success = contactRepository.upsertContactStatus(userId = userId, contactId = id, status = ContactStatus.BLOCKED)
+            if (success) {
+                eventBus.publishContactEvent(
+                    ContactEvent.UserBlocked(
+                        userId = userId,
+                        blockedUserId = id,
+                        timestamp = Clock.System.now(),
+                    ),
+                )
+            } else {
+                Err(ContactError.OperationFailed).bind()
+            }
+        }
+
+    suspend fun unblockUser(
+        userId: Uuid,
+        id: Uuid,
+    ): Result<Unit, ContactError> =
+        coroutineBinding {
+            // Unblock only operates on an existing BLOCKED row. This used to be an
+            // unconditional upsert of FRIEND, which let any user fabricate a
+            // one-way friendship with a stranger they had never contacted.
+            //
+            // The whole read-then-write decision runs in one transaction with row
+            // locks (SELECT ... FOR UPDATE) on BOTH sides: blocking rewrites the
+            // blocker's own row only, so the mirror row records the pre-block
+            // relationship — but without a lock on it, a concurrent blockUser
+            // could commit between our read and write and leave a one-way
+            // FRIEND/BLOCKED pair. Both rows are locked in a canonical (user_id
+            // ascending) order so two simultaneous unblocks of the same pair
+            // serialize instead of deadlocking against each other.
+            // Friendship is restored only if the pair were actually friends;
+            // unblocking a blocked stranger leaves no friendship behind.
+            inTransaction {
+                val (lockFirst, lockSecond) = if (userId < id) userId to id else id to userId
+                val rowOf =
+                    mapOf(
+                        lockFirst to contactRepository.getContactForUpdate(lockFirst, lockSecond),
+                        lockSecond to contactRepository.getContactForUpdate(lockSecond, lockFirst),
+                    )
+                val current = rowOf.getValue(userId)
+                val mirror = rowOf.getValue(id)
+                if (current?.status != ContactStatus.BLOCKED) {
+                    Err(ContactError.NotBlocked).bind()
+                }
+                val restoredStatus =
+                    if (mirror?.status == ContactStatus.FRIEND) {
+                        ContactStatus.FRIEND
+                    } else {
+                        ContactStatus.DELETED
+                    }
+                // Conditional update: never create or blindly overwrite.
+                val success =
+                    contactRepository.updateContactStatusIf(
+                        userId = userId,
+                        contactId = id,
+                        expected = ContactStatus.BLOCKED,
+                        newStatus = restoredStatus,
+                    )
+                if (!success) {
+                    Err(ContactError.OperationFailed).bind()
+                }
+                restoredStatus
+            }
+            eventBus.publishContactEvent(
+                ContactEvent.UserUnblocked(
+                    userId = userId,
+                    unblockedUserId = id,
+                    timestamp = Clock.System.now(),
+                ),
+            )
+        }
+
+    suspend fun updateContactInfo(
+        userId: Uuid,
+        id: Uuid,
+        nickname: String?,
+        alias: String?,
+    ): Result<Unit, ContactError> =
+        coroutineBinding {
+            val success = contactRepository.updateContact(userId, id, nickname, alias)
+            if (success) {
+                eventBus.publishContactEvent(
+                    ContactEvent.ContactUpdated(
+                        userId = userId,
+                        contactId = id,
+                        nickname = nickname,
+                        alias = alias,
+                        timestamp = Clock.System.now(),
+                    ),
+                )
+            } else {
+                Err(ContactError.OperationFailed).bind()
+            }
+        }
 }

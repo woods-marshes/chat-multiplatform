@@ -27,125 +27,141 @@ import kotlin.uuid.Uuid
 
 class TransactionReadIsolationTest {
     @Test
-    fun fileDatabaseDirectReadsSeeOwnWritesAndRollbackDoesNotNotify() = runBlocking {
-        val file = Files.createTempFile("chat-transaction-", ".db")
-        val driver = JdbcSqliteDriver("jdbc:sqlite:$file")
-        val writer = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-        val reader = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-        try {
-            val db = createDatabase { schema -> schema.create(driver).await(); driver }
-            val messages = MessageDaoImpl({ db }, writer)
-            val users = UserDaoImpl({ db }, reader)
-            val id = Uuid.random()
-            val now = kotlin.time.Instant.fromEpochMilliseconds(Clock.System.now().toEpochMilliseconds())
-            val user = UserEntity(id, "transaction-user", null, null, null, null, now, now, null, UserRole.MEMBER)
-            val notifications = AtomicInteger()
-            val query = db.usersQueries.getUserById(id)
-            val listener = Query.Listener { notifications.incrementAndGet() }
-            query.addListener(listener)
+    fun fileDatabaseDirectReadsSeeOwnWritesAndRollbackDoesNotNotify() =
+        runBlocking {
+            val file = Files.createTempFile("chat-transaction-", ".db")
+            val driver = JdbcSqliteDriver("jdbc:sqlite:$file")
+            val writer = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            val reader = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
             try {
-                assertFailsWith<IllegalStateException> {
-                    withContext(writer) { messages.transaction {
-                        users.insertUser(user)
-                        assertEquals(user, query.executeAsOneOrNull())
-                        assertEquals(0, notifications.get())
-                        error("Injected rollback")
-                    } }
-                }
-                assertNull(withContext(reader) { query.executeAsOneOrNull() })
-                assertEquals(0, notifications.get())
-                withContext(writer) { messages.transaction {
-                    users.insertUser(user)
-                    assertEquals(user, query.executeAsOneOrNull())
+                val db =
+                    createDatabase { schema ->
+                        schema.create(driver).await()
+                        driver
+                    }
+                val messages = MessageDaoImpl({ db }, writer)
+                val users = UserDaoImpl({ db }, reader)
+                val id = Uuid.random()
+                val now = kotlin.time.Instant.fromEpochMilliseconds(Clock.System.now().toEpochMilliseconds())
+                val user = UserEntity(id, "transaction-user", null, null, null, null, now, now, null, UserRole.MEMBER)
+                val notifications = AtomicInteger()
+                val query = db.usersQueries.getUserById(id)
+                val listener = Query.Listener { notifications.incrementAndGet() }
+                query.addListener(listener)
+                try {
+                    assertFailsWith<IllegalStateException> {
+                        withContext(writer) {
+                            messages.transaction {
+                                users.insertUser(user)
+                                assertEquals(user, query.executeAsOneOrNull())
+                                assertEquals(0, notifications.get())
+                                error("Injected rollback")
+                            }
+                        }
+                    }
+                    assertNull(withContext(reader) { query.executeAsOneOrNull() })
                     assertEquals(0, notifications.get())
+                    withContext(writer) {
+                        messages.transaction {
+                            users.insertUser(user)
+                            assertEquals(user, query.executeAsOneOrNull())
+                            assertEquals(0, notifications.get())
+                        }
+                    }
+                    assertEquals(user, withContext(reader) { query.executeAsOneOrNull() })
+                    assertEquals(1, notifications.get())
+                } finally {
+                    query.removeListener(listener)
                 }
-                }
-                assertEquals(user, withContext(reader) { query.executeAsOneOrNull() })
-                assertEquals(1, notifications.get())
-            } finally { query.removeListener(listener) }
-        } finally {
-            writer.close()
-            reader.close()
-            driver.close()
-            Files.deleteIfExists(file)
+            } finally {
+                writer.close()
+                reader.close()
+                driver.close()
+                Files.deleteIfExists(file)
+            }
         }
-    }
 
     @Test
-    fun fileDatabaseScopeCursorAndGetRetryableMessagesStayOnTransactionConnection() = runBlocking {
-        val file = Files.createTempFile("chat-tx-cursor-", ".db")
-        val driver = JdbcSqliteDriver("jdbc:sqlite:$file")
-        val writer = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-        val ioDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-        try {
-            val db = createDatabase { schema -> schema.create(driver).await(); driver }
-            // Pass a separate ioContext dispatcher to prove that one-shot reads
-            // execute directly on the calling transaction thread rather than
-            // hopping to ioContext via asFlow().mapToOneOrNull(ioContext).first().
-            val dao = MessageDaoImpl({ db }, ioDispatcher)
-            val userId = Uuid.parse("00000000-0000-0000-0000-000000000001")
-            val conversationId = Uuid.parse("00000000-0000-0000-0000-000000000002")
-            val msgId = Uuid.parse("00000000-0000-0000-0000-000000000010")
-            val now = kotlin.time.Instant.fromEpochMilliseconds(1_700_000_000_000)
+    fun fileDatabaseScopeCursorAndGetRetryableMessagesStayOnTransactionConnection() =
+        runBlocking {
+            val file = Files.createTempFile("chat-tx-cursor-", ".db")
+            val driver = JdbcSqliteDriver("jdbc:sqlite:$file")
+            val writer = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            val ioDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+            try {
+                val db =
+                    createDatabase { schema ->
+                        schema.create(driver).await()
+                        driver
+                    }
+                // Pass a separate ioContext dispatcher to prove that one-shot reads
+                // execute directly on the calling transaction thread rather than
+                // hopping to ioContext via asFlow().mapToOneOrNull(ioContext).first().
+                val dao = MessageDaoImpl({ db }, ioDispatcher)
+                val userId = Uuid.parse("00000000-0000-0000-0000-000000000001")
+                val conversationId = Uuid.parse("00000000-0000-0000-0000-000000000002")
+                val msgId = Uuid.parse("00000000-0000-0000-0000-000000000010")
+                val now = kotlin.time.Instant.fromEpochMilliseconds(1_700_000_000_000)
 
-            withContext(writer) {
-                db.usersQueries.upsertUser(
-                    UserEntity(userId, "tx-user", null, null, null, null, now, now, null, UserRole.MEMBER),
-                )
-                db.conversationsQueries.upsertConversation(
-                    ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0),
-                )
-            }
-
-            assertFailsWith<IllegalStateException> {
                 withContext(writer) {
-                    dao.transaction {
-                        // "CONVERSATION" must stay in sync with SyncScope.CONVERSATION.name,
-                        // the scope label production code persists under.
-                        dao.setScopeCursor("CONVERSATION", conversationId, 42L)
-                        assertEquals(42L, dao.getScopeCursor("CONVERSATION", conversationId))
+                    db.usersQueries.upsertUser(
+                        UserEntity(userId, "tx-user", null, null, null, null, now, now, null, UserRole.MEMBER),
+                    )
+                    db.conversationsQueries.upsertConversation(
+                        ConversationEntity(conversationId, ConversationType.PRIVATE, null, null, now, now, null, unread_count = 0),
+                    )
+                }
 
-                        dao.insertMessage(
-                            MessageEntity(
-                                id = msgId,
-                                conversation_id = conversationId,
-                                user_id = userId,
-                                category = MessageCategory.NORMAL,
-                                render_type = MessageRenderType.TEXT,
-                                content = TextContent("pending"),
-                                reply_to_message_id = null,
-                                created_at = now,
-                                revoked_at = null,
-                                local_send_status = MessageStatus.SENDING,
-                                in_timeline = true,
-                            ),
-                        )
-                        val retryable = dao.getRetryableMessages(
-                            kotlin.time.Instant.fromEpochMilliseconds(now.toEpochMilliseconds() + 1_000),
-                        )
-                        assertEquals(listOf(msgId), retryable.map { it.id })
+                assertFailsWith<IllegalStateException> {
+                    withContext(writer) {
+                        dao.transaction {
+                            // "CONVERSATION" must stay in sync with SyncScope.CONVERSATION.name,
+                            // the scope label production code persists under.
+                            dao.setScopeCursor("CONVERSATION", conversationId, 42L)
+                            assertEquals(42L, dao.getScopeCursor("CONVERSATION", conversationId))
 
-                        dao.demoteTimelineBefore(conversationId, msgId)
-                        assertEquals(1L, dao.getWindowGeneration(conversationId))
+                            dao.insertMessage(
+                                MessageEntity(
+                                    id = msgId,
+                                    conversation_id = conversationId,
+                                    user_id = userId,
+                                    category = MessageCategory.NORMAL,
+                                    render_type = MessageRenderType.TEXT,
+                                    content = TextContent("pending"),
+                                    reply_to_message_id = null,
+                                    created_at = now,
+                                    revoked_at = null,
+                                    local_send_status = MessageStatus.SENDING,
+                                    in_timeline = true,
+                                ),
+                            )
+                            val retryable =
+                                dao.getRetryableMessages(
+                                    kotlin.time.Instant.fromEpochMilliseconds(now.toEpochMilliseconds() + 1_000),
+                                )
+                            assertEquals(listOf(msgId), retryable.map { it.id })
 
-                        error("Rollback uncommitted cursor and message")
+                            dao.demoteTimelineBefore(conversationId, msgId)
+                            assertEquals(1L, dao.getWindowGeneration(conversationId))
+
+                            error("Rollback uncommitted cursor and message")
+                        }
                     }
                 }
-            }
 
-            withContext(writer) {
-                assertNull(dao.getScopeCursor("CONVERSATION", conversationId))
-                assertEquals(
-                    emptyList(),
-                    dao.getRetryableMessages(kotlin.time.Instant.fromEpochMilliseconds(now.toEpochMilliseconds() + 1_000)),
-                )
-                assertEquals(0L, dao.getWindowGeneration(conversationId))
+                withContext(writer) {
+                    assertNull(dao.getScopeCursor("CONVERSATION", conversationId))
+                    assertEquals(
+                        emptyList(),
+                        dao.getRetryableMessages(kotlin.time.Instant.fromEpochMilliseconds(now.toEpochMilliseconds() + 1_000)),
+                    )
+                    assertEquals(0L, dao.getWindowGeneration(conversationId))
+                }
+            } finally {
+                writer.close()
+                ioDispatcher.close()
+                driver.close()
+                Files.deleteIfExists(file)
             }
-        } finally {
-            writer.close()
-            ioDispatcher.close()
-            driver.close()
-            Files.deleteIfExists(file)
         }
-    }
 }

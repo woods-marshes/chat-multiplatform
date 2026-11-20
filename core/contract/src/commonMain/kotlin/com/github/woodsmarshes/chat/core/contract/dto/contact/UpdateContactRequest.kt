@@ -6,5 +6,5 @@ import kotlinx.serialization.protobuf.ProtoNumber
 @Serializable
 data class UpdateContactRequest(
     @ProtoNumber(1) val nickname: String? = null,
-    @ProtoNumber(2) val alias: String? = null
+    @ProtoNumber(2) val alias: String? = null,
 )

@@ -3,17 +3,17 @@ package com.github.woodsmarshes.chat.core.database.dao
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
-import com.github.woodsmarshes.chat.core.model.ConversationMetadata
-import io.github.woodsmarshes.chat.db.ChatDatabase
-import io.github.woodsmarshes.chat.db.ConversationEntity
-import io.github.woodsmarshes.chat.db.GetConversationListView
-import kotlinx.coroutines.flow.Flow
 import com.github.woodsmarshes.chat.core.database.di.BoundDatabaseElement
 import com.github.woodsmarshes.chat.core.database.session.DatabaseSessionGate
 import com.github.woodsmarshes.chat.core.database.session.DirectDatabaseSessionGate
 import com.github.woodsmarshes.chat.core.database.session.sessionBoundQueryFlow
+import com.github.woodsmarshes.chat.core.model.ConversationMetadata
+import io.github.woodsmarshes.chat.db.ChatDatabase
+import io.github.woodsmarshes.chat.db.ConversationEntity
+import io.github.woodsmarshes.chat.db.GetConversationListView
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -23,16 +23,18 @@ class ConversationDaoImpl(
     private val ioContext: CoroutineContext,
     private val sessionGate: DatabaseSessionGate = DirectDatabaseSessionGate(dbProvider),
 ) : ConversationDao {
-    private suspend fun writeQueries() = (currentCoroutineContext()[BoundDatabaseElement]?.database ?: dbProvider()).also { currentCoroutineContext().ensureActive() }.conversationsQueries
+    private suspend fun writeQueries() =
+        (currentCoroutineContext()[BoundDatabaseElement]?.database ?: dbProvider())
+            .also {
+                currentCoroutineContext().ensureActive()
+            }.conversationsQueries
 
     private val queries
         get() = dbProvider().conversationsQueries
 
-    override suspend fun findConversationById(id: Uuid): ConversationEntity? =
-        writeQueries().getConversationById(id).executeAsOneOrNull()
+    override suspend fun findConversationById(id: Uuid): ConversationEntity? = writeQueries().getConversationById(id).executeAsOneOrNull()
 
-    override suspend fun findAllActiveConversations(): List<ConversationEntity> =
-        writeQueries().getAllActiveConversations().executeAsList()
+    override suspend fun findAllActiveConversations(): List<ConversationEntity> = writeQueries().getAllActiveConversations().executeAsList()
 
     override suspend fun insertConversation(conversation: ConversationEntity) {
         writeQueries().upsertConversation(conversation)
@@ -45,43 +47,49 @@ class ConversationDaoImpl(
         }
     }
 
-    override fun getAllActiveConversations(): Flow<List<ConversationEntity>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.conversationsQueries.getAllActiveConversations() }, { it.executeAsList() })
-    }
+    override fun getAllActiveConversations(): Flow<List<ConversationEntity>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.conversationsQueries.getAllActiveConversations() }, {
+            it.executeAsList()
+        })
 
-    override fun getConversationById(id: Uuid): Flow<ConversationEntity?> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.conversationsQueries.getConversationById(id) }, { it.executeAsOneOrNull() })
-    }
+    override fun getConversationById(id: Uuid): Flow<ConversationEntity?> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.conversationsQueries.getConversationById(id) }, {
+            it.executeAsOneOrNull()
+        })
 
-    override fun getConversationListView(currentUserId: Uuid): Flow<List<GetConversationListView>> {
-        return sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.conversationsQueries.getConversationListView(currentUserId) }, { it.executeAsList() })
-    }
+    override fun getConversationListView(currentUserId: Uuid): Flow<List<GetConversationListView>> =
+        sessionBoundQueryFlow(sessionGate, ioContext, { db -> db.conversationsQueries.getConversationListView(currentUserId) }, {
+            it.executeAsList()
+        })
 
     override suspend fun updateLastMessage(
         id: Uuid,
         lastMessageId: Uuid?,
-        updatedAt: Instant
+        updatedAt: Instant,
     ) {
         writeQueries().updateLastMessage(
             lastMessageId = lastMessageId,
             updatedAt = updatedAt,
-            id = id
+            id = id,
         )
     }
 
     override suspend fun updateMetadata(
         id: Uuid,
         metadata: ConversationMetadata?,
-        updatedAt: Instant
+        updatedAt: Instant,
     ) {
         writeQueries().updateMetadata(
             metadata = metadata,
             updatedAt = updatedAt,
-            id = id
+            id = id,
         )
     }
 
-    override suspend fun setUnreadCount(id: Uuid, count: Long) {
+    override suspend fun setUnreadCount(
+        id: Uuid,
+        count: Long,
+    ) {
         writeQueries().setUnreadCount(count, id)
     }
 
@@ -89,10 +97,13 @@ class ConversationDaoImpl(
         writeQueries().incrementUnread(id)
     }
 
-    override suspend fun softDeleteConversation(id: Uuid, deletedAt: Instant) {
+    override suspend fun softDeleteConversation(
+        id: Uuid,
+        deletedAt: Instant,
+    ) {
         writeQueries().softDeleteConversation(
             deletedAt = deletedAt,
-            id = id
+            id = id,
         )
     }
 

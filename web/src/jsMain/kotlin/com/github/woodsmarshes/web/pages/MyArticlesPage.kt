@@ -8,7 +8,6 @@ import com.github.woodsmarshes.web.state.useCurrentContext
 import com.github.woodsmarshes.web.storage.ArticleRepository
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlin.uuid.Uuid
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.button
@@ -18,108 +17,110 @@ import react.dom.html.ReactHTML.p
 import react.useEffectOnce
 import react.useState
 import web.cssom.ClassName
+import kotlin.uuid.Uuid
 
 /**
  * 我的文章页（/my/articles）。
  * 主区只显示当前登录用户自己的文章（来自 listMyArticles）。
  * 左栏复用 Sidebar。
  */
-val MyArticlesPage = FC<Props> {
-    val user = useCurrentContext().user
-    var articles: List<ArticleListResponse> by useState(emptyList())
-    var loading: Boolean by useState(true)
-    var lastId: Uuid? by useState(null)
-    var hasMore: Boolean by useState(false)
+val MyArticlesPage =
+    FC<Props> {
+        val user = useCurrentContext().user
+        var articles: List<ArticleListResponse> by useState(emptyList())
+        var loading: Boolean by useState(true)
+        var lastId: Uuid? by useState(null)
+        var hasMore: Boolean by useState(false)
 
-    val loadPage: (Uuid?) -> Unit = { cursor ->
-        val scope = MainScope()
-        scope.launch {
-            loading = cursor == null
-            val result = ArticleRepository.listMy(beforeId = cursor, limit = 20)
-            if (cursor == null) {
-                articles = result
-            } else {
-                articles = articles + result
+        val loadPage: (Uuid?) -> Unit = { cursor ->
+            val scope = MainScope()
+            scope.launch {
+                loading = cursor == null
+                val result = ArticleRepository.listMy(beforeId = cursor, limit = 20)
+                if (cursor == null) {
+                    articles = result
+                } else {
+                    articles = articles + result
+                }
+                // beforeId is a keyset cursor on the article id, so the cursor must come from the
+                // raw page. Re-sorting by updatedAt would move it into an unrelated id range and
+                // make the next page duplicate and skip rows.
+                lastId = result.lastOrNull()?.id
+                hasMore = result.size >= 20
+                loading = false
             }
-            // beforeId is a keyset cursor on the article id, so the cursor must come from the
-            // raw page. Re-sorting by updatedAt would move it into an unrelated id range and
-            // make the next page duplicate and skip rows.
-            lastId = result.lastOrNull()?.id
-            hasMore = result.size >= 20
-            loading = false
         }
-    }
 
-    useEffectOnce {
-        if (user != null) {
-            loadPage(null)
-        } else {
-            loading = false
-        }
-    }
-
-    div {
-        className = ClassName("layout-with-sidebar")
-
-        Sidebar.invoke {
-            authorId = null
+        useEffectOnce {
+            if (user != null) {
+                loadPage(null)
+            } else {
+                loading = false
+            }
         }
 
         div {
-            className = ClassName("layout-main")
+            className = ClassName("layout-with-sidebar")
 
-            div {
-                className = ClassName("toolbar")
-                h2 { +"我的文章" }
-                div { className = ClassName("toolbar-spacer") }
-                button {
-                    className = ClassName("btn btn-primary")
-                    onClick = { Router.navigate("/articles/new") }
-                    +"+ New Article"
-                }
+            Sidebar.invoke {
+                authorId = null
             }
 
-            if (user == null) {
+            div {
+                className = ClassName("layout-main")
+
                 div {
-                    className = ClassName("empty-state")
-                    h2 { +"请先登录" }
-                    p { +"登录后可以查看和管理你自己的文章。" }
-                    button {
-                        className = ClassName("btn btn-primary")
-                        onClick = { Router.navigate("/login") }
-                        +"去登录"
-                    }
-                }
-            } else if (loading) {
-                div {
-                    className = ClassName("loading-container")
-                    div { className = ClassName("loading-spinner") }
-                }
-            } else if (articles.isEmpty()) {
-                div {
-                    className = ClassName("empty-state")
-                    h2 { +"还没有文章" }
-                    p { +"开始写你的第一篇文章吧。" }
+                    className = ClassName("toolbar")
+                    h2 { +"我的文章" }
+                    div { className = ClassName("toolbar-spacer") }
                     button {
                         className = ClassName("btn btn-primary")
                         onClick = { Router.navigate("/articles/new") }
-                        +"写一篇"
+                        +"+ New Article"
                     }
                 }
-            } else {
-                articles.forEach { article ->
-                    ArticleCard.invoke {
-                        this.article = article
+
+                if (user == null) {
+                    div {
+                        className = ClassName("empty-state")
+                        h2 { +"请先登录" }
+                        p { +"登录后可以查看和管理你自己的文章。" }
+                        button {
+                            className = ClassName("btn btn-primary")
+                            onClick = { Router.navigate("/login") }
+                            +"去登录"
+                        }
                     }
-                }
-                if (hasMore) {
-                    button {
-                        className = ClassName("btn load-more")
-                        onClick = { loadPage(lastId) }
-                        +"加载更多"
+                } else if (loading) {
+                    div {
+                        className = ClassName("loading-container")
+                        div { className = ClassName("loading-spinner") }
+                    }
+                } else if (articles.isEmpty()) {
+                    div {
+                        className = ClassName("empty-state")
+                        h2 { +"还没有文章" }
+                        p { +"开始写你的第一篇文章吧。" }
+                        button {
+                            className = ClassName("btn btn-primary")
+                            onClick = { Router.navigate("/articles/new") }
+                            +"写一篇"
+                        }
+                    }
+                } else {
+                    articles.forEach { article ->
+                        ArticleCard.invoke {
+                            this.article = article
+                        }
+                    }
+                    if (hasMore) {
+                        button {
+                            className = ClassName("btn load-more")
+                            onClick = { loadPage(lastId) }
+                            +"加载更多"
+                        }
                     }
                 }
             }
         }
     }
-}

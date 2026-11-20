@@ -19,7 +19,6 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class StoppedSessionMappingTest {
-
     /**
      * The session gate is never started, so every repository operation is
      * refused with SessionStoppedException before touching api or dao — the
@@ -29,23 +28,29 @@ class StoppedSessionMappingTest {
      * UncaughtExceptionsBeforeTest in a later test class on CI).
      */
     @Test
-    fun articleOperationOnStoppedSessionMapsToPermissionDenied() = runTest {
-        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        val db = createDatabase { schema -> schema.create(driver).await(); driver }
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val gate = ManagedDatabaseSessionGate(dispatcher, { db }, { 1L })
-        val holder = mockk<DatabaseHolder>()
-        every { holder.sessionGate } returns gate
+    fun articleOperationOnStoppedSessionMapsToPermissionDenied() =
+        runTest {
+            val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+            val db =
+                createDatabase { schema ->
+                    schema.create(driver).await()
+                    driver
+                }
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val gate = ManagedDatabaseSessionGate(dispatcher, { db }, { 1L })
+            val holder = mockk<DatabaseHolder>()
+            every { holder.sessionGate } returns gate
 
-        val repo = OfflineFirstArticleRepositoryImpl(
-            articleApi = mockk<ArticleApi>(relaxed = true),
-            articleDao = ArticleDaoImpl({ db }, dispatcher, gate),
-            databaseHolder = holder,
-            mediatorFactory = mockk<ArticleMediatorFactory>(relaxed = true),
-        )
+            val repo =
+                OfflineFirstArticleRepositoryImpl(
+                    articleApi = mockk<ArticleApi>(relaxed = true),
+                    articleDao = ArticleDaoImpl({ db }, dispatcher, gate),
+                    databaseHolder = holder,
+                    mediatorFactory = mockk<ArticleMediatorFactory>(relaxed = true),
+                )
 
-        val result = repo.createBlankArticle()
+            val result = repo.createBlankArticle()
 
-        assertEquals(ArticleError.PermissionDenied, result.getError())
-    }
+            assertEquals(ArticleError.PermissionDenied, result.getError())
+        }
 }

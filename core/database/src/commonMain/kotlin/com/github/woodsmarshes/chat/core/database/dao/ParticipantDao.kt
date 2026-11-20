@@ -18,29 +18,60 @@ interface ParticipantDao {
 
     // 写入
     suspend fun insertParticipant(participant: ParticipantEntity)
+
     suspend fun insertParticipantIfAbsent(participant: ParticipantEntity)
+
     suspend fun insertParticipants(participants: List<ParticipantEntity>)
+
     suspend fun insertParticipantsIfAbsent(participants: List<ParticipantEntity>)
 
     // 查询
     fun getParticipantsByConversationId(conversationId: Uuid): Flow<List<ParticipantEntity>>
+
     fun getParticipantsWithUserInfo(conversationId: Uuid): Flow<List<GetParticipantsWithUserInfo>>
-    fun getParticipant(conversationId: Uuid, userId: Uuid): Flow<ParticipantEntity?>
+
+    fun getParticipant(
+        conversationId: Uuid,
+        userId: Uuid,
+    ): Flow<ParticipantEntity?>
 
     fun getParticipantsExcludingUser(
         conversationIds: List<Uuid>,
-        excludeUserId: Uuid
+        excludeUserId: Uuid,
     ): Flow<List<GetParticipantsExcludingUser>>
 
     fun getConversationMemberAvatars(ownUserId: Uuid): Flow<List<GetConversationMemberAvatars>>
 
     // 更新
-    suspend fun updateRole(conversationId: Uuid, userId: Uuid, role: ConversationRole)
-    suspend fun updateLastReadMessage(conversationId: Uuid, userId: Uuid, lastMessageId: Uuid?)
-    suspend fun updateMuteStatus(conversationId: Uuid, userId: Uuid, mutedUntil: Instant?)
-    suspend fun updateSettings(conversationId: Uuid, userId: Uuid, settings: ParticipantSettings)
+    suspend fun updateRole(
+        conversationId: Uuid,
+        userId: Uuid,
+        role: ConversationRole,
+    )
+
+    suspend fun updateLastReadMessage(
+        conversationId: Uuid,
+        userId: Uuid,
+        lastMessageId: Uuid?,
+    )
+
+    suspend fun updateMuteStatus(
+        conversationId: Uuid,
+        userId: Uuid,
+        mutedUntil: Instant?,
+    )
+
+    suspend fun updateSettings(
+        conversationId: Uuid,
+        userId: Uuid,
+        settings: ParticipantSettings,
+    )
 
     // 删除
-    suspend fun removeParticipant(conversationId: Uuid, userId: Uuid)
+    suspend fun removeParticipant(
+        conversationId: Uuid,
+        userId: Uuid,
+    )
+
     suspend fun removeAllParticipantsFromConversation(conversationId: Uuid)
 }

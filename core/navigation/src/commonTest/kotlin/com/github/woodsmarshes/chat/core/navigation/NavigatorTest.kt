@@ -7,7 +7,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 @Serializable
-private data class DetailKey(val id: Int) : NavKey
+private data class DetailKey(
+    val id: Int,
+) : NavKey
 
 private data object OtherDetailKey : NavKey
 
@@ -16,14 +18,14 @@ private data object TabKey : NavKey
 private data object OtherTabKey : NavKey
 
 class NavigatorTest {
-
     private fun navigator(startKey: NavKey = TabKey): Navigator {
         val topLevelKeys = setOf(startKey, OtherTabKey)
-        val state = NavigationState(
-            startKey = startKey,
-            topLevelStack = NavBackStack(startKey),
-            subStacks = topLevelKeys.associateWith { key -> NavBackStack(key) },
-        )
+        val state =
+            NavigationState(
+                startKey = startKey,
+                topLevelStack = NavBackStack(startKey),
+                subStacks = topLevelKeys.associateWith { key -> NavBackStack(key) },
+            )
         return Navigator(state)
     }
 

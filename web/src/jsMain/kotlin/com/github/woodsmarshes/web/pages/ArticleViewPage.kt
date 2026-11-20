@@ -7,8 +7,6 @@ import com.github.woodsmarshes.web.components.ArticleContentRenderer
 import com.github.woodsmarshes.web.components.Sidebar
 import com.github.woodsmarshes.web.state.useCurrentContext
 import com.github.woodsmarshes.web.storage.ArticleRepository
-import kotlin.time.Instant
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -24,120 +22,128 @@ import react.dom.html.ReactHTML.span
 import react.useEffect
 import react.useState
 import web.cssom.ClassName
+import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
-val ArticleViewPage = FC<Props> {
-    val path = Router.currentPath()
-    val idPart = path.removePrefix("/articles/").removeSuffix("/edit")
-    val articleId = idPart.ifBlank { null }
+val ArticleViewPage =
+    FC<Props> {
+        val path = Router.currentPath()
+        val idPart = path.removePrefix("/articles/").removeSuffix("/edit")
+        val articleId = idPart.ifBlank { null }
 
-    val currentUser = useCurrentContext().user
+        val currentUser = useCurrentContext().user
 
-    var article: Article? by useState(null)
-    var loading: Boolean by useState(true)
-    var isOwn: Boolean by useState(false)
+        var article: Article? by useState(null)
+        var loading: Boolean by useState(true)
+        var isOwn: Boolean by useState(false)
 
-    // Keyed on the article id: without this, navigating between two articles
-    // kept the first one mounted and never refetched.
-    useEffect(articleId) {
-        loading = true
-        // A route change must clear the previous article: an unparsable id would
-        // otherwise keep rendering the previously opened article under the new URL.
-        article = null
-        isOwn = false
-        if (articleId != null) {
-            val id = try { Uuid.parse(articleId) } catch (e: Exception) { null }
-            if (id != null) {
-                // Try own-article API first (most useful for drafts + edit access)
-                val own = ArticleRepository.getMy(id)
-                if (own != null) {
-                    article = own
-                    isOwn = true
-                } else {
-                    // Fall back to public API
-                    article = ArticleRepository.getById(id)
-                    isOwn = false
+        // Keyed on the article id: without this, navigating between two articles
+        // kept the first one mounted and never refetched.
+        useEffect(articleId) {
+            loading = true
+            // A route change must clear the previous article: an unparsable id would
+            // otherwise keep rendering the previously opened article under the new URL.
+            article = null
+            isOwn = false
+            if (articleId != null) {
+                val id =
+                    try {
+                        Uuid.parse(articleId)
+                    } catch (e: Exception) {
+                        null
+                    }
+                if (id != null) {
+                    // Try own-article API first (most useful for drafts + edit access)
+                    val own = ArticleRepository.getMy(id)
+                    if (own != null) {
+                        article = own
+                        isOwn = true
+                    } else {
+                        // Fall back to public API
+                        article = ArticleRepository.getById(id)
+                        isOwn = false
+                    }
                 }
             }
-        }
-        loading = false
-    }
-
-    // 双栏布局：左栏显示作者文章列表，右栏显示文章正文
-    div {
-        className = ClassName("layout-with-sidebar")
-
-        Sidebar.invoke {
-            authorId = article?.author?.id
+            loading = false
         }
 
+        // 双栏布局：左栏显示作者文章列表，右栏显示文章正文
         div {
-            className = ClassName("layout-main article-view")
+            className = ClassName("layout-with-sidebar")
 
-            if (loading) {
-                div {
-                    className = ClassName("loading-container")
-                    div { className = ClassName("loading-spinner") }
-                }
-            } else if (article == null) {
-                div {
-                    className = ClassName("error-message")
-                    h1 { +"Article Not Found" }
-                    p {
-                        className = ClassName("auth-text")
-                        +"The article you're looking for doesn't exist or has been deleted."
+            Sidebar.invoke {
+                authorId = article?.author?.id
+            }
+
+            div {
+                className = ClassName("layout-main article-view")
+
+                if (loading) {
+                    div {
+                        className = ClassName("loading-container")
+                        div { className = ClassName("loading-spinner") }
                     }
-                    a {
-                        href = "#/"
-                        className = ClassName("btn")
-                        onClick = { event: dynamic ->
-                            event.preventDefault()
-                            Router.navigate("/")
+                } else if (article == null) {
+                    div {
+                        className = ClassName("error-message")
+                        h1 { +"Article Not Found" }
+                        p {
+                            className = ClassName("auth-text")
+                            +"The article you're looking for doesn't exist or has been deleted."
                         }
-                        +"Back to Articles"
-                    }
-                }
-            } else {
-                val a = article!!
-
-                h1 { +a.title }
-
-                div {
-                    className = ClassName("article-meta")
-                    span {
-                        className = when (a.status) {
-                            ArticleStatus.DRAFT -> ClassName("badge badge-draft")
-                            ArticleStatus.PUBLISHED -> ClassName("badge badge-published")
-                        }
-                        +(if (a.status == ArticleStatus.DRAFT) "Draft" else "Published")
-                    }
-                    span { +(a.author.displayName ?: a.author.username) }
-                    span { +formatTimestamp(a.updatedAt) }
-                    if (isOwn || a.stats.allowCollaboration) {
                         a {
-                            href = "#/articles/${a.id}/edit"
-                            className = ClassName("article-edit-link")
-                            onClick = { event ->
+                            href = "#/"
+                            className = ClassName("btn")
+                            onClick = { event: dynamic ->
                                 event.preventDefault()
-                                Router.navigate("/articles/${a.id}/edit")
+                                Router.navigate("/")
                             }
-                            +if (a.stats.allowCollaboration) "Edit" else "Collaborative-edit"
+                            +"Back to Articles"
                         }
                     }
-                }
+                } else {
+                    val a = article!!
 
-                ArticleContentRenderer.invoke {
-                    content = a.content
+                    h1 { +a.title }
+
+                    div {
+                        className = ClassName("article-meta")
+                        span {
+                            className =
+                                when (a.status) {
+                                    ArticleStatus.DRAFT -> ClassName("badge badge-draft")
+                                    ArticleStatus.PUBLISHED -> ClassName("badge badge-published")
+                                }
+                            +(if (a.status == ArticleStatus.DRAFT) "Draft" else "Published")
+                        }
+                        span { +(a.author.displayName ?: a.author.username) }
+                        span { +formatTimestamp(a.updatedAt) }
+                        if (isOwn || a.stats.allowCollaboration) {
+                            a {
+                                href = "#/articles/${a.id}/edit"
+                                className = ClassName("article-edit-link")
+                                onClick = { event ->
+                                    event.preventDefault()
+                                    Router.navigate("/articles/${a.id}/edit")
+                                }
+                                +if (a.stats.allowCollaboration) "Edit" else "Collaborative-edit"
+                            }
+                        }
+                    }
+
+                    ArticleContentRenderer.invoke {
+                        content = a.content
+                    }
                 }
             }
         }
     }
-}
 
-private fun formatTimestamp(instant: Instant): String {
-    return try {
+private fun formatTimestamp(instant: Instant): String =
+    try {
         val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
         "${dt.year}-${dt.month.number.toString().padStart(2, '0')}-${dt.day.toString().padStart(2, '0')}"
     } catch (e: Exception) {
         ""
     }
-}

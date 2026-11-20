@@ -17,97 +17,99 @@ import web.cssom.ClassName
 /**
  * 个人资料页（/me）。只读展示当前登录用户信息。
  */
-val ProfilePage = FC<Props> {
-    val user = useCurrentContext().user
+val ProfilePage =
+    FC<Props> {
+        val user = useCurrentContext().user
 
-    div {
-        className = ClassName("profile-page")
+        div {
+            className = ClassName("profile-page")
 
-        if (user == null) {
-            div {
-                className = ClassName("empty-state")
-                h1 { +"请先登录" }
-                p { +"登录后可以查看你的个人资料。" }
-                button {
-                    className = ClassName("btn btn-primary")
-                    onClick = { Router.navigate("/login") }
-                    +"去登录"
-                }
-            }
-        } else {
-            div {
-                className = ClassName("profile-card")
-
-                Avatar.invoke {
-                    this.user = user
-                    this.sizeClass = "avatar-xl"
-                }
-
-                h1 {
-                    className = ClassName("profile-name")
-                    +(user.displayName ?: user.username)
-                }
-
+            if (user == null) {
                 div {
-                    className = ClassName("profile-username")
-                    +("@${user.username}")
-                }
-
-                div {
-                    className = ClassName("profile-field")
-                    div {
-                        className = ClassName("profile-field-label")
-                        +"邮箱"
-                    }
-                    div {
-                        className = ClassName("profile-field-value")
-                        +(user.email ?: "—")
+                    className = ClassName("empty-state")
+                    h1 { +"请先登录" }
+                    p { +"登录后可以查看你的个人资料。" }
+                    button {
+                        className = ClassName("btn btn-primary")
+                        onClick = { Router.navigate("/login") }
+                        +"去登录"
                     }
                 }
-
+            } else {
                 div {
-                    className = ClassName("profile-field")
-                    div {
-                        className = ClassName("profile-field-label")
-                        +"简介"
-                    }
-                    div {
-                        className = ClassName("profile-field-value")
-                        +(if (user.bio.isNullOrBlank()) "—" else user.bio!!)
-                    }
-                }
+                    className = ClassName("profile-card")
 
-                div {
-                    className = ClassName("profile-field")
-                    div {
-                        className = ClassName("profile-field-label")
-                        +"加入时间"
+                    Avatar.invoke {
+                        this.user = user
+                        this.sizeClass = "avatar-xl"
                     }
-                    div {
-                        className = ClassName("profile-field-value")
-                        +formatProfileTimestamp(user.createdAt)
-                    }
-                }
 
-                div {
-                    className = ClassName("profile-field")
-                    div {
-                        className = ClassName("profile-field-label")
-                        +"角色"
+                    h1 {
+                        className = ClassName("profile-name")
+                        +(user.displayName ?: user.username)
                     }
+
                     div {
-                        className = ClassName("profile-field-value")
-                        +user.role.name
+                        className = ClassName("profile-username")
+                        +("@${user.username}")
+                    }
+
+                    div {
+                        className = ClassName("profile-field")
+                        div {
+                            className = ClassName("profile-field-label")
+                            +"邮箱"
+                        }
+                        div {
+                            className = ClassName("profile-field-value")
+                            +(user.email ?: "—")
+                        }
+                    }
+
+                    div {
+                        className = ClassName("profile-field")
+                        div {
+                            className = ClassName("profile-field-label")
+                            +"简介"
+                        }
+                        div {
+                            className = ClassName("profile-field-value")
+                            +(if (user.bio.isNullOrBlank()) "—" else user.bio!!)
+                        }
+                    }
+
+                    div {
+                        className = ClassName("profile-field")
+                        div {
+                            className = ClassName("profile-field-label")
+                            +"加入时间"
+                        }
+                        div {
+                            className = ClassName("profile-field-value")
+                            +formatProfileTimestamp(user.createdAt)
+                        }
+                    }
+
+                    div {
+                        className = ClassName("profile-field")
+                        div {
+                            className = ClassName("profile-field-label")
+                            +"角色"
+                        }
+                        div {
+                            className = ClassName("profile-field-value")
+                            +user.role.name
+                        }
                     }
                 }
             }
         }
     }
-}
 
-private fun formatProfileTimestamp(instant: kotlin.time.Instant): String = try {
-    val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-    "${dt.year}-${dt.month.number.toString().padStart(2, '0')}-${dt.day.toString().padStart(2, '0')}"
-} catch (e: Exception) {
-    "—"
-}
+private fun formatProfileTimestamp(instant: kotlin.time.Instant): String =
+    try {
+        val dt = instant.toLocalDateTime(TimeZone.currentSystemDefault())
+        "${dt.year}-${dt.month.number.toString().padStart(2, '0')}-${dt.day.toString().padStart(2, '0')}"
+    } catch (e: Exception) {
+        "—"
+    }

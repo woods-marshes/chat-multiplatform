@@ -1,11 +1,11 @@
 package com.github.woodsmarshes.chat.repository
 
-import com.github.woodsmarshes.chat.core.model.GroupProfile
-import com.github.woodsmarshes.chat.core.model.GroupSettings
-import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
 import com.github.woodsmarshes.chat.core.contract.dto.events.ConversationEventResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
+import com.github.woodsmarshes.chat.core.model.GroupProfile
+import com.github.woodsmarshes.chat.core.model.GroupSettings
+import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.GroupProfiles
 import com.github.woodsmarshes.chat.repository.database.schema.Users
@@ -25,7 +25,6 @@ import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 interface GroupProfileRepository {
-
     suspend fun initGroupProfile(
         conversationId: Uuid,
         name: String,
@@ -71,24 +70,25 @@ class GroupProfileDataSourceImpl(
         ownerId: Uuid,
         settings: GroupSettings?,
         description: String?,
-        avatarUrl: String?
-    ): GroupProfile? = dbQuery {
-        val now = Clock.System.now()
-        GroupProfiles.insert {
-            it[this.conversationId] = conversationId
-            it[this.name] = name
-            it[this.handle] = handle
-            it[this.description] = description
-            it[this.avatarUrl] = avatarUrl
-            it[this.ownerId] = ownerId
-            it[this.settings] = settings ?: GroupSettings()
-            it[this.createdAt] = now
-            it[this.updatedAt] = now
+        avatarUrl: String?,
+    ): GroupProfile? =
+        dbQuery {
+            val now = Clock.System.now()
+            GroupProfiles
+                .insert {
+                    it[this.conversationId] = conversationId
+                    it[this.name] = name
+                    it[this.handle] = handle
+                    it[this.description] = description
+                    it[this.avatarUrl] = avatarUrl
+                    it[this.ownerId] = ownerId
+                    it[this.settings] = settings ?: GroupSettings()
+                    it[this.createdAt] = now
+                    it[this.updatedAt] = now
+                }.resultedValues
+                ?.singleOrNull()
+                ?.toGroupProfile()
         }
-            .resultedValues
-            ?.singleOrNull()
-            ?.toGroupProfile()
-    }
 
     override suspend fun updateGroupProfile(
         conversationId: Uuid,
@@ -97,105 +97,113 @@ class GroupProfileDataSourceImpl(
         ownerId: Uuid?,
         description: String?,
         avatarUrl: String?,
-        settings: GroupSettings?
-    ): Boolean = dbQuery {
-        val now = Clock.System.now()
-        val updated = GroupProfiles.update({
-            GroupProfiles.conversationId eq conversationId
-        }) {
-            if (name != null) it[this.name] = name
-            if (handle != null) it[this.handle] = handle
-            if (ownerId != null) it[this.ownerId] = ownerId
-            if (description != null) it[this.description] = description
-            if (avatarUrl != null) it[this.avatarUrl] = avatarUrl
-            if (settings != null) it[this.settings] = settings
-            it[this.updatedAt] = now
-        } > 0
-        if (updated) {
-            val currentOwner = ownerId ?: GroupProfiles
-                .select(GroupProfiles.ownerId)
+        settings: GroupSettings?,
+    ): Boolean =
+        dbQuery {
+            val now = Clock.System.now()
+            val updated =
+                GroupProfiles.update({
+                    GroupProfiles.conversationId eq conversationId
+                }) {
+                    if (name != null) it[this.name] = name
+                    if (handle != null) it[this.handle] = handle
+                    if (ownerId != null) it[this.ownerId] = ownerId
+                    if (description != null) it[this.description] = description
+                    if (avatarUrl != null) it[this.avatarUrl] = avatarUrl
+                    if (settings != null) it[this.settings] = settings
+                    it[this.updatedAt] = now
+                } > 0
+            if (updated) {
+                val currentOwner =
+                    ownerId ?: GroupProfiles
+                        .select(GroupProfiles.ownerId)
+                        .where { GroupProfiles.conversationId eq conversationId }
+                        .singleOrNull()
+                        ?.get(GroupProfiles.ownerId)
+                        ?.value ?: conversationId
+                syncRepository.appendChange(
+                    scope = SyncScope.CONVERSATION,
+                    id = conversationId,
+                    event =
+                        ConversationEventResponse.GroupProfileUpdated(
+                            conversationId = conversationId,
+                            updaterId = currentOwner,
+                            profile =
+                                UpdateConversationSettingsRequest(
+                                    name = name,
+                                    handle = handle,
+                                    ownerId = ownerId,
+                                    description = description,
+                                    avatarUrl = avatarUrl,
+                                    settings = settings,
+                                ),
+                            timestamp = now,
+                        ),
+                )
+            }
+            updated
+        }
+
+    override suspend fun getGroupProfile(conversationId: Uuid): GroupProfile? =
+        dbQuery {
+            GroupProfiles
+                .selectAll()
                 .where { GroupProfiles.conversationId eq conversationId }
                 .singleOrNull()
-                ?.get(GroupProfiles.ownerId)
-                ?.value ?: conversationId
-            syncRepository.appendChange(
-                scope = SyncScope.CONVERSATION,
-                id = conversationId,
-                event = ConversationEventResponse.GroupProfileUpdated(
-                    conversationId = conversationId,
-                    updaterId = currentOwner,
-                    profile = UpdateConversationSettingsRequest(
-                        name = name,
-                        handle = handle,
-                        ownerId = ownerId,
-                        description = description,
-                        avatarUrl = avatarUrl,
-                        settings = settings,
-                    ),
-                    timestamp = now,
-                ),
-            )
+                ?.toGroupProfile()
         }
-        updated
-    }
 
-    override suspend fun getGroupProfile(conversationId: Uuid): GroupProfile? = dbQuery {
-        GroupProfiles
-            .selectAll()
-            .where { GroupProfiles.conversationId eq conversationId }
-            .singleOrNull()
-            ?.toGroupProfile()
-    }
-
-    override suspend fun getGroupProfileWithUser(conversationId: Uuid): Pair<GroupProfile, User>? = dbQuery {
-        (GroupProfiles innerJoin Users)
-            .selectAll()
-            .where { GroupProfiles.conversationId eq conversationId }
-            .map {
-                it.toGroupProfile() to it.toUser()
-            }
-            .singleOrNull()
-    }
-
-    override suspend fun getGroupProfilesWithUsers(conversationIds: List<Uuid>): List<Pair<GroupProfile, User>> = dbQuery {
-        (GroupProfiles innerJoin Users)
-            .selectAll()
-            .where { GroupProfiles.conversationId inList conversationIds }
-            .map {
-                it.toGroupProfile() to it.toUser()
-            }
-    }
-
-    override suspend fun searchGroup(keyword: String): List<GroupProfile> = dbQuery {
-        val queryTerm = keyword.trim().lowercase()
-        if (queryTerm.isEmpty()) {
-            return@dbQuery emptyList()
+    override suspend fun getGroupProfileWithUser(conversationId: Uuid): Pair<GroupProfile, User>? =
+        dbQuery {
+            (GroupProfiles innerJoin Users)
+                .selectAll()
+                .where { GroupProfiles.conversationId eq conversationId }
+                .map {
+                    it.toGroupProfile() to it.toUser()
+                }.singleOrNull()
         }
-        val pattern = "%${queryTerm.escapeLike()}%"
 
-        (GroupProfiles innerJoin Conversations)
-            .selectAll()
-            .where {
-                (Conversations.deletedAt.isNull()) and (
-                    (GroupProfiles.handle.lowerCase() like pattern) or
-                        (GroupProfiles.name.lowerCase() like pattern) or
-                        (GroupProfiles.description.lowerCase() like pattern)
+    override suspend fun getGroupProfilesWithUsers(conversationIds: List<Uuid>): List<Pair<GroupProfile, User>> =
+        dbQuery {
+            (GroupProfiles innerJoin Users)
+                .selectAll()
+                .where { GroupProfiles.conversationId inList conversationIds }
+                .map {
+                    it.toGroupProfile() to it.toUser()
+                }
+        }
+
+    override suspend fun searchGroup(keyword: String): List<GroupProfile> =
+        dbQuery {
+            val queryTerm = keyword.trim().lowercase()
+            if (queryTerm.isEmpty()) {
+                return@dbQuery emptyList()
+            }
+            val pattern = "%${queryTerm.escapeLike()}%"
+
+            (GroupProfiles innerJoin Conversations)
+                .selectAll()
+                .where {
+                    (Conversations.deletedAt.isNull()) and (
+                        (GroupProfiles.handle.lowerCase() like pattern) or
+                            (GroupProfiles.name.lowerCase() like pattern) or
+                            (GroupProfiles.description.lowerCase() like pattern)
                     )
-            }
-            .limit(20)
-            .map { it.toGroupProfile() }
-    }
+                }.limit(20)
+                .map { it.toGroupProfile() }
+        }
 
     private fun String.escapeLike(): String =
         replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_")
 
-    override suspend fun checkHandleExists(handle: String): Boolean = dbQuery {
-        GroupProfiles
-            .select(GroupProfiles.handle)
-            .where { GroupProfiles.handle eq handle }
-            .limit(1)
-            .count() > 0
-    }
+    override suspend fun checkHandleExists(handle: String): Boolean =
+        dbQuery {
+            GroupProfiles
+                .select(GroupProfiles.handle)
+                .where { GroupProfiles.handle eq handle }
+                .limit(1)
+                .count() > 0
+        }
 }

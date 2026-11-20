@@ -19,46 +19,47 @@ import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
-val MainModule = module {
-    singleOf(::TokenServiceImpl) {
-        bind<TokenService>()
+val MainModule =
+    module {
+        singleOf(::TokenServiceImpl) {
+            bind<TokenService>()
+        }
+
+        singleOf(::HashingServiceImpl) {
+            bind<HashingService>()
+        }
+
+        single { UserAccessCache(get()) }
+
+        // The Prometheus registry backs both EventBusImpl's drop counter and the
+        // MicrometerMetrics plugin; register it explicitly so singleOf's
+        // reflective constructor injection can resolve the MeterRegistry
+        // parameter (Kotlin default values do not apply to Koin).
+        single<MeterRegistry> { prometheusRegistry }
+
+        singleOf(::EventBusImpl) {
+            bind<EventBus>()
+        }
+
+        singleOf(::TemporaryUploadStoreImpl) {
+            bind<TemporaryUploadStore>()
+        }
+
+        // One shared session index: WebSocketSessionManager records live
+        // connections into it and RealtimeDelivery looks targets up in the
+        // same index — separate instances would silently never meet.
+        single { SessionIndex() }
+
+        single {
+            WebSocketSessionManager(sessions = get())
+        }
+
+        single<RealtimeDelivery> {
+            WebSocketRealtimeDelivery(
+                sessions = get(),
+                participants = get(),
+                logger = get(),
+                scope = get(),
+            )
+        }
     }
-
-    singleOf(::HashingServiceImpl) {
-        bind<HashingService>()
-    }
-
-    single { UserAccessCache(get()) }
-
-    // The Prometheus registry backs both EventBusImpl's drop counter and the
-    // MicrometerMetrics plugin; register it explicitly so singleOf's
-    // reflective constructor injection can resolve the MeterRegistry
-    // parameter (Kotlin default values do not apply to Koin).
-    single<MeterRegistry> { prometheusRegistry }
-
-    singleOf(::EventBusImpl) {
-        bind<EventBus>()
-    }
-
-    singleOf(::TemporaryUploadStoreImpl) {
-        bind<TemporaryUploadStore>()
-    }
-
-    // One shared session index: WebSocketSessionManager records live
-    // connections into it and RealtimeDelivery looks targets up in the
-    // same index — separate instances would silently never meet.
-    single { SessionIndex() }
-
-    single {
-        WebSocketSessionManager(sessions = get())
-    }
-
-    single<RealtimeDelivery> {
-        WebSocketRealtimeDelivery(
-            sessions = get(),
-            participants = get(),
-            logger = get(),
-            scope = get(),
-        )
-    }
-}

@@ -35,7 +35,10 @@ interface ContactRepository {
 
     suspend fun searchContacts(query: String): Result<List<Pair<Contact, User>>, ContactError>
 
-    suspend fun sendFriendRequest(targetId: Uuid, message: String? = null): Result<Boolean, ContactError>
+    suspend fun sendFriendRequest(
+        targetId: Uuid,
+        message: String? = null,
+    ): Result<Boolean, ContactError>
 
     fun observeIncomingRequests(): Flow<List<ContactRequest>>
 
@@ -46,7 +49,7 @@ interface ContactRepository {
     suspend fun handleFriendRequest(
         requestId: Uuid,
         accept: Boolean,
-        remark: String? = null
+        remark: String? = null,
     ): Result<Boolean, ContactError>
 
     suspend fun cancelFriendRequest(requestId: Uuid): Result<Boolean, ContactError> =
@@ -56,7 +59,9 @@ interface ContactRepository {
         userId: Uuid,
         nickname: String? = null,
         alias: String? = null,
-    ): Result<Boolean, ContactError> = com.github.michaelbull.result.Err(ContactError.PermissionDenied)
+    ): Result<Boolean, ContactError> =
+        com.github.michaelbull.result
+            .Err(ContactError.PermissionDenied)
 
     suspend fun blockUser(userId: Uuid): Result<Boolean, ContactError>
 

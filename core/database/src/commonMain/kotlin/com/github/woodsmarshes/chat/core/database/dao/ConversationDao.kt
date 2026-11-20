@@ -18,24 +18,43 @@ interface ConversationDao {
 
     // 写入与同步
     suspend fun insertConversation(conversation: ConversationEntity)
+
     suspend fun insertConversations(conversations: List<ConversationEntity>)
 
     // 查询 - 基础
     fun getAllActiveConversations(): Flow<List<ConversationEntity>>
+
     fun getConversationById(id: Uuid): Flow<ConversationEntity?>
 
     // 查询 - 视图（带最后一条消息预览，用于列表页）
     fun getConversationListView(currentUserId: Uuid): Flow<List<GetConversationListView>>
 
     // 更新逻辑
-    suspend fun updateLastMessage(id: Uuid, lastMessageId: Uuid?, updatedAt: Instant)
-    suspend fun updateMetadata(id: Uuid, metadata: ConversationMetadata?, updatedAt: Instant)
+    suspend fun updateLastMessage(
+        id: Uuid,
+        lastMessageId: Uuid?,
+        updatedAt: Instant,
+    )
+
+    suspend fun updateMetadata(
+        id: Uuid,
+        metadata: ConversationMetadata?,
+        updatedAt: Instant,
+    )
 
     // 未读数（服务端权威值落地 / 实时事件增减）
-    suspend fun setUnreadCount(id: Uuid, count: Long)
+    suspend fun setUnreadCount(
+        id: Uuid,
+        count: Long,
+    )
+
     suspend fun incrementUnread(id: Uuid)
 
     // 删除逻辑
-    suspend fun softDeleteConversation(id: Uuid, deletedAt: Instant)
+    suspend fun softDeleteConversation(
+        id: Uuid,
+        deletedAt: Instant,
+    )
+
     suspend fun hardDeleteConversation(id: Uuid)
 }

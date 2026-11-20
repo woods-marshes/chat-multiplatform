@@ -31,13 +31,15 @@ fun Route.sessionRoutes() {
             val currentSessionId = call.extractSessionId()
             // Only live sessions are devices the user can still act on;
             // revoked/expired rows are history, not devices.
-            val sessions = authSessionRepository.listByUser(userId)
-                .filter { it.revokedAt == null }
+            val sessions =
+                authSessionRepository
+                    .listByUser(userId)
+                    .filter { it.revokedAt == null }
             call.respond(
                 AuthSessionListResponse(
                     items = sessions.map { it.toAuthSessionInfo(isCurrent = it.id == currentSessionId) },
                     currentSessionId = currentSessionId,
-                )
+                ),
             )
         }
 

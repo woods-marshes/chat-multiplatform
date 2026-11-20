@@ -7,7 +7,6 @@ import com.github.woodsmarshes.web.components.Sidebar
 import com.github.woodsmarshes.web.storage.ArticleRepository
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlin.uuid.Uuid
 import react.FC
 import react.Props
 import react.dom.html.ReactHTML.button
@@ -17,88 +16,90 @@ import react.dom.html.ReactHTML.p
 import react.useEffectOnce
 import react.useState
 import web.cssom.ClassName
+import kotlin.uuid.Uuid
 
-val HomePage = FC<Props> {
-    var articles: List<ArticleListResponse> by useState(emptyList())
-    var loading: Boolean by useState(true)
-    var lastId: Uuid? by useState(null)
-    var hasMore: Boolean by useState(false)
+val HomePage =
+    FC<Props> {
+        var articles: List<ArticleListResponse> by useState(emptyList())
+        var loading: Boolean by useState(true)
+        var lastId: Uuid? by useState(null)
+        var hasMore: Boolean by useState(false)
 
-    val loadPage: (Uuid?) -> Unit = { cursor ->
-        val scope = MainScope()
-        scope.launch {
-            loading = cursor == null
-            val result = ArticleRepository.listAll(beforeId = cursor, limit = 20)
-            if (cursor == null) {
-                articles = result
-            } else {
-                articles = articles + result
+        val loadPage: (Uuid?) -> Unit = { cursor ->
+            val scope = MainScope()
+            scope.launch {
+                loading = cursor == null
+                val result = ArticleRepository.listAll(beforeId = cursor, limit = 20)
+                if (cursor == null) {
+                    articles = result
+                } else {
+                    articles = articles + result
+                }
+                // beforeId is a keyset cursor on the article id, so the cursor must come from the
+                // raw page. Re-sorting by updatedAt would move it into an unrelated id range and
+                // make the next page duplicate and skip rows.
+                lastId = result.lastOrNull()?.id
+                hasMore = result.size >= 20
+                loading = false
             }
-            // beforeId is a keyset cursor on the article id, so the cursor must come from the
-            // raw page. Re-sorting by updatedAt would move it into an unrelated id range and
-            // make the next page duplicate and skip rows.
-            lastId = result.lastOrNull()?.id
-            hasMore = result.size >= 20
-            loading = false
-        }
-    }
-
-    useEffectOnce {
-        loadPage(null)
-    }
-
-    // 双栏布局：左侧边栏 + 右主区
-    div {
-        className = ClassName("layout-with-sidebar")
-
-        Sidebar.invoke {
-            authorId = null
         }
 
+        useEffectOnce {
+            loadPage(null)
+        }
+
+        // 双栏布局：左侧边栏 + 右主区
         div {
-            className = ClassName("layout-main")
+            className = ClassName("layout-with-sidebar")
+
+            Sidebar.invoke {
+                authorId = null
+            }
 
             div {
-                className = ClassName("toolbar")
-                h2 { +"Articles" }
-                div { className = ClassName("toolbar-spacer") }
-                button {
-                    className = ClassName("btn btn-primary")
-                    onClick = { Router.navigate("/articles/new") }
-                    +"+ New Article"
-                }
-            }
+                className = ClassName("layout-main")
 
-            if (loading) {
                 div {
-                    className = ClassName("loading-container")
-                    div { className = ClassName("loading-spinner") }
-                }
-            } else if (articles.isEmpty()) {
-                div {
-                    className = ClassName("empty-state")
-                    h2 { +"No articles yet" }
-                    p { +"Start writing your first article." }
+                    className = ClassName("toolbar")
+                    h2 { +"Articles" }
+                    div { className = ClassName("toolbar-spacer") }
                     button {
                         className = ClassName("btn btn-primary")
                         onClick = { Router.navigate("/articles/new") }
-                        +"Create Your First Article"
+                        +"+ New Article"
                     }
                 }
-            } else {
-                articles.forEach { article ->
-                    ArticleCard.invoke {
-                        this.article = article
+
+                if (loading) {
+                    div {
+                        className = ClassName("loading-container")
+                        div { className = ClassName("loading-spinner") }
                     }
-                }
-                if (hasMore) {
-                    button {
-                        className = ClassName("btn load-more")
-                        onClick = { loadPage(lastId) }
-                        +"加载更多"
+                } else if (articles.isEmpty()) {
+                    div {
+                        className = ClassName("empty-state")
+                        h2 { +"No articles yet" }
+                        p { +"Start writing your first article." }
+                        button {
+                            className = ClassName("btn btn-primary")
+                            onClick = { Router.navigate("/articles/new") }
+                            +"Create Your First Article"
+                        }
+                    }
+                } else {
+                    articles.forEach { article ->
+                        ArticleCard.invoke {
+                            this.article = article
+                        }
+                    }
+                    if (hasMore) {
+                        button {
+                            className = ClassName("btn load-more")
+                            onClick = { loadPage(lastId) }
+                            +"加载更多"
+                        }
                     }
                 }
             }
         }
     }
-}

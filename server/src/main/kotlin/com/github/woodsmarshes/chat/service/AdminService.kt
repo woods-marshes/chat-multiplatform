@@ -34,10 +34,10 @@ import com.github.woodsmarshes.chat.utils.MAX_PAGE_SIZE
 import com.github.woodsmarshes.chat.utils.inTransaction
 import com.github.woodsmarshes.chat.websocket.RealtimeDelivery
 import com.github.woodsmarshes.chat.websocket.SessionIndex
+import org.slf4j.LoggerFactory
 import java.security.SecureRandom
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
-import org.slf4j.LoggerFactory
 
 /**
  * Application-administrator operations: user listing/detail, ban/unban,
@@ -66,10 +66,11 @@ class AdminService(
 
     private val logger = LoggerFactory.getLogger(AdminService::class.java)
 
-    suspend fun requireAdmin(adminId: Uuid): Result<Unit, UserError> = coroutineBinding {
-        val admin = userRepository.getUserById(adminId) ?: Err(UserError.NotFound).bind()
-        if (admin.role != UserRole.ADMIN) Err(UserError.PermissionDenied).bind()
-    }
+    suspend fun requireAdmin(adminId: Uuid): Result<Unit, UserError> =
+        coroutineBinding {
+            val admin = userRepository.getUserById(adminId) ?: Err(UserError.NotFound).bind()
+            if (admin.role != UserRole.ADMIN) Err(UserError.PermissionDenied).bind()
+        }
 
     suspend fun listUsers(
         adminId: Uuid,
@@ -78,42 +79,52 @@ class AdminService(
         banned: Boolean?,
         page: Int,
         limit: Int,
-    ): Result<AdminUserListResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val safePage = page.coerceAtLeast(1)
-        val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
-        val paged = userRepository.listUsersPaged(keyword, role, banned, safePage, safeLimit)
-        val sessionCounts = authSessionRepository.countActiveByUsers(paged.items.map { it.id })
-        AdminUserListResponse(
-            items = paged.items.map { AdminUserListItem(user = it, activeSessionCount = sessionCounts[it.id] ?: 0) },
-            page = safePage,
-            limit = safeLimit,
-            total = paged.total,
-        )
-    }
+    ): Result<AdminUserListResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val safePage = page.coerceAtLeast(1)
+            val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
+            val paged = userRepository.listUsersPaged(keyword, role, banned, safePage, safeLimit)
+            val sessionCounts = authSessionRepository.countActiveByUsers(paged.items.map { it.id })
+            AdminUserListResponse(
+                items = paged.items.map { AdminUserListItem(user = it, activeSessionCount = sessionCounts[it.id] ?: 0) },
+                page = safePage,
+                limit = safeLimit,
+                total = paged.total,
+            )
+        }
 
-    suspend fun getUserDetail(adminId: Uuid, id: Uuid): Result<AdminUserDetailResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val user = userRepository.getUserById(id) ?: Err(UserError.NotFound).bind()
-        val stats = userRepository.getUserAdminStats(id)
-        val sessionCount = authSessionRepository.countActiveByUsers(listOf(id))[id] ?: 0
-        val lastActiveAt = authSessionRepository.getLastActiveAt(id)
-        AdminUserDetailResponse(
-            user = user,
-            activeSessionCount = sessionCount,
-            conversationCount = stats.conversationCount,
-            messageCount = stats.messageCount,
-            lastActiveAt = lastActiveAt,
-        )
-    }
+    suspend fun getUserDetail(
+        adminId: Uuid,
+        id: Uuid,
+    ): Result<AdminUserDetailResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val user = userRepository.getUserById(id) ?: Err(UserError.NotFound).bind()
+            val stats = userRepository.getUserAdminStats(id)
+            val sessionCount = authSessionRepository.countActiveByUsers(listOf(id))[id] ?: 0
+            val lastActiveAt = authSessionRepository.getLastActiveAt(id)
+            AdminUserDetailResponse(
+                user = user,
+                activeSessionCount = sessionCount,
+                conversationCount = stats.conversationCount,
+                messageCount = stats.messageCount,
+                lastActiveAt = lastActiveAt,
+            )
+        }
 
-    suspend fun setBanned(adminId: Uuid, targetId: Uuid, banned: Boolean): Result<Unit, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        inTransaction {
-            setBannedTx(adminId, targetId, banned)
-        }.bind()
-        if (banned) disconnectLiveSessions(targetId)
-    }
+    suspend fun setBanned(
+        adminId: Uuid,
+        targetId: Uuid,
+        banned: Boolean,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            inTransaction {
+                setBannedTx(adminId, targetId, banned)
+            }.bind()
+            if (banned) disconnectLiveSessions(targetId)
+        }
 
     /**
      * Revoking credentials must also drop already-established WebSocket
@@ -133,147 +144,195 @@ class AdminService(
         }
     }
 
-    private suspend fun setBannedTx(adminId: Uuid, targetId: Uuid, banned: Boolean): Result<Unit, UserError> = coroutineBinding {
-        if (banned && targetId == adminId) Err(UserError.InvalidRequest).bind()
-        val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
-        requireMutableTarget(target).bind()
-        // Demoting the last admin out of the admin pool by ban would lock
-        // everyone out of administration; refuse while at least one remains.
-        // Unreachable while admins are immutable here; kept as defence in depth.
-        if (banned && target.role == UserRole.ADMIN && userRepository.countAdmins() <= 1) {
-            Err(UserError.PermissionDenied).bind()
+    private suspend fun setBannedTx(
+        adminId: Uuid,
+        targetId: Uuid,
+        banned: Boolean,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            if (banned && targetId == adminId) Err(UserError.InvalidRequest).bind()
+            val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+            requireMutableTarget(target).bind()
+            // Demoting the last admin out of the admin pool by ban would lock
+            // everyone out of administration; refuse while at least one remains.
+            // Unreachable while admins are immutable here; kept as defence in depth.
+            if (banned && target.role == UserRole.ADMIN && userRepository.countAdmins() <= 1) {
+                Err(UserError.PermissionDenied).bind()
+            }
+            if (!userRepository.setBannedAt(targetId, if (banned) Clock.System.now() else null)) {
+                Err(UserError.UpdateFailed).bind()
+            }
+            if (banned) {
+                // Refresh sessions die immediately; access tokens expire within
+                // their TTL or sooner via the UserAccessCache invalidation.
+                authSessionRepository.revokeAllByUser(targetId)
+            }
+            userAccessCache.invalidate(targetId)
+            adminAuditLogRepository.record(
+                adminId = adminId,
+                action = if (banned) "ban" else "unban",
+                targetId = targetId,
+            )
         }
-        if (!userRepository.setBannedAt(targetId, if (banned) Clock.System.now() else null)) {
-            Err(UserError.UpdateFailed).bind()
+
+    suspend fun changeRole(
+        adminId: Uuid,
+        targetId: Uuid,
+        newRole: UserRole,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            inTransaction {
+                changeRoleTx(adminId, targetId, newRole)
+            }.bind()
         }
-        if (banned) {
-            // Refresh sessions die immediately; access tokens expire within
-            // their TTL or sooner via the UserAccessCache invalidation.
+
+    private suspend fun changeRoleTx(
+        adminId: Uuid,
+        targetId: Uuid,
+        newRole: UserRole,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+            requireMutableTarget(target).bind()
+            // Admin identity is never granted through the API either.
+            requireRoleGrant(newRole).bind()
+            // Unreachable while admins are immutable here; kept as defence in depth.
+            if (target.role == UserRole.ADMIN && newRole != UserRole.ADMIN && userRepository.countAdmins() <= 1) {
+                Err(UserError.PermissionDenied).bind()
+            }
+            if (!userRepository.changeUserRole(targetId, newRole)) Err(UserError.UpdateFailed).bind()
+            adminAuditLogRepository.record(adminId, "change-role", targetId, "role=$newRole")
+        }
+
+    suspend fun listUserSessions(
+        adminId: Uuid,
+        targetId: Uuid,
+    ): Result<AuthSessionListResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+            // Only live sessions: refresh rotation leaves one revoked row per
+            // refresh, so the unfiltered history grows without bound. Expired
+            // rows are excluded too, matching countActiveByUsers/findActiveSession.
+            val now = Clock.System.now()
+            val sessions =
+                authSessionRepository
+                    .listByUser(targetId)
+                    .filter { it.revokedAt == null && it.expiresAt > now }
+            AuthSessionListResponse(items = sessions.map { it.toAuthSessionInfo() })
+        }
+
+    suspend fun revokeAllUserSessions(
+        adminId: Uuid,
+        targetId: Uuid,
+    ): Result<Int, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+            requireMutableTarget(target).bind()
+            val revoked =
+                inTransaction {
+                    val count = authSessionRepository.revokeAllByUser(targetId)
+                    adminAuditLogRepository.record(adminId, "revoke-all-sessions", targetId, "revoked=$count")
+                    count
+                }
+            userAccessCache.invalidate(targetId)
+            disconnectLiveSessions(targetId)
+            revoked
+        }
+
+    suspend fun resetPassword(
+        adminId: Uuid,
+        targetId: Uuid,
+    ): Result<ResetPasswordResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val response =
+                inTransaction {
+                    resetPasswordTx(adminId, targetId)
+                }.bind()
+            disconnectLiveSessions(targetId)
+            response
+        }
+
+    private suspend fun resetPasswordTx(
+        adminId: Uuid,
+        targetId: Uuid,
+    ): Result<ResetPasswordResponse, UserError> =
+        coroutineBinding {
+            val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
+            requireMutableTarget(target).bind()
+            val temporaryPassword = generateTemporaryPassword()
+            val salted = hashingService.generateSaltedHash(temporaryPassword)
+            if (!userRepository.updatePassword(targetId, salted.hash, salted.salt)) {
+                Err(UserError.UpdateFailed).bind()
+            }
+            // A password reset must also end every existing session, otherwise
+            // the old credentials' sessions outlive the credential change.
             authSessionRepository.revokeAllByUser(targetId)
+            userAccessCache.invalidate(targetId)
+            adminAuditLogRepository.record(adminId, "reset-password", targetId)
+            ResetPasswordResponse(temporaryPassword = temporaryPassword)
         }
-        userAccessCache.invalidate(targetId)
-        adminAuditLogRepository.record(
-            adminId = adminId,
-            action = if (banned) "ban" else "unban",
-            targetId = targetId,
-        )
-    }
-
-    suspend fun changeRole(adminId: Uuid, targetId: Uuid, newRole: UserRole): Result<Unit, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        inTransaction {
-            changeRoleTx(adminId, targetId, newRole)
-        }.bind()
-    }
-
-    private suspend fun changeRoleTx(adminId: Uuid, targetId: Uuid, newRole: UserRole): Result<Unit, UserError> = coroutineBinding {
-        val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
-        requireMutableTarget(target).bind()
-        // Admin identity is never granted through the API either.
-        requireRoleGrant(newRole).bind()
-        // Unreachable while admins are immutable here; kept as defence in depth.
-        if (target.role == UserRole.ADMIN && newRole != UserRole.ADMIN && userRepository.countAdmins() <= 1) {
-            Err(UserError.PermissionDenied).bind()
-        }
-        if (!userRepository.changeUserRole(targetId, newRole)) Err(UserError.UpdateFailed).bind()
-        adminAuditLogRepository.record(adminId, "change-role", targetId, "role=$newRole")
-    }
-
-    suspend fun listUserSessions(adminId: Uuid, targetId: Uuid): Result<AuthSessionListResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
-        // Only live sessions: refresh rotation leaves one revoked row per
-        // refresh, so the unfiltered history grows without bound. Expired
-        // rows are excluded too, matching countActiveByUsers/findActiveSession.
-        val now = Clock.System.now()
-        val sessions = authSessionRepository.listByUser(targetId)
-            .filter { it.revokedAt == null && it.expiresAt > now }
-        AuthSessionListResponse(items = sessions.map { it.toAuthSessionInfo() })
-    }
-
-    suspend fun revokeAllUserSessions(adminId: Uuid, targetId: Uuid): Result<Int, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
-        requireMutableTarget(target).bind()
-        val revoked = inTransaction {
-            val count = authSessionRepository.revokeAllByUser(targetId)
-            adminAuditLogRepository.record(adminId, "revoke-all-sessions", targetId, "revoked=$count")
-            count
-        }
-        userAccessCache.invalidate(targetId)
-        disconnectLiveSessions(targetId)
-        revoked
-    }
-
-    suspend fun resetPassword(adminId: Uuid, targetId: Uuid): Result<ResetPasswordResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val response = inTransaction {
-            resetPasswordTx(adminId, targetId)
-        }.bind()
-        disconnectLiveSessions(targetId)
-        response
-    }
-
-    private suspend fun resetPasswordTx(adminId: Uuid, targetId: Uuid): Result<ResetPasswordResponse, UserError> = coroutineBinding {
-        val target = userRepository.getUserById(targetId) ?: Err(UserError.NotFound).bind()
-        requireMutableTarget(target).bind()
-        val temporaryPassword = generateTemporaryPassword()
-        val salted = hashingService.generateSaltedHash(temporaryPassword)
-        if (!userRepository.updatePassword(targetId, salted.hash, salted.salt)) {
-            Err(UserError.UpdateFailed).bind()
-        }
-        // A password reset must also end every existing session, otherwise
-        // the old credentials' sessions outlive the credential change.
-        authSessionRepository.revokeAllByUser(targetId)
-        userAccessCache.invalidate(targetId)
-        adminAuditLogRepository.record(adminId, "reset-password", targetId)
-        ResetPasswordResponse(temporaryPassword = temporaryPassword)
-    }
 
     suspend fun listConversations(
         adminId: Uuid,
         type: ConversationType?,
         page: Int,
         limit: Int,
-    ): Result<AdminConversationListResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val safePage = page.coerceAtLeast(1)
-        val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
-        val paged = conversationRepository.listConversationsPaged(type, safePage, safeLimit)
-        // One batched pair of count queries for the whole page instead of
-        // two counts per row.
-        val statsById = conversationRepository.getConversationAdminStatsBatch(paged.items.map { it.conversation.id })
-        val items = paged.items.map { row ->
-            val stats = statsById[row.conversation.id]
-                ?: ConversationAdminStats(0, 0)
-            AdminConversationListItem(
-                conversation = row.conversation,
+    ): Result<AdminConversationListResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val safePage = page.coerceAtLeast(1)
+            val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
+            val paged = conversationRepository.listConversationsPaged(type, safePage, safeLimit)
+            // One batched pair of count queries for the whole page instead of
+            // two counts per row.
+            val statsById = conversationRepository.getConversationAdminStatsBatch(paged.items.map { it.conversation.id })
+            val items =
+                paged.items.map { row ->
+                    val stats =
+                        statsById[row.conversation.id]
+                            ?: ConversationAdminStats(0, 0)
+                    AdminConversationListItem(
+                        conversation = row.conversation,
+                        participantCount = stats.participantCount,
+                        messageCount = stats.messageCount,
+                        groupName = row.groupName,
+                    )
+                }
+            AdminConversationListResponse(items = items, page = safePage, limit = safeLimit, total = paged.total)
+        }
+
+    suspend fun getConversationDetail(
+        adminId: Uuid,
+        conversationId: Uuid,
+    ): Result<AdminConversationDetailResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val conversation =
+                conversationRepository.getConversationIncludeDeleted(conversationId)
+                    ?: Err(UserError.NotFound).bind()
+            val stats = conversationRepository.getConversationAdminStats(conversationId)
+            val participants =
+                conversationRepository
+                    .listConversationParticipants(conversationId)
+                    .map { AdminConversationParticipant(user = it.user, role = it.role, joinedAt = it.joinedAt) }
+            val groupName =
+                if (conversation.type == ConversationType.GROUP) {
+                    conversationRepository.getGroupName(conversationId)
+                } else {
+                    null
+                }
+            AdminConversationDetailResponse(
+                conversation = conversation,
                 participantCount = stats.participantCount,
                 messageCount = stats.messageCount,
-                groupName = row.groupName,
+                groupName = groupName,
+                participants = participants,
             )
         }
-        AdminConversationListResponse(items = items, page = safePage, limit = safeLimit, total = paged.total)
-    }
-
-    suspend fun getConversationDetail(adminId: Uuid, conversationId: Uuid): Result<AdminConversationDetailResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val conversation = conversationRepository.getConversationIncludeDeleted(conversationId)
-            ?: Err(UserError.NotFound).bind()
-        val stats = conversationRepository.getConversationAdminStats(conversationId)
-        val participants = conversationRepository.listConversationParticipants(conversationId)
-            .map { AdminConversationParticipant(user = it.user, role = it.role, joinedAt = it.joinedAt) }
-        val groupName = if (conversation.type == ConversationType.GROUP) {
-            conversationRepository.getGroupName(conversationId)
-        } else null
-        AdminConversationDetailResponse(
-            conversation = conversation,
-            participantCount = stats.participantCount,
-            messageCount = stats.messageCount,
-            groupName = groupName,
-            participants = participants,
-        )
-    }
 
     /**
      * Cursor-paged message history for infinite scroll: [beforeId] is the id
@@ -285,96 +344,125 @@ class AdminService(
         conversationId: Uuid,
         beforeId: Uuid?,
         limit: Int,
-    ): Result<AdminMessageListResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        conversationRepository.getConversationIncludeDeleted(conversationId) ?: Err(UserError.NotFound).bind()
-        val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
-        val messages = messageRepository.getHistory(conversationId, safeLimit + 1, beforeId)
-        val hasMore = messages.size > safeLimit
-        AdminMessageListResponse(items = messages.take(safeLimit), hasMore = hasMore)
-    }
+    ): Result<AdminMessageListResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            conversationRepository.getConversationIncludeDeleted(conversationId) ?: Err(UserError.NotFound).bind()
+            val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
+            val messages = messageRepository.getHistory(conversationId, safeLimit + 1, beforeId)
+            val hasMore = messages.size > safeLimit
+            AdminMessageListResponse(items = messages.take(safeLimit), hasMore = hasMore)
+        }
 
     /**
      * Soft-deletes a conversation for everyone (sets deletedAt and syncs the
      * deletion event). Unlike a group owner's delete this works for PRIVATE
      * conversations too — the admin is a moderator, not a participant.
      */
-    suspend fun deleteConversation(adminId: Uuid, conversationId: Uuid): Result<Unit, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        inTransaction {
-            deleteConversationTx(adminId, conversationId)
-        }.bind()
-    }
+    suspend fun deleteConversation(
+        adminId: Uuid,
+        conversationId: Uuid,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            inTransaction {
+                deleteConversationTx(adminId, conversationId)
+            }.bind()
+        }
 
-    private suspend fun deleteConversationTx(adminId: Uuid, conversationId: Uuid): Result<Unit, UserError> = coroutineBinding {
-        conversationRepository.getConversationIncludeDeleted(conversationId) ?: Err(UserError.NotFound).bind()
-        if (!conversationRepository.softDeleteConversation(conversationId, adminId)) Err(UserError.UpdateFailed).bind()
-        adminAuditLogRepository.record(adminId, "delete-conversation", conversationId)
-    }
+    private suspend fun deleteConversationTx(
+        adminId: Uuid,
+        conversationId: Uuid,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            conversationRepository.getConversationIncludeDeleted(conversationId) ?: Err(UserError.NotFound).bind()
+            if (!conversationRepository.softDeleteConversation(conversationId, adminId)) Err(UserError.UpdateFailed).bind()
+            adminAuditLogRepository.record(adminId, "delete-conversation", conversationId)
+        }
 
     /**
      * Moderator revoke: same irreversible blanking as a user-initiated
      * revoke, including the sync event that tells clients to withdraw the
      * message. No membership check — the admin is not a participant.
      */
-    suspend fun revokeMessage(adminId: Uuid, messageId: Uuid): Result<Unit, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        inTransaction {
-            revokeMessageTx(adminId, messageId)
-        }.bind()
-    }
-
-    private suspend fun revokeMessageTx(adminId: Uuid, messageId: Uuid): Result<Unit, UserError> = coroutineBinding {
-        if (!messageRepository.revokeMessage(messageId)) Err(UserError.NotFound).bind()
-        adminAuditLogRepository.record(adminId, "revoke-message", messageId)
-    }
-
-    suspend fun getStats(adminId: Uuid): Result<AdminStatsResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val userStats = userRepository.getUserStats()
-        val conversationCounts = conversationRepository.countConversations()
-        val messageCount = messageRepository.countMessages()
-        val activeSessionCount = authSessionRepository.countActiveSessions()
-        AdminStatsResponse(
-            userCount = userStats.total,
-            adminCount = userStats.admins,
-            bannedUserCount = userStats.banned,
-            conversationCount = conversationCounts.total,
-            groupConversationCount = conversationCounts.groups,
-            privateConversationCount = conversationCounts.privates,
-            messageCount = messageCount,
-            activeSessionCount = activeSessionCount,
-        )
-    }
-
-    suspend fun listLogs(adminId: Uuid, level: String?, limit: Int): Result<AdminLogListResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val normalizedLevel = level?.uppercase()
-        if (normalizedLevel != null && normalizedLevel !in ALLOWED_LOG_LEVELS) {
-            Err(UserError.InvalidRequest).bind()
+    suspend fun revokeMessage(
+        adminId: Uuid,
+        messageId: Uuid,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            inTransaction {
+                revokeMessageTx(adminId, messageId)
+            }.bind()
         }
-        val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
-        AdminLogListResponse(
-            items = AppLogBuffer.list(normalizedLevel, safeLimit).map {
-                AdminLogEntry(
-                    timestamp = it.timestamp,
-                    level = it.level,
-                    logger = it.logger,
-                    message = it.message,
-                    detail = it.detail,
-                )
+
+    private suspend fun revokeMessageTx(
+        adminId: Uuid,
+        messageId: Uuid,
+    ): Result<Unit, UserError> =
+        coroutineBinding {
+            if (!messageRepository.revokeMessage(messageId)) Err(UserError.NotFound).bind()
+            adminAuditLogRepository.record(adminId, "revoke-message", messageId)
+        }
+
+    suspend fun getStats(adminId: Uuid): Result<AdminStatsResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val userStats = userRepository.getUserStats()
+            val conversationCounts = conversationRepository.countConversations()
+            val messageCount = messageRepository.countMessages()
+            val activeSessionCount = authSessionRepository.countActiveSessions()
+            AdminStatsResponse(
+                userCount = userStats.total,
+                adminCount = userStats.admins,
+                bannedUserCount = userStats.banned,
+                conversationCount = conversationCounts.total,
+                groupConversationCount = conversationCounts.groups,
+                privateConversationCount = conversationCounts.privates,
+                messageCount = messageCount,
+                activeSessionCount = activeSessionCount,
+            )
+        }
+
+    suspend fun listLogs(
+        adminId: Uuid,
+        level: String?,
+        limit: Int,
+    ): Result<AdminLogListResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val normalizedLevel = level?.uppercase()
+            if (normalizedLevel != null && normalizedLevel !in ALLOWED_LOG_LEVELS) {
+                Err(UserError.InvalidRequest).bind()
             }
-        )
-    }
+            val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
+            AdminLogListResponse(
+                items =
+                    AppLogBuffer.list(normalizedLevel, safeLimit).map {
+                        AdminLogEntry(
+                            timestamp = it.timestamp,
+                            level = it.level,
+                            logger = it.logger,
+                            message = it.message,
+                            detail = it.detail,
+                        )
+                    },
+            )
+        }
 
     /** Admin audit trail: persisted admin actions, newest first. */
-    suspend fun listAuditLogs(adminId: Uuid, limit: Int): Result<AdminLogListResponse, UserError> = coroutineBinding {
-        requireAdmin(adminId).bind()
-        val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
-        AdminLogListResponse(
-            items = adminAuditLogRepository.listRecent(safeLimit).map { it.toLogEntry() }
-        )
-    }
+    suspend fun listAuditLogs(
+        adminId: Uuid,
+        limit: Int,
+    ): Result<AdminLogListResponse, UserError> =
+        coroutineBinding {
+            requireAdmin(adminId).bind()
+            val safeLimit = limit.coerceIn(1, MAX_PAGE_SIZE)
+            AdminLogListResponse(
+                items = adminAuditLogRepository.listRecent(safeLimit).map { it.toLogEntry() },
+            )
+        }
+
     /** 16 chars from an unambiguous alphabet — shown once, never stored. */
     private fun generateTemporaryPassword(): String {
         val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
@@ -388,13 +476,15 @@ class AdminService(
 }
 
 /** Audit rows reuse the log-entry DTO so the endpoint contract stays unchanged. */
-private fun AdminAuditLogRecord.toLogEntry(): AdminLogEntry = AdminLogEntry(
-    timestamp = createdAt,
-    level = "INFO",
-    logger = "admin.audit",
-    message = buildString {
-        append(action).append(" admin=").append(adminId)
-        targetId?.let { append(" target=").append(it) }
-    },
-    detail = detail,
-)
+private fun AdminAuditLogRecord.toLogEntry(): AdminLogEntry =
+    AdminLogEntry(
+        timestamp = createdAt,
+        level = "INFO",
+        logger = "admin.audit",
+        message =
+            buildString {
+                append(action).append(" admin=").append(adminId)
+                targetId?.let { append(" target=").append(it) }
+            },
+        detail = detail,
+    )

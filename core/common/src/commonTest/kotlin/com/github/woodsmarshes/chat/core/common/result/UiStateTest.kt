@@ -12,8 +12,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class UiStateTest {
-
-    private data class TestError(val reason: String)
+    private data class TestError(
+        val reason: String,
+    )
 
     // ── Result.toUiState ────────────────────────────────────────────────
 
@@ -60,56 +61,64 @@ class UiStateTest {
     // ── Flow<Result>.asUiState ──────────────────────────────────────────
 
     @Test
-    fun `asUiState emits Loading first then the mapped states`() = runTest {
-        val flow = flow<Result<Int, String>> {
-            emit(Ok(1))
-            emit(Ok(2))
+    fun `asUiState emits Loading first then the mapped states`() =
+        runTest {
+            val flow =
+                flow<Result<Int, String>> {
+                    emit(Ok(1))
+                    emit(Ok(2))
+                }
+
+            val states = flow.asUiState().toList()
+
+            assertEquals(UiState.Loading, states.first())
+            assertEquals(2, states.filterIsInstance<UiState.Success<Int>>().size)
+            assertEquals(1, (states[1] as UiState.Success).data)
+            assertEquals(2, (states[2] as UiState.Success).data)
         }
-
-        val states = flow.asUiState().toList()
-
-        assertEquals(UiState.Loading, states.first())
-        assertEquals(2, states.filterIsInstance<UiState.Success<Int>>().size)
-        assertEquals(1, (states[1] as UiState.Success).data)
-        assertEquals(2, (states[2] as UiState.Success).data)
-    }
 
     @Test
-    fun `asUiState maps failures through the default mapper`() = runTest {
-        val flow = flow<Result<Unit, String>> {
-            emit(Err("nope"))
+    fun `asUiState maps failures through the default mapper`() =
+        runTest {
+            val flow =
+                flow<Result<Unit, String>> {
+                    emit(Err("nope"))
+                }
+
+            val states = flow.asUiState().toList()
+
+            assertEquals(UiState.Loading, states[0])
+            assertIs<UiState.Error>(states[1])
+            assertEquals("nope", (states[1] as UiState.Error).message)
         }
-
-        val states = flow.asUiState().toList()
-
-        assertEquals(UiState.Loading, states[0])
-        assertIs<UiState.Error>(states[1])
-        assertEquals("nope", (states[1] as UiState.Error).message)
-    }
 
     @Test
-    fun `asUiState converts upstream exceptions into an Error state`() = runTest {
-        val flow = flow<Result<Int, String>> {
-            throw IllegalStateException("disk on fire")
+    fun `asUiState converts upstream exceptions into an Error state`() =
+        runTest {
+            val flow =
+                flow<Result<Int, String>> {
+                    throw IllegalStateException("disk on fire")
+                }
+
+            val states = flow.asUiState().toList()
+
+            assertEquals(2, states.size)
+            assertEquals(UiState.Loading, states[0])
+            assertIs<UiState.Error>(states[1])
+            assertEquals("disk on fire", (states[1] as UiState.Error).message)
         }
-
-        val states = flow.asUiState().toList()
-
-        assertEquals(2, states.size)
-        assertEquals(UiState.Loading, states[0])
-        assertIs<UiState.Error>(states[1])
-        assertEquals("disk on fire", (states[1] as UiState.Error).message)
-    }
 
     @Test
-    fun `asUiState falls back to Unknown Error when the exception has no message`() = runTest {
-        val flow = flow<Result<Int, String>> {
-            throw RuntimeException()
+    fun `asUiState falls back to Unknown Error when the exception has no message`() =
+        runTest {
+            val flow =
+                flow<Result<Int, String>> {
+                    throw RuntimeException()
+                }
+
+            val states = flow.asUiState().toList()
+
+            assertIs<UiState.Error>(states[1])
+            assertTrue((states[1] as UiState.Error).message.contains("Unknown"))
         }
-
-        val states = flow.asUiState().toList()
-
-        assertIs<UiState.Error>(states[1])
-        assertTrue((states[1] as UiState.Error).message.contains("Unknown"))
-    }
 }

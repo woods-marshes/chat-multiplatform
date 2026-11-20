@@ -7,7 +7,6 @@ import kotlin.uuid.Uuid
 
 @Serializable
 sealed class MessageRequest : RealtimeEvent {
-
     @Serializable
     data class Send(
         @ProtoNumber(1) val senderId: Uuid,

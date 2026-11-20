@@ -31,41 +31,43 @@ private val AdminConversationDetailRoute = FC<Props> { AdminArea { AdminConversa
 private val AdminLogsRoute = FC<Props> { AdminArea { AdminLogsPage() } }
 private val AdminAuditLogsRoute = FC<Props> { AdminArea { AdminAuditLogsPage() } }
 
-val App = FC<Props> {
-    var currentPath by useState(Router.currentPath())
+val App =
+    FC<Props> {
+        var currentPath by useState(Router.currentPath())
 
-    useEffectOnce {
-        window.onhashchange = {
-            currentPath = Router.currentPath()
+        useEffectOnce {
+            window.onhashchange = {
+                currentPath = Router.currentPath()
+            }
+        }
+
+        // Strip query params for route matching
+        val routePath = currentPath.substringBefore('?').ifEmpty { "/" }
+
+        val pageElement =
+            when {
+                routePath == "/" -> HomePage
+                routePath == "/login" -> AuthPage
+                routePath == "/me" -> ProfilePage
+                routePath == "/settings" -> SettingsPage
+                routePath == "/admin" -> AdminOverviewRoute
+                routePath == "/admin/users" -> AdminUsersRoute
+                routePath.startsWith("/admin/users/") -> AdminUserDetailRoute
+                routePath == "/admin/conversations" -> AdminConversationsRoute
+                routePath.startsWith("/admin/conversations/") -> AdminConversationDetailRoute
+                routePath == "/admin/logs" -> AdminLogsRoute
+                routePath == "/admin/audit-logs" -> AdminAuditLogsRoute
+                routePath == "/my/articles" -> MyArticlesPage
+                routePath == "/articles/new" -> ArticleEditorPage
+                routePath.startsWith("/articles/") && routePath.endsWith("/edit") -> ArticleEditorPage
+                routePath.startsWith("/articles/") -> ArticleViewPage
+                else -> HomePage
+            }
+
+        // UserProvider must wrap Layout so the nav UserMenu can read the current user.
+        ContextProvider.invoke {
+            Layout.invoke {
+                pageElement()
+            }
         }
     }
-
-    // Strip query params for route matching
-    val routePath = currentPath.substringBefore('?').ifEmpty { "/" }
-
-    val pageElement = when {
-        routePath == "/" -> HomePage
-        routePath == "/login" -> AuthPage
-        routePath == "/me" -> ProfilePage
-        routePath == "/settings" -> SettingsPage
-        routePath == "/admin" -> AdminOverviewRoute
-        routePath == "/admin/users" -> AdminUsersRoute
-        routePath.startsWith("/admin/users/") -> AdminUserDetailRoute
-        routePath == "/admin/conversations" -> AdminConversationsRoute
-        routePath.startsWith("/admin/conversations/") -> AdminConversationDetailRoute
-        routePath == "/admin/logs" -> AdminLogsRoute
-        routePath == "/admin/audit-logs" -> AdminAuditLogsRoute
-        routePath == "/my/articles" -> MyArticlesPage
-        routePath == "/articles/new" -> ArticleEditorPage
-        routePath.startsWith("/articles/") && routePath.endsWith("/edit") -> ArticleEditorPage
-        routePath.startsWith("/articles/") -> ArticleViewPage
-        else -> HomePage
-    }
-
-    // UserProvider must wrap Layout so the nav UserMenu can read the current user.
-    ContextProvider.invoke {
-        Layout.invoke {
-            pageElement()
-        }
-    }
-}

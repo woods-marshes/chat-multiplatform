@@ -39,9 +39,10 @@ class ParticipantDaoImpl(
     }
 
     override fun bindToCurrentDatabase(): ParticipantDao {
-        val capturedDb = runCatching { dbProvider() }.getOrElse {
-            throw SessionStoppedException(it.message ?: "Database is not initialized")
-        }
+        val capturedDb =
+            runCatching { dbProvider() }.getOrElse {
+                throw SessionStoppedException(it.message ?: "Database is not initialized")
+            }
         return PinnedParticipantDao(
             boundDatabase = capturedDb,
             ioContext = ioContext,
@@ -151,7 +152,10 @@ class ParticipantDaoImpl(
         writeQueries().updateSettings(settings, conversationId, userId)
     }
 
-    override suspend fun removeParticipant(conversationId: Uuid, userId: Uuid) {
+    override suspend fun removeParticipant(
+        conversationId: Uuid,
+        userId: Uuid,
+    ) {
         writeQueries().removeParticipant(conversationId, userId)
     }
 
@@ -274,7 +278,10 @@ private class PinnedParticipantDao(
         writeQueries().updateSettings(settings, conversationId, userId)
     }
 
-    override suspend fun removeParticipant(conversationId: Uuid, userId: Uuid) {
+    override suspend fun removeParticipant(
+        conversationId: Uuid,
+        userId: Uuid,
+    ) {
         writeQueries().removeParticipant(conversationId, userId)
     }
 

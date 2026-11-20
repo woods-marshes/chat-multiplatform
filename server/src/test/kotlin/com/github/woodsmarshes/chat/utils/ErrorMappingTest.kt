@@ -1,8 +1,5 @@
 package com.github.woodsmarshes.chat.utils
 
-import io.ktor.http.HttpStatusCode
-import kotlin.test.Test
-import kotlin.test.assertEquals
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
 import com.github.woodsmarshes.chat.core.model.error.AuthError
 import com.github.woodsmarshes.chat.core.model.error.ContactError
@@ -11,6 +8,9 @@ import com.github.woodsmarshes.chat.core.model.error.DomainError
 import com.github.woodsmarshes.chat.core.model.error.FileError
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.core.model.error.UserError
+import io.ktor.http.HttpStatusCode
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * Exhaustive mapping table from every [DomainError] variant to its HTTP status.
@@ -18,8 +18,10 @@ import com.github.woodsmarshes.chat.core.model.error.UserError
  * exhaustiveness; this test pins the actual status codes.
  */
 class ErrorMappingTest {
-
-    private fun assertStatus(expected: HttpStatusCode, error: DomainError) {
+    private fun assertStatus(
+        expected: HttpStatusCode,
+        error: DomainError,
+    ) {
         assertEquals(expected, error.toHttpStatusCode(), "wrong status for $error")
     }
 

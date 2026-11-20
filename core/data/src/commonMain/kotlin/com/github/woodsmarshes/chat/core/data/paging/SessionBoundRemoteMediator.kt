@@ -17,7 +17,10 @@ abstract class SessionBoundRemoteMediator<Key : Any, Value : Any>(
     private val generation = gate.currentGeneration
     private val database = gate.boundDatabase
 
-    final override suspend fun load(loadType: LoadType, state: PagingState<Key, Value>): MediatorResult =
+    final override suspend fun load(
+        loadType: LoadType,
+        state: PagingState<Key, Value>,
+    ): MediatorResult =
         try {
             gate.runInSession(generation, database) { db ->
                 withContext(BoundDatabaseElement(db)) { loadInSession(loadType, state) }
@@ -29,7 +32,10 @@ abstract class SessionBoundRemoteMediator<Key : Any, Value : Any>(
             MediatorResult.Error(failure)
         }
 
-    protected abstract suspend fun loadInSession(loadType: LoadType, state: PagingState<Key, Value>): MediatorResult
+    protected abstract suspend fun loadInSession(
+        loadType: LoadType,
+        state: PagingState<Key, Value>,
+    ): MediatorResult
 
     protected open fun onLoadFailure(failure: Exception) = Unit
 }

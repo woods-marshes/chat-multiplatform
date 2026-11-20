@@ -28,22 +28,24 @@ object WaveformGenerator {
         cause: Throwable? = null,
     ) : IllegalStateException(message, cause)
 
-    private val watchdogExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "ffmpeg-waveform-watchdog").apply { isDaemon = true }
-    }
+    private val watchdogExecutor =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "ffmpeg-waveform-watchdog").apply { isDaemon = true }
+        }
 
     fun generate(
         audioFile: File,
         durationMs: Long,
         samplesCount: Int = 100,
         watchdogTimeoutMs: Long = WATCHDOG_TIMEOUT_MS,
-    ): List<Int> = generate(
-        audioFile = audioFile,
-        durationMs = durationMs,
-        samplesCount = samplesCount,
-        watchdogTimeoutMs = watchdogTimeoutMs,
-        executableResolver = { FfmpegExecutableResolver.resolve() },
-    )
+    ): List<Int> =
+        generate(
+            audioFile = audioFile,
+            durationMs = durationMs,
+            samplesCount = samplesCount,
+            watchdogTimeoutMs = watchdogTimeoutMs,
+            executableResolver = { FfmpegExecutableResolver.resolve() },
+        )
 
     internal fun generate(
         audioFile: File,
@@ -52,24 +54,32 @@ object WaveformGenerator {
         watchdogTimeoutMs: Long = WATCHDOG_TIMEOUT_MS,
         executableResolver: () -> String,
     ): List<Int> {
-        val ffmpegPath = try {
-            executableResolver()
-        } catch (e: Exception) {
-            throw WaveformGenerationException(FailureReason.LAUNCH_FAILED, "Failed to resolve ffmpeg executable", e)
-        }
+        val ffmpegPath =
+            try {
+                executableResolver()
+            } catch (e: Exception) {
+                throw WaveformGenerationException(FailureReason.LAUNCH_FAILED, "Failed to resolve ffmpeg executable", e)
+            }
         val effectiveDurationMs = durationMs.coerceAtLeast(1L)
         val limitSeconds = (minOf(effectiveDurationMs, MAX_PROCESS_DURATION_MS) / 1000.0).toString()
         return generateWithCommand(
-            command = listOf(
-                ffmpegPath,
-                "-i", audioFile.absolutePath,
-                "-t", limitSeconds,
-                "-ac", "1",
-                "-ar", SAMPLE_RATE_HZ.toString(),
-                "-f", "s16le",
-                "-acodec", "pcm_s16le",
-                "-"
-            ),
+            command =
+                listOf(
+                    ffmpegPath,
+                    "-i",
+                    audioFile.absolutePath,
+                    "-t",
+                    limitSeconds,
+                    "-ac",
+                    "1",
+                    "-ar",
+                    SAMPLE_RATE_HZ.toString(),
+                    "-f",
+                    "s16le",
+                    "-acodec",
+                    "pcm_s16le",
+                    "-",
+                ),
             durationMs = effectiveDurationMs,
             samplesCount = samplesCount,
             watchdogTimeoutMs = watchdogTimeoutMs,
@@ -87,53 +97,57 @@ object WaveformGenerator {
             throw WaveformGenerationException(FailureReason.TIMED_OUT, "Waveform budget exhausted ($watchdogTimeoutMs ms)")
         }
 
-        val process = try {
-            ProcessBuilder(command)
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start()
-        } catch (e: Exception) {
-            throw WaveformGenerationException(FailureReason.LAUNCH_FAILED, "Failed to start ffmpeg process", e)
-        }
+        val process =
+            try {
+                ProcessBuilder(command)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+            } catch (e: Exception) {
+                throw WaveformGenerationException(FailureReason.LAUNCH_FAILED, "Failed to start ffmpeg process", e)
+            }
 
         val killedByWatchdog = AtomicBoolean(false)
-        val watchdog = watchdogExecutor.schedule(
-            {
-                killedByWatchdog.set(true)
-                process.destroyForcibly()
-            },
-            watchdogTimeoutMs,
-            TimeUnit.MILLISECONDS,
-        )
+        val watchdog =
+            watchdogExecutor.schedule(
+                {
+                    killedByWatchdog.set(true)
+                    process.destroyForcibly()
+                },
+                watchdogTimeoutMs,
+                TimeUnit.MILLISECONDS,
+            )
 
         val totalSeconds = minOf(durationMs.coerceAtLeast(1L), MAX_PROCESS_DURATION_MS) / 1000.0
         val totalExpectedSamples = (totalSeconds * SAMPLE_RATE_HZ).toLong().coerceAtLeast(1L)
         val samplesPerBucket = (totalExpectedSamples / samplesCount).coerceAtLeast(1L)
 
         try {
-            val sampled = try {
-                samplePcm16LeStream(process.inputStream, samplesCount, samplesPerBucket)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                confirmProcessExit(process)
-                throw WaveformGenerationException(FailureReason.INTERRUPTED, "Interrupted while reading PCM stream", e)
-            } catch (e: Exception) {
-                confirmProcessExit(process)
-                val reason = if (killedByWatchdog.get()) FailureReason.TIMED_OUT else FailureReason.NO_PCM_DATA
-                throw WaveformGenerationException(reason, "Failed while reading PCM stream", e)
-            }
+            val sampled =
+                try {
+                    samplePcm16LeStream(process.inputStream, samplesCount, samplesPerBucket)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    confirmProcessExit(process)
+                    throw WaveformGenerationException(FailureReason.INTERRUPTED, "Interrupted while reading PCM stream", e)
+                } catch (e: Exception) {
+                    confirmProcessExit(process)
+                    val reason = if (killedByWatchdog.get()) FailureReason.TIMED_OUT else FailureReason.NO_PCM_DATA
+                    throw WaveformGenerationException(reason, "Failed while reading PCM stream", e)
+                }
 
             if (killedByWatchdog.get()) {
                 confirmProcessExit(process)
                 throw WaveformGenerationException(FailureReason.TIMED_OUT, "Waveform timed out after ${watchdogTimeoutMs}ms")
             }
 
-            val exited = try {
-                process.waitFor(watchdogTimeoutMs, TimeUnit.MILLISECONDS)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                confirmProcessExit(process)
-                throw WaveformGenerationException(FailureReason.INTERRUPTED, "Interrupted waiting for ffmpeg exit", e)
-            }
+            val exited =
+                try {
+                    process.waitFor(watchdogTimeoutMs, TimeUnit.MILLISECONDS)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    confirmProcessExit(process)
+                    throw WaveformGenerationException(FailureReason.INTERRUPTED, "Interrupted waiting for ffmpeg exit", e)
+                }
 
             if (killedByWatchdog.get() || !exited) {
                 confirmProcessExit(process)
@@ -166,7 +180,10 @@ object WaveformGenerator {
         }
     }
 
-    internal data class SampledPcm(val waveform: List<Int>, val totalSamplesRead: Long)
+    internal data class SampledPcm(
+        val waveform: List<Int>,
+        val totalSamplesRead: Long,
+    )
 
     internal fun samplePcm16LeStream(
         input: InputStream,
@@ -182,8 +199,7 @@ object WaveformGenerator {
         var samplesInCurrentBucket = 0L
         var totalSamplesRead = 0L
 
-        fun toPercent(maxAmp: Int): Int =
-            (maxAmp.toDouble() / 32767.0 * 100.0).toInt().coerceIn(0, 100)
+        fun toPercent(maxAmp: Int): Int = (maxAmp.toDouble() / 32767.0 * 100.0).toInt().coerceIn(0, 100)
 
         while (true) {
             val bytesRead = input.read(chunk)

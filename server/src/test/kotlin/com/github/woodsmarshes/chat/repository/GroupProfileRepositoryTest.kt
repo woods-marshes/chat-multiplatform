@@ -24,7 +24,6 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 class GroupProfileRepositoryTest {
-
     private val database = connectToH2Database()
     private val groupOwnerId = Uuid.random()
     private val matchingGroupId = Uuid.random()
@@ -44,53 +43,54 @@ class GroupProfileRepositoryTest {
         }
     }
 
-    private fun seed() = runBlocking {
-        val now = Clock.System.now()
-        transaction(database) {
-            SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
-            Users.insert {
-                it[id] = groupOwnerId
-                it[username] = "owner-$groupOwnerId"
-                it[email] = "owner-$groupOwnerId@test.local"
-                it[passwordHash] = "hash"
-                it[salt] = ""
-                it[role] = UserRole.MEMBER
-                it[createdAt] = now
-                it[updatedAt] = now
-            }
-
-            fun insertGroup(
-                conversationId: Uuid,
-                name: String,
-                handle: String,
-                deletedAt: Instant? = null,
-            ) {
-                Conversations.insert {
-                    it[id] = conversationId
-                    it[type] = ConversationType.GROUP
-                    it[metadata] = GroupMetadata()
-                    it[createdAt] = now
-                    it[updatedAt] = now
-                    it[Conversations.deletedAt] = deletedAt
-                }
-                GroupProfiles.insert {
-                    it[GroupProfiles.conversationId] = conversationId
-                    it[GroupProfiles.name] = name
-                    it[GroupProfiles.handle] = handle
-                    it[description] = null
-                    it[avatarUrl] = null
-                    it[GroupProfiles.ownerId] = groupOwnerId
-                    it[settings] = GroupSettings()
+    private fun seed() =
+        runBlocking {
+            val now = Clock.System.now()
+            transaction(database) {
+                SchemaUtils.create(*ALL_SCHEMA_TABLES.toTypedArray())
+                Users.insert {
+                    it[id] = groupOwnerId
+                    it[username] = "owner-$groupOwnerId"
+                    it[email] = "owner-$groupOwnerId@test.local"
+                    it[passwordHash] = "hash"
+                    it[salt] = ""
+                    it[role] = UserRole.MEMBER
                     it[createdAt] = now
                     it[updatedAt] = now
                 }
-            }
 
-            insertGroup(matchingGroupId, "Alpha", "alpha")
-            insertGroup(unrelatedGroupId, "Beta", "beta")
-            insertGroup(deletedMatchingGroupId, "Alpha archived", "alpha-archived", deletedAt = now)
+                fun insertGroup(
+                    conversationId: Uuid,
+                    name: String,
+                    handle: String,
+                    deletedAt: Instant? = null,
+                ) {
+                    Conversations.insert {
+                        it[id] = conversationId
+                        it[type] = ConversationType.GROUP
+                        it[metadata] = GroupMetadata()
+                        it[createdAt] = now
+                        it[updatedAt] = now
+                        it[Conversations.deletedAt] = deletedAt
+                    }
+                    GroupProfiles.insert {
+                        it[GroupProfiles.conversationId] = conversationId
+                        it[GroupProfiles.name] = name
+                        it[GroupProfiles.handle] = handle
+                        it[description] = null
+                        it[avatarUrl] = null
+                        it[GroupProfiles.ownerId] = groupOwnerId
+                        it[settings] = GroupSettings()
+                        it[createdAt] = now
+                        it[updatedAt] = now
+                    }
+                }
+
+                insertGroup(matchingGroupId, "Alpha", "alpha")
+                insertGroup(unrelatedGroupId, "Beta", "beta")
+                insertGroup(deletedMatchingGroupId, "Alpha archived", "alpha-archived", deletedAt = now)
+            }
         }
-    }
 
     @Test
     fun searchGroupReturnsOnlyLiveGroupsMatchingTheKeyword() {

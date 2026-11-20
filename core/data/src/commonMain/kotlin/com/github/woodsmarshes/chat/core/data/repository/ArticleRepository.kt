@@ -11,8 +11,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlin.uuid.Uuid
 
 interface ArticleRepository {
-
-//    val invalidationEvents: Flow<Unit>
+    //    val invalidationEvents: Flow<Unit>
 
     suspend fun getArticle(
         getMyArticle: Boolean,

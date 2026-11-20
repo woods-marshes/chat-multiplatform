@@ -13,6 +13,5 @@ data class ContactRequest(
     @ProtoNumber(4) val message: String?,
     @ProtoNumber(5) val status: RequestStatus,
     @ProtoNumber(6) val createdAt: Instant,
-    @ProtoNumber(7) val updatedAt: Instant
+    @ProtoNumber(7) val updatedAt: Instant,
 )
-

@@ -34,13 +34,13 @@ data class UserPreference(
 enum class ProfileVisibility {
     PUBLIC,
     FRIENDS,
-    PRIVATE
+    PRIVATE,
 }
 
 enum class FriendRequestPolicy {
     NEED_APPROVAL,
     AUTO_ACCEPT,
-    DENY_ANY
+    DENY_ANY,
 }
 
 enum class ThemeBrand {
@@ -49,7 +49,7 @@ enum class ThemeBrand {
     MATERIAL3,
     ANDROID,
     IOS,
-    DESKTOP
+    DESKTOP,
 }
 
 enum class DarkThemeConfig {

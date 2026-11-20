@@ -27,23 +27,36 @@ interface ContactDao {
 
     // 写入与同步
     suspend fun insertContact(contact: ContactEntity)
+
     suspend fun insertContacts(contacts: List<ContactEntity>)
 
     // 查询 - 好友列表（带用户信息）
     fun getAllContactsWithUserInfo(): Flow<List<GetAllContactsWithUserInfo>>
+
     fun getBlockedContactsWithUserInfo(): Flow<List<GetBlockedContactsWithUserInfo>>
 
     // 查询 - 基础
     fun getContactById(contactId: Uuid): Flow<ContactEntity?>
+
     fun getBlockedContacts(): Flow<List<ContactEntity>>
+
     suspend fun selectAllContactsForSync(): List<ContactEntity>
 
     // 搜索
     fun searchContacts(query: String): Flow<List<SearchContacts>>
 
     // 更新
-    suspend fun updateAlias(contactId: Uuid, alias: String?, updatedAt: Instant)
-    suspend fun updateStatus(contactId: Uuid, status: ContactStatus, updatedAt: Instant)
+    suspend fun updateAlias(
+        contactId: Uuid,
+        alias: String?,
+        updatedAt: Instant,
+    )
+
+    suspend fun updateStatus(
+        contactId: Uuid,
+        status: ContactStatus,
+        updatedAt: Instant,
+    )
 
     // 删除
     suspend fun deleteContact(contactId: Uuid)

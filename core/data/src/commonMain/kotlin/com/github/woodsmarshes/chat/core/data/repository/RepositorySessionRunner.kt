@@ -21,17 +21,20 @@ internal class RepositorySessionRunner<S : Any>(
     private val isSameState: (existing: S, candidate: S) -> Boolean,
     private val databaseOf: (S) -> ChatDatabase?,
 ) {
-    private val lifecycle = ResourceSession(
-        dispatcher = dispatcher,
-        create = { ActiveSession(captureState()) },
-        validateExisting = { active ->
-            check(isSameState(active.state, captureState())) {
-                "$ownerName is already bound to different resources; stop it before rebinding"
-            }
-        },
-    )
+    private val lifecycle =
+        ResourceSession(
+            dispatcher = dispatcher,
+            create = { ActiveSession(captureState()) },
+            validateExisting = { active ->
+                check(isSameState(active.state, captureState())) {
+                    "$ownerName is already bound to different resources; stop it before rebinding"
+                }
+            },
+        )
 
-    internal inner class ActiveSession(val state: S) {
+    internal inner class ActiveSession(
+        val state: S,
+    ) {
         suspend fun ensureCurrent() {
             currentCoroutineContext().ensureActive()
             if (!lifecycle.isCurrent(this)) throw SessionStoppedException("$ownerName session ended")
@@ -39,17 +42,19 @@ internal class RepositorySessionRunner<S : Any>(
     }
 
     suspend fun startSession() = lifecycle.start()
+
     suspend fun stopSession() = lifecycle.stop()
 
     suspend fun <T, E> execute(
         onStoppedError: () -> E,
         onUnexpectedError: (Throwable) -> E,
         block: suspend (session: ActiveSession) -> Result<T, E>,
-    ): Result<T, E> {
-        return try {
+    ): Result<T, E> =
+        try {
             lifecycle.execute { activeSession ->
-                val dbElement = databaseOf(activeSession.state)?.let(::BoundDatabaseElement)
-                    ?: EmptyCoroutineContext
+                val dbElement =
+                    databaseOf(activeSession.state)?.let(::BoundDatabaseElement)
+                        ?: EmptyCoroutineContext
                 withContext(dbElement) {
                     val result = block(activeSession)
                     currentCoroutineContext().ensureActive()
@@ -63,5 +68,4 @@ internal class RepositorySessionRunner<S : Any>(
         } catch (e: Exception) {
             Err(onUnexpectedError(e))
         }
-    }
 }

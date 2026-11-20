@@ -45,13 +45,13 @@ class ContactDaoImpl(
         return dbProvider()
     }
 
-    private suspend fun writeQueries(): ContactsQueries =
-        writeDatabase().contactsQueries
+    private suspend fun writeQueries(): ContactsQueries = writeDatabase().contactsQueries
 
     override fun bindToCurrentDatabase(): ContactDao {
-        val capturedDb = runCatching { dbProvider() }.getOrElse {
-            throw SessionStoppedException(it.message ?: "Database is not initialized")
-        }
+        val capturedDb =
+            runCatching { dbProvider() }.getOrElse {
+                throw SessionStoppedException(it.message ?: "Database is not initialized")
+            }
         return PinnedContactDao(
             boundDatabase = capturedDb,
             ioContext = ioContext,
@@ -59,9 +59,7 @@ class ContactDaoImpl(
         )
     }
 
-    override suspend fun transaction(
-        body: suspend SuspendingTransactionWithoutReturn.() -> Unit,
-    ) {
+    override suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit) {
         val targetDb = writeDatabase()
         withContext(BoundDatabaseElement(targetDb)) {
             targetDb.contactsQueries.transaction(body = body)
@@ -112,8 +110,7 @@ class ContactDaoImpl(
             extractor = { it.executeAsList() },
         )
 
-    override suspend fun selectAllContactsForSync(): List<ContactEntity> =
-        writeQueries().selectAllContactsForSync().executeAsList()
+    override suspend fun selectAllContactsForSync(): List<ContactEntity> = writeQueries().selectAllContactsForSync().executeAsList()
 
     override fun searchContacts(query: String): Flow<List<SearchContacts>> =
         sessionBoundQueryFlow(
@@ -168,9 +165,7 @@ private class PinnedContactDao(
 
     override fun bindToCurrentDatabase(): ContactDao = this
 
-    override suspend fun transaction(
-        body: suspend SuspendingTransactionWithoutReturn.() -> Unit,
-    ) {
+    override suspend fun transaction(body: suspend SuspendingTransactionWithoutReturn.() -> Unit) {
         val q = writeQueries()
         withContext(BoundDatabaseElement(boundDatabase)) {
             q.transaction(body = body)
@@ -221,8 +216,7 @@ private class PinnedContactDao(
             extractor = { it.executeAsList() },
         )
 
-    override suspend fun selectAllContactsForSync(): List<ContactEntity> =
-        writeQueries().selectAllContactsForSync().executeAsList()
+    override suspend fun selectAllContactsForSync(): List<ContactEntity> = writeQueries().selectAllContactsForSync().executeAsList()
 
     override fun searchContacts(query: String): Flow<List<SearchContacts>> =
         sessionBoundQueryFlow(

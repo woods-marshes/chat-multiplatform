@@ -2,8 +2,8 @@ package com.github.woodsmarshes.chat.utils
 
 import com.github.woodsmarshes.chat.exceptions.AuthenticationException
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.principal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction

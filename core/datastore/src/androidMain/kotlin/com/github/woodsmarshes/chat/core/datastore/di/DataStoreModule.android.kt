@@ -10,21 +10,22 @@ import com.github.woodsmarshes.chat.core.common.di.PlatformContext
 import okio.FileSystem
 import okio.Path.Companion.toOkioPath
 
-//actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> {
+// actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> {
 //    val context = (platformContext as AndroidContext).context
 //    return createDataStore(
 //        producePath = { context.filesDir.resolve(DATA_STORE_FILE_NAME).absolutePath }
 //    )
-//}
+// }
 
 actual fun createDataStore(platformContext: PlatformContext): DataStore<Preferences> {
     val context = (platformContext as AndroidContext).context
     val file = context.filesDir.resolve(DATA_STORE_FILE_NAME)
     return createDataStore(
-        storage = OkioStorage(
-            fileSystem = FileSystem.SYSTEM,
-            serializer = PreferencesSerializer,
-            producePath = { file.toOkioPath() }
-        )
+        storage =
+            OkioStorage(
+                fileSystem = FileSystem.SYSTEM,
+                serializer = PreferencesSerializer,
+                producePath = { file.toOkioPath() },
+            ),
     )
 }

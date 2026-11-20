@@ -16,6 +16,6 @@ sealed interface ConnectionState {
     /** Connection is lost or intentionally closed. */
     data class Disconnected(
         val reason: String,
-        val throwable: Throwable? = null
+        val throwable: Throwable? = null,
     ) : ConnectionState
 }
