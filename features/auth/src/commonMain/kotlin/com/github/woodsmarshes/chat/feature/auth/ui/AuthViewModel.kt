@@ -154,6 +154,7 @@ class AuthViewModel(
             AuthError.InvalidCredentials -> strings.authInvalidCredentials
             AuthError.UserAlreadyExists -> strings.authUserExists
             AuthError.WeakPassword -> strings.authWeakPassword
+            AuthError.AccountBanned -> strings.authAccountBanned
             else -> strings.authOperationFailed
         }
     }

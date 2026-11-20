@@ -54,6 +54,7 @@ private suspend fun decodeAuthError(e: Throwable): String? {
         AuthError.InvalidCredentials -> "Invalid email or password"
         AuthError.UserAlreadyExists -> "This email is already registered"
         AuthError.WeakPassword -> "Password is too weak"
+        AuthError.AccountBanned -> "This account has been banned"
         is AuthError.Unknown -> error.message
         else -> null
     }
