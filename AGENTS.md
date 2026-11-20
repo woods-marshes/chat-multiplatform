@@ -100,6 +100,13 @@ Windows PowerShell 使用 `./gradlew.bat` 替代 `./gradlew`。旧分支没有 d
   - React 组件包装为 `FC<Props>` 的 `external` 声明或 `val X = FC<XProps> { ... }` 的 Kotlin DSL
   - JSON 序列化：Kotlin `JsonElement` ↔ JS `dynamic` 需通过 `JSON.stringify` + `ProjectJson` 手动转换
 
+## 服务端管理后台
+
+- 管理 API 在 `server/routes/AdminRoutes.kt` + `service/AdminService.kt`，web 管理台在 `web/pages/admin/`；每个接口由 service 层重新校验 ADMIN，变更操作写入 `admin.audit` 内存缓冲（重启即失）
+- Admin 账号不可通过 API 变更：不能被 ban/降级/重置密码/吊销会话，API 也不能授予 ADMIN（`service/AdminPolicy.kt`）
+- 管理员身份来源只有两个：启动时 `admin.emails`（环境变量 `ADMIN_EMAILS`，逗号分隔，启动时 promote 已有用户）和注册时邮箱命中 `admin.emails` 直接授 ADMIN。**信任模型**：admin 邮箱必须由可信方先完成注册——无人验证邮箱，抢先注册该邮箱者即得管理员；`ADMIN_EMAILS` 泄露等价于管理员账号可被抢注
+- Ban 生效链路：JWT validate 经 `UserAccessCache`（30s TTL）拒绝 + 吊销 refresh session + 主动断开 WS；revoke-all-sessions 与 reset-password 同样断开 WS
+
 ## 工作效率与验证
 
 - 优先用内容检索（例如 `rg`）定位关键行，再按需读取上下文，避免反复读取大文件。
