@@ -210,50 +210,9 @@ jobs:
           path: desktopApp/build/compose/binaries/main-release/deb/*.deb
           if-no-files-found: error
 
-  web:
-    name: Web SPA
-    needs: preflight
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: 'tiptap-bridge/package-lock.json'
-
-      - name: Install tiptap-bridge dependencies
-        run: |
-          cd tiptap-bridge
-          npm ci --legacy-peer-deps
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Build web distribution
-        run: ./gradlew :web:jsBrowserDistribution -PenableAndroid=false --no-daemon
-
-      - name: Package SPA
-        run: |
-          cd web/build/dist
-          zip -r "$GITHUB_WORKSPACE/web-spa.zip" .
-
-      - name: Upload SPA
-        uses: actions/upload-artifact@v7
-        with:
-          name: web-spa
-          path: web-spa.zip
-          if-no-files-found: error
-
   github-release:
     name: Create GitHub Release
-    needs: [preflight, android, desktop-windows, desktop-macos, desktop-linux, web]
+    needs: [preflight, android, desktop-windows, desktop-macos, desktop-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -270,4 +229,6 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" release-assets/* --generate-notes --verify-tag
+        # Draft first: a human reviews the assets and notes, then publishes.
+        # Drop --draft to go back to fully automatic releases.
+        run: gh release create "$GITHUB_REF_NAME" release-assets/* --generate-notes --verify-tag --draft
