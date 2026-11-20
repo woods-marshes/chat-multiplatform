@@ -6,10 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  # A newer push supersedes the in-flight run for the same ref; PRs get
+  # their own group so they never cancel each other's checks.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   client:
     name: Client Compile Check (Android targets = ${{ matrix.enable-android }})
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -64,6 +71,7 @@ jobs:
   client-tests:
     name: Client JVM Tests (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -130,6 +138,7 @@ jobs:
   collab-server-check:
     name: Collab Server Dependency Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -151,6 +160,7 @@ jobs:
   server:
     name: Server Test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
