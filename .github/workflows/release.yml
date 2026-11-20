@@ -1,0 +1,189 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android Release (APK + AAB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'tiptap-bridge/package-lock.json'
+
+      - name: Install tiptap-bridge dependencies
+        run: |
+          cd tiptap-bridge
+          npm ci --legacy-peer-deps
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Decode release keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$GITHUB_WORKSPACE/android-release.jks"
+
+      - name: Build signed release artifacts
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/android-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: >-
+          ./gradlew :androidApp:assembleRelease :androidApp:bundleRelease
+          -PenableAndroid=true
+          -PappVersionCode=${{ github.run_number }}
+          --no-daemon
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release
+          path: |
+            androidApp/build/outputs/apk/release/*.apk
+            androidApp/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+  desktop-windows:
+    name: Desktop Windows MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'tiptap-bridge/package-lock.json'
+
+      - name: Install tiptap-bridge dependencies
+        run: |
+          cd tiptap-bridge
+          npm ci --legacy-peer-deps
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # jpackage builds MSI through WiX 3.x, which is not preinstalled on
+      # windows-latest runners.
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Build Windows installer
+        run: ./gradlew :desktopApp:packageReleaseMsi -PenableAndroid=false --no-daemon
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows
+          path: desktopApp/build/compose/binaries/main-release/msi/*.msi
+          if-no-files-found: error
+
+  desktop-macos:
+    name: Desktop macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'tiptap-bridge/package-lock.json'
+
+      - name: Install tiptap-bridge dependencies
+        run: |
+          cd tiptap-bridge
+          npm ci --legacy-peer-deps
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build macOS disk image
+        run: ./gradlew :desktopApp:packageReleaseDmg -PenableAndroid=false --no-daemon
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-macos
+          path: desktopApp/build/compose/binaries/main-release/dmg/*.dmg
+          if-no-files-found: error
+
+  web:
+    name: Web SPA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'tiptap-bridge/package-lock.json'
+
+      - name: Install tiptap-bridge dependencies
+        run: |
+          cd tiptap-bridge
+          npm ci --legacy-peer-deps
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build web distribution
+        run: ./gradlew :web:jsBrowserDistribution -PenableAndroid=false --no-daemon
+
+      - name: Package SPA
+        run: |
+          cd web/build/dist
+          zip -r "$GITHUB_WORKSPACE/web-spa.zip" .
+
+      - name: Upload SPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-spa
+          path: web-spa.zip
+          if-no-files-found: error
+
+  github-release:
+    name: Create GitHub Release
+    needs: [android, desktop-windows, desktop-macos, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.apk' -o -name '*.aab' -o -name '*.msi' -o -name '*.dmg' -o -name '*.zip' \) -exec cp {} release-assets/ \;
+          ls -la release-assets
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" release-assets/* --generate-notes --verify-tag
