@@ -15,7 +15,11 @@ internal class InputPanelState {
     var stableImeHeightPx by mutableStateOf(0)
         private set
 
-    fun openPanel(selector: InputSelector, currentImePx: Int, fallbackPx: Int) {
+    fun openPanel(
+        selector: InputSelector,
+        currentImePx: Int,
+        fallbackPx: Int,
+    ) {
         require(selector != InputSelector.NONE)
         if (this.selector == InputSelector.NONE && !awaitingKeyboard) {
             panelHeightPx = stableImeHeightPx.takeIf { it > 0 }
@@ -43,7 +47,11 @@ internal class InputPanelState {
         }
     }
 
-    fun observeIme(current: Int, source: Int, target: Int) {
+    fun observeIme(
+        current: Int,
+        source: Int,
+        target: Int,
+    ) {
         // Only completed geometry can replace the cache, including a smaller keyboard.
         if (current > 0 && current == source && source == target) {
             stableImeHeightPx = current
@@ -72,25 +80,38 @@ internal class InputPanelState {
         panelHeightPx = 0
     }
 
-    fun occupiedHeight(current: Int, source: Int, target: Int, navigation: Int): Int {
+    fun occupiedHeight(
+        current: Int,
+        source: Int,
+        target: Int,
+        navigation: Int,
+    ): Int {
         // Some IMEs report a transient oversized animation target on repeated openings.
         // Preserve the measured panel reservation until actual settled geometry takes over.
         if (awaitingKeyboard && stableImeHeightPx > 0) {
             return maxOf(panelHeightPx, navigation)
         }
-        val reserved = when {
-            selector != InputSelector.NONE -> panelHeightPx
-            awaitingKeyboard -> {
-                // Use the system animation itself to reconcile a different keyboard height.
-                val progress = if (target > source) {
-                    ((current - source).toFloat() / (target - source)).coerceIn(0f, 1f)
-                } else {
-                    0f
+        val reserved =
+            when {
+                selector != InputSelector.NONE -> {
+                    panelHeightPx
                 }
-                (panelHeightPx + (target - panelHeightPx) * progress).toInt()
+
+                awaitingKeyboard -> {
+                    // Use the system animation itself to reconcile a different keyboard height.
+                    val progress =
+                        if (target > source) {
+                            ((current - source).toFloat() / (target - source)).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                    (panelHeightPx + (target - panelHeightPx) * progress).toInt()
+                }
+
+                else -> {
+                    0
+                }
             }
-            else -> 0
-        }
         return maxOf(current, reserved, navigation)
     }
 }

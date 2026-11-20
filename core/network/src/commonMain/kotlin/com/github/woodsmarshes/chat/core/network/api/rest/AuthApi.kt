@@ -12,42 +12,40 @@ import io.ktor.client.request.header
 import io.ktor.client.request.setBody
 import io.ktor.http.HttpHeaders
 
-class AuthApi (
+class AuthApi(
     private val client: HttpClient,
 ) {
     suspend fun register(
         username: String,
         email: String,
         password: String,
-    ): AuthResponse {
-        return client.post(V1.Auth.Register()) {
-            setBody(
-                RegisterRequest(
-                    username = username,
-                    email = email,
-                    password = password,
+    ): AuthResponse =
+        client
+            .post(V1.Auth.Register()) {
+                setBody(
+                    RegisterRequest(
+                        username = username,
+                        email = email,
+                        password = password,
+                    ),
                 )
-            )
-        }.body()
-    }
+            }.body()
 
     suspend fun login(
         email: String,
         password: String,
-    ): AuthResponse {
-        return client.post(V1.Auth.Login()) {
-            setBody(
-                LoginRequest(
-                    email = email,
-                    password = password
+    ): AuthResponse =
+        client
+            .post(V1.Auth.Login()) {
+                setBody(
+                    LoginRequest(
+                        email = email,
+                        password = password,
+                    ),
                 )
-            )
-        }.body()
-    }
+            }.body()
 
-    suspend fun refreshToken(): AuthResponse {
-        return client.post(V1.Auth.Refresh()) {}.body()
-    }
+    suspend fun refreshToken(): AuthResponse = client.post(V1.Auth.Refresh()) {}.body()
 
     /**
      * Revokes the server session behind [refreshToken]. Sent with the

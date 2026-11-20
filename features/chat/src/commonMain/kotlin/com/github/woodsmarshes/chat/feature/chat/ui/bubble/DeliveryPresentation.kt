@@ -9,7 +9,11 @@ internal val LocalMessageConnection = staticCompositionLocalOf<ConnectionState> 
 
 internal enum class DeliveryPresentation { Waiting, Sending, Failed, Sent, Hidden }
 
-internal fun deliveryPresentation(status: MessageState, connection: ConnectionState, own: Boolean): DeliveryPresentation =
+internal fun deliveryPresentation(
+    status: MessageState,
+    connection: ConnectionState,
+    own: Boolean,
+): DeliveryPresentation =
     when {
         !own -> DeliveryPresentation.Hidden
         status is MessageState.SendFailed -> DeliveryPresentation.Failed

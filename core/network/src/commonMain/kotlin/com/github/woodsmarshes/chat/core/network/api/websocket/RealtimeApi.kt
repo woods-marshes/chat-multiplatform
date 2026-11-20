@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.core.network.api.websocket
 
+import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.model.ConnectionState
-import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
 import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.network.ktor.TokenRefresher
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -66,7 +66,7 @@ class RealtimeApi(
     private val serverEndpointProvider: ServerEndpointProvider,
     private val authTokenDataSource: AuthTokenDataSource,
     private val tokenRefresher: TokenRefresher,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
 ) {
     val log = KotlinLogging.logger {}
 
@@ -83,9 +83,10 @@ class RealtimeApi(
      * teardown succeeded. Process-exit shutdown ownership is tracked separately
      * from per-session logout.
      */
-    private val teardownScope = CoroutineScope(
-        SupervisorJob() + (scope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Default)
-    )
+    private val teardownScope =
+        CoroutineScope(
+            SupervisorJob() + (scope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Default),
+        )
 
     // Buffering decouples the socket read loop from DB-writing consumers: a
     // slow consumer must not backpressure the TCP read side into a stall.
@@ -119,22 +120,23 @@ class RealtimeApi(
      */
     suspend fun connect() {
         while (true) {
-            val pendingDisconnect = lifecycleMutex.withLock {
-                val disconnecting = inFlightDisconnect
-                if (disconnecting != null && !disconnecting.isCompleted) {
-                    disconnecting
-                } else {
-                    if (connectionJob?.isActive == true) {
-                        log.info { "[RealtimeApi] connect() skipped: already active" }
+            val pendingDisconnect =
+                lifecycleMutex.withLock {
+                    val disconnecting = inFlightDisconnect
+                    if (disconnecting != null && !disconnecting.isCompleted) {
+                        disconnecting
+                    } else {
+                        if (connectionJob?.isActive == true) {
+                            log.info { "[RealtimeApi] connect() skipped: already active" }
+                            return
+                        }
+                        check(scope.isActive) { "RealtimeApi owner scope is cancelled; cannot start connection" }
+                        val gen = ++generation
+                        log.info { "[RealtimeApi] connect() starting connection loop (generation $gen)" }
+                        connectionJob = scope.launch { connectionLoop(gen) }
                         return
                     }
-                    check(scope.isActive) { "RealtimeApi owner scope is cancelled; cannot start connection" }
-                    val gen = ++generation
-                    log.info { "[RealtimeApi] connect() starting connection loop (generation $gen)" }
-                    connectionJob = scope.launch { connectionLoop(gen) }
-                    return
                 }
-            }
             pendingDisconnect.await()
         }
     }
@@ -148,42 +150,43 @@ class RealtimeApi(
      * teardown continues to completion on [teardownScope].
      */
     suspend fun disconnect() {
-        val completion = lifecycleMutex.withLock {
-            generation += 1
-            _connectionState.value = ConnectionState.Idle
-            val job = connectionJob
-            connectionJob = null
-            val previous = inFlightDisconnect
-            if (job == null) {
-                previous
-            } else {
-                val done = CompletableDeferred<Unit>()
-                inFlightDisconnect = done
-                teardownScope.launch {
-                    withContext(NonCancellable) {
-                        try {
-                            previous?.await()
-                            job.cancel()
-                            job.join()
-                            lifecycleMutex.withLock {
-                                if (inFlightDisconnect === done) {
-                                    inFlightDisconnect = null
+        val completion =
+            lifecycleMutex.withLock {
+                generation += 1
+                _connectionState.value = ConnectionState.Idle
+                val job = connectionJob
+                connectionJob = null
+                val previous = inFlightDisconnect
+                if (job == null) {
+                    previous
+                } else {
+                    val done = CompletableDeferred<Unit>()
+                    inFlightDisconnect = done
+                    teardownScope.launch {
+                        withContext(NonCancellable) {
+                            try {
+                                previous?.await()
+                                job.cancel()
+                                job.join()
+                                lifecycleMutex.withLock {
+                                    if (inFlightDisconnect === done) {
+                                        inFlightDisconnect = null
+                                    }
                                 }
-                            }
-                            done.complete(Unit)
-                        } catch (t: Throwable) {
-                            lifecycleMutex.withLock {
-                                if (inFlightDisconnect === done) {
-                                    inFlightDisconnect = null
+                                done.complete(Unit)
+                            } catch (t: Throwable) {
+                                lifecycleMutex.withLock {
+                                    if (inFlightDisconnect === done) {
+                                        inFlightDisconnect = null
+                                    }
                                 }
+                                done.completeExceptionally(t)
                             }
-                            done.completeExceptionally(t)
                         }
                     }
+                    done
                 }
-                done
             }
-        }
         completion?.await()
     }
 
@@ -197,15 +200,16 @@ class RealtimeApi(
      * withdrawal must be surfaced to the user).
      */
     suspend fun send(realtimeEvent: RealtimeEvent): Boolean {
-        val target = lifecycleMutex.withLock {
-            val state = _connectionState.value
-            if (state !is ConnectionState.Connected) {
-                log.warn { "[RealtimeApi] send() skipped: not connected (state=$state)" }
-                null
-            } else {
-                session
-            }
-        } ?: return false
+        val target =
+            lifecycleMutex.withLock {
+                val state = _connectionState.value
+                if (state !is ConnectionState.Connected) {
+                    log.warn { "[RealtimeApi] send() skipped: not connected (state=$state)" }
+                    null
+                } else {
+                    session
+                }
+            } ?: return false
 
         return try {
             sendFrame(target, realtimeEvent)
@@ -219,7 +223,10 @@ class RealtimeApi(
         }
     }
 
-    private suspend fun updateState(gen: Long, state: ConnectionState) {
+    private suspend fun updateState(
+        gen: Long,
+        state: ConnectionState,
+    ) {
         lifecycleMutex.withLock {
             if (generation == gen && currentCoroutineContext().isActive) {
                 _connectionState.value = state
@@ -227,11 +234,15 @@ class RealtimeApi(
         }
     }
 
-    private suspend fun isCurrentGeneration(gen: Long): Boolean = lifecycleMutex.withLock {
-        generation == gen && currentCoroutineContext().isActive
-    }
+    private suspend fun isCurrentGeneration(gen: Long): Boolean =
+        lifecycleMutex.withLock {
+            generation == gen && currentCoroutineContext().isActive
+        }
 
-    private suspend fun tryPublishSocket(gen: Long, socket: DefaultClientWebSocketSession): Boolean =
+    private suspend fun tryPublishSocket(
+        gen: Long,
+        socket: DefaultClientWebSocketSession,
+    ): Boolean =
         lifecycleMutex.withLock {
             if (generation != gen || !currentCoroutineContext().isActive) {
                 false
@@ -299,7 +310,6 @@ class RealtimeApi(
                 updateState(gen, ConnectionState.Disconnected("Connection closed by server"))
                 log.info { "[RealtimeApi] connection closed, backing off ${currentDelay}ms" }
                 backoff()
-
             } catch (e: CancellationException) {
                 // Cancellation belongs to disconnect(), which owns the terminal
                 // state: writing here would let a stale generation clobber a
@@ -315,7 +325,10 @@ class RealtimeApi(
         }
     }
 
-    private suspend fun observeMessages(gen: Long, currentSession: DefaultClientWebSocketSession) {
+    private suspend fun observeMessages(
+        gen: Long,
+        currentSession: DefaultClientWebSocketSession,
+    ) {
         log.info { "[RealtimeApi] observeMessages() started" }
         while (currentSession.isActive && isCurrentGeneration(gen)) {
             try {

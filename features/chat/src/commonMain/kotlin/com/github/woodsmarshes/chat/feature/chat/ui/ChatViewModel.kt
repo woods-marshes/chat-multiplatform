@@ -4,11 +4,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.PagingData
 import androidx.paging.LoadState
 import androidx.paging.LoadStates
+import androidx.paging.PagingData
 import androidx.paging.cachedIn
-
 import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
@@ -54,7 +53,6 @@ class ChatViewModel(
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
-
     // Retain the keyed viewport with the conversation while a detail entry covers it.
     val messageListState = LazyListState()
 
@@ -99,13 +97,15 @@ class ChatViewModel(
     private var forwardJob: Job? = null
 
     /** Conversation picker data for the forward dialog. */
-    val forwardTargets: Flow<List<ConversationUiModel>> = flow {
-        emitAll(conversationRepository.getConversationListFlow())
-    }
+    val forwardTargets: Flow<List<ConversationUiModel>> =
+        flow {
+            emitAll(conversationRepository.getConversationListFlow())
+        }
 
     init {
         viewModelScope.launch {
-            userRepository.getMeFlow()
+            userRepository
+                .getMeFlow()
                 .map { it?.id }
                 .collectLatest { ownUserId ->
                     _uiState.update { it.copy(ownUserId = ownUserId) }
@@ -136,14 +136,14 @@ class ChatViewModel(
                     val now = Clock.System.now().toEpochMilliseconds()
                     // The server echoes typing events back to the sender's own
                     // sessions, so exclude the local user explicitly.
-                    val activeTypingUsers = typing
-                        .filterValues { now - it < TYPING_VISIBLE_MS }
-                        .keys
-                        .filterNot { it == me?.id }
-                        .let { ids -> members.filter { it.id in ids } }
+                    val activeTypingUsers =
+                        typing
+                            .filterValues { now - it < TYPING_VISIBLE_MS }
+                            .keys
+                            .filterNot { it == me?.id }
+                            .let { ids -> members.filter { it.id in ids } }
                     members to activeTypingUsers
-                }
-                    .distinctUntilChanged()
+                }.distinctUntilChanged()
                     .collectLatest { (members, activeTypingUsers) ->
                         _typingUsers.value = activeTypingUsers
                         _memberCount.value = if (isGroup) members.size else null
@@ -153,27 +153,26 @@ class ChatViewModel(
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val messages: Flow<PagingData<MessageUiModel>> = userRepository.getMeFlow()
-        .map { it?.id }
-        .distinctUntilChanged()
-        .onEach { userId ->
-            log.info { "[ChatVM-messages] getMeFlow emitted userId=$userId" }
-        }
-        .flatMapLatest { ownUserId ->
-            val uid = ownUserId ?: return@flatMapLatest flowOf(pendingMessagePage())
-            log.info { "[ChatVM-messages] flatMapLatest calling getMessages(ownUserId=$uid)" }
-            conversationUuid?.let { convId ->
-                messageRepository.getMessages(
-                    ownUserId = uid,
-                    conversationId = convId,
-                    isGroup = isGroup,
-                )
-            } ?: flowOf(PagingData.empty())
-        }
-        .onEach {
-            log.info { "[ChatVM-messages] got new PagingData from getMessages" }
-        }
-        .cachedIn(viewModelScope)
+    val messages: Flow<PagingData<MessageUiModel>> =
+        userRepository
+            .getMeFlow()
+            .map { it?.id }
+            .distinctUntilChanged()
+            .onEach { userId ->
+                log.info { "[ChatVM-messages] getMeFlow emitted userId=$userId" }
+            }.flatMapLatest { ownUserId ->
+                val uid = ownUserId ?: return@flatMapLatest flowOf(pendingMessagePage())
+                log.info { "[ChatVM-messages] flatMapLatest calling getMessages(ownUserId=$uid)" }
+                conversationUuid?.let { convId ->
+                    messageRepository.getMessages(
+                        ownUserId = uid,
+                        conversationId = convId,
+                        isGroup = isGroup,
+                    )
+                } ?: flowOf(PagingData.empty())
+            }.onEach {
+                log.info { "[ChatVM-messages] got new PagingData from getMessages" }
+            }.cachedIn(viewModelScope)
 
     /**
      * Reports the messages currently visible in the chat viewport. Only
@@ -182,13 +181,15 @@ class ChatViewModel(
      */
     fun onMessagesVisible(messages: List<MessageUiModel>) {
         val conversationId = conversationUuid ?: return
-        val readMessageId = messages.asSequence()
-            .filter { it.conversationId == conversationId }
-            .filter { it.revokedAt == null }
-            .filter { it.isReadReceiptEligible }
-            .filter { it.sendStatus == MessageState.Completed }
-            .map { it.id }
-            .maxOrNull() ?: return
+        val readMessageId =
+            messages
+                .asSequence()
+                .filter { it.conversationId == conversationId }
+                .filter { it.revokedAt == null }
+                .filter { it.isReadReceiptEligible }
+                .filter { it.sendStatus == MessageState.Completed }
+                .map { it.id }
+                .maxOrNull() ?: return
 
         if (readMessageId == lastReportedReadMessageId) return
         lastReportedReadMessageId = readMessageId
@@ -206,15 +207,20 @@ class ChatViewModel(
 
     fun insertEmoji(emoji: String) {
         val input = _input.value
-        val newText = input.text.substring(0, input.selection.start) +
-            emoji +
-            input.text.substring(input.selection.end)
+        val newText =
+            input.text.substring(0, input.selection.start) +
+                emoji +
+                input.text.substring(input.selection.end)
         val newCursor = input.selection.start + emoji.length
-        onInputChanged(input.copy(
-            text = newText,
-            selection = androidx.compose.ui.text.TextRange(newCursor),
-            composition = null,
-        ))
+        onInputChanged(
+            input.copy(
+                text = newText,
+                selection =
+                    androidx.compose.ui.text
+                        .TextRange(newCursor),
+                composition = null,
+            ),
+        )
     }
 
     fun sendMessage() {
@@ -239,18 +245,21 @@ class ChatViewModel(
 
         _uiState.update { it.copy(isSending = true) }
         viewModelScope.launch {
-            messageRepository.retryMessage(message.id)
+            messageRepository
+                .retryMessage(message.id)
                 .onOk {
                     _uiState.update { it.copy(isSending = false, error = null) }
-                }
-                .onErr { error ->
+                }.onErr { error ->
                     log.warn { "[ChatVM] retryMessage failed: ${error.message}" }
                     _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
                 }
         }
     }
 
-    private fun sendContent(text: String, replyToMessageId: Uuid?) {
+    private fun sendContent(
+        text: String,
+        replyToMessageId: Uuid?,
+    ) {
         // A double tap must not create a second message: the repository mints a fresh
         // request id per call, so the duplicate would be a real second bubble.
         if (_uiState.value.isSending) return
@@ -263,23 +272,25 @@ class ChatViewModel(
         _uiState.update { it.copy(isSending = true) }
 
         viewModelScope.launch {
-            val result = messageRepository.sendMessage(
-                conversationId = conversationId,
-                content = TextContent(text),
-                replyToMessageId = replyToMessageId,
-            )
-            result.onOk {
-                log.info { "[ChatVM] sendMessage result OK" }
-                // Repository success accepts the local outbox submission, not server delivery.
-                if (draftRevision == submittedDraftRevision) {
-                    onInputChanged(TextFieldValue())
+            val result =
+                messageRepository.sendMessage(
+                    conversationId = conversationId,
+                    content = TextContent(text),
+                    replyToMessageId = replyToMessageId,
+                )
+            result
+                .onOk {
+                    log.info { "[ChatVM] sendMessage result OK" }
+                    // Repository success accepts the local outbox submission, not server delivery.
+                    if (draftRevision == submittedDraftRevision) {
+                        onInputChanged(TextFieldValue())
+                    }
+                    if (replyRevision == submittedReplyRevision) clearReplyTo()
+                    _uiState.update { it.copy(isSending = false, error = null) }
+                }.onErr {
+                    log.warn { "[ChatVM] sendMessage result ERR: ${it.message}" }
+                    _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
                 }
-                if (replyRevision == submittedReplyRevision) clearReplyTo()
-                _uiState.update { it.copy(isSending = false, error = null) }
-            }.onErr {
-                log.warn { "[ChatVM] sendMessage result ERR: ${it.message}" }
-                _uiState.update { it.copy(isSending = false, error = strings.sendFailed) }
-            }
             if (draftRevision == submittedDraftRevision || _input.value.text.isBlank()) {
                 stopTyping(conversationId)
             }
@@ -330,11 +341,12 @@ class ChatViewModel(
             return
         }
         val current = _uiState.value.selectedMessages
-        val updated = if (current.any { it.id == message.id }) {
-            current.filterNot { it.id == message.id }
-        } else {
-            current + message
-        }
+        val updated =
+            if (current.any { it.id == message.id }) {
+                current.filterNot { it.id == message.id }
+            } else {
+                current + message
+            }
         _uiState.update {
             it.copy(
                 selectionMode = updated.isNotEmpty(),
@@ -376,23 +388,25 @@ class ChatViewModel(
         // sent part of the batch and resend everything, duplicating the forwarded messages.
         if (_uiState.value.isForwarding) return
         forwardJob?.cancel()
-        forwardJob = viewModelScope.launch {
-            _uiState.update { it.copy(isForwarding = true) }
-            var failed = 0
-            messages.forEach { message ->
-                messageRepository.sendMessage(
-                    conversationId = targetConversationId,
-                    content = message.content,
-                ).onErr { failed++ }
+        forwardJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isForwarding = true) }
+                var failed = 0
+                messages.forEach { message ->
+                    messageRepository
+                        .sendMessage(
+                            conversationId = targetConversationId,
+                            content = message.content,
+                        ).onErr { failed++ }
+                }
+                _uiState.update {
+                    it.copy(
+                        isForwarding = false,
+                        forwardingMessages = emptyList(),
+                        error = if (failed > 0) strings.forwardFailed else null,
+                    )
+                }
             }
-            _uiState.update {
-                it.copy(
-                    isForwarding = false,
-                    forwardingMessages = emptyList(),
-                    error = if (failed > 0) strings.forwardFailed else null,
-                )
-            }
-        }
     }
 
     fun setReplyToAndClearSelection(message: MessageUiModel) {
@@ -425,13 +439,17 @@ class ChatViewModel(
                 sendTyping(convId, true)
             }
         }
-        typingStopJob = viewModelScope.launch {
-            delay(TYPING_IDLE_STOP_MS)
-            stopTyping(convId)
-        }
+        typingStopJob =
+            viewModelScope.launch {
+                delay(TYPING_IDLE_STOP_MS)
+                stopTyping(convId)
+            }
     }
 
-    private fun sendTyping(conversationId: Uuid, isTyping: Boolean) {
+    private fun sendTyping(
+        conversationId: Uuid,
+        isTyping: Boolean,
+    ) {
         lastTypingSentAt = Clock.System.now().toEpochMilliseconds()
         viewModelScope.launch {
             messageRepository.sendTyping(conversationId, isTyping)
@@ -446,12 +464,13 @@ class ChatViewModel(
         }
     }
 
-    private fun tickerFlow() = flow {
-        while (true) {
-            emit(Unit)
-            delay(TYPING_TICK_MS)
+    private fun tickerFlow() =
+        flow {
+            while (true) {
+                emit(Unit)
+                delay(TYPING_TICK_MS)
+            }
         }
-    }
 
     private companion object {
         /** How long a typing entry stays visible since its last event. */
@@ -468,10 +487,12 @@ class ChatViewModel(
 }
 
 /** Missing session identity is pending initialization, not an empty conversation. */
-internal fun pendingMessagePage(): PagingData<MessageUiModel> = PagingData.empty(
-    sourceLoadStates = LoadStates(
-        refresh = LoadState.Loading,
-        prepend = LoadState.NotLoading(false),
-        append = LoadState.NotLoading(false),
-    ),
-)
+internal fun pendingMessagePage(): PagingData<MessageUiModel> =
+    PagingData.empty(
+        sourceLoadStates =
+            LoadStates(
+                refresh = LoadState.Loading,
+                prepend = LoadState.NotLoading(false),
+                append = LoadState.NotLoading(false),
+            ),
+    )

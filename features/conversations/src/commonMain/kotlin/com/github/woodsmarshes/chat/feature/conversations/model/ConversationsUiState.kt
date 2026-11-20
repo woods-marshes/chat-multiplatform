@@ -10,7 +10,6 @@ data class ConversationsUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-
     // Create group modal
     val showCreateGroup: Boolean = false,
     val groupName: String = "",
@@ -25,11 +24,9 @@ data class ConversationsUiState(
     val avatarBytes: ByteArray? = null,
     val isCreating: Boolean = false,
     val createError: String? = null,
-
     // In-place search (AdaptiveSearchBar)
     val searchResults: List<ConversationUiModel> = emptyList(),
     val searchProfiles: Map<Uuid, GroupProfile> = emptyMap(),
     val isSearching: Boolean = false,
     val searchError: String? = null,
 )
-

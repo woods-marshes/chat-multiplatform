@@ -20,6 +20,7 @@ import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
+
 /**
  * Dispatches the correct bubble composable based on [MessageRenderType].
  * Used by [MessageListItems] as the reusable content renderer.
@@ -43,10 +44,11 @@ fun MessageBubbleContent(
     if (message.revokedAt != null) {
         BasicText(
             text = strings.messageRevoked,
-            style = LocalTextStyle.current.copy(
-                fontStyle = FontStyle.Italic,
-                textDecoration = TextDecoration.LineThrough,
-            ),
+            style =
+                LocalTextStyle.current.copy(
+                    fontStyle = FontStyle.Italic,
+                    textDecoration = TextDecoration.LineThrough,
+                ),
             modifier = modifier,
         )
         return
@@ -60,27 +62,36 @@ fun MessageBubbleContent(
             )
         }
         when (message.renderType) {
-            MessageRenderType.TEXT -> TextBubble(
-                content = message.content as? TextContent ?: TextContent(""),
-                isOwnMessage = isOwnMessage,
-                sendStatus = message.sendStatus,
-                modifier = Modifier,
-                formatter = formatter,
-                onRetry = onRetry,
-            )
-            MessageRenderType.IMAGE -> ImageBubble(
-                content = message.content as? ImageContent,
-                isOwnMessage = isOwnMessage,
-                modifier = Modifier,
-                onImageClick = onImageClick,
-            )
-            MessageRenderType.VIDEO -> VideoBubble(
-                content = message.content as? VideoContent,
-                isOwnMessage = isOwnMessage,
-                modifier = Modifier,
-                isPlaying = videoIsPlaying,
-                onPlayClick = onVideoPlayClick,
-            )
+            MessageRenderType.TEXT -> {
+                TextBubble(
+                    content = message.content as? TextContent ?: TextContent(""),
+                    isOwnMessage = isOwnMessage,
+                    sendStatus = message.sendStatus,
+                    modifier = Modifier,
+                    formatter = formatter,
+                    onRetry = onRetry,
+                )
+            }
+
+            MessageRenderType.IMAGE -> {
+                ImageBubble(
+                    content = message.content as? ImageContent,
+                    isOwnMessage = isOwnMessage,
+                    modifier = Modifier,
+                    onImageClick = onImageClick,
+                )
+            }
+
+            MessageRenderType.VIDEO -> {
+                VideoBubble(
+                    content = message.content as? VideoContent,
+                    isOwnMessage = isOwnMessage,
+                    modifier = Modifier,
+                    isPlaying = videoIsPlaying,
+                    onPlayClick = onVideoPlayClick,
+                )
+            }
+
             MessageRenderType.AUDIO -> {
                 val audioContent = message.content as? AudioContent
                 AudioBubble(
@@ -88,27 +99,34 @@ fun MessageBubbleContent(
                     isOwnMessage = isOwnMessage,
                     modifier = Modifier,
                     state = audioState,
-                    onPlayPauseToggle = if (audioContent == null) {
-                        null
-                    } else {
-                        onAudioPlayPauseClick?.let { click -> { click(audioContent) } }
-                    },
+                    onPlayPauseToggle =
+                        if (audioContent == null) {
+                            null
+                        } else {
+                            onAudioPlayPauseClick?.let { click -> { click(audioContent) } }
+                        },
                     onSeek = if (audioContent == null) null else onAudioSeek?.let { seek -> { frac -> seek(audioContent, frac) } },
                 )
             }
-            MessageRenderType.FILE -> FileBubble(
-                content = message.content as? FileContent,
-                isOwnMessage = isOwnMessage,
-                modifier = Modifier,
-                onFileClick = onFileClick,
-            )
-            MessageRenderType.OTHER -> TextBubble(
-                content = TextContent(strings.unsupportedMessage),
-                isOwnMessage = isOwnMessage,
-                sendStatus = message.sendStatus,
-                modifier = Modifier,
-                onRetry = null,
-            )
+
+            MessageRenderType.FILE -> {
+                FileBubble(
+                    content = message.content as? FileContent,
+                    isOwnMessage = isOwnMessage,
+                    modifier = Modifier,
+                    onFileClick = onFileClick,
+                )
+            }
+
+            MessageRenderType.OTHER -> {
+                TextBubble(
+                    content = TextContent(strings.unsupportedMessage),
+                    isOwnMessage = isOwnMessage,
+                    sendStatus = message.sendStatus,
+                    modifier = Modifier,
+                    onRetry = null,
+                )
+            }
         }
     }
 }

@@ -21,61 +21,63 @@ import kotlinx.coroutines.sync.withLock
  * userinfo is rejected because `V1` routes are absolute paths and a prefix
  * would produce 404s.
  */
-fun parseServerAddress(raw: String): Result<NetworkConfig> = runCatching {
-    var rest = raw.trim()
-    require(rest.isNotEmpty()) { "Server address is empty" }
+fun parseServerAddress(raw: String): Result<NetworkConfig> =
+    runCatching {
+        var rest = raw.trim()
+        require(rest.isNotEmpty()) { "Server address is empty" }
 
-    var schemeTls: Boolean? = null
-    val schemeEnd = rest.indexOf("://")
-    if (schemeEnd >= 0) {
-        val scheme = rest.substring(0, schemeEnd).lowercase()
-        require(scheme == "http" || scheme == "https") {
-            "Unsupported scheme '$scheme' (use http or https)"
+        var schemeTls: Boolean? = null
+        val schemeEnd = rest.indexOf("://")
+        if (schemeEnd >= 0) {
+            val scheme = rest.substring(0, schemeEnd).lowercase()
+            require(scheme == "http" || scheme == "https") {
+                "Unsupported scheme '$scheme' (use http or https)"
+            }
+            schemeTls = scheme == "https"
+            rest = rest.substring(schemeEnd + 3)
         }
-        schemeTls = scheme == "https"
-        rest = rest.substring(schemeEnd + 3)
-    }
 
-    require(!rest.contains('?') && !rest.contains('#')) {
-        "Server address must not contain query or fragment"
-    }
-    if (rest.endsWith("/")) rest = rest.dropLast(1)
-    require(!rest.contains('/')) { "Server address must not contain a path" }
-    require(!rest.contains('@')) { "Server address must not contain userinfo" }
-
-    val host: String
-    val explicitPort: Int?
-    if (rest.startsWith("[")) {
-        val close = rest.indexOf(']')
-        require(close > 1) { "Malformed IPv6 address" }
-        host = rest.substring(1, close)
-        val tail = rest.substring(close + 1)
-        explicitPort = when {
-            tail.isEmpty() -> null
-            tail.startsWith(":") -> parsePort(tail.substring(1))
-            else -> throw IllegalArgumentException("Unexpected characters after IPv6 address")
+        require(!rest.contains('?') && !rest.contains('#')) {
+            "Server address must not contain query or fragment"
         }
-    } else {
-        require(rest.count { it == ':' } <= 1) { "Malformed server address" }
-        val colon = rest.indexOf(':')
-        if (colon >= 0) {
-            host = rest.substring(0, colon)
-            explicitPort = parsePort(rest.substring(colon + 1))
+        if (rest.endsWith("/")) rest = rest.dropLast(1)
+        require(!rest.contains('/')) { "Server address must not contain a path" }
+        require(!rest.contains('@')) { "Server address must not contain userinfo" }
+
+        val host: String
+        val explicitPort: Int?
+        if (rest.startsWith("[")) {
+            val close = rest.indexOf(']')
+            require(close > 1) { "Malformed IPv6 address" }
+            host = rest.substring(1, close)
+            val tail = rest.substring(close + 1)
+            explicitPort =
+                when {
+                    tail.isEmpty() -> null
+                    tail.startsWith(":") -> parsePort(tail.substring(1))
+                    else -> throw IllegalArgumentException("Unexpected characters after IPv6 address")
+                }
         } else {
-            host = rest
-            explicitPort = null
+            require(rest.count { it == ':' } <= 1) { "Malformed server address" }
+            val colon = rest.indexOf(':')
+            if (colon >= 0) {
+                host = rest.substring(0, colon)
+                explicitPort = parsePort(rest.substring(colon + 1))
+            } else {
+                host = rest
+                explicitPort = null
+            }
         }
-    }
-    require(isValidHost(host)) { "Invalid host '$host'" }
+        require(isValidHost(host)) { "Invalid host '$host'" }
 
-    // Bare `host` and `host:443` default to TLS; any other explicit port
-    // without a scheme is treated as plain HTTP (e.g. `192.168.1.5:9051`).
-    val useTls = schemeTls ?: (explicitPort == null || explicitPort == 443)
-    val port = explicitPort ?: if (useTls) 443 else 80
-    // Hostnames are case-insensitive; normalizing keeps serverKeyFor (and
-    // therefore the per-server database namespace) stable across spellings.
-    NetworkConfig(host = host.lowercase(), port = port, useTls = useTls)
-}
+        // Bare `host` and `host:443` default to TLS; any other explicit port
+        // without a scheme is treated as plain HTTP (e.g. `192.168.1.5:9051`).
+        val useTls = schemeTls ?: (explicitPort == null || explicitPort == 443)
+        val port = explicitPort ?: if (useTls) 443 else 80
+        // Hostnames are case-insensitive; normalizing keeps serverKeyFor (and
+        // therefore the per-server database namespace) stable across spellings.
+        NetworkConfig(host = host.lowercase(), port = port, useTls = useTls)
+    }
 
 private fun parsePort(raw: String): Int {
     val port = raw.toIntOrNull()
@@ -93,7 +95,12 @@ private fun isValidHost(host: String): Boolean =
  * Kotlin/JVM, Kotlin/JS and Kotlin/Native.
  */
 fun serverKeyFor(config: NetworkConfig): String =
-    "s" + config.baseUrl.hashCode().toUInt().toString(16).padStart(8, '0')
+    "s" +
+        config.baseUrl
+            .hashCode()
+            .toUInt()
+            .toString(16)
+            .padStart(8, '0')
 
 /**
  * Holds the active server endpoint: seeded from the injected [NetworkConfig]
@@ -142,15 +149,16 @@ class ServerEndpointProvider(
     /** Callers must hold [mutex]. */
     private suspend fun loadLocked() {
         if (loaded) return
-        val stored = try {
-            serverConfigDataSource.currentServerBaseUrl()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // A failing preferences read must not wedge session startup;
-            // fall back to the compile-time seed.
-            null
-        }
+        val stored =
+            try {
+                serverConfigDataSource.currentServerBaseUrl()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A failing preferences read must not wedge session startup;
+                // fall back to the compile-time seed.
+                null
+            }
         if (!stored.isNullOrBlank()) {
             // A corrupt stored value degrades to the seed instead of
             // breaking every request.
@@ -168,19 +176,21 @@ class ServerEndpointProvider(
      * [revertStaged] on failure. Only meaningful while logged out — callers
      * must enforce that policy.
      */
-    suspend fun stage(rawAddress: String): Result<NetworkConfig> = mutex.withLock {
-        // Load the persisted endpoint first when startup hasn't finished:
-        // [committed] must reflect storage so a failed login's revertStaged
-        // restores the real previous selection instead of the seed.
-        loadLocked()
-        val parsed = parseServerAddress(rawAddress).getOrElse {
-            return@withLock Result.failure(it)
+    suspend fun stage(rawAddress: String): Result<NetworkConfig> =
+        mutex.withLock {
+            // Load the persisted endpoint first when startup hasn't finished:
+            // [committed] must reflect storage so a failed login's revertStaged
+            // restores the real previous selection instead of the seed.
+            loadLocked()
+            val parsed =
+                parseServerAddress(rawAddress).getOrElse {
+                    return@withLock Result.failure(it)
+                }
+            _config.value = parsed
+            selectionStaged = true
+            loaded = true
+            Result.success(parsed)
         }
-        _config.value = parsed
-        selectionStaged = true
-        loaded = true
-        Result.success(parsed)
-    }
 
     /**
      * Persists the endpoint applied by [stage] and makes it the fallback for
@@ -190,20 +200,21 @@ class ServerEndpointProvider(
      * the caller is already authenticated against it, so refusing to continue
      * would be worse than losing the preference on the next start.
      */
-    suspend fun commitStaged(): Result<Unit> = mutex.withLock {
-        val target = _config.value
-        try {
-            serverConfigDataSource.setServerBaseUrl(target.baseUrl)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return@withLock Result.failure(e)
+    suspend fun commitStaged(): Result<Unit> =
+        mutex.withLock {
+            val target = _config.value
+            try {
+                serverConfigDataSource.setServerBaseUrl(target.baseUrl)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@withLock Result.failure(e)
+            }
+            committed = target
+            selectionStaged = false
+            loaded = true
+            Result.success(Unit)
         }
-        committed = target
-        selectionStaged = false
-        loaded = true
-        Result.success(Unit)
-    }
 
     /**
      * Discards a staged selection and restores the last persisted endpoint.

@@ -4,7 +4,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ListScreenScaffoldStateTest {
-
     @Test
     fun loadingWithoutDataShowsLoading() {
         assertEquals(

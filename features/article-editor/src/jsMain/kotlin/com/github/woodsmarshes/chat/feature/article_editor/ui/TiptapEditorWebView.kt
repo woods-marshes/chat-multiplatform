@@ -1,4 +1,4 @@
-package com.github.woodsmarshes.chat.feature.article_editor.ui
+package com.github.woodsmarshes.chat.feature.articleeditor.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize

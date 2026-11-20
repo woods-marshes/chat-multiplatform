@@ -46,8 +46,8 @@ import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.flow.Flow
-import kotlin.uuid.Uuid
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.uuid.Uuid
 
 private val log = KotlinLogging.logger {}
 
@@ -98,9 +98,10 @@ fun ArticleListScreen(
         },
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
             // Tabs: 全部 | 我的
             AppTabRow(
@@ -113,15 +114,17 @@ fun ArticleListScreen(
 
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
             ) { page ->
-                val flow = when (page) {
-                    0 -> viewModel.allArticles
-                    1 -> viewModel.myArticles
-                    else -> viewModel.allArticles
-                }
+                val flow =
+                    when (page) {
+                        0 -> viewModel.allArticles
+                        1 -> viewModel.myArticles
+                        else -> viewModel.allArticles
+                    }
                 ArticleListContent(
                     articlesFlow = flow,
                     selectedArticleId = if (inMultiPane) selectedArticleId else null,
@@ -168,6 +171,7 @@ private fun ArticleListContent(
         articles.loadState.refresh is LoadState.Loading && articles.itemCount == 0 -> {
             LoadingContent(modifier = Modifier.fillMaxSize())
         }
+
         articles.loadState.refresh is LoadState.Error && articles.itemCount == 0 -> {
             ErrorContent(
                 message = strings.loadFailed,
@@ -175,12 +179,14 @@ private fun ArticleListContent(
                 onRetry = { articles.retry() },
             )
         }
+
         articles.itemCount == 0 && articles.loadState.refresh is LoadState.NotLoading -> {
             EmptyContent(
                 message = strings.articleNoArticles,
                 modifier = Modifier.fillMaxSize(),
             )
         }
+
         else -> {
             val isRefreshing = articles.loadState.refresh is LoadState.Loading
 
@@ -210,6 +216,7 @@ private fun ArticleListContent(
                                 }
                             }
                         }
+
                         is LoadState.Error -> {
                             item {
                                 Box(
@@ -225,6 +232,7 @@ private fun ArticleListContent(
                                 }
                             }
                         }
+
                         else -> {}
                     }
                 }

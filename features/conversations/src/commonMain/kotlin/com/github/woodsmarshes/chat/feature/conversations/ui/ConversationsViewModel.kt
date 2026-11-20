@@ -51,7 +51,8 @@ class ConversationsViewModel(
 
     private fun loadConversations() {
         viewModelScope.launch {
-            conversationRepository.getConversationListFlow()
+            conversationRepository
+                .getConversationListFlow()
                 .onStart { _uiState.update { it.copy(isLoading = true) } }
                 .catch { e ->
                     log.error(e) { "[Conversations] loading the list failed" }
@@ -61,15 +62,15 @@ class ConversationsViewModel(
                             isLoading = false,
                         )
                     }
-                }
-                .collect { conversations ->
+                }.collect { conversations ->
                     // Mirrors the SQL ordering (COALESCE(last message time,
                     // conversation creation time)): message-less conversations
                     // must not sink below every messaged one.
-                    val sorted = conversations.sortedWith(
-                        compareByDescending<ConversationUiModel> { it.isPinned }
-                            .thenByDescending { it.lastMessage?.createdAt ?: it.createdAt }
-                    )
+                    val sorted =
+                        conversations.sortedWith(
+                            compareByDescending<ConversationUiModel> { it.isPinned }
+                                .thenByDescending { it.lastMessage?.createdAt ?: it.createdAt },
+                        )
                     _uiState.update {
                         it.copy(
                             conversations = sorted,
@@ -82,7 +83,8 @@ class ConversationsViewModel(
 
     private fun observeFriendsForPicker() {
         viewModelScope.launch {
-            contactRepository.getFriendsFlow()
+            contactRepository
+                .getFriendsFlow()
                 .catch { e -> log.warn(e) { "[ConversationsViewModel] observing friends failed" } }
                 .collect { pairs ->
                     val friends = pairs.map { (contact, user) -> toContactUiModel(contact, user) }
@@ -124,34 +126,38 @@ class ConversationsViewModel(
             return
         }
         lastSearchQuery = query
-        searchJob = viewModelScope.launch {
-            _uiState.update { it.copy(isSearching = true, searchError = null) }
-            conversationRepository.searchGroups(query).onOk { groups ->
-                val existingById = _uiState.value.conversations.associateBy { it.id }
-                _uiState.update {
-                    it.copy(
-                        searchProfiles = groups.associateBy { group -> group.conversationId },
-                        searchResults = groups.map { group ->
-                            val existing = existingById[group.conversationId]
-                            ConversationUiModel(
-                                id = group.conversationId,
-                                type = ConversationType.GROUP,
-                                name = group.name,
-                                avatarUrl = group.avatarUrl,
-                                description = group.description,
-                                handle = group.handle,
-                                lastMessage = existing?.lastMessage,
-                                memberAvatars = existing?.memberAvatars.orEmpty(),
+        searchJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isSearching = true, searchError = null) }
+                conversationRepository
+                    .searchGroups(query)
+                    .onOk { groups ->
+                        val existingById = _uiState.value.conversations.associateBy { it.id }
+                        _uiState.update {
+                            it.copy(
+                                searchProfiles = groups.associateBy { group -> group.conversationId },
+                                searchResults =
+                                    groups.map { group ->
+                                        val existing = existingById[group.conversationId]
+                                        ConversationUiModel(
+                                            id = group.conversationId,
+                                            type = ConversationType.GROUP,
+                                            name = group.name,
+                                            avatarUrl = group.avatarUrl,
+                                            description = group.description,
+                                            handle = group.handle,
+                                            lastMessage = existing?.lastMessage,
+                                            memberAvatars = existing?.memberAvatars.orEmpty(),
+                                        )
+                                    },
+                                isSearching = false,
                             )
-                        },
-                        isSearching = false,
-                    )
-                }
-            }.onErr { err ->
-                log.error { "[ConversationsViewModel] group search failed: $err" }
-                _uiState.update { it.copy(isSearching = false, searchError = strings.searchFailed) }
+                        }
+                    }.onErr { err ->
+                        log.error { "[ConversationsViewModel] group search failed: $err" }
+                        _uiState.update { it.copy(isSearching = false, searchError = strings.searchFailed) }
+                    }
             }
-        }
     }
 
     fun retrySearch() {
@@ -206,9 +212,10 @@ class ConversationsViewModel(
         }
         handleCheckJob?.cancel()
         if (cleaned.isEmpty()) return
-        handleCheckJob = viewModelScope.launchGroupHandleCheck(cleaned, conversationRepository) { checking, available ->
-            _uiState.update { it.copy(isCheckingHandle = checking, isHandleAvailable = available) }
-        }
+        handleCheckJob =
+            viewModelScope.launchGroupHandleCheck(cleaned, conversationRepository) { checking, available ->
+                _uiState.update { it.copy(isCheckingHandle = checking, isHandleAvailable = available) }
+            }
     }
 
     fun onGroupDescriptionChanged(desc: String) {
@@ -225,11 +232,12 @@ class ConversationsViewModel(
 
     fun onToggleMemberSelection(userId: Uuid) {
         _uiState.update { state ->
-            val updated = if (userId in state.selectedMemberIds) {
-                state.selectedMemberIds - userId
-            } else {
-                state.selectedMemberIds + userId
-            }
+            val updated =
+                if (userId in state.selectedMemberIds) {
+                    state.selectedMemberIds - userId
+                } else {
+                    state.selectedMemberIds + userId
+                }
             state.copy(selectedMemberIds = updated)
         }
     }
@@ -253,34 +261,36 @@ class ConversationsViewModel(
 
         _uiState.update { it.copy(isCreating = true, createError = null) }
         viewModelScope.launch {
-            val settings = GroupSettings(
-                joinApprovalRequired = state.joinApprovalRequired,
-                allowMemberInvite = state.allowMemberInvite,
-            )
-            conversationRepository.createGroup(
-                name = name,
-                handle = state.groupHandle.trim().ifEmpty { null },
-                description = state.groupDescription.trim().ifEmpty { null },
-                settings = settings,
-                memberIds = state.selectedMemberIds.toList(),
-            ).onErr {
-                _uiState.update { it.copy(isCreating = false, createError = strings.createGroupFailed) }
-            }.onOk { created ->
-                val avatarBytes = state.avatarBytes
-                if (avatarBytes != null) {
-                    // Recoverable: the group exists and the owner can re-upload
-                    // from GroupInfoScreen. The conversations screen has no
-                    // snackbar plumbing, so surface the failure via the log.
-                    conversationRepository.uploadGroupAvatar(created.id, avatarBytes)
-                        .onErr { err ->
-                            log.warn { "[Conversations] group avatar upload failed for ${created.id}: $err" }
-                        }
+            val settings =
+                GroupSettings(
+                    joinApprovalRequired = state.joinApprovalRequired,
+                    allowMemberInvite = state.allowMemberInvite,
+                )
+            conversationRepository
+                .createGroup(
+                    name = name,
+                    handle = state.groupHandle.trim().ifEmpty { null },
+                    description = state.groupDescription.trim().ifEmpty { null },
+                    settings = settings,
+                    memberIds = state.selectedMemberIds.toList(),
+                ).onErr {
+                    _uiState.update { it.copy(isCreating = false, createError = strings.createGroupFailed) }
+                }.onOk { created ->
+                    val avatarBytes = state.avatarBytes
+                    if (avatarBytes != null) {
+                        // Recoverable: the group exists and the owner can re-upload
+                        // from GroupInfoScreen. The conversations screen has no
+                        // snackbar plumbing, so surface the failure via the log.
+                        conversationRepository
+                            .uploadGroupAvatar(created.id, avatarBytes)
+                            .onErr { err ->
+                                log.warn { "[Conversations] group avatar upload failed for ${created.id}: $err" }
+                            }
+                    }
+                    _uiState.update { it.copy(showCreateGroup = false, isCreating = false) }
+                    refresh()
+                    onCreated?.invoke(created.id.toString())
                 }
-                _uiState.update { it.copy(showCreateGroup = false, isCreating = false) }
-                refresh()
-                onCreated?.invoke(created.id.toString())
-            }
         }
     }
 }
-

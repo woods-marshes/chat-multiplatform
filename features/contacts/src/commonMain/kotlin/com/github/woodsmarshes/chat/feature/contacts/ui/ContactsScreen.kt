@@ -115,33 +115,44 @@ fun ContactsScreen(
                 trailingAffordance = LocalAccountAffordance.current,
                 searchViewContent = {
                     when {
-                        uiState.isSearching && uiState.searchResults.isEmpty() -> LoadingContent(
-                            message = strings.loading,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        uiState.searchError != null && uiState.searchResults.isEmpty() -> ErrorContent(
-                            message = uiState.searchError ?: strings.searchFailed,
-                            modifier = Modifier.fillMaxSize(),
-                            onRetry = viewModel::retrySearch,
-                        )
-                        uiState.searchResults.isEmpty() -> EmptyContent(
-                            message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(
-                                items = uiState.searchResults,
-                                key = { it.id },
-                            ) { contact ->
-                                ContactItem(
-                                    contact = contact,
-                                    onClick = {
-                                        scope.launch {
-                                            searchBarState.animateToCollapsed()
-                                            onContactClick(contact.id.toString())
-                                        }
-                                    },
-                                )
+                        uiState.isSearching && uiState.searchResults.isEmpty() -> {
+                            LoadingContent(
+                                message = strings.loading,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        uiState.searchError != null && uiState.searchResults.isEmpty() -> {
+                            ErrorContent(
+                                message = uiState.searchError ?: strings.searchFailed,
+                                modifier = Modifier.fillMaxSize(),
+                                onRetry = viewModel::retrySearch,
+                            )
+                        }
+
+                        uiState.searchResults.isEmpty() -> {
+                            EmptyContent(
+                                message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        else -> {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(
+                                    items = uiState.searchResults,
+                                    key = { it.id },
+                                ) { contact ->
+                                    ContactItem(
+                                        contact = contact,
+                                        onClick = {
+                                            scope.launch {
+                                                searchBarState.animateToCollapsed()
+                                                onContactClick(contact.id.toString())
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -169,12 +180,13 @@ fun ContactsScreen(
             loadingContent = {
                 ListSkeleton(count = 8, skeleton = { ContactSkeleton() })
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
             Box(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -182,9 +194,10 @@ fun ContactsScreen(
                 ) {
                     item(key = "contact_management_entries") {
                         ChatAppCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
                             Column {
                                 SettingsItem(
@@ -192,11 +205,12 @@ fun ContactsScreen(
                                     title = strings.contactsNewFriends,
                                     subtitle = strings.contactsNewFriendsDesc,
                                     onClick = viewModel::showNewFriends,
-                                    trailing = if (uiState.pendingReceivedCount > 0) {
-                                        { CountBadge(count = uiState.pendingReceivedCount) }
-                                    } else {
-                                        null
-                                    },
+                                    trailing =
+                                        if (uiState.pendingReceivedCount > 0) {
+                                            { CountBadge(count = uiState.pendingReceivedCount) }
+                                        } else {
+                                            null
+                                        },
                                 )
                                 AppHorizontalDivider()
                                 SettingsItem(
@@ -204,21 +218,23 @@ fun ContactsScreen(
                                     title = strings.contactsGroupNotifications,
                                     subtitle = strings.contactsGroupNotificationsDesc,
                                     onClick = viewModel::showGroupNotifications,
-                                    trailing = if (uiState.pendingGroupRequestCount > 0) {
-                                        { CountBadge(count = uiState.pendingGroupRequestCount) }
-                                    } else {
-                                        null
-                                    },
+                                    trailing =
+                                        if (uiState.pendingGroupRequestCount > 0) {
+                                            { CountBadge(count = uiState.pendingGroupRequestCount) }
+                                        } else {
+                                            null
+                                        },
                                 )
                                 AppHorizontalDivider()
                                 SettingsItem(
                                     icon = Icons.Default.Block,
                                     title = strings.contactsBlockedUsers,
-                                    subtitle = if (uiState.blockedContacts.isNotEmpty()) {
-                                        "${uiState.blockedContacts.size}"
-                                    } else {
-                                        strings.contactsBlockedUsersDesc
-                                    },
+                                    subtitle =
+                                        if (uiState.blockedContacts.isNotEmpty()) {
+                                            "${uiState.blockedContacts.size}"
+                                        } else {
+                                            strings.contactsBlockedUsersDesc
+                                        },
                                     onClick = viewModel::showBlockedUsers,
                                 )
                             }
@@ -229,9 +245,10 @@ fun ContactsScreen(
                         item(key = "empty_contacts") {
                             EmptyContent(
                                 message = strings.noContacts,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 48.dp),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 48.dp),
                             )
                         }
                     } else {
@@ -251,9 +268,10 @@ fun ContactsScreen(
                     AlphabetIndexBar(
                         letters = indexLetters,
                         onLetterSelected = { letter ->
-                            val idx = uiState.contacts.indexOfFirst {
-                                (it.displayName?.firstOrNull() ?: it.username.firstOrNull())?.uppercaseChar() == letter.firstOrNull()
-                            }
+                            val idx =
+                                uiState.contacts.indexOfFirst {
+                                    (it.displayName?.firstOrNull() ?: it.username.firstOrNull())?.uppercaseChar() == letter.firstOrNull()
+                                }
                             if (idx >= 0) {
                                 scope.launch { listState.animateScrollToItem(idx + 1) }
                             }
@@ -278,11 +296,12 @@ fun ContactsScreen(
         )
         Spacer(Modifier.height(12.dp))
         Box(Modifier.fillMaxWidth().height(360.dp), contentAlignment = Alignment.Center) {
-            val activeList = if (uiState.newFriendsTabIndex == 0) {
-                uiState.receivedRequests
-            } else {
-                uiState.sentRequests
-            }
+            val activeList =
+                if (uiState.newFriendsTabIndex == 0) {
+                    uiState.receivedRequests
+                } else {
+                    uiState.sentRequests
+                }
             if (activeList.isEmpty()) {
                 Text(
                     text = strings.contactsNoRequests,
@@ -292,27 +311,29 @@ fun ContactsScreen(
                 )
             } else {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     activeList.forEach { req ->
                         val isReceived = uiState.newFriendsTabIndex == 0
                         val targetId = if (isReceived) req.senderId else req.receiverId
                         val user = uiState.requestUsers[targetId]
-                        val name = user?.displayName?.ifEmpty { null }
-                            ?: user?.username
-                            ?: targetId.toString().take(8)
+                        val name =
+                            user?.displayName?.ifEmpty { null }
+                                ?: user?.username
+                                ?: targetId.toString().take(8)
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.small)
-                                .clickable {
-                                    viewModel.dismissNewFriends()
-                                    onContactClick(targetId.toString())
-                                }
-                                .padding(vertical = 4.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable {
+                                        viewModel.dismissNewFriends()
+                                        onContactClick(targetId.toString())
+                                    }.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             UserAvatar(
@@ -352,6 +373,7 @@ fun ContactsScreen(
                                         size = ButtonSize.SM,
                                     )
                                 }
+
                                 !isReceived && req.status == RequestStatus.PENDING -> {
                                     ChatAppButton(
                                         onClick = { viewModel.cancelFriendRequest(req.id) },
@@ -360,13 +382,15 @@ fun ContactsScreen(
                                         size = ButtonSize.SM,
                                     )
                                 }
+
                                 else -> {
-                                    val statusLabel = when (req.status) {
-                                        RequestStatus.PENDING -> strings.requestStatusPending
-                                        RequestStatus.ACCEPTED -> strings.requestStatusAccepted
-                                        RequestStatus.REJECTED -> strings.requestStatusRejected
-                                        RequestStatus.CANCELED -> strings.requestStatusCanceled
-                                    }
+                                    val statusLabel =
+                                        when (req.status) {
+                                            RequestStatus.PENDING -> strings.requestStatusPending
+                                            RequestStatus.ACCEPTED -> strings.requestStatusAccepted
+                                            RequestStatus.REJECTED -> strings.requestStatusRejected
+                                            RequestStatus.CANCELED -> strings.requestStatusCanceled
+                                        }
                                     Text(
                                         text = statusLabel,
                                         style = MaterialTheme.typography.bodySmall,
@@ -408,11 +432,12 @@ fun ContactsScreen(
                 return@Box
             }
             val isIncoming = uiState.groupNotificationsTabIndex == 0
-            val activeList = if (isIncoming) {
-                uiState.incomingGroupRequests
-            } else {
-                uiState.sentGroupRequests
-            }
+            val activeList =
+                if (isIncoming) {
+                    uiState.incomingGroupRequests
+                } else {
+                    uiState.sentGroupRequests
+                }
             if (activeList.isEmpty()) {
                 Text(
                     text = strings.contactsNoRequests,
@@ -422,23 +447,27 @@ fun ContactsScreen(
                 )
             } else {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     activeList.forEach { req ->
                         val applicant = uiState.requestUsers[req.applicantId]
-                        val groupName = uiState.groupNames[req.conversationId]
-                            ?: req.conversationId.toString().take(8)
-                        val titleText = if (isIncoming) {
-                            val userName = applicant?.displayName?.ifEmpty { null }
-                                ?: applicant?.username
-                                ?: req.applicantId.toString().take(8)
-                            "$userName → $groupName"
-                        } else {
-                            groupName
-                        }
+                        val groupName =
+                            uiState.groupNames[req.conversationId]
+                                ?: req.conversationId.toString().take(8)
+                        val titleText =
+                            if (isIncoming) {
+                                val userName =
+                                    applicant?.displayName?.ifEmpty { null }
+                                        ?: applicant?.username
+                                        ?: req.applicantId.toString().take(8)
+                                "$userName → $groupName"
+                            } else {
+                                groupName
+                            }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -491,12 +520,13 @@ fun ContactsScreen(
                                     size = ButtonSize.SM,
                                 )
                             } else {
-                                val statusLabel = when (req.status) {
-                                    RequestStatus.PENDING -> strings.requestStatusPending
-                                    RequestStatus.ACCEPTED -> strings.requestStatusAccepted
-                                    RequestStatus.REJECTED -> strings.requestStatusRejected
-                                    RequestStatus.CANCELED -> strings.requestStatusCanceled
-                                }
+                                val statusLabel =
+                                    when (req.status) {
+                                        RequestStatus.PENDING -> strings.requestStatusPending
+                                        RequestStatus.ACCEPTED -> strings.requestStatusAccepted
+                                        RequestStatus.REJECTED -> strings.requestStatusRejected
+                                        RequestStatus.CANCELED -> strings.requestStatusCanceled
+                                    }
                                 Text(
                                     text = statusLabel,
                                     style = MaterialTheme.typography.bodySmall,
@@ -526,9 +556,10 @@ fun ContactsScreen(
                 )
             } else {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     uiState.blockedContacts.forEach { blocked ->
@@ -573,10 +604,11 @@ fun ContactsScreen(
 @Composable
 private fun CountBadge(count: Int) {
     Box(
-        modifier = Modifier
-            .size(22.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.error),
+        modifier =
+            Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.error),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -587,4 +619,3 @@ private fun CountBadge(count: Int) {
         )
     }
 }
-

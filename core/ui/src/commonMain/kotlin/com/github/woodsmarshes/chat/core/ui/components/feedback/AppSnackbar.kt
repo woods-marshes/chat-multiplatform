@@ -39,7 +39,10 @@ class AppSnackbarState {
     private val _hostState = SnackbarHostState()
     val hostState: SnackbarHostState get() = _hostState
 
-    suspend fun show(message: String, type: SnackbarType = SnackbarType.INFO) {
+    suspend fun show(
+        message: String,
+        type: SnackbarType = SnackbarType.INFO,
+    ) {
         _hostState.showSnackbar(TypedSnackbarVisuals(message = message, type = type))
     }
 }
@@ -47,9 +50,10 @@ class AppSnackbarState {
 @Composable
 fun rememberAppSnackbarState(): AppSnackbarState = remember { AppSnackbarState() }
 
-val LocalSnackbarState = compositionLocalOf<AppSnackbarState> {
-    error("AppSnackbarState not provided")
-}
+val LocalSnackbarState =
+    compositionLocalOf<AppSnackbarState> {
+        error("AppSnackbarState not provided")
+    }
 
 @Composable
 fun AppSnackbarHost(
@@ -65,12 +69,13 @@ fun AppSnackbarHost(
         val message = data.visuals.message
         val colorScheme = MaterialTheme.colorScheme
 
-        val (bgColor, contentColor) = when (type) {
-            SnackbarType.ERROR -> colorScheme.errorContainer to colorScheme.onErrorContainer
-            SnackbarType.SUCCESS -> colorScheme.primaryContainer to colorScheme.onPrimaryContainer
-            SnackbarType.WARNING -> colorScheme.tertiaryContainer to colorScheme.onTertiaryContainer
-            SnackbarType.INFO -> colorScheme.inverseSurface to colorScheme.inverseOnSurface
-        }
+        val (bgColor, contentColor) =
+            when (type) {
+                SnackbarType.ERROR -> colorScheme.errorContainer to colorScheme.onErrorContainer
+                SnackbarType.SUCCESS -> colorScheme.primaryContainer to colorScheme.onPrimaryContainer
+                SnackbarType.WARNING -> colorScheme.tertiaryContainer to colorScheme.onTertiaryContainer
+                SnackbarType.INFO -> colorScheme.inverseSurface to colorScheme.inverseOnSurface
+            }
 
         Snackbar(
             modifier = Modifier.fillMaxWidth(),
@@ -101,7 +106,9 @@ fun AppSnackbarHost(
 }
 
 @Composable
-fun AppSnackbarHost(snackbarState: AppSnackbarState, modifier: Modifier = Modifier) {
+fun AppSnackbarHost(
+    snackbarState: AppSnackbarState,
+    modifier: Modifier = Modifier,
+) {
     AppSnackbarHost(hostState = snackbarState.hostState, modifier = modifier)
 }
-

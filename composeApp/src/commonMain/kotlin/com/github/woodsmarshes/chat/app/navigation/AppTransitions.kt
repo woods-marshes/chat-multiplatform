@@ -11,7 +11,7 @@ import androidx.compose.animation.togetherWith
 import com.github.woodsmarshes.chat.core.ui.components.motion.AppMotion
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
-import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
+import com.github.woodsmarshes.chat.feature.articleeditor.navigation.ArticleEditorNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ChatGroupInfoNavKey
@@ -58,15 +58,15 @@ object AppTransitions {
     ): ContentTransform =
         when {
             isTopLevelSwitch(initial, target) -> {
-                fadeIn(tween(AppMotion.PageMillis)) togetherWith fadeOut(tween(AppMotion.PageMillis))
+                fadeIn(tween(AppMotion.PAGE_MILLIS)) togetherWith fadeOut(tween(AppMotion.PAGE_MILLIS))
             }
 
             else -> {
                 (
-                    slideInHorizontally(tween(AppMotion.PageMillis)) { it / 4 } +
-                        fadeIn(tween(AppMotion.PageMillis))
+                    slideInHorizontally(tween(AppMotion.PAGE_MILLIS)) { it / 4 } +
+                        fadeIn(tween(AppMotion.PAGE_MILLIS))
                 ) togetherWith
-                    fadeOut(tween(AppMotion.FeedbackMillis))
+                    fadeOut(tween(AppMotion.FEEDBACK_MILLIS))
             }
         }
 
@@ -81,16 +81,16 @@ object AppTransitions {
     ): ContentTransform =
         when {
             isTopLevelSwitch(initial, target) -> {
-                fadeIn(tween(AppMotion.PageMillis)) togetherWith fadeOut(tween(AppMotion.PageMillis))
+                fadeIn(tween(AppMotion.PAGE_MILLIS)) togetherWith fadeOut(tween(AppMotion.PAGE_MILLIS))
             }
 
             isChatKey(initial) -> {
-                (slideInHorizontally(tween(AppMotion.PageMillis)) { -it / 4 }) togetherWith
-                    fadeOut(tween(AppMotion.FeedbackMillis))
+                (slideInHorizontally(tween(AppMotion.PAGE_MILLIS)) { -it / 4 }) togetherWith
+                    fadeOut(tween(AppMotion.FEEDBACK_MILLIS))
             }
 
             else -> {
-                EnterTransition.None togetherWith fadeOut(tween(AppMotion.FeedbackMillis))
+                EnterTransition.None togetherWith fadeOut(tween(AppMotion.FEEDBACK_MILLIS))
             }
         }
 

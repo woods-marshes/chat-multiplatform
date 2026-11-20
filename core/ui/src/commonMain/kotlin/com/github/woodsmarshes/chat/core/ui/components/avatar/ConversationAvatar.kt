@@ -47,9 +47,10 @@ fun ConversationAvatar(
         return
     }
 
-    val baseModifier = modifier
-        .size(size)
-        .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+    val baseModifier =
+        modifier
+            .size(size)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
 
     val displayParticipants = participants.take(4)
 
@@ -64,6 +65,7 @@ fun ConversationAvatar(
                 onClick = onClick,
             )
         }
+
         else -> {
             val smallSize = size * 0.55f
             val offsetAmount = size * 0.22f
@@ -84,10 +86,14 @@ fun ConversationAvatar(
     }
 }
 
-private fun offsetsForIndex(index: Int, offset: Dp): Pair<Dp, Dp> = when (index) {
-    0 -> Pair(-offset, -offset)
-    1 -> Pair(offset, -offset)
-    2 -> Pair(-offset, offset)
-    3 -> Pair(offset, offset)
-    else -> Pair(0.dp, 0.dp)
-}
+private fun offsetsForIndex(
+    index: Int,
+    offset: Dp,
+): Pair<Dp, Dp> =
+    when (index) {
+        0 -> Pair(-offset, -offset)
+        1 -> Pair(offset, -offset)
+        2 -> Pair(-offset, offset)
+        3 -> Pair(offset, offset)
+        else -> Pair(0.dp, 0.dp)
+    }

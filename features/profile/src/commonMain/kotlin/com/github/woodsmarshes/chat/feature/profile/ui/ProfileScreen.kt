@@ -110,227 +110,248 @@ fun ProfileScreen(
         snackbarHost = { AppSnackbarHost(snackbarHostState) },
     ) { padding ->
         when {
-            uiState.notFound -> EmptyContent(
-                message = strings.userNotFound,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            )
-            uiState.isLoading -> LoadingContent(
-                message = strings.loading,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            )
-            uiState.error != null && uiState.userId == null -> ErrorContent(
-                message = uiState.error ?: strings.profileLoadFailed,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                onRetry = viewModel::refresh,
-            )
-            else -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                val primaryTitle = uiState.remark?.takeIf { it.isNotBlank() }
-                    ?: uiState.displayName.ifEmpty { uiState.username }
-                Column(
-                    modifier = Modifier
-                        .widthIn(max = 640.dp)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+            uiState.notFound -> {
+                EmptyContent(
+                    message = strings.userNotFound,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                )
+            }
+
+            uiState.isLoading -> {
+                LoadingContent(
+                    message = strings.loading,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                )
+            }
+
+            uiState.error != null && uiState.userId == null -> {
+                ErrorContent(
+                    message = uiState.error ?: strings.profileLoadFailed,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                    onRetry = viewModel::refresh,
+                )
+            }
+
+            else -> {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    Spacer(modifier = Modifier.height(32.dp))
-                    UserAvatar(
-                        name = primaryTitle,
-                        avatarUrl = uiState.avatarUrl,
-                        modifier = Modifier.sharedUserBounds(userId, "avatar"),
-                        size = 120.dp,
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(
-                        text = primaryTitle,
-                        modifier = Modifier.sharedUserBounds(userId, "title"),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                    )
-                    if (!uiState.remark.isNullOrBlank() && uiState.displayName.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = uiState.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    val primaryTitle =
+                        uiState.remark?.takeIf { it.isNotBlank() }
+                            ?: uiState.displayName.ifEmpty { uiState.username }
+                    Column(
+                        modifier =
+                            Modifier
+                                .widthIn(max = 640.dp)
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Spacer(modifier = Modifier.height(32.dp))
+                        UserAvatar(
+                            name = primaryTitle,
+                            avatarUrl = uiState.avatarUrl,
+                            modifier = Modifier.sharedUserBounds(userId, "avatar"),
+                            size = 120.dp,
                         )
-                    }
-                    if (uiState.username.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
                         Text(
-                            text = "@${uiState.username}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    val bio = uiState.bio
-                    if (!bio.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = bio,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = primaryTitle,
+                            modifier = Modifier.sharedUserBounds(userId, "title"),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-                    if (uiState.isOwnProfile) {
-                        if (onEditProfile != null) {
-                            ChatAppButton(
-                                onClick = onEditProfile,
-                                label = strings.editProfile,
-                                style = ButtonStyle.PRIMARY,
-                                size = ButtonSize.MD,
-                                fullWidth = true,
+                        if (!uiState.remark.isNullOrBlank() && uiState.displayName.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = uiState.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    } else if (uiState.contactStatus == ContactStatus.BLOCKED) {
-                        Text(
-                            text = strings.blockedBanner,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(bottom = 12.dp),
-                        )
-                        ChatAppButton(
-                            onClick = viewModel::toggleBlockUser,
-                            label = strings.unblockUser,
-                            style = ButtonStyle.SECONDARY,
-                            size = ButtonSize.MD,
-                            fullWidth = true,
-                        )
-                    } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Box(modifier = Modifier.weight(1f)) {
+                        if (uiState.username.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "@${uiState.username}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        val bio = uiState.bio
+                        if (!bio.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = bio,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                        if (uiState.isOwnProfile) {
+                            if (onEditProfile != null) {
                                 ChatAppButton(
-                                    onClick = { viewModel.startChat(onChatReady = onOpenChat) },
-                                    label = strings.sendMessage,
+                                    onClick = onEditProfile,
+                                    label = strings.editProfile,
                                     style = ButtonStyle.PRIMARY,
                                     size = ButtonSize.MD,
-                                    enabled = !uiState.isStartingChat,
-                                    isLoading = uiState.isStartingChat,
                                     fullWidth = true,
                                 )
                             }
-                            if (uiState.contactStatus != ContactStatus.FRIEND) {
+                        } else if (uiState.contactStatus == ContactStatus.BLOCKED) {
+                            Text(
+                                text = strings.blockedBanner,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                            ChatAppButton(
+                                onClick = viewModel::toggleBlockUser,
+                                label = strings.unblockUser,
+                                style = ButtonStyle.SECONDARY,
+                                size = ButtonSize.MD,
+                                fullWidth = true,
+                            )
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
                                 Box(modifier = Modifier.weight(1f)) {
                                     ChatAppButton(
-                                        onClick = viewModel::showAddFriendDialog,
-                                        label = if (uiState.isFriendRequestPending) {
-                                            strings.friendRequestPending
-                                        } else {
-                                            strings.addFriend
-                                        },
-                                        style = ButtonStyle.SECONDARY,
+                                        onClick = { viewModel.startChat(onChatReady = onOpenChat) },
+                                        label = strings.sendMessage,
+                                        style = ButtonStyle.PRIMARY,
                                         size = ButtonSize.MD,
+                                        enabled = !uiState.isStartingChat,
+                                        isLoading = uiState.isStartingChat,
                                         fullWidth = true,
-                                        enabled = !uiState.isFriendRequestPending,
                                     )
                                 }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-                    ChatAppCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            val email = uiState.email
-                            if (!email.isNullOrBlank()) {
-                                Text(
-                                    text = email,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                )
-                                AppHorizontalDivider()
-                            }
-                            val savedUserId = uiState.userId
-                            if (savedUserId != null) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = strings.userIdLabel(savedUserId),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    IconButton(onClick = {
-                                        clipboard.setText(AnnotatedString(savedUserId))
-                                        scope.launch { snackbarHostState.showSnackbar(strings.copied) }
-                                    }) {
-                                        Icon(
-                                            imageVector = Icons.Default.ContentCopy,
-                                            contentDescription = strings.copyIdCd,
+                                if (uiState.contactStatus != ContactStatus.FRIEND) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        ChatAppButton(
+                                            onClick = viewModel::showAddFriendDialog,
+                                            label =
+                                                if (uiState.isFriendRequestPending) {
+                                                    strings.friendRequestPending
+                                                } else {
+                                                    strings.addFriend
+                                                },
+                                            style = ButtonStyle.SECONDARY,
+                                            size = ButtonSize.MD,
+                                            fullWidth = true,
+                                            enabled = !uiState.isFriendRequestPending,
                                         )
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Contact Management Card (for other users)
-                    if (!uiState.isOwnProfile) {
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(32.dp))
                         ChatAppCard(modifier = Modifier.fillMaxWidth()) {
-                            Column {
-                                if (uiState.contactStatus == ContactStatus.FRIEND) {
-                                    SettingsItem(
-                                        icon = Icons.Default.Badge,
-                                        title = strings.editRemark,
-                                        subtitle = uiState.remark?.takeIf { it.isNotBlank() }
-                                            ?: strings.remarkPlaceholder,
-                                        onClick = viewModel::showEditRemarkDialog,
+                            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                val email = uiState.email
+                                if (!email.isNullOrBlank()) {
+                                    Text(
+                                        text = email,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 12.dp),
                                     )
                                     AppHorizontalDivider()
                                 }
-                                val isBlocked = uiState.contactStatus == ContactStatus.BLOCKED
-                                SettingsItem(
-                                    icon = Icons.Default.Block,
-                                    title = if (isBlocked) strings.unblockUser else strings.blockUser,
-                                    danger = !isBlocked,
-                                    onClick = if (isBlocked) {
-                                        viewModel::toggleBlockUser
-                                    } else {
-                                        // Blocking is destructive enough to confirm.
-                                        viewModel::showBlockConfirmDialog
-                                    },
-                                )
-                                if (uiState.contactStatus == ContactStatus.FRIEND) {
-                                    AppHorizontalDivider()
-                                    SettingsItem(
-                                        icon = Icons.Default.PersonRemove,
-                                        title = strings.deleteFriend,
-                                        danger = true,
-                                        onClick = viewModel::showDeleteFriendConfirm,
-                                    )
+                                val savedUserId = uiState.userId
+                                if (savedUserId != null) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = strings.userIdLabel(savedUserId),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        IconButton(onClick = {
+                                            clipboard.setText(AnnotatedString(savedUserId))
+                                            scope.launch { snackbarHostState.showSnackbar(strings.copied) }
+                                        }) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = strings.copyIdCd,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                        // Contact Management Card (for other users)
+                        if (!uiState.isOwnProfile) {
+                            Spacer(modifier = Modifier.height(20.dp))
+                            ChatAppCard(modifier = Modifier.fillMaxWidth()) {
+                                Column {
+                                    if (uiState.contactStatus == ContactStatus.FRIEND) {
+                                        SettingsItem(
+                                            icon = Icons.Default.Badge,
+                                            title = strings.editRemark,
+                                            subtitle =
+                                                uiState.remark?.takeIf { it.isNotBlank() }
+                                                    ?: strings.remarkPlaceholder,
+                                            onClick = viewModel::showEditRemarkDialog,
+                                        )
+                                        AppHorizontalDivider()
+                                    }
+                                    val isBlocked = uiState.contactStatus == ContactStatus.BLOCKED
+                                    SettingsItem(
+                                        icon = Icons.Default.Block,
+                                        title = if (isBlocked) strings.unblockUser else strings.blockUser,
+                                        danger = !isBlocked,
+                                        onClick =
+                                            if (isBlocked) {
+                                                viewModel::toggleBlockUser
+                                            } else {
+                                                // Blocking is destructive enough to confirm.
+                                                viewModel::showBlockConfirmDialog
+                                            },
+                                    )
+                                    if (uiState.contactStatus == ContactStatus.FRIEND) {
+                                        AppHorizontalDivider()
+                                        SettingsItem(
+                                            icon = Icons.Default.PersonRemove,
+                                            title = strings.deleteFriend,
+                                            danger = true,
+                                            onClick = viewModel::showDeleteFriendConfirm,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
                 }
             }
         }
@@ -405,4 +426,3 @@ fun ProfileScreen(
         onDismiss = viewModel::dismissDeleteFriendConfirm,
     )
 }
-

@@ -2,8 +2,8 @@ package com.github.woodsmarshes.chat.feature.chat.ui.bubble
 
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
-import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.model.AudioContent
+import com.github.woodsmarshes.chat.core.model.ConnectionState
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.KmpMediaPlaybackState
@@ -72,9 +72,12 @@ fun LazyListScope.messageItems(
                 formatter = formatter,
                 audioState = audioState,
                 videoIsPlaying = videoIsPlaying,
-                onRetry = if (message.sendStatus is MessageState.SendFailed && onRetry != null) {
-                    { onRetry(message) }
-                } else null,
+                onRetry =
+                    if (message.sendStatus is MessageState.SendFailed && onRetry != null) {
+                        { onRetry(message) }
+                    } else {
+                        null
+                    },
                 onImageClick = onImageClick,
                 onVideoPlayClick = onVideoPlayClick,
                 onAudioPlayPauseClick = onAudioPlayPauseClick,
@@ -84,34 +87,36 @@ fun LazyListScope.messageItems(
         }
 
         androidx.compose.runtime.CompositionLocalProvider(LocalMessageConnection provides connectionState) {
-        if (isOwn) {
-            OwnMessageContainer(
-                message = message,
-                onReply = onReply?.let { { onReply(message) } },
-                selectionActive = selectionActive,
-                selected = selected,
-                onToggleSelection = onToggleSelection?.let { { it(message) } },
-                menuContent = menuContent?.let { content ->
-                    { dismiss -> content(message, dismiss) }
-                },
-                content = content,
-            )
-        } else {
-            OtherMessageContainer(
-                message = message,
-                showAvatar = true,
-                showSenderName = true,
-                onReply = onReply?.let { { onReply(message) } },
-                onAvatarClick = onAvatarClick?.let { click -> { click(message) } },
-                selectionActive = selectionActive,
-                selected = selected,
-                onToggleSelection = onToggleSelection?.let { { it(message) } },
-                menuContent = menuContent?.let { content ->
-                    { dismiss -> content(message, dismiss) }
-                },
-                content = content,
-            )
-        }
+            if (isOwn) {
+                OwnMessageContainer(
+                    message = message,
+                    onReply = onReply?.let { { onReply(message) } },
+                    selectionActive = selectionActive,
+                    selected = selected,
+                    onToggleSelection = onToggleSelection?.let { { it(message) } },
+                    menuContent =
+                        menuContent?.let { content ->
+                            { dismiss -> content(message, dismiss) }
+                        },
+                    content = content,
+                )
+            } else {
+                OtherMessageContainer(
+                    message = message,
+                    showAvatar = true,
+                    showSenderName = true,
+                    onReply = onReply?.let { { onReply(message) } },
+                    onAvatarClick = onAvatarClick?.let { click -> { click(message) } },
+                    selectionActive = selectionActive,
+                    selected = selected,
+                    onToggleSelection = onToggleSelection?.let { { it(message) } },
+                    menuContent =
+                        menuContent?.let { content ->
+                            { dismiss -> content(message, dismiss) }
+                        },
+                    content = content,
+                )
+            }
         }
     }
 }

@@ -41,8 +41,12 @@ fun FileBubble(
     val bubbleColors = LocalBubbleColors.current
     val bubbleShapes = LocalBubbleShapes.current
 
-    val bgColor = if (isOwnMessage) bubbleColors.ownBackground.copy(alpha = 0.85f)
-    else bubbleColors.otherBackground
+    val bgColor =
+        if (isOwnMessage) {
+            bubbleColors.ownBackground.copy(alpha = 0.85f)
+        } else {
+            bubbleColors.otherBackground
+        }
 
     val contentColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.otherContent
     val secondaryColor = if (isOwnMessage) contentColor.copy(alpha = 0.75f) else bubbleColors.timestampColor
@@ -50,22 +54,26 @@ fun FileBubble(
     val sizeStr = formatFileSize(content.size)
 
     Row(
-        modifier = modifier
-            .widthIn(min = 160.dp, max = 260.dp)
-            .clip(shape)
-            .background(bgColor)
-            .then(
-                if (onFileClick != null) Modifier.clickable { onFileClick(content) }
-                else Modifier
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .widthIn(min = 160.dp, max = 260.dp)
+                .clip(shape)
+                .background(bgColor)
+                .then(
+                    if (onFileClick != null) {
+                        Modifier.clickable { onFileClick(content) }
+                    } else {
+                        Modifier
+                    },
+                ).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(contentColor.copy(alpha = 0.1f)),
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(contentColor.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -97,11 +105,12 @@ fun FileBubble(
                 if (mimeStr != null) {
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = mimeStr
-                            .replace("application/", "")
-                            .replace("audio/", "")
-                            .replace("video/", "")
-                            .replace("image/", ""),
+                        text =
+                            mimeStr
+                                .replace("application/", "")
+                                .replace("audio/", "")
+                                .replace("video/", "")
+                                .replace("image/", ""),
                         color = secondaryColor,
                         fontSize = 11.sp,
                     )

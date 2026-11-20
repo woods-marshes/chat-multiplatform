@@ -1,4 +1,4 @@
-package com.github.woodsmarshes.chat.feature.article_editor.ui
+package com.github.woodsmarshes.chat.feature.articleeditor.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -108,14 +108,15 @@ fun ArticleEditorScreen(
     // Saving overlay — blocks interaction and shows spinner
     if (uiState.isSaving) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f))
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                    onClick = { /* consume clicks */ },
-                ),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = { /* consume clicks */ },
+                    ),
             contentAlignment = Alignment.Center,
         ) {
             AppProgressIndicator(color = Color.White)

@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.feature.auth.ui.AuthViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-val authModule = module {
-    viewModelOf(::AuthViewModel)
-}
+val authModule =
+    module {
+        viewModelOf(::AuthViewModel)
+    }

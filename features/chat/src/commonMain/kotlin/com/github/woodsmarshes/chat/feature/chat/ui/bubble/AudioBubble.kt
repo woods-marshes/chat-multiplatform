@@ -68,24 +68,28 @@ fun AudioBubble(
     val durationStr = formatDuration(content.duration)
 
     Column(
-        modifier = modifier
-            .widthIn(min = 180.dp, max = 260.dp)
-            .clip(shape)
-            .background(bgColor)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .widthIn(min = 180.dp, max = 260.dp)
+                .clip(shape)
+                .background(bgColor)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Play/Pause button
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(contentColor.copy(alpha = 0.15f))
-                    .then(
-                        if (onPlayPauseToggle != null) {
-                            Modifier.clickable { onPlayPauseToggle() }
-                        } else Modifier
-                    ),
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(contentColor.copy(alpha = 0.15f))
+                        .then(
+                            if (onPlayPauseToggle != null) {
+                                Modifier.clickable { onPlayPauseToggle() }
+                            } else {
+                                Modifier
+                            },
+                        ),
                 contentAlignment = Alignment.Center,
             ) {
                 if (state.isLoading) {
@@ -128,8 +132,11 @@ fun AudioBubble(
                 } else {
                     LinearProgressIndicator(
                         progress = { state.progressFraction },
-                        modifier = Modifier.fillMaxWidth().height(3.dp)
-                            .clip(RoundedCornerShape(2.dp)),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp)),
                         color = contentColor,
                         trackColor = contentColor.copy(alpha = 0.2f),
                         strokeCap = StrokeCap.Round,
@@ -159,11 +166,12 @@ fun AudioBubble(
                     onSeek(committed)
                 },
                 modifier = Modifier.fillMaxWidth().height(20.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = contentColor,
-                    activeTrackColor = contentColor,
-                    inactiveTrackColor = contentColor.copy(alpha = 0.2f),
-                ),
+                colors =
+                    SliderDefaults.colors(
+                        thumbColor = contentColor,
+                        activeTrackColor = contentColor,
+                        inactiveTrackColor = contentColor.copy(alpha = 0.2f),
+                    ),
             )
         }
     }
@@ -179,9 +187,10 @@ private fun WaveformBar(
 ) {
     // Hoisted out of the draw lambda: `maxOrNull()` is O(n) and would otherwise
     // run on every frame while the track is playing.
-    val maxValue = remember(waveform) {
-        waveform.maxOrNull()?.toFloat()?.takeIf { it > 0f } ?: 1f
-    }
+    val maxValue =
+        remember(waveform) {
+            waveform.maxOrNull()?.toFloat()?.takeIf { it > 0f } ?: 1f
+        }
     // One canvas instead of one Box per sample: a waveform with 40+ entries
     // used to cost the same number of layout nodes per audio bubble.
     Canvas(modifier) {

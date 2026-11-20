@@ -1,6 +1,5 @@
 package com.github.woodsmarshes.chat.core.ui.components.item
 
-import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Badge as M3Badge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,13 +31,15 @@ import com.github.woodsmarshes.chat.core.model.presentation.ConversationUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.LastMessageInfo
 import com.github.woodsmarshes.chat.core.ui.components.avatar.ConversationAvatar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.core.ui.utils.formatRelativeTime
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.material3.Badge as M3Badge
 import top.yukonga.miuix.kmp.basic.Badge as MiuixBadge
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun ConversationItem(
@@ -53,28 +53,33 @@ fun ConversationItem(
     val convName = conversation.name ?: LocalStrings.current.unnamed
     val lastMsg = conversation.lastMessage
 
-    val selectedBg = if (isMiuix) {
-        MiuixTheme.colorScheme.tertiaryContainer
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
-    val selectedTextColor = if (isMiuix) {
-        MiuixTheme.colorScheme.onTertiaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    }
+    val selectedBg =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.tertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        }
+    val selectedTextColor =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.onTertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
-            .background(
-                if (selected) selectedBg
-                else Color.Transparent
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
+                .background(
+                    if (selected) {
+                        selectedBg
+                    } else {
+                        Color.Transparent
+                    },
+                ).clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 头像 + 未读角标
@@ -98,9 +103,10 @@ fun ConversationItem(
             if (conversation.unreadCount > 0) {
                 val badgeText = if (conversation.unreadCount > 99) "99+" else conversation.unreadCount.toString()
                 Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(x = 4.dp, y = 4.dp),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 4.dp, y = 4.dp),
                 ) {
                     if (isMiuix) {
                         MiuixBadge(
@@ -141,8 +147,9 @@ fun ConversationItem(
             Spacer(modifier = Modifier.height(3.dp))
             LastMessagePreview(
                 lastMessage = lastMsg,
-                fallbackSubtitle = conversation.description?.takeIf { it.isNotBlank() }
-                    ?: conversation.handle?.takeIf { it.isNotBlank() }?.let { "@$it" },
+                fallbackSubtitle =
+                    conversation.description?.takeIf { it.isNotBlank() }
+                        ?: conversation.handle?.takeIf { it.isNotBlank() }?.let { "@$it" },
                 unreadCount = conversation.unreadCount,
                 bubbleColors = bubbleColors,
             )
@@ -190,16 +197,22 @@ private fun LastMessagePreview(
 
     val senderPrefix = if (lastMessage.senderName != null) "${lastMessage.senderName}: " else ""
     val strings = LocalStrings.current
-    val contentPreview = when {
-        lastMessage.revokedAt != null -> strings.messageRevoked
-        else -> when (lastMessage.renderType) {
-            MessageRenderType.IMAGE -> strings.messagePreviewImage
-            MessageRenderType.VIDEO -> strings.messagePreviewVideo
-            MessageRenderType.AUDIO -> strings.messagePreviewAudio
-            MessageRenderType.FILE -> strings.messagePreviewFile
-            else -> lastMessage.contentTruncated(50)
+    val contentPreview =
+        when {
+            lastMessage.revokedAt != null -> {
+                strings.messageRevoked
+            }
+
+            else -> {
+                when (lastMessage.renderType) {
+                    MessageRenderType.IMAGE -> strings.messagePreviewImage
+                    MessageRenderType.VIDEO -> strings.messagePreviewVideo
+                    MessageRenderType.AUDIO -> strings.messagePreviewAudio
+                    MessageRenderType.FILE -> strings.messagePreviewFile
+                    else -> lastMessage.contentTruncated(50)
+                }
+            }
         }
-    }
     val fullPreview = "$senderPrefix$contentPreview"
 
     Text(
@@ -212,12 +225,14 @@ private fun LastMessagePreview(
     )
 }
 
-private fun LastMessageInfo.contentTruncated(max: Int): String {
-    return when (renderType) {
+private fun LastMessageInfo.contentTruncated(max: Int): String =
+    when (renderType) {
         MessageRenderType.TEXT -> {
             val text = (content as? com.github.woodsmarshes.chat.core.model.TextContent)?.text ?: ""
             text.take(max).replace("\n", " ")
         }
-        else -> ""
+
+        else -> {
+            ""
+        }
     }
-}

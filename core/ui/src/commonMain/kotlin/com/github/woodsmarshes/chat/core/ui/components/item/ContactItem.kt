@@ -1,7 +1,4 @@
 package com.github.woodsmarshes.chat.core.ui.components.item
-import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
-import com.github.woodsmarshes.chat.core.ui.components.motion.sharedUserBounds
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -24,6 +21,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
+import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedUserBounds
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -37,28 +36,33 @@ fun ContactItem(
 ) {
     val bubbleColors = LocalBubbleColors.current
     val isMiuix = isMiuixTheme()
-    val selectedBg = if (isMiuix) {
-        MiuixTheme.colorScheme.tertiaryContainer
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
-    val selectedTextColor = if (isMiuix) {
-        MiuixTheme.colorScheme.onTertiaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    }
+    val selectedBg =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.tertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        }
+    val selectedTextColor =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.onTertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
-            .background(
-                if (selected) selectedBg
-                else Color.Transparent
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
+                .background(
+                    if (selected) {
+                        selectedBg
+                    } else {
+                        Color.Transparent
+                    },
+                ).clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         UserAvatar(

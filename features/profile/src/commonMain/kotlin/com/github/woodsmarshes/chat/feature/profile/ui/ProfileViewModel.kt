@@ -28,7 +28,6 @@ class ProfileViewModel(
     private val conversationRepository: ConversationRepository,
     private val contactRepository: ContactRepository? = null,
 ) : ViewModel() {
-
     private val strings
         get() = getLocaleStrings()
 
@@ -81,14 +80,16 @@ class ProfileViewModel(
         val repo = contactRepository
         if (repo != null) {
             viewModelScope.launch {
-                repo.getContactFlow(userId)
+                repo
+                    .getContactFlow(userId)
                     .catch { }
                     .collect { contact ->
                         _uiState.update {
                             it.copy(
                                 contactStatus = contact?.status,
-                                remark = contact?.alias?.takeIf { s -> s.isNotBlank() }
-                                    ?: contact?.nickname?.takeIf { s -> s.isNotBlank() },
+                                remark =
+                                    contact?.alias?.takeIf { s -> s.isNotBlank() }
+                                        ?: contact?.nickname?.takeIf { s -> s.isNotBlank() },
                             )
                         }
                     }
@@ -96,17 +97,18 @@ class ProfileViewModel(
             viewModelScope.launch {
                 combine(repo.observeAllRequests(), userRepository.getMeFlow()) { requests, me ->
                     requests to me
-                }
-                    .catch { }
+                }.catch { }
                     .collect { (requests, me) ->
                         val myId = me?.id
                         _uiState.update {
                             it.copy(
-                                isFriendRequestPending = myId != null && requests.any {
-                                    it.senderId == myId &&
-                                        it.receiverId == userId &&
-                                        it.status == RequestStatus.PENDING
-                                }
+                                isFriendRequestPending =
+                                    myId != null &&
+                                        requests.any {
+                                            it.senderId == myId &&
+                                                it.receiverId == userId &&
+                                                it.status == RequestStatus.PENDING
+                                        },
                             )
                         }
                     }
@@ -122,45 +124,54 @@ class ProfileViewModel(
     fun refresh() {
         val userId = parsedId ?: return
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true) }
-            userRepository.fetchUserDetail(userId).onErr { err ->
-                when {
-                    err is UserError.NotFound -> _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            notFound = true,
-                        )
-                    }
-                    !hasCachedUser -> _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = strings.profileLoadFailed,
-                        )
+        refreshJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isRefreshing = true) }
+                userRepository.fetchUserDetail(userId).onErr { err ->
+                    when {
+                        err is UserError.NotFound -> {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    notFound = true,
+                                )
+                            }
+                        }
+
+                        !hasCachedUser -> {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    error = strings.profileLoadFailed,
+                                )
+                            }
+                        }
                     }
                 }
+                _uiState.update { it.copy(isRefreshing = false) }
             }
-            _uiState.update { it.copy(isRefreshing = false) }
-        }
     }
 
     fun startChat(onChatReady: (conversationId: String) -> Unit) {
         val userId = parsedId ?: return
         chatJob?.cancel()
-        chatJob = viewModelScope.launch {
-            _uiState.update { it.copy(isStartingChat = true, actionError = null) }
-            conversationRepository.createDirectChat(userId).onOk { conversation ->
-                _uiState.update { it.copy(isStartingChat = false) }
-                onChatReady(conversation.id.toString())
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isStartingChat = false,
-                        actionError = strings.openChatFailed,
-                    )
-                }
+        chatJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isStartingChat = true, actionError = null) }
+                conversationRepository
+                    .createDirectChat(userId)
+                    .onOk { conversation ->
+                        _uiState.update { it.copy(isStartingChat = false) }
+                        onChatReady(conversation.id.toString())
+                    }.onErr {
+                        _uiState.update {
+                            it.copy(
+                                isStartingChat = false,
+                                actionError = strings.openChatFailed,
+                            )
+                        }
+                    }
             }
-        }
     }
 
     // ---------------- Add Friend ----------------
@@ -181,27 +192,32 @@ class ProfileViewModel(
     fun sendFriendRequest() {
         val userId = parsedId ?: return
         val repo = contactRepository ?: return
-        val msg = _uiState.value.addFriendMessage.trim().ifEmpty { null }
+        val msg =
+            _uiState.value.addFriendMessage
+                .trim()
+                .ifEmpty { null }
         _uiState.update { it.copy(isSendingFriendRequest = true) }
         viewModelScope.launch {
-            repo.sendFriendRequest(userId, msg).onOk {
-                _uiState.update {
-                    it.copy(
-                        isSendingFriendRequest = false,
-                        showAddFriendDialog = false,
-                        actionMessage = strings.addFriendSent,
-                    )
+            repo
+                .sendFriendRequest(userId, msg)
+                .onOk {
+                    _uiState.update {
+                        it.copy(
+                            isSendingFriendRequest = false,
+                            showAddFriendDialog = false,
+                            actionMessage = strings.addFriendSent,
+                        )
+                    }
+                    repo.syncFriends()
+                }.onErr {
+                    _uiState.update {
+                        it.copy(
+                            isSendingFriendRequest = false,
+                            showAddFriendDialog = false,
+                            actionError = strings.authOperationFailed,
+                        )
+                    }
                 }
-                repo.syncFriends()
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isSendingFriendRequest = false,
-                        showAddFriendDialog = false,
-                        actionError = strings.authOperationFailed,
-                    )
-                }
-            }
         }
     }
 
@@ -233,11 +249,13 @@ class ProfileViewModel(
             // Alias only: nickname is a different column. An empty string
             // deliberately clears the remark — null would mean "no change"
             // server-side.
-            repo.updateContactInfo(userId, nickname = null, alias = newRemark).onOk {
-                _uiState.update { it.copy(actionMessage = strings.profileSaved) }
-            }.onErr {
-                _uiState.update { it.copy(actionError = strings.profileSaveFailed) }
-            }
+            repo
+                .updateContactInfo(userId, nickname = null, alias = newRemark)
+                .onOk {
+                    _uiState.update { it.copy(actionMessage = strings.profileSaved) }
+                }.onErr {
+                    _uiState.update { it.copy(actionError = strings.profileSaveFailed) }
+                }
         }
     }
 
@@ -257,11 +275,13 @@ class ProfileViewModel(
         val isBlocked = _uiState.value.contactStatus == ContactStatus.BLOCKED
         viewModelScope.launch {
             if (isBlocked) {
-                repo.unblockUser(userId).onOk {
-                    repo.syncFriends()
-                }.onErr {
-                    _uiState.update { it.copy(actionError = strings.authOperationFailed) }
-                }
+                repo
+                    .unblockUser(userId)
+                    .onOk {
+                        repo.syncFriends()
+                    }.onErr {
+                        _uiState.update { it.copy(actionError = strings.authOperationFailed) }
+                    }
             } else {
                 repo.blockUser(userId).onErr {
                     _uiState.update { it.copy(actionError = strings.authOperationFailed) }
@@ -291,4 +311,3 @@ class ProfileViewModel(
         }
     }
 }
-

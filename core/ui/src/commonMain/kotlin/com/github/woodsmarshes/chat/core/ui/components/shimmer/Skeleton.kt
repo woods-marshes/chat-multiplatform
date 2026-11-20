@@ -27,12 +27,13 @@ fun SkeletonLine(
     height: Dp = 14.dp,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .clip(RoundedCornerShape(4.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .shimmer(cornerRadius = 4.dp, clock = LocalShimmerClock.current),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(height)
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+                .shimmer(cornerRadius = 4.dp, clock = LocalShimmerClock.current),
     )
 }
 
@@ -42,11 +43,12 @@ fun SkeletonCircle(
     size: Dp = 48.dp,
 ) {
     Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .shimmer(cornerRadius = size / 2, clock = LocalShimmerClock.current),
+        modifier =
+            modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+                .shimmer(cornerRadius = size / 2, clock = LocalShimmerClock.current),
     )
 }
 
@@ -57,20 +59,22 @@ fun SkeletonRect(
     height: Dp = 80.dp,
 ) {
     Box(
-        modifier = modifier
-            .size(width, height)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
-            .shimmer(cornerRadius = 8.dp, clock = LocalShimmerClock.current),
+        modifier =
+            modifier
+                .size(width, height)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+                .shimmer(cornerRadius = 8.dp, clock = LocalShimmerClock.current),
     )
 }
 
 @Composable
 fun ConversationSkeleton(modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SkeletonCircle(size = 52.dp)
@@ -94,9 +98,10 @@ fun ConversationSkeleton(modifier: Modifier = Modifier) {
 @Composable
 fun ContactSkeleton(modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SkeletonCircle(size = 48.dp)

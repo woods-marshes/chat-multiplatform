@@ -1,26 +1,33 @@
 package com.github.woodsmarshes.chat
 
 import com.github.woodsmarshes.chat.utils.extractUserId
-import io.ktor.http.*
-import io.ktor.http.content.*
+import io.ktor.http.CacheControl
+import io.ktor.http.ContentType
+import io.ktor.http.content.CachingOptions
 import io.ktor.openapi.OpenApiInfo
-import io.ktor.server.application.*
-import io.ktor.server.plugins.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.install
+import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.plugins.callid.callId
 import io.ktor.server.plugins.callid.callIdMdc
 import io.ktor.server.plugins.calllogging.CallLogging
-import io.ktor.server.plugins.cachingheaders.*
-import io.ktor.server.plugins.compression.*
-import io.ktor.server.plugins.defaultheaders.*
-import io.ktor.server.plugins.forwardedheaders.*
-import io.ktor.server.plugins.openapi.*
-import io.ktor.server.plugins.partialcontent.*
+import io.ktor.server.plugins.compression.Compression
+import io.ktor.server.plugins.compression.gzip
+import io.ktor.server.plugins.defaultheaders.DefaultHeaders
+import io.ktor.server.plugins.forwardedheaders.ForwardedHeaders
+import io.ktor.server.plugins.forwardedheaders.XForwardedHeaders
+import io.ktor.server.plugins.openapi.openAPI
+import io.ktor.server.plugins.origin
+import io.ktor.server.plugins.partialcontent.PartialContent
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
-import io.ktor.server.plugins.swagger.*
-import io.ktor.server.request.*
-import io.ktor.server.routing.*
+import io.ktor.server.plugins.swagger.swaggerUI
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
 import io.ktor.server.routing.openapi.OpenApiDocSource
+import io.ktor.server.routing.routing
+import io.ktor.server.routing.routingRoot
 import kotlin.time.Duration.Companion.seconds
 
 fun Application.configureHTTP() {
@@ -36,18 +43,19 @@ fun Application.configureHTTP() {
     routing {
         openAPI(path = "openapi") {
             info = OpenApiInfo("Chat Multiplatform API", "1.0")
-            source = OpenApiDocSource.Routing {
-                routingRoot.descendants()
-            }
+            source =
+                OpenApiDocSource.Routing {
+                    routingRoot.descendants()
+                }
             outputPath = System.getProperty("user.dir") + "/server/docs"
         }
         swaggerUI(path = "openapi")
     }
     install(PartialContent) {
-            // Maximum number of ranges that will be accepted from a HTTP request.
-            // If the HTTP request specifies more ranges, they will all be merged into a single range.
-            maxRangeCount = 10
-        }
+        // Maximum number of ranges that will be accepted from a HTTP request.
+        // If the HTTP request specifies more ranges, they will all be merged into a single range.
+        maxRangeCount = 10
+    }
     // Only trust forwarded headers when the deployment actually sits behind a
     // reverse proxy: on a directly exposed server clients could forge
     // X-Forwarded-For to rotate rate-limit keys. With the plugins absent,
@@ -87,7 +95,7 @@ fun Application.configureHTTP() {
 
         register(RateLimitName("uploads")) {
             rateLimiter(
-                limit = 60,                 // 每分钟允许60次上传
+                limit = 60, // 每分钟允许60次上传
                 refillPeriod = 60.seconds,
             )
             requestKey { call -> call.clientKey() }

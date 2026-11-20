@@ -26,7 +26,7 @@ class MediaProbeTest {
                 compatible_brands: isomiso2avc1mp41
                 encoder         : Lavf59.27.100
               Duration: 00:00:05.07, start: 0.000000, bitrate: 1243 kb/s
-              Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 1024 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+              Stream #0:0[0x1](und): Video: h264 (High) (avc1), yuv420p(tv, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 1024 kb/s, 30 fps
               Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x63700061), 44100 Hz, stereo, fltp, 128 kb/s (default)
             At least one output file must be specified
             """.trimIndent()

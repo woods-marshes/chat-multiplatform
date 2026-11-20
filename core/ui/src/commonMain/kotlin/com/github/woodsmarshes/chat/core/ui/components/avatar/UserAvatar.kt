@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,9 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Text
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
@@ -33,7 +33,10 @@ import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 
 val LocalServerBaseUrl = compositionLocalOf { "http://127.0.0.1:9051" }
 
-fun resolveMediaUrl(url: String?, baseUrl: String): String? {
+fun resolveMediaUrl(
+    url: String?,
+    baseUrl: String,
+): String? {
     val trimmed = url?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     return when {
         trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("file://") -> trimmed
@@ -54,29 +57,44 @@ fun UserAvatar(
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
 ) {
-    val initials = name?.trim()?.take(2)?.uppercase()?.ifEmpty { null } ?: "?"
+    val initials =
+        name
+            ?.trim()
+            ?.take(2)
+            ?.uppercase()
+            ?.ifEmpty { null } ?: "?"
     val bgColor = avatarColor(name)
     val bubbleColors = LocalBubbleColors.current
     val resolvedAvatarUrl = resolveMediaUrl(avatarUrl, LocalServerBaseUrl.current)
     val strings = LocalStrings.current
 
-    val interactionModifier = when {
-        onClick != null && onLongPress != null -> Modifier
-            .clip(CircleShape)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongPress,
-            )
-        onClick != null -> Modifier
-            .clip(CircleShape)
-            .clickable { onClick() }
-        else -> Modifier
-    }
+    val interactionModifier =
+        when {
+            onClick != null && onLongPress != null -> {
+                Modifier
+                    .clip(CircleShape)
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongPress,
+                    )
+            }
+
+            onClick != null -> {
+                Modifier
+                    .clip(CircleShape)
+                    .clickable { onClick() }
+            }
+
+            else -> {
+                Modifier
+            }
+        }
 
     Box(
-        modifier = modifier
-            .size(size)
-            .then(interactionModifier),
+        modifier =
+            modifier
+                .size(size)
+                .then(interactionModifier),
         contentAlignment = Alignment.Center,
     ) {
         if (resolvedAvatarUrl != null) {
@@ -88,14 +106,18 @@ fun UserAvatar(
                 mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
             }
             Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(bgColor)
-                    .then(
-                        if (showBorder) Modifier.border(2.dp, bubbleColors.inputFieldBackground, CircleShape)
-                        else Modifier
-                    ),
+                modifier =
+                    Modifier
+                        .size(size)
+                        .clip(CircleShape)
+                        .background(bgColor)
+                        .then(
+                            if (showBorder) {
+                                Modifier.border(2.dp, bubbleColors.inputFieldBackground, CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        ),
                 contentAlignment = Alignment.Center,
             ) {
                 AsyncImage(
@@ -111,14 +133,18 @@ fun UserAvatar(
             }
         } else {
             Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(CircleShape)
-                    .background(bgColor)
-                    .then(
-                        if (showBorder) Modifier.border(2.dp, bubbleColors.inputFieldBackground, CircleShape)
-                        else Modifier
-                    ),
+                modifier =
+                    Modifier
+                        .size(size)
+                        .clip(CircleShape)
+                        .background(bgColor)
+                        .then(
+                            if (showBorder) {
+                                Modifier.border(2.dp, bubbleColors.inputFieldBackground, CircleShape)
+                            } else {
+                                Modifier
+                            },
+                        ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -133,12 +159,13 @@ fun UserAvatar(
         if (showOnlineDot) {
             val dotSize = (size * 0.25f).coerceIn(8.dp, 14.dp)
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(dotSize)
-                    .clip(CircleShape)
-                    .background(Color(0xFF2E7D32))
-                    .border(1.5.dp, bubbleColors.surfaceColor, CircleShape),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(dotSize)
+                        .clip(CircleShape)
+                        .background(Color(0xFF2E7D32))
+                        .border(1.5.dp, bubbleColors.surfaceColor, CircleShape),
             )
         }
     }
@@ -155,11 +182,17 @@ private fun placeholderImage(size: Dp) {
 }
 
 private fun avatarColor(key: String?): Color {
-    val colors = listOf(
-        Color(0xFFD32F2F), Color(0xFF388E3C), Color(0xFF1976D2),
-        Color(0xFFF57C00), Color(0xFF8E24AA), Color(0xFF00796B),
-        Color(0xFFE64A19), Color(0xFF3949AB),
-    )
+    val colors =
+        listOf(
+            Color(0xFFD32F2F),
+            Color(0xFF388E3C),
+            Color(0xFF1976D2),
+            Color(0xFFF57C00),
+            Color(0xFF8E24AA),
+            Color(0xFF00796B),
+            Color(0xFFE64A19),
+            Color(0xFF3949AB),
+        )
     val hash = key?.hashCode() ?: 0
     val index = hash.mod(colors.size).let { if (it < 0) it + colors.size else it }
     return colors[index]

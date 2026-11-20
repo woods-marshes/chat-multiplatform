@@ -1,10 +1,10 @@
-package com.github.woodsmarshes.chat.feature.article_editor.ui
+package com.github.woodsmarshes.chat.feature.articleeditor.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
-import com.github.woodsmarshes.chat.feature.article_editor.model.CollabConfig
-import com.github.woodsmarshes.chat.feature.article_editor.model.CollabUserInfo
+import com.github.woodsmarshes.chat.feature.articleeditor.model.CollabConfig
+import com.github.woodsmarshes.chat.feature.articleeditor.model.CollabUserInfo
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -42,28 +42,31 @@ internal fun buildEditorInitializeScript(
     val titleExpr = decodeBase64Utf8JsExpr(initialTitle)
     val jsonExpr = decodeBase64Utf8JsExpr(initialJsonStr)
 
-    val collabJsonStr = if (collabUrl != null && roomId != null) {
-        ProjectJson.encodeToString(
-            CollabConfig.serializer(),
-            CollabConfig(
-                collabUrl = collabUrl,
-                roomId = roomId,
-                token = token,
-                userInfo = CollabUserInfo(
-                    name = userInfoName ?: "Anonymous",
-                    color = userInfoColor ?: "#ffcc00",
+    val collabJsonStr =
+        if (collabUrl != null && roomId != null) {
+            ProjectJson.encodeToString(
+                CollabConfig.serializer(),
+                CollabConfig(
+                    collabUrl = collabUrl,
+                    roomId = roomId,
+                    token = token,
+                    userInfo =
+                        CollabUserInfo(
+                            name = userInfoName ?: "Anonymous",
+                            color = userInfoColor ?: "#ffcc00",
+                        ),
                 ),
-            ),
-        )
-    } else {
-        null
-    }
+            )
+        } else {
+            null
+        }
 
-    val args = if (collabJsonStr != null) {
-        "$titleExpr, $jsonExpr, ${decodeBase64Utf8JsExpr(collabJsonStr)}"
-    } else {
-        "$titleExpr, $jsonExpr"
-    }
+    val args =
+        if (collabJsonStr != null) {
+            "$titleExpr, $jsonExpr, ${decodeBase64Utf8JsExpr(collabJsonStr)}"
+        } else {
+            "$titleExpr, $jsonExpr"
+        }
     return "window.__editorShell.initialize($args);"
 }
 

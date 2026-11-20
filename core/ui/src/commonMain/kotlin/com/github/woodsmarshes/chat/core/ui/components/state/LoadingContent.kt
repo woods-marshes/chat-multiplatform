@@ -1,6 +1,4 @@
 package com.github.woodsmarshes.chat.core.ui.components.state
-import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
-
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,10 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
+import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 
 @Composable
 fun LoadingContent(
@@ -58,10 +57,11 @@ fun LoadingContent(
 @Composable
 fun LoadingItem(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(72.dp)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         AppProgressIndicator()

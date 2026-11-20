@@ -1,7 +1,7 @@
-package com.github.woodsmarshes.chat.feature.article_editor.ui
+package com.github.woodsmarshes.chat.feature.articleeditor.ui
 
 import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
-import com.github.woodsmarshes.chat.feature.article_editor.model.CollabConfig
+import com.github.woodsmarshes.chat.feature.articleeditor.model.CollabConfig
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.test.Test
@@ -12,16 +12,18 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalEncodingApi::class)
 class TiptapEditorScriptTest {
-
     @Test
     fun nonCollabScriptHasBalancedParenthesesAndDecodesComplexCharacters() {
         val title = "中文标题 🚀 \"quotes\" 'single' \\backslash\nsecond line\r\nthird"
-        val jsonStr = """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello 世界 🎉 \"quoted\"\nline 2"}]}]}"""
+        val jsonStr =
+            """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hello 世界 🎉 \"quoted\"\nline 2""" +
+                """}]}]}"""
 
-        val script = buildEditorInitializeScript(
-            initialTitle = title,
-            initialJsonStr = jsonStr,
-        )
+        val script =
+            buildEditorInitializeScript(
+                initialTitle = title,
+                initialJsonStr = jsonStr,
+            )
 
         assertBalancedJavaScriptCall(script, expectedArgCount = 2)
 
@@ -37,15 +39,16 @@ class TiptapEditorScriptTest {
         val jsonStr = """{"type":"doc","content":[]}"""
         val userName = "Wood \"The Reviewer\" \\ \n🌱"
 
-        val script = buildEditorInitializeScript(
-            initialTitle = title,
-            initialJsonStr = jsonStr,
-            collabUrl = "ws://127.0.0.1:1234",
-            roomId = "room-123",
-            token = "jwt.token.value",
-            userInfoName = userName,
-            userInfoColor = "#34d399",
-        )
+        val script =
+            buildEditorInitializeScript(
+                initialTitle = title,
+                initialJsonStr = jsonStr,
+                collabUrl = "ws://127.0.0.1:1234",
+                roomId = "room-123",
+                token = "jwt.token.value",
+                userInfoName = userName,
+                userInfoColor = "#34d399",
+            )
 
         assertBalancedJavaScriptCall(script, expectedArgCount = 3)
 
@@ -66,47 +69,54 @@ class TiptapEditorScriptTest {
 
     @Test
     fun partialCollabParametersFallBackToNonCollabTwoArgCall() {
-        val scriptMissingRoom = buildEditorInitializeScript(
-            initialTitle = "Title",
-            initialJsonStr = "{}",
-            collabUrl = "ws://127.0.0.1:1234",
-            roomId = null,
-        )
+        val scriptMissingRoom =
+            buildEditorInitializeScript(
+                initialTitle = "Title",
+                initialJsonStr = "{}",
+                collabUrl = "ws://127.0.0.1:1234",
+                roomId = null,
+            )
         assertBalancedJavaScriptCall(scriptMissingRoom, expectedArgCount = 2)
 
-        val scriptMissingUrl = buildEditorInitializeScript(
-            initialTitle = "Title",
-            initialJsonStr = "{}",
-            collabUrl = null,
-            roomId = "room-1",
-        )
+        val scriptMissingUrl =
+            buildEditorInitializeScript(
+                initialTitle = "Title",
+                initialJsonStr = "{}",
+                collabUrl = null,
+                roomId = "room-1",
+            )
         assertBalancedJavaScriptCall(scriptMissingUrl, expectedArgCount = 2)
     }
 
     @Test
     fun collabDefaultsAnonymousUserInfoWhenOmitted() {
-        val script = buildEditorInitializeScript(
-            initialTitle = "",
-            initialJsonStr = "{}",
-            collabUrl = "wss://example.com/collab",
-            roomId = "room-abc",
-            token = null,
-            userInfoName = null,
-            userInfoColor = null,
-        )
+        val script =
+            buildEditorInitializeScript(
+                initialTitle = "",
+                initialJsonStr = "{}",
+                collabUrl = "wss://example.com/collab",
+                roomId = "room-abc",
+                token = null,
+                userInfoName = null,
+                userInfoColor = null,
+            )
 
         assertBalancedJavaScriptCall(script, expectedArgCount = 3)
         val args = extractBase64Args(script)
-        val parsedCollab = ProjectJson.decodeFromString(
-            CollabConfig.serializer(),
-            Base64.decode(args[2]).decodeToString(),
-        )
+        val parsedCollab =
+            ProjectJson.decodeFromString(
+                CollabConfig.serializer(),
+                Base64.decode(args[2]).decodeToString(),
+            )
         assertNull(parsedCollab.token)
         assertEquals("Anonymous", parsedCollab.userInfo?.name)
         assertEquals("#ffcc00", parsedCollab.userInfo?.color)
     }
 
-    private fun assertBalancedJavaScriptCall(script: String, expectedArgCount: Int) {
+    private fun assertBalancedJavaScriptCall(
+        script: String,
+        expectedArgCount: Int,
+    ) {
         assertTrue(
             script.startsWith("window.__editorShell.initialize("),
             "Script must invoke window.__editorShell.initialize",
@@ -123,12 +133,23 @@ class TiptapEditorScriptTest {
                 continue
             }
             when (ch) {
-                '\\' -> if (inDoubleQuote) escaped = true
-                '"' -> inDoubleQuote = !inDoubleQuote
-                '(' -> if (!inDoubleQuote) parenDepth++
-                ')' -> if (!inDoubleQuote) {
-                    parenDepth--
-                    assertTrue(parenDepth >= 0, "Closing parenthesis before opening in: $script")
+                '\\' -> {
+                    if (inDoubleQuote) escaped = true
+                }
+
+                '"' -> {
+                    inDoubleQuote = !inDoubleQuote
+                }
+
+                '(' -> {
+                    if (!inDoubleQuote) parenDepth++
+                }
+
+                ')' -> {
+                    if (!inDoubleQuote) {
+                        parenDepth--
+                        assertTrue(parenDepth >= 0, "Closing parenthesis before opening in: $script")
+                    }
                 }
             }
         }

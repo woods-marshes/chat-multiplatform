@@ -7,12 +7,13 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-
-
 /**
  * 格式化相对时间（如 "刚刚"、"5分钟前"、"2小时前"、"3天前"、"月/日"）
  */
-fun formatRelativeTime(instant: Instant?, strings: com.github.woodsmarshes.chat.lyricist.Strings = getLocaleStrings()): String {
+fun formatRelativeTime(
+    instant: Instant?,
+    strings: com.github.woodsmarshes.chat.lyricist.Strings = getLocaleStrings(),
+): String {
     if (instant == null) return ""
 
     val now = Clock.System.now()
@@ -25,16 +26,24 @@ fun formatRelativeTime(instant: Instant?, strings: com.github.woodsmarshes.chat.
     val diffMinutes = totalMilliseconds / (60 * 1000)
 
     return when {
-        diffMinutes < 1 -> strings.justNow
-        diffMinutes < 60 -> strings.minutesAgo(diffMinutes.toInt().toString())
+        diffMinutes < 1 -> {
+            strings.justNow
+        }
+
+        diffMinutes < 60 -> {
+            strings.minutesAgo(diffMinutes.toInt().toString())
+        }
+
         diffMinutes < 60 * 24 -> {
             val hours = (diffMinutes / 60).toInt()
             strings.hoursAgo(hours.toString())
         }
+
         diffMinutes < 60 * 24 * 7 -> {
             val days = (diffMinutes / (60 * 24)).toInt()
             strings.daysAgo(days.toString())
         }
+
         else -> {
             // 超过7天，显示月份和日期（注意：需要时区转换）
             val timeZone = TimeZone.currentSystemDefault()

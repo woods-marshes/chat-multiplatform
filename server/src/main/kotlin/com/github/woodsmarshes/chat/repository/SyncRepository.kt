@@ -1,8 +1,5 @@
 package com.github.woodsmarshes.chat.repository
 
-import com.github.woodsmarshes.chat.core.model.Message
-import com.github.woodsmarshes.chat.core.model.MessageCategory
-import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.MessageEventResponse
 import com.github.woodsmarshes.chat.core.contract.dto.events.RealtimeEvent
@@ -12,6 +9,9 @@ import com.github.woodsmarshes.chat.core.contract.dto.events.SyncHead
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncSnapshot
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageCategory
+import com.github.woodsmarshes.chat.core.model.TextContent
 import com.github.woodsmarshes.chat.repository.database.schema.ConversationParticipants
 import com.github.woodsmarshes.chat.repository.database.schema.Conversations
 import com.github.woodsmarshes.chat.repository.database.schema.Messages
@@ -19,7 +19,6 @@ import com.github.woodsmarshes.chat.repository.database.schema.SyncChanges
 import com.github.woodsmarshes.chat.repository.database.schema.SyncStreams
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
-import kotlin.time.Instant
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -30,13 +29,14 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.leftJoin
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.sql.SQLException
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 /**
@@ -53,7 +53,11 @@ interface SyncRepository {
      * Appends one event to the `(scope, id)` stream inside the enclosing (or
      * newly opened) transaction and returns the assigned revision.
      */
-    suspend fun appendChange(scope: SyncScope, id: Uuid, event: RealtimeEvent): SyncHead
+    suspend fun appendChange(
+        scope: SyncScope,
+        id: Uuid,
+        event: RealtimeEvent,
+    ): SyncHead
 
     /**
      * Appends multiple events across one or more streams inside a single
@@ -113,86 +117,94 @@ interface SyncRepository {
      * `(scope, id)` order with independent per-stream transactions, returning the
      * total deleted row count.
      */
-    suspend fun sweepExpiredChanges(cutoff: Instant, maxBatchSize: Int = 1000): Int
+    suspend fun sweepExpiredChanges(
+        cutoff: Instant,
+        maxBatchSize: Int = 1000,
+    ): Int
 }
 
 class SyncDataSourceImpl : SyncRepository {
-
     override suspend fun appendChange(
         scope: SyncScope,
         id: Uuid,
         event: RealtimeEvent,
     ): SyncHead = appendChanges(listOf(SyncAppendTarget(scope, id, event))).single()
 
-    override suspend fun appendChanges(targets: List<SyncAppendTarget>): List<SyncHead> = dbQuery {
-        if (targets.isEmpty()) return@dbQuery emptyList()
+    override suspend fun appendChanges(targets: List<SyncAppendTarget>): List<SyncHead> =
+        dbQuery {
+            if (targets.isEmpty()) return@dbQuery emptyList()
 
-        targets.forEach { target ->
-            require(target.event !is SyncStateResponse) {
-                "SyncStateResponse must never be persisted inside SyncChanges"
-            }
-        }
-
-        // Canonical lock ordering across all touched streams prevents deadlocks
-        // when concurrent multi-stream transactions (e.g. group creation,
-        // membership changes, contact approvals) touch overlapping streams.
-        val distinctStreams = targets
-            .map { it.scope to it.id }
-            .distinct()
-            .sortedWith(compareBy<Pair<SyncScope, Uuid>> { it.first.ordinal }.thenBy { it.second.toString() })
-
-        val revisionByStream = HashMap<Pair<SyncScope, Uuid>, Long>(distinctStreams.size)
-        for ((scope, scopeId) in distinctStreams) {
-            val row = lockOrCreateStreamRow(scope, scopeId)
-            revisionByStream[scope to scopeId] = row
-        }
-
-        val now = Clock.System.now()
-        val assignedHeads = ArrayList<SyncHead>(targets.size)
-
-        for (target in targets) {
-            val key = target.scope to target.id
-            val nextRev = (revisionByStream[key] ?: 0L) + 1L
-            revisionByStream[key] = nextRev
-
-            val (sanitizedEvent, refMessageId) = sanitizeEventForStorage(target.event)
-
-            SyncChanges.insert {
-                it[this.scope] = target.scope
-                it[this.scopeId] = target.id
-                it[this.revision] = nextRev
-                it[this.event] = sanitizedEvent
-                it[this.messageId] = refMessageId
-                it[this.createdAt] = now
+            targets.forEach { target ->
+                require(target.event !is SyncStateResponse) {
+                    "SyncStateResponse must never be persisted inside SyncChanges"
+                }
             }
 
-            assignedHeads.add(SyncHead(scope = target.scope, id = target.id, revision = nextRev))
-        }
+            // Canonical lock ordering across all touched streams prevents deadlocks
+            // when concurrent multi-stream transactions (e.g. group creation,
+            // membership changes, contact approvals) touch overlapping streams.
+            val distinctStreams =
+                targets
+                    .map { it.scope to it.id }
+                    .distinct()
+                    .sortedWith(compareBy<Pair<SyncScope, Uuid>> { it.first.ordinal }.thenBy { it.second.toString() })
 
-        for ((key, finalRev) in revisionByStream) {
-            val (scope, scopeId) = key
-            SyncStreams.update(
-                where = { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq scopeId) }
-            ) {
-                it[this.lastRevision] = finalRev
-                it[this.updatedAt] = now
+            val revisionByStream = HashMap<Pair<SyncScope, Uuid>, Long>(distinctStreams.size)
+            for ((scope, scopeId) in distinctStreams) {
+                val row = lockOrCreateStreamRow(scope, scopeId)
+                revisionByStream[scope to scopeId] = row
             }
-        }
 
-        assignedHeads
-    }
+            val now = Clock.System.now()
+            val assignedHeads = ArrayList<SyncHead>(targets.size)
+
+            for (target in targets) {
+                val key = target.scope to target.id
+                val nextRev = (revisionByStream[key] ?: 0L) + 1L
+                revisionByStream[key] = nextRev
+
+                val (sanitizedEvent, refMessageId) = sanitizeEventForStorage(target.event)
+
+                SyncChanges.insert {
+                    it[this.scope] = target.scope
+                    it[this.scopeId] = target.id
+                    it[this.revision] = nextRev
+                    it[this.event] = sanitizedEvent
+                    it[this.messageId] = refMessageId
+                    it[this.createdAt] = now
+                }
+
+                assignedHeads.add(SyncHead(scope = target.scope, id = target.id, revision = nextRev))
+            }
+
+            for ((key, finalRev) in revisionByStream) {
+                val (scope, scopeId) = key
+                SyncStreams.update(
+                    where = { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq scopeId) },
+                ) {
+                    it[this.lastRevision] = finalRev
+                    it[this.updatedAt] = now
+                }
+            }
+
+            assignedHeads
+        }
 
     /**
      * Locks the `SyncStreams` row for `(scope, scopeId)` with `FOR UPDATE`,
      * creating it at revision 0 if it does not exist yet and handling
      * concurrent first-time creation races via unique-constraint retry.
      */
-    private fun lockOrCreateStreamRow(scope: SyncScope, scopeId: Uuid): Long {
-        val existing = SyncStreams
-            .selectAll()
-            .where { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq scopeId) }
-            .forUpdate()
-            .singleOrNull()
+    private fun lockOrCreateStreamRow(
+        scope: SyncScope,
+        scopeId: Uuid,
+    ): Long {
+        val existing =
+            SyncStreams
+                .selectAll()
+                .where { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq scopeId) }
+                .forUpdate()
+                .singleOrNull()
         if (existing != null) {
             return existing[SyncStreams.lastRevision]
         }
@@ -219,165 +231,179 @@ class SyncDataSourceImpl : SyncRepository {
      * attachment URL inside `sync_changes`. The live `Messages` row is hydrated
      * when `getChanges` serves the entry.
      */
-    private fun sanitizeEventForStorage(event: RealtimeEvent): Pair<RealtimeEvent, Uuid?> {
-        return when (event) {
+    private fun sanitizeEventForStorage(event: RealtimeEvent): Pair<RealtimeEvent, Uuid?> =
+        when (event) {
             is MessageEventResponse.Received -> {
                 val msg = event.message
-                val stubMessage = Message(
-                    id = msg.id,
-                    conversationId = msg.conversationId,
-                    sender = null,
-                    category = MessageCategory.NORMAL,
-                    createdAt = msg.createdAt,
-                    revokedAt = msg.revokedAt,
-                    replyTo = null,
-                    content = TextContent(""),
-                    senderContext = null,
-                    clientRequestId = msg.clientRequestId,
-                )
+                val stubMessage =
+                    Message(
+                        id = msg.id,
+                        conversationId = msg.conversationId,
+                        sender = null,
+                        category = MessageCategory.NORMAL,
+                        createdAt = msg.createdAt,
+                        revokedAt = msg.revokedAt,
+                        replyTo = null,
+                        content = TextContent(""),
+                        senderContext = null,
+                        clientRequestId = msg.clientRequestId,
+                    )
                 event.copy(message = stubMessage) to msg.id
             }
-            else -> event to null
-        }
-    }
 
-    override suspend fun getHeadsForUser(userId: Uuid): List<SyncHead> = dbQuery {
-        val conversationIds = (ConversationParticipants innerJoin Conversations)
-            .selectAll()
-            .where {
-                (ConversationParticipants.userId eq userId) and Conversations.deletedAt.isNull()
+            else -> {
+                event to null
             }
-            .map { it[Conversations.id].value }
+        }
 
-        val userRev = SyncStreams
-            .selectAll()
-            .where { (SyncStreams.scope eq SyncScope.USER) and (SyncStreams.scopeId eq userId) }
-            .singleOrNull()
-            ?.get(SyncStreams.lastRevision) ?: 0L
+    override suspend fun getHeadsForUser(userId: Uuid): List<SyncHead> =
+        dbQuery {
+            val conversationIds =
+                (ConversationParticipants innerJoin Conversations)
+                    .selectAll()
+                    .where {
+                        (ConversationParticipants.userId eq userId) and Conversations.deletedAt.isNull()
+                    }.map { it[Conversations.id].value }
 
-        val convRevs = if (conversationIds.isNotEmpty()) {
-            SyncStreams
-                .selectAll()
-                .where {
-                    (SyncStreams.scope eq SyncScope.CONVERSATION) and
-                        (SyncStreams.scopeId inList conversationIds)
+            val userRev =
+                SyncStreams
+                    .selectAll()
+                    .where { (SyncStreams.scope eq SyncScope.USER) and (SyncStreams.scopeId eq userId) }
+                    .singleOrNull()
+                    ?.get(SyncStreams.lastRevision) ?: 0L
+
+            val convRevs =
+                if (conversationIds.isNotEmpty()) {
+                    SyncStreams
+                        .selectAll()
+                        .where {
+                            (SyncStreams.scope eq SyncScope.CONVERSATION) and
+                                (SyncStreams.scopeId inList conversationIds)
+                        }.associate { it[SyncStreams.scopeId] to it[SyncStreams.lastRevision] }
+                } else {
+                    emptyMap()
                 }
-                .associate { it[SyncStreams.scopeId] to it[SyncStreams.lastRevision] }
-        } else {
-            emptyMap()
-        }
 
-        buildList {
-            add(SyncHead(scope = SyncScope.USER, id = userId, revision = userRev))
-            conversationIds.forEach { convId ->
-                add(
-                    SyncHead(
-                        scope = SyncScope.CONVERSATION,
-                        id = convId,
-                        revision = convRevs[convId] ?: 0L,
+            buildList {
+                add(SyncHead(scope = SyncScope.USER, id = userId, revision = userRev))
+                conversationIds.forEach { convId ->
+                    add(
+                        SyncHead(
+                            scope = SyncScope.CONVERSATION,
+                            id = convId,
+                            revision = convRevs[convId] ?: 0L,
+                        ),
                     )
-                )
+                }
             }
         }
-    }
 
     override suspend fun getChanges(
         scope: SyncScope,
         id: Uuid,
         afterRevision: Long,
         limit: Int,
-    ): SyncBatch = dbQuery {
-        val coercedLimit = limit.coerceIn(1, 500)
-        val streamRow = SyncStreams
-            .selectAll()
-            .where { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq id) }
-            .singleOrNull()
+    ): SyncBatch =
+        dbQuery {
+            val coercedLimit = limit.coerceIn(1, 500)
+            val streamRow =
+                SyncStreams
+                    .selectAll()
+                    .where { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq id) }
+                    .singleOrNull()
 
-        val lastRevision = streamRow?.get(SyncStreams.lastRevision) ?: 0L
-        val minRetained = streamRow?.get(SyncStreams.minRetainedRevision) ?: 1L
+            val lastRevision = streamRow?.get(SyncStreams.lastRevision) ?: 0L
+            val minRetained = streamRow?.get(SyncStreams.minRetainedRevision) ?: 1L
 
-        // Out-of-range cursor: negative, ahead of server head, or behind the
-        // retention floor when the stream has already advanced past the floor.
-        if (
-            afterRevision < 0L ||
-            afterRevision > lastRevision ||
-            (lastRevision > 0L && afterRevision + 1L < minRetained)
-        ) {
-            return@dbQuery SyncBatch(
-                scope = scope,
-                id = id,
-                fromRevision = afterRevision,
-                nextRevision = lastRevision,
-                hasMore = false,
-                resetRequired = true,
-                changes = emptyList(),
-            )
-        }
-
-        if (afterRevision == lastRevision) {
-            return@dbQuery SyncBatch(
-                scope = scope,
-                id = id,
-                fromRevision = afterRevision,
-                nextRevision = lastRevision,
-                hasMore = false,
-                resetRequired = false,
-                changes = emptyList(),
-            )
-        }
-
-        // Fetch limit + 1 to determine hasMore accurately in one query.
-        val rows = SyncChanges
-            .selectAll()
-            .where {
-                (SyncChanges.scope eq scope) and
-                    (SyncChanges.scopeId eq id) and
-                    (SyncChanges.revision greater afterRevision)
+            // Out-of-range cursor: negative, ahead of server head, or behind the
+            // retention floor when the stream has already advanced past the floor.
+            if (
+                afterRevision < 0L ||
+                afterRevision > lastRevision ||
+                (lastRevision > 0L && afterRevision + 1L < minRetained)
+            ) {
+                return@dbQuery SyncBatch(
+                    scope = scope,
+                    id = id,
+                    fromRevision = afterRevision,
+                    nextRevision = lastRevision,
+                    hasMore = false,
+                    resetRequired = true,
+                    changes = emptyList(),
+                )
             }
-            .orderBy(SyncChanges.revision to SortOrder.ASC)
-            .limit(coercedLimit + 1)
-            .toList()
 
-        val hasMore = rows.size > coercedLimit
-        val pageRows = if (hasMore) rows.take(coercedLimit) else rows
+            if (afterRevision == lastRevision) {
+                return@dbQuery SyncBatch(
+                    scope = scope,
+                    id = id,
+                    fromRevision = afterRevision,
+                    nextRevision = lastRevision,
+                    hasMore = false,
+                    resetRequired = false,
+                    changes = emptyList(),
+                )
+            }
 
-        val messageIds = pageRows.mapNotNull { it[SyncChanges.messageId] }.distinct()
-        val hydratedMessages = if (messageIds.isNotEmpty()) {
-            loadHydratedMessages(messageIds)
-        } else {
-            emptyMap()
-        }
+            // Fetch limit + 1 to determine hasMore accurately in one query.
+            val rows =
+                SyncChanges
+                    .selectAll()
+                    .where {
+                        (SyncChanges.scope eq scope) and
+                            (SyncChanges.scopeId eq id) and
+                            (SyncChanges.revision greater afterRevision)
+                    }.orderBy(SyncChanges.revision to SortOrder.ASC)
+                    .limit(coercedLimit + 1)
+                    .toList()
 
-        val changes = pageRows.mapNotNull { row ->
-            val rev = row[SyncChanges.revision]
-            val rawEvent = row[SyncChanges.event]
-            val hydratedEvent = when (rawEvent) {
-                is MessageEventResponse.Received -> {
-                    val msgId = row[SyncChanges.messageId] ?: rawEvent.message.id
-                    val liveMsg = hydratedMessages[msgId] ?: return@mapNotNull null
-                    rawEvent.copy(message = liveMsg)
+            val hasMore = rows.size > coercedLimit
+            val pageRows = if (hasMore) rows.take(coercedLimit) else rows
+
+            val messageIds = pageRows.mapNotNull { it[SyncChanges.messageId] }.distinct()
+            val hydratedMessages =
+                if (messageIds.isNotEmpty()) {
+                    loadHydratedMessages(messageIds)
+                } else {
+                    emptyMap()
                 }
-                else -> rawEvent
-            }
-            SyncChange(revision = rev, event = hydratedEvent)
-        }
 
-        val nextRevision = if (pageRows.isNotEmpty()) {
-            pageRows.last()[SyncChanges.revision]
-        } else {
-            afterRevision
-        }
+            val changes =
+                pageRows.mapNotNull { row ->
+                    val rev = row[SyncChanges.revision]
+                    val rawEvent = row[SyncChanges.event]
+                    val hydratedEvent =
+                        when (rawEvent) {
+                            is MessageEventResponse.Received -> {
+                                val msgId = row[SyncChanges.messageId] ?: rawEvent.message.id
+                                val liveMsg = hydratedMessages[msgId] ?: return@mapNotNull null
+                                rawEvent.copy(message = liveMsg)
+                            }
 
-        SyncBatch(
-            scope = scope,
-            id = id,
-            fromRevision = afterRevision,
-            nextRevision = nextRevision,
-            hasMore = hasMore,
-            resetRequired = false,
-            changes = changes,
-        )
-    }
+                            else -> {
+                                rawEvent
+                            }
+                        }
+                    SyncChange(revision = rev, event = hydratedEvent)
+                }
+
+            val nextRevision =
+                if (pageRows.isNotEmpty()) {
+                    pageRows.last()[SyncChanges.revision]
+                } else {
+                    afterRevision
+                }
+
+            SyncBatch(
+                scope = scope,
+                id = id,
+                fromRevision = afterRevision,
+                nextRevision = nextRevision,
+                hasMore = hasMore,
+                resetRequired = false,
+                changes = changes,
+            )
+        }
 
     override suspend fun getSnapshot(
         scope: SyncScope,
@@ -385,89 +411,100 @@ class SyncDataSourceImpl : SyncRepository {
         limit: Int,
         conversationBuilder: suspend () -> List<ConversationResponse>,
         userEventsBuilder: suspend () -> List<RealtimeEvent>,
-    ): SyncSnapshot = dbQuery {
-        val coercedLimit = limit.coerceIn(1, 200)
-        // Lock (or initialize and lock) the stream row for the duration of the
-        // snapshot read so no concurrent writer can commit a state change on
-        // this stream without its revision being reflected in the paired
-        // snapshot revision — even on a brand-new stream with revision 0.
-        val revision = lockOrCreateStreamRow(scope, id)
+    ): SyncSnapshot =
+        dbQuery {
+            val coercedLimit = limit.coerceIn(1, 200)
+            // Lock (or initialize and lock) the stream row for the duration of the
+            // snapshot read so no concurrent writer can commit a state change on
+            // this stream without its revision being reflected in the paired
+            // snapshot revision — even on a brand-new stream with revision 0.
+            val revision = lockOrCreateStreamRow(scope, id)
 
-        when (scope) {
-            SyncScope.CONVERSATION -> {
-                val messageRows = messagesWithSenderContext(id)
-                    .selectAll()
-                    .where { Messages.conversationId eq id }
-                    .orderBy(Messages.id to SortOrder.DESC)
-                    .limit(coercedLimit)
-                    .toList()
+            when (scope) {
+                SyncScope.CONVERSATION -> {
+                    val messageRows =
+                        messagesWithSenderContext(id)
+                            .selectAll()
+                            .where { Messages.conversationId eq id }
+                            .orderBy(Messages.id to SortOrder.DESC)
+                            .limit(coercedLimit)
+                            .toList()
 
-                SyncSnapshot(
-                    scope = SyncScope.CONVERSATION,
-                    id = id,
-                    revision = revision,
-                    messages = hydrateReplies(messageRows, id),
-                    events = emptyList(),
-                    conversations = emptyList(),
-                )
-            }
+                    SyncSnapshot(
+                        scope = SyncScope.CONVERSATION,
+                        id = id,
+                        revision = revision,
+                        messages = hydrateReplies(messageRows, id),
+                        events = emptyList(),
+                        conversations = emptyList(),
+                    )
+                }
 
-            SyncScope.USER -> {
-                val conversations = conversationBuilder()
-                val events = userEventsBuilder()
-                SyncSnapshot(
-                    scope = SyncScope.USER,
-                    id = id,
-                    revision = revision,
-                    messages = emptyList(),
-                    events = events,
-                    conversations = conversations,
-                )
+                SyncScope.USER -> {
+                    val conversations = conversationBuilder()
+                    val events = userEventsBuilder()
+                    SyncSnapshot(
+                        scope = SyncScope.USER,
+                        id = id,
+                        revision = revision,
+                        messages = emptyList(),
+                        events = events,
+                        conversations = conversations,
+                    )
+                }
             }
         }
-    }
 
     override suspend fun advanceFloor(
         scope: SyncScope,
         id: Uuid,
         newMinRetainedRevision: Long,
-    ): Int = dbQuery {
-        val currentLast = lockOrCreateStreamRow(scope, id)
-        val clampedFloor = newMinRetainedRevision.coerceIn(1L, currentLast + 1L)
-        SyncStreams.update(
-            where = { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq id) }
-        ) {
-            it[this.minRetainedRevision] = clampedFloor
-            it[this.updatedAt] = Clock.System.now()
+    ): Int =
+        dbQuery {
+            val currentLast = lockOrCreateStreamRow(scope, id)
+            val clampedFloor = newMinRetainedRevision.coerceIn(1L, currentLast + 1L)
+            SyncStreams.update(
+                where = { (SyncStreams.scope eq scope) and (SyncStreams.scopeId eq id) },
+            ) {
+                it[this.minRetainedRevision] = clampedFloor
+                it[this.updatedAt] = Clock.System.now()
+            }
+            SyncChanges.deleteWhere {
+                (SyncChanges.scope eq scope) and
+                    (SyncChanges.scopeId eq id) and
+                    (SyncChanges.revision less clampedFloor)
+            }
         }
-        SyncChanges.deleteWhere {
-            (SyncChanges.scope eq scope) and
-                (SyncChanges.scopeId eq id) and
-                (SyncChanges.revision less clampedFloor)
-        }
-    }
 
-    override suspend fun sweepExpiredChanges(cutoff: Instant, maxBatchSize: Int): Int {
+    override suspend fun sweepExpiredChanges(
+        cutoff: Instant,
+        maxBatchSize: Int,
+    ): Int {
         require(maxBatchSize > 0) { "maxBatchSize must be positive, was $maxBatchSize" }
         var totalDeleted = 0
         while (true) {
-            val expiredRows = dbQuery {
-                SyncChanges
-                    .select(SyncChanges.scope, SyncChanges.scopeId, SyncChanges.revision)
-                    .where { SyncChanges.createdAt less cutoff }
-                    .limit(maxBatchSize)
-                    .toList()
-            }
+            val expiredRows =
+                dbQuery {
+                    SyncChanges
+                        .select(SyncChanges.scope, SyncChanges.scopeId, SyncChanges.revision)
+                        .where { SyncChanges.createdAt less cutoff }
+                        .limit(maxBatchSize)
+                        .toList()
+                }
             if (expiredRows.isEmpty()) break
 
             // Deterministic ordering across distinct streams for predictable progress
             // and diagnostics. Each stream's floor is advanced in its own short transaction
             // via advanceFloor to avoid holding table/row locks across multiple streams.
-            val maxExpiredByStream = expiredRows
-                .groupBy { it[SyncChanges.scope] to it[SyncChanges.scopeId] }
-                .mapValues { (_, rows) -> rows.maxOf { it[SyncChanges.revision] } }
-                .toList()
-                .sortedWith(compareBy<Pair<Pair<SyncScope, Uuid>, Long>> { it.first.first.ordinal }.thenBy { it.first.second.toString() })
+            val maxExpiredByStream =
+                expiredRows
+                    .groupBy { it[SyncChanges.scope] to it[SyncChanges.scopeId] }
+                    .mapValues { (_, rows) -> rows.maxOf { it[SyncChanges.revision] } }
+                    .toList()
+                    .sortedWith(
+                        compareBy<Pair<Pair<SyncScope, Uuid>, Long>> { it.first.first.ordinal }
+                            .thenBy { it.first.second.toString() },
+                    )
 
             for ((streamKey, maxRev) in maxExpiredByStream) {
                 val (scope, scopeId) = streamKey
@@ -480,10 +517,11 @@ class SyncDataSourceImpl : SyncRepository {
     }
 
     private fun loadHydratedMessages(messageIds: List<Uuid>): Map<Uuid, Message> {
-        val rows = messagesWithSenderContext(Messages.conversationId)
-            .selectAll()
-            .where { Messages.id inList messageIds }
-            .toList()
+        val rows =
+            messagesWithSenderContext(Messages.conversationId)
+                .selectAll()
+                .where { Messages.id inList messageIds }
+                .toList()
         return hydrateReplies(rows, Messages.conversationId)
     }
 }

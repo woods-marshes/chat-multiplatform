@@ -1,22 +1,59 @@
 package com.github.woodsmarshes.chat.feature.auth.ui
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.ArcMode
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -62,6 +99,7 @@ fun AuthScreen(
                 snackbarHostState.showSnackbar(state.message)
                 viewModel.resetScreenState()
             }
+
             else -> {}
         }
     }
@@ -78,7 +116,7 @@ fun AuthScreen(
             onServerAddressChange = viewModel::updateServerAddress,
             onSubmit = viewModel::submit,
             snackbarHostState = snackbarHostState,
-            sharedTransitionScope = this
+            sharedTransitionScope = this,
         )
     }
 }
@@ -96,33 +134,37 @@ private fun AuthScreenContent(
     onServerAddressChange: (String) -> Unit,
     onSubmit: () -> Unit,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
-    sharedTransitionScope: SharedTransitionScope
+    sharedTransitionScope: SharedTransitionScope,
 ) {
     // 使用 androidx.window.core.layout.WindowSizeClass 提供的断点判断方法
     // WIDTH_DP_MEDIUM_LOWER_BOUND = 600
-    val isDesktopOrTablet = windowSizeClass
-        .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+    val isDesktopOrTablet =
+        windowSizeClass
+            .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
 
-    val brandingBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
-        keyframes {
-            durationMillis = 320
-            initialBounds at 0 using ArcMode.ArcAbove using FastOutSlowInEasing
-            targetBounds at 320
+    val brandingBoundsTransform =
+        BoundsTransform { initialBounds, targetBounds ->
+            keyframes {
+                durationMillis = 320
+                initialBounds at 0 using ArcMode.ArcAbove using FastOutSlowInEasing
+                targetBounds at 320
+            }
         }
-    }
 
-    val formBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
-        keyframes {
-            durationMillis = 320
-            initialBounds at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
-            targetBounds at 320
+    val formBoundsTransform =
+        BoundsTransform { initialBounds, targetBounds ->
+            keyframes {
+                durationMillis = 320
+                initialBounds at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
+                targetBounds at 320
+            }
         }
-    }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize(),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize(),
+        contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(
             modifier = Modifier.fillMaxSize().imePadding(),
@@ -130,51 +172,54 @@ private fun AuthScreenContent(
             label = "Auth-LayoutTransition",
             transitionSpec = {
                 fadeIn(animationSpec = tween(220)) togetherWith
-                        fadeOut(animationSpec = tween(220))
-            }
+                    fadeOut(animationSpec = tween(220))
+            },
         ) { targetIsDesktopOrTablet ->
 
             if (targetIsDesktopOrTablet) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(24.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(0.8f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(48.dp)
+                        horizontalArrangement = Arrangement.spacedBy(48.dp),
                     ) {
                         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                             with(sharedTransitionScope) {
                                 AuthBrandingSection(
-                                    modifier =  Modifier
-                                        .sharedBounds(
-                                            sharedContentState = rememberSharedContentState(key = "branding_section"),
-                                            animatedVisibilityScope = this@AnimatedContent,
-                                            boundsTransform = brandingBoundsTransform,
-                                            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                        ).skipToLookaheadSize()
+                                    modifier =
+                                        Modifier
+                                            .sharedBounds(
+                                                sharedContentState = rememberSharedContentState(key = "branding_section"),
+                                                animatedVisibilityScope = this@AnimatedContent,
+                                                boundsTransform = brandingBoundsTransform,
+                                                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                                            ).skipToLookaheadSize(),
                                 )
                             }
                         }
                         ChatAppCard(
-                            modifier = Modifier
-                                .weight(1.2f)
-                                .then(
-                                    with(sharedTransitionScope) {
-                                        Modifier
-                                            .sharedBounds(
-                                                sharedContentState = rememberSharedContentState(key = "form_container"),
-                                                animatedVisibilityScope = this@AnimatedContent,
-                                                boundsTransform = formBoundsTransform,
-                                                resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                            )
-                                    }
-                                ),
+                            modifier =
+                                Modifier
+                                    .weight(1.2f)
+                                    .then(
+                                        with(sharedTransitionScope) {
+                                            Modifier
+                                                .sharedBounds(
+                                                    sharedContentState = rememberSharedContentState(key = "form_container"),
+                                                    animatedVisibilityScope = this@AnimatedContent,
+                                                    boundsTransform = formBoundsTransform,
+                                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                                                )
+                                        },
+                                    ),
                             cornerRadius = 16.dp,
                         ) {
                             with(sharedTransitionScope) {
@@ -187,7 +232,7 @@ private fun AuthScreenContent(
                                         onPasswordChange = onPasswordChange,
                                         onConfirmPasswordChange = onConfirmPasswordChange,
                                         onServerAddressChange = onServerAddressChange,
-                                        onSubmit = onSubmit
+                                        onSubmit = onSubmit,
                                     )
                                 }
                             }
@@ -196,39 +241,41 @@ private fun AuthScreenContent(
                 }
             } else {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(24.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     with(sharedTransitionScope) {
                         AuthBrandingSection(
-                            modifier = Modifier
-                                .sharedBounds(
-                                    sharedContentState = rememberSharedContentState(key = "branding_section"),
-                                    animatedVisibilityScope = this@AnimatedContent,
-                                    boundsTransform = brandingBoundsTransform,
-                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                )
-                                .skipToLookaheadSize()
+                            modifier =
+                                Modifier
+                                    .sharedBounds(
+                                        sharedContentState = rememberSharedContentState(key = "branding_section"),
+                                        animatedVisibilityScope = this@AnimatedContent,
+                                        boundsTransform = brandingBoundsTransform,
+                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                                    ).skipToLookaheadSize(),
                         )
                     }
                     Spacer(modifier = Modifier.height(32.dp))
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                        modifier = Modifier.then(
-                            with(sharedTransitionScope) {
-                                Modifier.sharedBounds(
-                                    sharedContentState = rememberSharedContentState(key = "form_container"),
-                                    animatedVisibilityScope = this@AnimatedContent,
-                                    boundsTransform = formBoundsTransform,
-                                    resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds()
-                                )
-                            }
-                        )
+                        modifier =
+                            Modifier.then(
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedBounds(
+                                        sharedContentState = rememberSharedContentState(key = "form_container"),
+                                        animatedVisibilityScope = this@AnimatedContent,
+                                        boundsTransform = formBoundsTransform,
+                                        resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+                                    )
+                                },
+                            ),
                     ) {
                         with(sharedTransitionScope) {
                             Box(modifier = Modifier.skipToLookaheadSize()) {
@@ -240,7 +287,7 @@ private fun AuthScreenContent(
                                     onPasswordChange = onPasswordChange,
                                     onConfirmPasswordChange = onConfirmPasswordChange,
                                     onServerAddressChange = onServerAddressChange,
-                                    onSubmit = onSubmit
+                                    onSubmit = onSubmit,
                                 )
                             }
                         }
@@ -261,28 +308,26 @@ private fun AuthScreenContent(
 }
 
 @Composable
-private fun AuthBrandingSection(
-    modifier: Modifier = Modifier,
-) {
+private fun AuthBrandingSection(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.Chat,
             contentDescription = null,
             modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = LocalStrings.current.appName,
             style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = LocalStrings.current.appTagline,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline
+            color = MaterialTheme.colorScheme.outline,
         )
     }
 }
@@ -296,7 +341,7 @@ private fun AuthFormContent(
     onPasswordChange: (String) -> Unit,
     onConfirmPasswordChange: (String) -> Unit,
     onServerAddressChange: (String) -> Unit,
-    onSubmit: () -> Unit
+    onSubmit: () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
     val onSubmitWithClearFocus: () -> Unit = {
@@ -306,12 +351,12 @@ private fun AuthFormContent(
 
     Column(
         modifier = Modifier.padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         val strings = LocalStrings.current
         Text(
             text = if (uiState.mode == AuthMode.Login) strings.authWelcomeBack else strings.createAccount,
-            style = MaterialTheme.typography.headlineSmall
+            style = MaterialTheme.typography.headlineSmall,
         )
 
         AppTabRow(
@@ -332,15 +377,17 @@ private fun AuthFormContent(
             errorText = uiState.serverError?.localizedMessage(),
             leadingIcon = { Icon(Icons.Default.Dns, null) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Next
-            ),
-            keyboardActions = KeyboardActions(
-                onNext = {
-                    focusManager.moveFocus(FocusDirection.Down)
-                }
-            )
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Next,
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onNext = {
+                        focusManager.moveFocus(FocusDirection.Down)
+                    },
+                ),
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -349,25 +396,33 @@ private fun AuthFormContent(
             targetState = uiState.mode,
             transitionSpec = {
                 if (targetState == AuthMode.Register) {
-                    (slideInHorizontally { width -> width / 2 }
-                            + fadeIn(animationSpec = tween(300))) togetherWith
-                            (slideOutHorizontally { width -> -width / 2 }
-                                    + fadeOut(animationSpec = tween(300)))
+                    (
+                        slideInHorizontally { width -> width / 2 } +
+                            fadeIn(animationSpec = tween(300))
+                    ) togetherWith
+                        (
+                            slideOutHorizontally { width -> -width / 2 } +
+                                fadeOut(animationSpec = tween(300))
+                        )
                 } else {
-                    (slideInHorizontally { width -> -width / 2 }
-                            + fadeIn(animationSpec = tween(300))) togetherWith
-                            (slideOutHorizontally { width -> width / 2 }
-                                    + fadeOut(animationSpec = tween(300)))
+                    (
+                        slideInHorizontally { width -> -width / 2 } +
+                            fadeIn(animationSpec = tween(300))
+                    ) togetherWith
+                        (
+                            slideOutHorizontally { width -> width / 2 } +
+                                fadeOut(animationSpec = tween(300))
+                        )
                 }.using(
-                    SizeTransform(clip = true)
+                    SizeTransform(clip = true),
                 )
             },
-            label = "FormFieldsTransition"
+            label = "FormFieldsTransition",
         ) { mode ->
             val strings = LocalStrings.current
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 var passwordVisible by rememberSaveable { mutableStateOf(false) }
                 var confirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
@@ -381,15 +436,17 @@ private fun AuthFormContent(
                         errorText = uiState.emailError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Email,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                focusManager.moveFocus(FocusDirection.Down)
-                            }
-                        )
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onNext = {
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                },
+                            ),
                     )
 
                     AppTextField(
@@ -403,24 +460,27 @@ private fun AuthFormContent(
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(
-                                    imageVector = if (passwordVisible) {
-                                        Icons.Default.Visibility
-                                    } else {
-                                        Icons.Default.VisibilityOff
-                                    },
-                                    contentDescription = if (passwordVisible) strings.hidePasswordCd else strings.showPasswordCd
+                                    imageVector =
+                                        if (passwordVisible) {
+                                            Icons.Default.Visibility
+                                        } else {
+                                            Icons.Default.VisibilityOff
+                                        },
+                                    contentDescription = if (passwordVisible) strings.hidePasswordCd else strings.showPasswordCd,
                                 )
                             }
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { if (uiState.canSubmit) onSubmitWithClearFocus() }
-                        )
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onDone = { if (uiState.canSubmit) onSubmitWithClearFocus() },
+                            ),
                     )
                 } else {
                     AppTextField(
@@ -433,11 +493,12 @@ private fun AuthFormContent(
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                focusManager.moveFocus(FocusDirection.Down)
-                            }
-                        )
+                        keyboardActions =
+                            KeyboardActions(
+                                onNext = {
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                },
+                            ),
                     )
 
                     AppTextField(
@@ -449,15 +510,17 @@ private fun AuthFormContent(
                         errorText = uiState.emailError?.localizedMessage(),
                         leadingIcon = { Icon(Icons.Default.Email, null) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Email,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                focusManager.moveFocus(FocusDirection.Down)
-                            }
-                        )
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onNext = {
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                },
+                            ),
                     )
 
                     AppTextField(
@@ -478,13 +541,15 @@ private fun AuthFormContent(
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        )
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Next,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                            ),
                     )
 
                     AppTextField(
@@ -505,13 +570,15 @@ private fun AuthFormContent(
                         },
                         visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = {
-                            if (uiState.canSubmit) onSubmitWithClearFocus()
-                        })
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(onDone = {
+                                if (uiState.canSubmit) onSubmitWithClearFocus()
+                            }),
                     )
                 }
             }

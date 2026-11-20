@@ -53,19 +53,22 @@ fun VideoBubble(
     val bgColor = if (isOwnMessage) bubbleColors.ownBackground.copy(alpha = 0.85f) else bubbleColors.otherBackground
 
     Column(
-        modifier = modifier
-            .widthIn(max = 260.dp)
-            .clip(shape)
-            .background(bgColor)
-            .then(
-                // Consume touch events to prevent pass-through
-                if (onPlayClick != null) {
-                    Modifier.clickable(
-                        indication = null,
-                        interactionSource = null,
-                    ) { onPlayClick(content) }
-                } else Modifier
-            ),
+        modifier =
+            modifier
+                .widthIn(max = 260.dp)
+                .clip(shape)
+                .background(bgColor)
+                .then(
+                    // Consume touch events to prevent pass-through
+                    if (onPlayClick != null) {
+                        Modifier.clickable(
+                            indication = null,
+                            interactionSource = null,
+                        ) { onPlayClick(content) }
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         // Cover / playback area
         Box(
@@ -102,10 +105,11 @@ fun VideoBubble(
 
                 // Centered play button overlay
                 Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f)),
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.5f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -124,11 +128,17 @@ fun VideoBubble(
 }
 
 @Composable
-private fun VideoPlaceholder(iconTint: Color, size: androidx.compose.ui.unit.Dp) {
+private fun VideoPlaceholder(
+    iconTint: Color,
+    size: androidx.compose.ui.unit.Dp,
+) {
     val bubbleColors = LocalBubbleColors.current
     Box(
-        modifier = Modifier.fillMaxWidth().height(180.dp)
-            .background(bubbleColors.otherBackground),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(bubbleColors.otherBackground),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -141,7 +151,10 @@ private fun VideoPlaceholder(iconTint: Color, size: androidx.compose.ui.unit.Dp)
 }
 
 @Composable
-private fun VideoInfoRow(content: VideoContent, isOwnMessage: Boolean) {
+private fun VideoInfoRow(
+    content: VideoContent,
+    isOwnMessage: Boolean,
+) {
     val bubbleColors = LocalBubbleColors.current
     val durationStr = formatDuration(content.duration)
     val sizeStr = formatFileSize(content.size)
@@ -149,9 +162,10 @@ private fun VideoInfoRow(content: VideoContent, isOwnMessage: Boolean) {
     val secondaryColor = if (isOwnMessage) bubbleColors.ownContent.copy(alpha = 0.75f) else bubbleColors.timestampColor
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

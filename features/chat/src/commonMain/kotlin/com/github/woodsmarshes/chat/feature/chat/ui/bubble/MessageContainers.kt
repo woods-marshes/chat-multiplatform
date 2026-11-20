@@ -27,8 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.Icon
-import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenu
-import com.github.woodsmarshes.chat.core.ui.components.RoleMicroBadge
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,6 +65,8 @@ import com.github.woodsmarshes.chat.core.model.ConversationRole
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.presentation.MessageState
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
+import com.github.woodsmarshes.chat.core.ui.components.AppDropdownMenu
+import com.github.woodsmarshes.chat.core.ui.components.RoleMicroBadge
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
@@ -86,7 +86,10 @@ val REPLY_THRESHOLD_DP = 56.dp
 /**
  * Computes a Telegram-style rubber-banded horizontal offset (<= 0f) for swipe-to-reply.
  */
-private fun calculateDampedSwipeOffset(rawDragX: Float, thresholdPx: Float): Float {
+private fun calculateDampedSwipeOffset(
+    rawDragX: Float,
+    thresholdPx: Float,
+): Float {
     val clamped = rawDragX.coerceAtMost(0f)
     val absDrag = -clamped
     return if (absDrag <= thresholdPx) {
@@ -116,32 +119,34 @@ private fun SwipeReplyIndicator(
     val slideOffsetPx = with(density) { 16.dp.toPx() }
     val isMiuix = isMiuixTheme()
 
-    val bgColor = when {
-        active && isMiuix -> MiuixTheme.colorScheme.primary
-        active -> MaterialTheme.colorScheme.primary
-        isMiuix -> MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f)
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
-    }
-    val iconColor = when {
-        active && isMiuix -> MiuixTheme.colorScheme.onPrimary
-        active -> MaterialTheme.colorScheme.onPrimary
-        isMiuix -> MiuixTheme.colorScheme.onSurfaceVariantActions
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val bgColor =
+        when {
+            active && isMiuix -> MiuixTheme.colorScheme.primary
+            active -> MaterialTheme.colorScheme.primary
+            isMiuix -> MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
+        }
+    val iconColor =
+        when {
+            active && isMiuix -> MiuixTheme.colorScheme.onPrimary
+            active -> MaterialTheme.colorScheme.onPrimary
+            isMiuix -> MiuixTheme.colorScheme.onSurfaceVariantActions
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Box(
-        modifier = modifier
-            .size(34.dp)
-            .graphicsLayer {
-                val clamped = (-offsetXProvider() / thresholdPx).coerceIn(0f, 1f)
-                val scale = if (clamped <= 0.01f) 0f else (0.4f + 0.6f * clamped)
-                scaleX = scale
-                scaleY = scale
-                alpha = clamped
-                translationX = (1f - clamped) * slideOffsetPx
-            }
-            .clip(CircleShape)
-            .background(bgColor),
+        modifier =
+            modifier
+                .size(34.dp)
+                .graphicsLayer {
+                    val clamped = (-offsetXProvider() / thresholdPx).coerceIn(0f, 1f)
+                    val scale = if (clamped <= 0.01f) 0f else (0.4f + 0.6f * clamped)
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = clamped
+                    translationX = (1f - clamped) * slideOffsetPx
+                }.clip(CircleShape)
+                .background(bgColor),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -186,94 +191,96 @@ fun OwnMessageContainer(
     val currentOnReply by rememberUpdatedState(onReply)
 
     val isMiuix = isMiuixTheme()
-    val selectedBg = if (isMiuix) {
-        MiuixTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
-    } else {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-    }
+    val selectedBg =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+        } else {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        }
 
-    val rowModifier = modifier
-        .fillMaxWidth()
-        .background(if (selected) selectedBg else Color.Transparent)
-        .pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (event.type == PointerEventType.Press) {
-                        event.changes.firstOrNull()?.position?.let { pos ->
-                            pressOffset = pos
+    val rowModifier =
+        modifier
+            .fillMaxWidth()
+            .background(if (selected) selectedBg else Color.Transparent)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press) {
+                            event.changes.firstOrNull()?.position?.let { pos ->
+                                pressOffset = pos
+                            }
                         }
                     }
                 }
-            }
-        }
-        .then(
-            if (selectionActive) {
-                Modifier
-                    .pointerHoverIcon(PointerIcon.Hand)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { currentToggleSelection?.invoke() },
-                    )
-            } else if (onReply != null) {
-                Modifier.pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            rawDragX = offsetX.value
-                            hasHapticPlayed = false
-                        },
-                        onDragEnd = {
-                            val triggered = abs(offsetX.value) >= thresholdPx
-                            rawDragX = 0f
-                            hasHapticPlayed = false
-                            coroutineScope.launch {
-                                if (triggered) {
-                                    currentOnReply?.invoke()
-                                }
-                                offsetX.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                )
-                            }
-                        },
-                        onDragCancel = {
-                            rawDragX = 0f
-                            hasHapticPlayed = false
-                            coroutineScope.launch {
-                                offsetX.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                )
-                            }
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            rawDragX = (rawDragX + dragAmount).coerceAtMost(0f)
-                            val targetOffset = calculateDampedSwipeOffset(rawDragX, thresholdPx)
-                            val passed = abs(targetOffset) >= thresholdPx
-                            if (passed && !hasHapticPlayed) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                hasHapticPlayed = true
-                            } else if (!passed && hasHapticPlayed) {
+            }.then(
+                if (selectionActive) {
+                    Modifier
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { currentToggleSelection?.invoke() },
+                        )
+                } else if (onReply != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                rawDragX = offsetX.value
                                 hasHapticPlayed = false
-                            }
-                            coroutineScope.launch {
-                                offsetX.snapTo(targetOffset)
-                            }
-                        },
-                    )
-                }
-            } else {
-                Modifier
-            }
-        )
-        .padding(horizontal = 12.dp, vertical = 4.dp)
+                            },
+                            onDragEnd = {
+                                val triggered = abs(offsetX.value) >= thresholdPx
+                                rawDragX = 0f
+                                hasHapticPlayed = false
+                                coroutineScope.launch {
+                                    if (triggered) {
+                                        currentOnReply?.invoke()
+                                    }
+                                    offsetX.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec =
+                                            spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMedium,
+                                            ),
+                                    )
+                                }
+                            },
+                            onDragCancel = {
+                                rawDragX = 0f
+                                hasHapticPlayed = false
+                                coroutineScope.launch {
+                                    offsetX.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec =
+                                            spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMedium,
+                                            ),
+                                    )
+                                }
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                rawDragX = (rawDragX + dragAmount).coerceAtMost(0f)
+                                val targetOffset = calculateDampedSwipeOffset(rawDragX, thresholdPx)
+                                val passed = abs(targetOffset) >= thresholdPx
+                                if (passed && !hasHapticPlayed) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    hasHapticPlayed = true
+                                } else if (!passed && hasHapticPlayed) {
+                                    hasHapticPlayed = false
+                                }
+                                coroutineScope.launch {
+                                    offsetX.snapTo(targetOffset)
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            ).padding(horizontal = 12.dp, vertical = 4.dp)
 
     // Low-frequency boolean: only crosses the threshold twice per swipe, so the
     // container recomposes twice at most — the per-frame work stays in graphicsLayer.
@@ -288,12 +295,17 @@ fun OwnMessageContainer(
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 8.dp)
-                    .size(22.dp),
+                tint =
+                    if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    },
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 8.dp)
+                        .size(22.dp),
             )
         }
 
@@ -303,58 +315,64 @@ fun OwnMessageContainer(
                 offsetXProvider = { offsetX.value },
                 thresholdPx = thresholdPx,
                 active = reachedThreshold,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 8.dp),
             )
         }
 
         // Foreground layer: Own message bubble translated purely in graphicsLayer
         Column(
             horizontalAlignment = Alignment.End,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .widthIn(max = 420.dp)
-                .graphicsLayer {
-                    translationX = offsetX.value
-                }
-                .then(
-                    if (!selectionActive && (menuContent != null || onToggleSelection != null)) {
-                        Modifier
-                            .combinedClickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = { /* Keep left click clean on desktop */ },
-                                onLongClick = {
-                                    if (menuContent != null) menuExpanded = true
-                                    else currentToggleSelection?.invoke()
-                                },
-                            )
-                            .pointerInput(Unit) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        if (event.type == PointerEventType.Press) {
-                                            when {
-                                                // Desktop right-click: message menu at cursor
-                                                event.buttons.isSecondaryPressed && currentMenuContent != null -> {
-                                                    menuExpanded = true
-                                                    event.changes.forEach { it.consume() }
-                                                }
-                                                // Desktop Ctrl+click: toggle selection
-                                                event.changes.firstOrNull()?.pressed == true &&
-                                                    event.keyboardModifiers.isCtrlPressed &&
-                                                    currentToggleSelection != null -> {
-                                                    currentToggleSelection?.invoke()
-                                                    event.changes.forEach { it.consume() }
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .widthIn(max = 420.dp)
+                    .graphicsLayer {
+                        translationX = offsetX.value
+                    }.then(
+                        if (!selectionActive && (menuContent != null || onToggleSelection != null)) {
+                            Modifier
+                                .combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = { /* Keep left click clean on desktop */ },
+                                    onLongClick = {
+                                        if (menuContent != null) {
+                                            menuExpanded = true
+                                        } else {
+                                            currentToggleSelection?.invoke()
+                                        }
+                                    },
+                                ).pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            if (event.type == PointerEventType.Press) {
+                                                when {
+                                                    // Desktop right-click: message menu at cursor
+                                                    event.buttons.isSecondaryPressed && currentMenuContent != null -> {
+                                                        menuExpanded = true
+                                                        event.changes.forEach { it.consume() }
+                                                    }
+
+                                                    // Desktop Ctrl+click: toggle selection
+                                                    event.changes.firstOrNull()?.pressed == true &&
+                                                        event.keyboardModifiers.isCtrlPressed &&
+                                                        currentToggleSelection != null -> {
+                                                        currentToggleSelection?.invoke()
+                                                        event.changes.forEach { it.consume() }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
-                    } else Modifier
-                ),
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             content()
             MessageTimestamp(
@@ -368,14 +386,15 @@ fun OwnMessageContainer(
         // composes its items, which would otherwise cost one menu tree per row.
         if (menuContent != null && menuExpanded) {
             Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset {
-                        IntOffset(
-                            x = pressOffset.x.roundToInt(),
-                            y = pressOffset.y.roundToInt(),
-                        )
-                    },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .offset {
+                            IntOffset(
+                                x = pressOffset.x.roundToInt(),
+                                y = pressOffset.y.roundToInt(),
+                            )
+                        },
             ) {
                 AppDropdownMenu(
                     expanded = menuExpanded,
@@ -425,94 +444,96 @@ fun OtherMessageContainer(
 
     val sender = message.sender
     val isMiuix = isMiuixTheme()
-    val selectedBg = if (isMiuix) {
-        MiuixTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
-    } else {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-    }
+    val selectedBg =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+        } else {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        }
 
-    val rowModifier = modifier
-        .fillMaxWidth()
-        .background(if (selected) selectedBg else Color.Transparent)
-        .pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (event.type == PointerEventType.Press) {
-                        event.changes.firstOrNull()?.position?.let { pos ->
-                            pressOffset = pos
+    val rowModifier =
+        modifier
+            .fillMaxWidth()
+            .background(if (selected) selectedBg else Color.Transparent)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press) {
+                            event.changes.firstOrNull()?.position?.let { pos ->
+                                pressOffset = pos
+                            }
                         }
                     }
                 }
-            }
-        }
-        .then(
-            if (selectionActive) {
-                Modifier
-                    .pointerHoverIcon(PointerIcon.Hand)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { currentToggleSelection?.invoke() },
-                    )
-            } else if (onReply != null) {
-                Modifier.pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            rawDragX = offsetX.value
-                            hasHapticPlayed = false
-                        },
-                        onDragEnd = {
-                            val triggered = abs(offsetX.value) >= thresholdPx
-                            rawDragX = 0f
-                            hasHapticPlayed = false
-                            coroutineScope.launch {
-                                if (triggered) {
-                                    currentOnReply?.invoke()
-                                }
-                                offsetX.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                )
-                            }
-                        },
-                        onDragCancel = {
-                            rawDragX = 0f
-                            hasHapticPlayed = false
-                            coroutineScope.launch {
-                                offsetX.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMedium,
-                                    ),
-                                )
-                            }
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            rawDragX = (rawDragX + dragAmount).coerceAtMost(0f)
-                            val targetOffset = calculateDampedSwipeOffset(rawDragX, thresholdPx)
-                            val passed = abs(targetOffset) >= thresholdPx
-                            if (passed && !hasHapticPlayed) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                hasHapticPlayed = true
-                            } else if (!passed && hasHapticPlayed) {
+            }.then(
+                if (selectionActive) {
+                    Modifier
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { currentToggleSelection?.invoke() },
+                        )
+                } else if (onReply != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                rawDragX = offsetX.value
                                 hasHapticPlayed = false
-                            }
-                            coroutineScope.launch {
-                                offsetX.snapTo(targetOffset)
-                            }
-                        },
-                    )
-                }
-            } else {
-                Modifier
-            }
-        )
-        .padding(horizontal = 12.dp, vertical = 4.dp)
+                            },
+                            onDragEnd = {
+                                val triggered = abs(offsetX.value) >= thresholdPx
+                                rawDragX = 0f
+                                hasHapticPlayed = false
+                                coroutineScope.launch {
+                                    if (triggered) {
+                                        currentOnReply?.invoke()
+                                    }
+                                    offsetX.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec =
+                                            spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMedium,
+                                            ),
+                                    )
+                                }
+                            },
+                            onDragCancel = {
+                                rawDragX = 0f
+                                hasHapticPlayed = false
+                                coroutineScope.launch {
+                                    offsetX.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec =
+                                            spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = Spring.StiffnessMedium,
+                                            ),
+                                    )
+                                }
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                rawDragX = (rawDragX + dragAmount).coerceAtMost(0f)
+                                val targetOffset = calculateDampedSwipeOffset(rawDragX, thresholdPx)
+                                val passed = abs(targetOffset) >= thresholdPx
+                                if (passed && !hasHapticPlayed) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    hasHapticPlayed = true
+                                } else if (!passed && hasHapticPlayed) {
+                                    hasHapticPlayed = false
+                                }
+                                coroutineScope.launch {
+                                    offsetX.snapTo(targetOffset)
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            ).padding(horizontal = 12.dp, vertical = 4.dp)
 
     // Low-frequency boolean: only crosses the threshold twice per swipe, so the
     // container recomposes twice at most — the per-frame work stays in graphicsLayer.
@@ -529,19 +550,21 @@ fun OtherMessageContainer(
                 offsetXProvider = { offsetX.value },
                 thresholdPx = thresholdPx,
                 active = reachedThreshold,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 8.dp),
             )
         }
 
         // Foreground layer: Avatar + Bubble move left together as one unit
         Row(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .graphicsLayer {
-                    translationX = offsetX.value
-                },
+            modifier =
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .graphicsLayer {
+                        translationX = offsetX.value
+                    },
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top,
         ) {
@@ -549,12 +572,17 @@ fun OtherMessageContainer(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    modifier = Modifier
-                        .align(Alignment.CenterVertically)
-                        .padding(end = 8.dp)
-                        .size(22.dp),
+                    tint =
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        },
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterVertically)
+                            .padding(end = 8.dp)
+                            .size(22.dp),
                 )
             }
 
@@ -570,55 +598,62 @@ fun OtherMessageContainer(
 
             Column(
                 horizontalAlignment = Alignment.Start,
-                modifier = Modifier
-                    .widthIn(max = 420.dp)
-                    .then(
-                        if (!selectionActive && (menuContent != null || onToggleSelection != null)) {
-                            Modifier
-                                .combinedClickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = { /* Keep left click clean on desktop */ },
-                                    onLongClick = {
-                                        if (menuContent != null) menuExpanded = true
-                                        else currentToggleSelection?.invoke()
-                                    },
-                                )
-                                .pointerInput(Unit) {
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            val event = awaitPointerEvent()
-                                            if (event.type == PointerEventType.Press) {
-                                                when {
-                                                    // Desktop right-click: message menu at cursor
-                                                    event.buttons.isSecondaryPressed && currentMenuContent != null -> {
-                                                        menuExpanded = true
-                                                        event.changes.forEach { it.consume() }
-                                                    }
-                                                    // Desktop Ctrl+click: toggle selection
-                                                    event.changes.firstOrNull()?.pressed == true &&
-                                                        event.keyboardModifiers.isCtrlPressed &&
-                                                        currentToggleSelection != null -> {
-                                                        currentToggleSelection?.invoke()
-                                                        event.changes.forEach { it.consume() }
+                modifier =
+                    Modifier
+                        .widthIn(max = 420.dp)
+                        .then(
+                            if (!selectionActive && (menuContent != null || onToggleSelection != null)) {
+                                Modifier
+                                    .combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = { /* Keep left click clean on desktop */ },
+                                        onLongClick = {
+                                            if (menuContent != null) {
+                                                menuExpanded = true
+                                            } else {
+                                                currentToggleSelection?.invoke()
+                                            }
+                                        },
+                                    ).pointerInput(Unit) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                if (event.type == PointerEventType.Press) {
+                                                    when {
+                                                        // Desktop right-click: message menu at cursor
+                                                        event.buttons.isSecondaryPressed && currentMenuContent != null -> {
+                                                            menuExpanded = true
+                                                            event.changes.forEach { it.consume() }
+                                                        }
+
+                                                        // Desktop Ctrl+click: toggle selection
+                                                        event.changes.firstOrNull()?.pressed == true &&
+                                                            event.keyboardModifiers.isCtrlPressed &&
+                                                            currentToggleSelection != null -> {
+                                                            currentToggleSelection?.invoke()
+                                                            event.changes.forEach { it.consume() }
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                        } else Modifier
-                    ),
+                            } else {
+                                Modifier
+                            },
+                        ),
             ) {
                 if (showSenderName && sender != null) {
                     val s = sender
                     Box(
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            enabled = !selectionActive && onAvatarClick != null,
-                            onClick = { onAvatarClick?.invoke() },
-                        )
+                        modifier =
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = !selectionActive && onAvatarClick != null,
+                                onClick = { onAvatarClick?.invoke() },
+                            ),
                     ) {
                         MessageSenderName(
                             name = s.displayName ?: s.username,
@@ -639,14 +674,15 @@ fun OtherMessageContainer(
         // composes its items, which would otherwise cost one menu tree per row.
         if (menuContent != null && menuExpanded) {
             Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset {
-                        IntOffset(
-                            x = pressOffset.x.roundToInt(),
-                            y = pressOffset.y.roundToInt(),
-                        )
-                    },
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .offset {
+                            IntOffset(
+                                x = pressOffset.x.roundToInt(),
+                                y = pressOffset.y.roundToInt(),
+                            )
+                        },
             ) {
                 AppDropdownMenu(
                     expanded = menuExpanded,
@@ -697,13 +733,14 @@ fun MessageTimestamp(
     val strings = LocalStrings.current
     val timeStr = formatMessageTime(createdAt, strings)
 
-    val statusStr = when (deliveryPresentation(sendStatus, LocalMessageConnection.current, isOwnMessage)) {
-        DeliveryPresentation.Waiting -> strings.messageWaitingConnection
-        DeliveryPresentation.Sending -> strings.messageSending
-        DeliveryPresentation.Failed -> strings.messageSendFailed
-        DeliveryPresentation.Sent -> strings.sendCompleted
-        DeliveryPresentation.Hidden -> ""
-    }
+    val statusStr =
+        when (deliveryPresentation(sendStatus, LocalMessageConnection.current, isOwnMessage)) {
+            DeliveryPresentation.Waiting -> strings.messageWaitingConnection
+            DeliveryPresentation.Sending -> strings.messageSending
+            DeliveryPresentation.Failed -> strings.messageSendFailed
+            DeliveryPresentation.Sent -> strings.sendCompleted
+            DeliveryPresentation.Hidden -> ""
+        }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -721,8 +758,12 @@ fun MessageTimestamp(
         if (statusStr.isNotEmpty()) {
             Text(
                 text = statusStr,
-                color = if (sendStatus is MessageState.SendFailed) bubbleColors.errorColor
-                else bubbleColors.timestampColor,
+                color =
+                    if (sendStatus is MessageState.SendFailed) {
+                        bubbleColors.errorColor
+                    } else {
+                        bubbleColors.timestampColor
+                    },
                 fontSize = 11.sp,
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -734,5 +775,3 @@ fun MessageTimestamp(
         )
     }
 }
-
-

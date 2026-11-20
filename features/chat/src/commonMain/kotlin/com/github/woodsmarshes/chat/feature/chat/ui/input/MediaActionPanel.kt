@@ -42,27 +42,30 @@ fun MediaActionPanel(
     val bubbleColors = LocalBubbleColors.current
     val strings = LocalStrings.current
 
-    val actions = listOf(
-        MediaAction(strings.mediaImage, Icons.Default.Image, InputSelector.IMAGE),
-        MediaAction(strings.mediaFile, Icons.AutoMirrored.Filled.InsertDriveFile, InputSelector.FILE),
-        MediaAction(strings.mediaVoice, Icons.Default.Mic, InputSelector.AUDIO),
-    )
+    val actions =
+        listOf(
+            MediaAction(strings.mediaImage, Icons.Default.Image, InputSelector.IMAGE),
+            MediaAction(strings.mediaFile, Icons.AutoMirrored.Filled.InsertDriveFile, InputSelector.FILE),
+            MediaAction(strings.mediaVoice, Icons.Default.Mic, InputSelector.AUDIO),
+        )
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(bubbleColors.panelBackground)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(bubbleColors.panelBackground)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         actions.forEach { action ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onActionClick(action.selector) }
-                    .padding(8.dp),
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onActionClick(action.selector) }
+                        .padding(8.dp),
             ) {
                 Icon(
                     imageVector = action.icon,

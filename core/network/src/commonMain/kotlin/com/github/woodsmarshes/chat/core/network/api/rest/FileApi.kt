@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.core.network.api.rest
 
+import com.github.woodsmarshes.chat.core.contract.api.V1
 import com.github.woodsmarshes.chat.core.model.FileType
 import com.github.woodsmarshes.chat.core.model.MediaContent
-import com.github.woodsmarshes.chat.core.contract.api.V1
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.onUpload
@@ -26,71 +26,73 @@ class FileApi(
         source: Source,
         fileName: String,
         fileType: FileType,
-        onProgress: suspend (bytesSent: Long, total: Long?) -> Unit
-    ): MediaContent {
-        return client.post(V1.Files.Upload(type = fileType)) {
-            headers.remove(HttpHeaders.ContentType)
-            // 设置多部分表单内容
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append(
-                            "file",
-                            InputProvider {
-                                source.buffered()
-                            },
-                            Headers.build {
-                                append(HttpHeaders.ContentType, fileType.toContentType().toString())
-                                // 必须设置 filename 字段，否则服务端 part.originalFileName 为 null
-                                append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
-                        })
-                    }
+        onProgress: suspend (bytesSent: Long, total: Long?) -> Unit,
+    ): MediaContent =
+        client
+            .post(V1.Files.Upload(type = fileType)) {
+                headers.remove(HttpHeaders.ContentType)
+                // 设置多部分表单内容
+                setBody(
+                    MultiPartFormDataContent(
+                        formData {
+                            append(
+                                "file",
+                                InputProvider {
+                                    source.buffered()
+                                },
+                                Headers.build {
+                                    append(HttpHeaders.ContentType, fileType.toContentType().toString())
+                                    // 必须设置 filename 字段，否则服务端 part.originalFileName 为 null
+                                    append(HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                                },
+                            )
+                        },
+                    ),
                 )
-            )
 
-            onUpload { bytesSentTotal, contentLength ->
-                onProgress(bytesSentTotal, contentLength)
-            }
-        }.body()
-    }
+                onUpload { bytesSentTotal, contentLength ->
+                    onProgress(bytesSentTotal, contentLength)
+                }
+            }.body()
 
     suspend fun uploadAvatar(
         source: Source,
         isGroup: Boolean,
         targetId: Uuid? = null,
-        onProgress: suspend (bytesSent: Long, total: Long?) -> Unit
+        onProgress: suspend (bytesSent: Long, total: Long?) -> Unit,
     ): String {
-        val response = client.post(V1.Files.Avatar(isGroup = isGroup, targetId = targetId)) {
-            headers.remove(HttpHeaders.ContentType)
-            setBody(
-                MultiPartFormDataContent(
-                    formData {
-                        append(
-                            "file",
-                            InputProvider {
-                            source.buffered()
-                            },
-                            Headers.build {
-                                append(HttpHeaders.ContentType, "image/jpeg")
-                                append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
-                            }
-                        )
-                    }
+        val response =
+            client.post(V1.Files.Avatar(isGroup = isGroup, targetId = targetId)) {
+                headers.remove(HttpHeaders.ContentType)
+                setBody(
+                    MultiPartFormDataContent(
+                        formData {
+                            append(
+                                "file",
+                                InputProvider {
+                                    source.buffered()
+                                },
+                                Headers.build {
+                                    append(HttpHeaders.ContentType, "image/jpeg")
+                                    append(HttpHeaders.ContentDisposition, "filename=\"avatar.jpg\"")
+                                },
+                            )
+                        },
+                    ),
                 )
-            )
-            onUpload { bytesSent, total ->
-                onProgress(bytesSent, total)
+                onUpload { bytesSent, total ->
+                    onProgress(bytesSent, total)
+                }
             }
-        }
         return response.body<Map<String, String>>()["url"] ?: ""
     }
-
 }
 
-internal fun FileType.toContentType(): ContentType = when (this) {
-    FileType.IMAGE -> ContentType.Image.JPEG
-    FileType.AVATAR -> ContentType.Image.JPEG
-    FileType.AUDIO -> ContentType.Audio.MPEG
-    FileType.VIDEO -> ContentType.Video.MP4
-    FileType.FILE -> ContentType.Application.OctetStream
-}
+internal fun FileType.toContentType(): ContentType =
+    when (this) {
+        FileType.IMAGE -> ContentType.Image.JPEG
+        FileType.AVATAR -> ContentType.Image.JPEG
+        FileType.AUDIO -> ContentType.Audio.MPEG
+        FileType.VIDEO -> ContentType.Video.MP4
+        FileType.FILE -> ContentType.Application.OctetStream
+    }

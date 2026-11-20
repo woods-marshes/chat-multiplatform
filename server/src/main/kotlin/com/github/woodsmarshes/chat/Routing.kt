@@ -13,17 +13,22 @@ import com.github.woodsmarshes.chat.routes.sessionRoutes
 import com.github.woodsmarshes.chat.routes.syncRoutes
 import com.github.woodsmarshes.chat.routes.userRoutes
 import com.github.woodsmarshes.chat.utils.toHttpStatusCode
-import io.ktor.http.*
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.http.content.*
-import io.ktor.server.plugins.autohead.*
+import io.ktor.http.CacheControl
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
+import io.ktor.server.application.createApplicationPlugin
+import io.ktor.server.application.install
+import io.ktor.server.auth.authenticate
+import io.ktor.server.http.content.singlePageApplication
+import io.ktor.server.http.content.staticFiles
 import io.ktor.server.plugins.BadRequestException
-import java.io.File
-import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.plugins.autohead.AutoHeadResponse
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.resources.Resources
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.routing
+import java.io.File
 
 fun Application.configureRouting() {
     // DoubleReceive must NOT be installed here: its body cache disposal
@@ -55,7 +60,7 @@ fun Application.configureRouting() {
         // server bugs behind a 400.
         exception<BadRequestException> { call, cause ->
             this@configureRouting.environment.log.warn(
-                "Malformed request to ${call.request.local.uri}: ${cause.message}"
+                "Malformed request to ${call.request.local.uri}: ${cause.message}",
             )
             call.respondText(text = "Malformed request body", status = HttpStatusCode.BadRequest)
         }
@@ -72,13 +77,17 @@ fun Application.configureRouting() {
 
     // User-uploaded files are served straight from disk: without nosniff a
     // polyglot payload could be reinterpreted as script/HTML by the browser.
-    install(createApplicationPlugin("UploadSecurityHeaders") {
-        onCall { call ->
-            if (call.request.local.uri.startsWith("/uploads/")) {
-                call.response.headers.append("X-Content-Type-Options", "nosniff", safeOnly = false)
+    install(
+        createApplicationPlugin("UploadSecurityHeaders") {
+            onCall { call ->
+                if (call.request.local.uri
+                        .startsWith("/uploads/")
+                ) {
+                    call.response.headers.append("X-Content-Type-Options", "nosniff", safeOnly = false)
+                }
             }
-        }
-    })
+        },
+    )
 
     routing {
         authRoutes()
@@ -96,46 +105,60 @@ fun Application.configureRouting() {
         staticFiles("/uploads", File("uploads")) {
             cacheControl { file ->
                 when {
-                    file.path.contains("avatar") -> listOf(
-                        CacheControl.MaxAge(
-                            maxAgeSeconds = 3600,
-                            proxyMaxAgeSeconds = 1800,
-                            mustRevalidate = true,
-                            proxyRevalidate = true,
-                            visibility = CacheControl.Visibility.Public
+                    file.path.contains("avatar") -> {
+                        listOf(
+                            CacheControl.MaxAge(
+                                maxAgeSeconds = 3600,
+                                proxyMaxAgeSeconds = 1800,
+                                mustRevalidate = true,
+                                proxyRevalidate = true,
+                                visibility = CacheControl.Visibility.Public,
+                            ),
                         )
-                    )
-                    file.path.contains("image") -> listOf(
-                        CacheControl.MaxAge(
-                            maxAgeSeconds = 86400 * 30,
-                            proxyMaxAgeSeconds = 86400 * 7,
-                            mustRevalidate = false,
-                            visibility = CacheControl.Visibility.Public
+                    }
+
+                    file.path.contains("image") -> {
+                        listOf(
+                            CacheControl.MaxAge(
+                                maxAgeSeconds = 86400 * 30,
+                                proxyMaxAgeSeconds = 86400 * 7,
+                                mustRevalidate = false,
+                                visibility = CacheControl.Visibility.Public,
+                            ),
                         )
-                    )
-                    file.path.contains("audio") -> listOf(
-                        CacheControl.MaxAge(
-                            maxAgeSeconds = 86400 * 7,
-                            proxyMaxAgeSeconds = 86400 * 3,
-                            mustRevalidate = false,
-                            visibility = CacheControl.Visibility.Public
+                    }
+
+                    file.path.contains("audio") -> {
+                        listOf(
+                            CacheControl.MaxAge(
+                                maxAgeSeconds = 86400 * 7,
+                                proxyMaxAgeSeconds = 86400 * 3,
+                                mustRevalidate = false,
+                                visibility = CacheControl.Visibility.Public,
+                            ),
                         )
-                    )
-                    file.path.contains("video") -> listOf(
-                        CacheControl.MaxAge(
-                            maxAgeSeconds = 86400 * 7,
-                            proxyMaxAgeSeconds = 86400 * 3,
-                            mustRevalidate = false,
-                            visibility = CacheControl.Visibility.Public
+                    }
+
+                    file.path.contains("video") -> {
+                        listOf(
+                            CacheControl.MaxAge(
+                                maxAgeSeconds = 86400 * 7,
+                                proxyMaxAgeSeconds = 86400 * 3,
+                                mustRevalidate = false,
+                                visibility = CacheControl.Visibility.Public,
+                            ),
                         )
-                    )
-                    else -> listOf(
-                        CacheControl.MaxAge(
-                            maxAgeSeconds = 3600 * 4,
-                            mustRevalidate = true,
-                            visibility = CacheControl.Visibility.Public
+                    }
+
+                    else -> {
+                        listOf(
+                            CacheControl.MaxAge(
+                                maxAgeSeconds = 3600 * 4,
+                                mustRevalidate = true,
+                                visibility = CacheControl.Visibility.Public,
+                            ),
                         )
-                    )
+                    }
                 }
             }
         }

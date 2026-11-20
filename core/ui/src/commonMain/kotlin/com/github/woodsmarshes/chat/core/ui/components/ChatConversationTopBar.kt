@@ -1,9 +1,8 @@
 package com.github.woodsmarshes.chat.core.ui.components
 
-import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -31,12 +30,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedConversationBounds
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Telegram-style chat top bar: back button (in single-pane layouts), avatar,
@@ -70,11 +70,12 @@ fun ChatConversationTopBar(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .height(64.dp)
-                    .padding(horizontal = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .height(64.dp)
+                        .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (showBackButton) {
@@ -98,13 +99,14 @@ fun ChatConversationTopBar(
                     Spacer(modifier = Modifier.width(12.dp))
                 }
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .focusProperties { canFocus = false }
-                        .clickable(enabled = onHeaderClick != null) { onHeaderClick?.invoke() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .focusProperties { canFocus = false }
+                            .clickable(enabled = onHeaderClick != null) { onHeaderClick?.invoke() }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (showAvatar) {
@@ -120,9 +122,10 @@ fun ChatConversationTopBar(
                     Spacer(modifier = Modifier.width(12.dp))
                     // Move the subtitle with its title, not underneath the flying avatar.
                     Column(
-                        modifier = Modifier
-                            .sharedConversationBounds(conversationId, "title")
-                            .height(40.dp),
+                        modifier =
+                            Modifier
+                                .sharedConversationBounds(conversationId, "title")
+                                .height(40.dp),
                         verticalArrangement = Arrangement.Center,
                     ) {
                         if (isMiuix) {

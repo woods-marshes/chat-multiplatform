@@ -36,7 +36,6 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArticleDetailViewModelTest {
-
     private val articleId = Uuid.parse("00000000-0000-0000-0000-0000000000a1")
     private val authorId = Uuid.parse("00000000-0000-0000-0000-0000000000a2")
 
@@ -51,33 +50,37 @@ class ArticleDetailViewModelTest {
     }
 
     @Test
-    fun notFoundErrorMapsToLocalizedStringInsteadOfRawErrorToString() = runTest {
-        val vm = ArticleDetailViewModel(
-            articleRepository = FakeArticleRepository(Err(ArticleError.NotFound)),
-            userRepository = FakeUserRepository(),
-            articleId = articleId,
-            authorId = authorId,
-        )
+    fun notFoundErrorMapsToLocalizedStringInsteadOfRawErrorToString() =
+        runTest {
+            val vm =
+                ArticleDetailViewModel(
+                    articleRepository = FakeArticleRepository(Err(ArticleError.NotFound)),
+                    userRepository = FakeUserRepository(),
+                    articleId = articleId,
+                    authorId = authorId,
+                )
 
-        val state = vm.uiState.first { !it.isLoading }
-        assertEquals(getLocaleStrings().articleNotFound, state.error)
-    }
+            val state = vm.uiState.first { !it.isLoading }
+            assertEquals(getLocaleStrings().articleNotFound, state.error)
+        }
 
     @Test
-    fun networkErrorDoesNotExposeRawExceptionOrUrlInUiState() = runTest {
-        val rawLeak = "https://internal.example.com/v1/articles?access_token=secret-jwt-token"
-        val vm = ArticleDetailViewModel(
-            articleRepository = FakeArticleRepository(Err(ArticleError.Unknown(rawLeak))),
-            userRepository = FakeUserRepository(),
-            articleId = articleId,
-            authorId = authorId,
-        )
+    fun networkErrorDoesNotExposeRawExceptionOrUrlInUiState() =
+        runTest {
+            val rawLeak = "https://internal.example.com/v1/articles?access_token=secret-jwt-token"
+            val vm =
+                ArticleDetailViewModel(
+                    articleRepository = FakeArticleRepository(Err(ArticleError.Unknown(rawLeak))),
+                    userRepository = FakeUserRepository(),
+                    articleId = articleId,
+                    authorId = authorId,
+                )
 
-        val state = vm.uiState.first { !it.isLoading }
-        assertEquals(getLocaleStrings().articleLoadFailed, state.error)
-        assertFalse(state.error.orEmpty().contains("secret-jwt-token"))
-        assertFalse(state.error.orEmpty().contains("internal.example.com"))
-    }
+            val state = vm.uiState.first { !it.isLoading }
+            assertEquals(getLocaleStrings().articleLoadFailed, state.error)
+            assertFalse(state.error.orEmpty().contains("secret-jwt-token"))
+            assertFalse(state.error.orEmpty().contains("internal.example.com"))
+        }
 
     private class FakeArticleRepository(
         private val result: Result<Article?, ArticleError>,
@@ -108,20 +111,28 @@ class ArticleDetailViewModelTest {
 
     private class FakeUserRepository : UserRepository {
         override fun getMeFlow(): Flow<User?> = flowOf(null)
+
         override suspend fun syncMe(): Result<User, UserError> = error("not used")
+
         override suspend fun updateMyProfile(
             displayName: String?,
             avatarUrl: String?,
             bio: String?,
         ): Result<User, UserError> = error("not used")
+
         override fun getGlobalSettingsFlow(): Flow<UserSetting?> = emptyFlow()
+
         override suspend fun syncGlobalSettings(): Result<UserSetting, UserError> = error("not used")
+
         override suspend fun updateGlobalSettings(
             privacy: PrivacySetting?,
             preferences: UserPreference?,
         ): Result<Boolean, UserError> = error("not used")
+
         override suspend fun fetchUserDetail(userId: Uuid): Result<User, UserError> = error("not used")
+
         override fun getUserFlow(userId: Uuid): Flow<User?> = emptyFlow()
+
         override suspend fun searchUsers(keyword: String): Result<List<User>, UserError> = error("not used")
     }
 }

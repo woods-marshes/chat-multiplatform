@@ -12,90 +12,95 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
  *
  * 当 ThemeBrand == MATERIAL3 时，Theme.kt 使用此处生成的 ColorScheme。
  */
-internal val m3LightColorScheme = with(ColorTokens.light()) {
-    lightColorScheme(
-        primary = primary,
-        onPrimary = onPrimary,
-        primaryContainer = primaryContainer,
-        onPrimaryContainer = onPrimaryContainer,
-        secondary = secondary,
-        onSecondary = onSecondary,
-        secondaryContainer = secondaryContainer,
-        onSecondaryContainer = onSecondaryContainer,
-        tertiary = tertiary,
-        onTertiary = onTertiary,
-        tertiaryContainer = tertiaryContainer,
-        onTertiaryContainer = onTertiaryContainer,
-        error = error,
-        onError = onError,
-        errorContainer = errorContainer,
-        onErrorContainer = onErrorContainer,
-        background = background,
-        onBackground = onBackground,
-        surface = surface,
-        onSurface = onSurface,
-        surfaceVariant = surfaceVariant,
-        onSurfaceVariant = onSurfaceVariant,
-        outline = outline,
-        outlineVariant = outlineVariant,
-        inverseSurface = inverseSurface,
-        inverseOnSurface = inverseOnSurface,
-        inversePrimary = inversePrimary,
-        surfaceDim = surfaceDim,
-        surfaceBright = surfaceBright,
-        surfaceContainerLowest = surfaceContainerLowest,
-        surfaceContainerLow = surfaceContainerLow,
-        surfaceContainer = surfaceContainer,
-        surfaceContainerHigh = surfaceContainerHigh,
-        surfaceContainerHighest = surfaceContainerHighest,
-    )
-}
+internal val m3LightColorScheme =
+    with(ColorTokens.light()) {
+        lightColorScheme(
+            primary = primary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+            secondary = secondary,
+            onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = onSecondaryContainer,
+            tertiary = tertiary,
+            onTertiary = onTertiary,
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = onTertiaryContainer,
+            error = error,
+            onError = onError,
+            errorContainer = errorContainer,
+            onErrorContainer = onErrorContainer,
+            background = background,
+            onBackground = onBackground,
+            surface = surface,
+            onSurface = onSurface,
+            surfaceVariant = surfaceVariant,
+            onSurfaceVariant = onSurfaceVariant,
+            outline = outline,
+            outlineVariant = outlineVariant,
+            inverseSurface = inverseSurface,
+            inverseOnSurface = inverseOnSurface,
+            inversePrimary = inversePrimary,
+            surfaceDim = surfaceDim,
+            surfaceBright = surfaceBright,
+            surfaceContainerLowest = surfaceContainerLowest,
+            surfaceContainerLow = surfaceContainerLow,
+            surfaceContainer = surfaceContainer,
+            surfaceContainerHigh = surfaceContainerHigh,
+            surfaceContainerHighest = surfaceContainerHighest,
+        )
+    }
 
-internal val m3DarkColorScheme = with(ColorTokens.dark()) {
-    darkColorScheme(
-        primary = primary,
-        onPrimary = onPrimary,
-        primaryContainer = primaryContainer,
-        onPrimaryContainer = onPrimaryContainer,
-        secondary = secondary,
-        onSecondary = onSecondary,
-        secondaryContainer = secondaryContainer,
-        onSecondaryContainer = onSecondaryContainer,
-        tertiary = tertiary,
-        onTertiary = onTertiary,
-        tertiaryContainer = tertiaryContainer,
-        onTertiaryContainer = onTertiaryContainer,
-        error = error,
-        onError = onError,
-        errorContainer = errorContainer,
-        onErrorContainer = onErrorContainer,
-        background = background,
-        onBackground = onBackground,
-        surface = surface,
-        onSurface = onSurface,
-        surfaceVariant = surfaceVariant,
-        onSurfaceVariant = onSurfaceVariant,
-        outline = outline,
-        outlineVariant = outlineVariant,
-        inverseSurface = inverseSurface,
-        inverseOnSurface = inverseOnSurface,
-        inversePrimary = inversePrimary,
-        surfaceDim = surfaceDim,
-        surfaceBright = surfaceBright,
-        surfaceContainerLowest = surfaceContainerLowest,
-        surfaceContainerLow = surfaceContainerLow,
-        surfaceContainer = surfaceContainer,
-        surfaceContainerHigh = surfaceContainerHigh,
-        surfaceContainerHighest = surfaceContainerHighest,
-    )
-}
+internal val m3DarkColorScheme =
+    with(ColorTokens.dark()) {
+        darkColorScheme(
+            primary = primary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+            secondary = secondary,
+            onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = onSecondaryContainer,
+            tertiary = tertiary,
+            onTertiary = onTertiary,
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = onTertiaryContainer,
+            error = error,
+            onError = onError,
+            errorContainer = errorContainer,
+            onErrorContainer = onErrorContainer,
+            background = background,
+            onBackground = onBackground,
+            surface = surface,
+            onSurface = onSurface,
+            surfaceVariant = surfaceVariant,
+            onSurfaceVariant = onSurfaceVariant,
+            outline = outline,
+            outlineVariant = outlineVariant,
+            inverseSurface = inverseSurface,
+            inverseOnSurface = inverseOnSurface,
+            inversePrimary = inversePrimary,
+            surfaceDim = surfaceDim,
+            surfaceBright = surfaceBright,
+            surfaceContainerLowest = surfaceContainerLowest,
+            surfaceContainerLow = surfaceContainerLow,
+            surfaceContainer = surfaceContainer,
+            surfaceContainerHigh = surfaceContainerHigh,
+            surfaceContainerHighest = surfaceContainerHighest,
+        )
+    }
 
 /**
  * Bridges Miuix's active [MiuixColors] into a Material 3 [ColorScheme] so any
  * Material 3 component that must coexist in Miuix mode (e.g. AdaptiveSearchBar,
  * LibrariesContainer, DropdownMenu) uses Miuix colors without leaking M3 purple.
  */
-internal fun miuixBridgedM3ColorScheme(miuix: MiuixColors, isDark: Boolean): ColorScheme {
+internal fun miuixBridgedM3ColorScheme(
+    miuix: MiuixColors,
+    isDark: Boolean,
+): ColorScheme {
     val base = if (isDark) m3DarkColorScheme else m3LightColorScheme
     return base.copy(
         primary = miuix.primary,
@@ -139,7 +144,10 @@ internal fun miuixBridgedM3ColorScheme(miuix: MiuixColors, isDark: Boolean): Col
  * Bridges Material 3's active [ColorScheme] into Miuix [MiuixColors] so any
  * Miuix primitive rendered under Material 3 mode inherits M3 colors.
  */
-internal fun m3BridgedMiuixColors(m3: ColorScheme, isDark: Boolean): MiuixColors {
+internal fun m3BridgedMiuixColors(
+    m3: ColorScheme,
+    isDark: Boolean,
+): MiuixColors {
     val base = if (isDark) miuixDarkColorScheme() else miuixLightColorScheme()
     return base.copy(
         primary = m3.primary,
@@ -179,4 +187,3 @@ internal fun m3BridgedMiuixColors(m3: ColorScheme, isDark: Boolean): MiuixColors
         dividerLine = m3.outlineVariant,
     )
 }
-

@@ -19,4 +19,3 @@ val LocalThemeConfig = compositionLocalOf { ThemeConfig() }
 @Composable
 @ReadOnlyComposable
 fun isMiuixTheme(): Boolean = LocalThemeConfig.current.isMiuix
-

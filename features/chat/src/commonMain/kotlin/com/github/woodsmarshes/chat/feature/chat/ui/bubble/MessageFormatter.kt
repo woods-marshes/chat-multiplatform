@@ -51,10 +51,11 @@ class MessageFormatter(
             }
 
             entities.forEach { entity ->
-                val range = when (entity) {
-                    is FormattingEntity.TextRange -> entity.offset to (entity.offset + entity.length)
-                    is FormattingEntity.BlockQuote -> return@forEach // handled at bubble level
-                }
+                val range =
+                    when (entity) {
+                        is FormattingEntity.TextRange -> entity.offset to (entity.offset + entity.length)
+                        is FormattingEntity.BlockQuote -> return@forEach // handled at bubble level
+                    }
                 val start = range.first.coerceIn(0, text.length)
                 val end = range.second.coerceIn(start, text.length)
                 if (start >= end) return@forEach
@@ -63,18 +64,23 @@ class MessageFormatter(
                     is FormattingEntity.Bold -> {
                         addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
                     }
+
                     is FormattingEntity.Italic -> {
                         addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
                     }
+
                     is FormattingEntity.Strikethrough -> {
                         addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), start, end)
                     }
+
                     is FormattingEntity.Spoiler -> {
                         addStyle(SpanStyle(background = defaultColor, color = defaultColor), start, end)
                     }
+
                     is FormattingEntity.Code -> {
                         addStyle(SpanStyle(fontFamily = FontFamily.Monospace), start, end)
                     }
+
                     is FormattingEntity.Url -> {
                         pushStringAnnotation(tag = ANNOTATION_URL, annotation = entity.url)
                         addStyle(
@@ -88,6 +94,7 @@ class MessageFormatter(
                         )
                         pop()
                     }
+
                     is FormattingEntity.Mention -> {
                         pushStringAnnotation(
                             tag = ANNOTATION_MENTION,
@@ -96,19 +103,23 @@ class MessageFormatter(
                         addStyle(SpanStyle(fontWeight = FontWeight.Medium), start, end)
                         pop()
                     }
+
                     is FormattingEntity.MentionAll -> {
                         pushStringAnnotation(tag = ANNOTATION_MENTION, annotation = "all")
                         addStyle(SpanStyle(fontWeight = FontWeight.Medium), start, end)
                         pop()
                     }
+
                     is FormattingEntity.Hashtag -> {
                         pushStringAnnotation(tag = ANNOTATION_HASHTAG, annotation = entity.tag)
                         addStyle(SpanStyle(fontWeight = FontWeight.Medium), start, end)
                         pop()
                     }
+
                     is FormattingEntity.BotCommand -> {
                         addStyle(SpanStyle(fontFamily = FontFamily.Monospace), start, end)
                     }
+
                     else -> {} // no-op for unrecognized entities
                 }
             }

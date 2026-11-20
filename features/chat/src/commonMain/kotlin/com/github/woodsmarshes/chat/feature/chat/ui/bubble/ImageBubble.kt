@@ -49,34 +49,41 @@ fun ImageBubble(
 
     val shape = bubbleShapes.mediaBubble
 
-    val aspectRatio = if (content.width > 0 && content.height > 0) {
-        content.width.toFloat() / content.height.toFloat()
-    } else {
-        4f / 3f
-    }
+    val aspectRatio =
+        if (content.width > 0 && content.height > 0) {
+            content.width.toFloat() / content.height.toFloat()
+        } else {
+            4f / 3f
+        }
 
-    val imageHeight = when {
-        aspectRatio > 1.5f -> 160.dp
-        aspectRatio < 0.8f -> 260.dp
-        else -> 200.dp
-    }
-    val imageWidth = when {
-        aspectRatio > 1.5f -> 240.dp
-        aspectRatio < 0.8f -> 160.dp
-        else -> 200.dp
-    }
+    val imageHeight =
+        when {
+            aspectRatio > 1.5f -> 160.dp
+            aspectRatio < 0.8f -> 260.dp
+            else -> 200.dp
+        }
+    val imageWidth =
+        when {
+            aspectRatio > 1.5f -> 240.dp
+            aspectRatio < 0.8f -> 160.dp
+            else -> 200.dp
+        }
     val bgColor = if (isOwnMessage) bubbleColors.ownBackground.copy(alpha = 0.85f) else bubbleColors.otherBackground
 
     Box(
-        modifier = modifier
-            .fillMaxWidth(MAX_IMAGE_WIDTH_FRACTION)
-            .widthIn(max = MAX_IMAGE_DP)
-            .clip(shape)
-            .background(bgColor)
-            .then(
-                if (onImageClick != null) Modifier.clickable { onImageClick(content) }
-                else Modifier
-            ),
+        modifier =
+            modifier
+                .fillMaxWidth(MAX_IMAGE_WIDTH_FRACTION)
+                .widthIn(max = MAX_IMAGE_DP)
+                .clip(shape)
+                .background(bgColor)
+                .then(
+                    if (onImageClick != null) {
+                        Modifier.clickable { onImageClick(content) }
+                    } else {
+                        Modifier
+                    },
+                ),
         contentAlignment = Alignment.Center,
     ) {
         // State-driven AsyncImage instead of SubcomposeAsyncImage: same loading/error
@@ -86,9 +93,10 @@ fun ImageBubble(
             mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
         }
         Box(
-            modifier = Modifier
-                .widthIn(max = imageWidth)
-                .height(imageHeight),
+            modifier =
+                Modifier
+                    .widthIn(max = imageWidth)
+                    .height(imageHeight),
             contentAlignment = Alignment.Center,
         ) {
             AsyncImage(
@@ -108,6 +116,7 @@ fun ImageBubble(
                         textAlign = TextAlign.Center,
                     )
                 }
+
                 imageState !is AsyncImagePainter.State.Success -> {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),

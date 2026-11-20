@@ -3,13 +3,13 @@ package com.github.woodsmarshes.chat.feature.article.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.michaelbull.result.Ok
+import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.onErr
 import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ArticleRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
 import com.github.woodsmarshes.chat.core.model.Article
 import com.github.woodsmarshes.chat.core.model.error.ArticleError
-import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.article.model.ArticleDetailUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -36,9 +36,10 @@ class ArticleDetailViewModel(
     val user = userRepository.getMeFlow()
 
     /** Whether the current user is the author of this article. */
-    val isOwnArticle: StateFlow<Boolean> = user
-        .map { it?.id == authorId }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val isOwnArticle: StateFlow<Boolean> =
+        user
+            .map { it?.id == authorId }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val retryTrigger = MutableStateFlow(0)
 
@@ -54,28 +55,29 @@ class ArticleDetailViewModel(
      * runs in background and re-emits if data changed.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val article: StateFlow<Result<Article?, ArticleError>> = combine(isOwnArticle, retryTrigger) { isOwn: Boolean, _: Int -> isOwn }
-        .flatMapLatest { isOwn ->
-            articleRepository.getArticle(getMyArticle = isOwn, articleId = articleId)
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Ok(null))
+    private val article: StateFlow<Result<Article?, ArticleError>> =
+        combine(isOwnArticle, retryTrigger) { isOwn: Boolean, _: Int -> isOwn }
+            .flatMapLatest { isOwn ->
+                articleRepository.getArticle(getMyArticle = isOwn, articleId = articleId)
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Ok(null))
 
-    val uiState: StateFlow<ArticleDetailUiState> = article
-        .map { result ->
-            // The repository emits Ok(null) while it is still reading the cache and fetching,
-            // so a null article is a loading state, not an empty screen.
-            var state = ArticleDetailUiState(isLoading = true)
-            result
-                .onOk { a -> state = state.copy(isLoading = a == null, article = a) }
-                .onErr { e ->
-                    log.error { "[article-detail] load article $articleId failed: $e" }
-                    val message = when (e) {
-                        ArticleError.NotFound -> strings.articleNotFound
-                        else -> strings.articleLoadFailed
+    val uiState: StateFlow<ArticleDetailUiState> =
+        article
+            .map { result ->
+                // The repository emits Ok(null) while it is still reading the cache and fetching,
+                // so a null article is a loading state, not an empty screen.
+                var state = ArticleDetailUiState(isLoading = true)
+                result
+                    .onOk { a -> state = state.copy(isLoading = a == null, article = a) }
+                    .onErr { e ->
+                        log.error { "[article-detail] load article $articleId failed: $e" }
+                        val message =
+                            when (e) {
+                                ArticleError.NotFound -> strings.articleNotFound
+                                else -> strings.articleLoadFailed
+                            }
+                        state = state.copy(isLoading = false, error = message)
                     }
-                    state = state.copy(isLoading = false, error = message)
-                }
-            state
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArticleDetailUiState())
+                state
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ArticleDetailUiState())
 }

@@ -1,7 +1,6 @@
 package com.github.woodsmarshes.chat.feature.chat.model
 
 import com.github.woodsmarshes.chat.core.model.presentation.MessageUiModel
-
 import kotlin.uuid.Uuid
 
 /**
@@ -28,4 +27,3 @@ data class ChatUiState(
     val forwardingMessages: List<MessageUiModel> = emptyList(),
     val isForwarding: Boolean = false,
 )
-

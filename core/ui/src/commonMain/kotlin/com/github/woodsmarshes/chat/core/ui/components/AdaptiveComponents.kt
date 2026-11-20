@@ -19,14 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults as M3ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator as M3CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton as M3ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton as M3FloatingActionButton
-import androidx.compose.material3.HorizontalDivider as M3HorizontalDivider
-import androidx.compose.material3.Icon as M3Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -34,11 +28,8 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text as M3Text
-import androidx.compose.material3.TextButton as M3TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState as rememberM3PullToRefreshState
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -62,6 +53,18 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
+import androidx.compose.material3.ButtonDefaults as M3ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator as M3CircularProgressIndicator
+import androidx.compose.material3.ExtendedFloatingActionButton as M3ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton as M3FloatingActionButton
+import androidx.compose.material3.HorizontalDivider as M3HorizontalDivider
+import androidx.compose.material3.Icon as M3Icon
+import androidx.compose.material3.Text as M3Text
+import androidx.compose.material3.TextButton as M3TextButton
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState as rememberM3PullToRefreshState
 import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import top.yukonga.miuix.kmp.basic.FloatingActionButton as MiuixFloatingActionButton
 import top.yukonga.miuix.kmp.basic.HorizontalDivider as MiuixHorizontalDivider
@@ -75,9 +78,6 @@ import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
 import top.yukonga.miuix.kmp.basic.TextField as MiuixTextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults as MiuixTextFieldDefaults
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState as rememberMiuixPullToRefreshState
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
-import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * Dual-style progress indicator: renders Miuix's [MiuixInfiniteProgressIndicator]
@@ -318,9 +318,10 @@ fun AppModalBottomSheet(
             title = title,
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
                 content = content,
             )
         }
@@ -334,13 +335,14 @@ fun AppModalBottomSheet(
             if (show) {
                 isMounted = true
             } else if (isMounted) {
-                scope.launch {
-                    sheetState.hide()
-                }.invokeOnCompletion {
-                    if (!sheetState.isVisible && !currentShow) {
-                        isMounted = false
+                scope
+                    .launch {
+                        sheetState.hide()
+                    }.invokeOnCompletion {
+                        if (!sheetState.isVisible && !currentShow) {
+                            isMounted = false
+                        }
                     }
-                }
             }
         }
 
@@ -355,9 +357,10 @@ fun AppModalBottomSheet(
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
                 ) {
                     if (title != null) {
                         M3Text(
@@ -404,9 +407,10 @@ fun AppAlertDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (content != null) {
                     Column(
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .weight(1f, fill = false)
+                                .fillMaxWidth(),
                     ) {
                         content()
                     }
@@ -427,14 +431,15 @@ fun AppAlertDialog(
                             )
                         }
                         if (confirmLabel != null && onConfirm != null) {
-                            val confirmColors = if (confirmDanger) {
-                                MiuixButtonDefaults.textButtonColors(
-                                    color = MiuixTheme.colorScheme.error,
-                                    textColor = MiuixTheme.colorScheme.onError,
-                                )
-                            } else {
-                                MiuixButtonDefaults.textButtonColorsPrimary()
-                            }
+                            val confirmColors =
+                                if (confirmDanger) {
+                                    MiuixButtonDefaults.textButtonColors(
+                                        color = MiuixTheme.colorScheme.error,
+                                        textColor = MiuixTheme.colorScheme.onError,
+                                    )
+                                } else {
+                                    MiuixButtonDefaults.textButtonColorsPrimary()
+                                }
                             MiuixTextButton(
                                 text = confirmLabel,
                                 onClick = onConfirm,
@@ -468,30 +473,32 @@ fun AppAlertDialog(
                     M3TextButton(
                         onClick = onConfirm,
                         enabled = confirmEnabled,
-                        colors = if (confirmDanger) {
-                            M3ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            )
-                        } else {
-                            M3ButtonDefaults.textButtonColors()
-                        },
+                        colors =
+                            if (confirmDanger) {
+                                M3ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                )
+                            } else {
+                                M3ButtonDefaults.textButtonColors()
+                            },
                     ) {
                         M3Text(confirmLabel)
                     }
                 }
             },
-            dismissButton = if (dismissLabel != null && onDismiss != null) {
-                {
-                    M3TextButton(
-                        onClick = onDismiss,
-                        enabled = dismissEnabled,
-                    ) {
-                        M3Text(dismissLabel)
+            dismissButton =
+                if (dismissLabel != null && onDismiss != null) {
+                    {
+                        M3TextButton(
+                            onClick = onDismiss,
+                            enabled = dismissEnabled,
+                        ) {
+                            M3Text(dismissLabel)
+                        }
                     }
-                }
-            } else {
-                null
-            },
+                } else {
+                    null
+                },
         )
     }
 }
@@ -521,11 +528,12 @@ fun AppTextField(
 ) {
     if (isMiuixTheme()) {
         Column(modifier = modifier) {
-            val borderColor = if (isError) {
-                MiuixTheme.colorScheme.error
-            } else {
-                MiuixTheme.colorScheme.primary
-            }
+            val borderColor =
+                if (isError) {
+                    MiuixTheme.colorScheme.error
+                } else {
+                    MiuixTheme.colorScheme.primary
+                }
             MiuixTextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -533,27 +541,30 @@ fun AppTextField(
                 label = label,
                 useLabelAsPlaceholder = placeholder == null,
                 insideMargin = DpSize(16.dp, 14.dp),
-                colors = MiuixTextFieldDefaults.textFieldColors(
-                    borderColor = borderColor,
-                ),
+                colors =
+                    MiuixTextFieldDefaults.textFieldColors(
+                        borderColor = borderColor,
+                    ),
                 enabled = enabled,
                 singleLine = singleLine,
                 minLines = minLines,
                 maxLines = maxLines,
-                leadingIcon = leadingIcon?.let { icon ->
-                    {
-                        Box(modifier = Modifier.padding(start = 14.dp)) {
-                            icon()
+                leadingIcon =
+                    leadingIcon?.let { icon ->
+                        {
+                            Box(modifier = Modifier.padding(start = 14.dp)) {
+                                icon()
+                            }
                         }
-                    }
-                },
-                trailingIcon = trailingIcon?.let { icon ->
-                    {
-                        Box(modifier = Modifier.padding(end = 14.dp)) {
-                            icon()
+                    },
+                trailingIcon =
+                    trailingIcon?.let { icon ->
+                        {
+                            Box(modifier = Modifier.padding(end = 14.dp)) {
+                                icon()
+                            }
                         }
-                    }
-                },
+                    },
                 visualTransformation = visualTransformation,
                 keyboardOptions = keyboardOptions,
                 keyboardActions = keyboardActions,
@@ -577,11 +588,12 @@ fun AppTextField(
             modifier = modifier,
             enabled = enabled,
             isError = isError,
-            supportingText = if (isError && !errorText.isNullOrBlank()) {
-                { M3Text(errorText) }
-            } else {
-                null
-            },
+            supportingText =
+                if (isError && !errorText.isNullOrBlank()) {
+                    { M3Text(errorText) }
+                } else {
+                    null
+                },
             leadingIcon = leadingIcon,
             trailingIcon = trailingIcon,
             visualTransformation = visualTransformation,
@@ -630,16 +642,18 @@ fun AppDropdownMenu(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val isMiuix = isMiuixTheme()
-    val containerColor = if (isMiuix) {
-        MiuixTheme.colorScheme.surface
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-    val borderColor = if (isMiuix) {
-        MiuixTheme.colorScheme.dividerLine
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-    }
+    val containerColor =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+    val borderColor =
+        if (isMiuix) {
+            MiuixTheme.colorScheme.dividerLine
+        } else {
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        }
 
     DropdownMenu(
         expanded = expanded,
@@ -669,34 +683,46 @@ fun AppDropdownMenuItem(
     danger: Boolean = false,
 ) {
     val isMiuix = isMiuixTheme()
-    val contentColor = when {
-        !enabled -> if (isMiuix) {
-            MiuixTheme.colorScheme.disabledOnSecondaryVariant
-        } else {
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val contentColor =
+        when {
+            !enabled -> {
+                if (isMiuix) {
+                    MiuixTheme.colorScheme.disabledOnSecondaryVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                }
+            }
+
+            danger -> {
+                if (isMiuix) MiuixTheme.colorScheme.error else MaterialTheme.colorScheme.error
+            }
+
+            else -> {
+                if (isMiuix) MiuixTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface
+            }
         }
-        danger -> if (isMiuix) MiuixTheme.colorScheme.error else MaterialTheme.colorScheme.error
-        else -> if (isMiuix) MiuixTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface
-    }
-    val iconColor = when {
-        !enabled -> contentColor
-        danger -> contentColor
-        isMiuix -> MiuixTheme.colorScheme.onSurfaceVariantActions
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val iconColor =
+        when {
+            !enabled -> contentColor
+            danger -> contentColor
+            isMiuix -> MiuixTheme.colorScheme.onSurfaceVariantActions
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .focusProperties { canFocus = false }
-                .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .focusProperties { canFocus = false }
+                    .clickable(enabled = enabled, onClick = onClick)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (leadingIcon != null) {
@@ -717,4 +743,3 @@ fun AppDropdownMenuItem(
         }
     }
 }
-

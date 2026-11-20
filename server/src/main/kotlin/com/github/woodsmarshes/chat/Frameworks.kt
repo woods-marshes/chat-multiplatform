@@ -8,16 +8,23 @@ import com.github.woodsmarshes.chat.di.repositoryModule
 import com.github.woodsmarshes.chat.di.serviceModule
 import com.github.woodsmarshes.chat.repository.AdminAuditLogRepository
 import com.github.woodsmarshes.chat.repository.AuthSessionRepository
+import com.github.woodsmarshes.chat.repository.SyncRepository
 import com.github.woodsmarshes.chat.repository.UserRepository
-import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.repository.database.schema.ALL_SCHEMA_TABLES
+import com.github.woodsmarshes.chat.repository.database.schema.PrivateFiles
 import com.github.woodsmarshes.chat.service.FileService
+import com.github.woodsmarshes.chat.service.RealtimeService
 import com.github.woodsmarshes.chat.utils.TemporaryUploadStore
 import com.github.woodsmarshes.chat.utils.closeHikariDataSource
 import com.github.woodsmarshes.chat.utils.connectToH2Database
 import com.github.woodsmarshes.chat.utils.connectToPostgresDatabase
-import io.ktor.server.application.*
-import io.ktor.server.config.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStarted
+import io.ktor.server.application.ApplicationStopped
+import io.ktor.server.application.ApplicationStopping
+import io.ktor.server.application.install
+import io.ktor.server.application.log
+import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.plugins.di.dependencies
 import io.ktor.util.logging.Logger
 import kotlinx.coroutines.CancellationException
@@ -37,8 +44,6 @@ import org.koin.fileProperties
 import org.koin.ktor.ext.getKoin
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
-import com.github.woodsmarshes.chat.repository.SyncRepository
-import com.github.woodsmarshes.chat.service.RealtimeService
 import java.security.MessageDigest
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -52,6 +57,7 @@ private const val JOURNAL_SWEEP_MINUTES = 360L
 private const val JOURNAL_SWEEP_INITIAL_DELAY_MINUTES = 5L
 private const val JOURNAL_RETENTION_DAYS = 14L
 private const val AUDIT_RETENTION_DAYS = 365L
+
 // A thumbnail/cover/avatar is only swept when this much older than the last
 // change AND unreferenced — keeps artifacts of in-flight uploads safe.
 private const val ORPHAN_FILE_MIN_AGE_MS = 60L * 60 * 1000
@@ -97,7 +103,7 @@ private fun Application.requireProductionConfiguration(config: ServerConfig) {
         database != null &&
             !database.url.isBlank() &&
             !database.username.isBlank() &&
-            !database.password.isBlank()
+            !database.password.isBlank(),
     ) {
         "postgres url/username/password must be configured outside development mode"
     }
@@ -114,39 +120,51 @@ private fun Application.requireProductionConfiguration(config: ServerConfig) {
  */
 private fun Application.logEffectiveJwtConfig(config: ServerConfig) {
     val tokenConfig = config.tokenConfig
-    val fingerprint = MessageDigest.getInstance("SHA-256")
-        .digest(tokenConfig.secret.toByteArray())
-        .joinToString("") { "%02x".format(it) }
-        .takeLast(8)
+    val fingerprint =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(tokenConfig.secret.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+            .takeLast(8)
     environment.log.info(
         "JWT config: issuer='${tokenConfig.issuer}', audience='${tokenConfig.audience}', " +
             "realm='${tokenConfig.realm}', expiresIn=${tokenConfig.expiresIn / 1000}s, " +
-            "secretSha256=...$fingerprint"
+            "secretSha256=...$fingerprint",
     )
 }
 
-private val INSECURE_SECRETS = setOf(
-    "my-local-test-secret-key-change-in-prod",
-    "jghN7qJJq4vDmvHVg",
-    // The demo values shipped in the checked-in .env that compose.yml feeds
-    // the container: without these entries, `docker compose up` in
-    // production passes the guard while running on published secrets.
-    "demo-jwt-secret-must-be-changed-for-production-use",
-    "demo-password-please-change-in-production",
-)
+private val INSECURE_SECRETS =
+    setOf(
+        "my-local-test-secret-key-change-in-prod",
+        "jghN7qJJq4vDmvHVg",
+        // The demo values shipped in the checked-in .env that compose.yml feeds
+        // the container: without these entries, `docker compose up` in
+        // production passes the guard while running on published secrets.
+        "demo-jwt-secret-must-be-changed-for-production-use",
+        "demo-password-please-change-in-production",
+    )
 
-private fun Application.configureDatabase(config: ServerConfig, dbType: String): Database {
-    return when (dbType) {
+private fun Application.configureDatabase(
+    config: ServerConfig,
+    dbType: String,
+): Database =
+    when (dbType) {
         "postgres" -> {
-            val dbConfig = config.databaseConfig
-                ?: error("PostgreSQL config is required when database.type=postgres")
+            val dbConfig =
+                config.databaseConfig
+                    ?: error("PostgreSQL config is required when database.type=postgres")
             connectToPostgresDatabase(dbConfig)
         }
-        else -> connectToH2Database()
-    }
-}
 
-private fun configurePrivateFileBackfill(database: Database, dbType: String) {
+        else -> {
+            connectToH2Database()
+        }
+    }
+
+private fun configurePrivateFileBackfill(
+    database: Database,
+    dbType: String,
+) {
     // One-time backfill: attachments sent before download authorization was
     // introduced have no private_files rows. Runs only on PostgreSQL (the
     // production dialect — H2 dev/test data is disposable) and only while the
@@ -161,7 +179,7 @@ private fun configurePrivateFileBackfill(database: Database, dbType: String) {
             FROM messages m
             WHERE m.content->>'type' = 'FILE' AND m.content->>'url' LIKE '/v1/files/content/%'
             ON CONFLICT DO NOTHING
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 }
@@ -186,7 +204,7 @@ private fun configureSchema(database: Database) {
         // Unique across (sender, conversation, client_request_id): NULLs are
         // distinct in both H2 and PostgreSQL, so system messages coexist.
         exec(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_request_id ON messages (user_id, conversation_id, client_request_id)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_request_id ON messages (user_id, conversation_id, client_request_id)",
         )
         exec("CREATE INDEX IF NOT EXISTS idx_sync_changes_created_at ON sync_changes (created_at)")
         // Soft-ban flag and per-device session metadata, added after the
@@ -321,10 +339,11 @@ private fun Application.configureArtifactSweep() {
         while (isActive) {
             try {
                 val referencedAvatars = userRepository.listReferencedAvatarFileNames()
-                val swept = fileService.sweepOrphanFiles(
-                    referencedAvatarFileNames = referencedAvatars,
-                    minAgeMillis = ORPHAN_FILE_MIN_AGE_MS,
-                )
+                val swept =
+                    fileService.sweepOrphanFiles(
+                        referencedAvatarFileNames = referencedAvatars,
+                        minAgeMillis = ORPHAN_FILE_MIN_AGE_MS,
+                    )
                 if (swept > 0) log.info("Artifact sweep removed {} orphan file(s)", swept)
             } catch (e: CancellationException) {
                 throw e
@@ -359,23 +378,33 @@ private fun Application.extractServerConfig(): ServerConfig {
     val config = environment.config
     val development = config.propertyOrNull("ktor.development")?.getString() == "true"
     return ServerConfig(
-        tokenConfig = TokenConfig(
-            issuer = config.propertyOrNull("jwt.issuer")?.getString() ?: "chat-server",
-            audience = config.propertyOrNull("jwt.audience")?.getString() ?: "chat-client",
-            realm = config.propertyOrNull("jwt.realm")?.getString() ?: "chat",
-            expiresIn = config.propertyOrNull("jwt.expiresInMs")?.getString()?.toLongOrNull()
-                ?: DEFAULT_JWT_EXPIRY_MS,
-            secret = config.propertyOrNull("jwt.secret")?.getString()
-                ?: error("jwt.secret must be configured in application.conf"),
-        ),
+        tokenConfig =
+            TokenConfig(
+                issuer = config.propertyOrNull("jwt.issuer")?.getString() ?: "chat-server",
+                audience = config.propertyOrNull("jwt.audience")?.getString() ?: "chat-client",
+                realm = config.propertyOrNull("jwt.realm")?.getString() ?: "chat",
+                expiresIn =
+                    config.propertyOrNull("jwt.expiresInMs")?.getString()?.toLongOrNull()
+                        ?: DEFAULT_JWT_EXPIRY_MS,
+                secret =
+                    config.propertyOrNull("jwt.secret")?.getString()
+                        ?: error("jwt.secret must be configured in application.conf"),
+            ),
         development = development,
-        adminEmails = config.propertyOrNull("admin.emails")?.getString()
-            ?.split(',')?.map { it.trim().lowercase() }?.filter { it.isNotEmpty() }?.toSet()
-            ?: emptySet(),
-        databaseConfig = DatabaseConfig(
-            url = config.propertyOrNull("postgres.url")?.getString() ?: "",
-            username = config.propertyOrNull("postgres.username")?.getString() ?: "",
-            password = config.propertyOrNull("postgres.password")?.getString() ?: "",
-        ),
+        adminEmails =
+            config
+                .propertyOrNull("admin.emails")
+                ?.getString()
+                ?.split(',')
+                ?.map { it.trim().lowercase() }
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: emptySet(),
+        databaseConfig =
+            DatabaseConfig(
+                url = config.propertyOrNull("postgres.url")?.getString() ?: "",
+                username = config.propertyOrNull("postgres.username")?.getString() ?: "",
+                password = config.propertyOrNull("postgres.password")?.getString() ?: "",
+            ),
     )
 }

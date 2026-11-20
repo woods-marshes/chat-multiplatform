@@ -29,12 +29,13 @@ fun ChatApp() {
     val serverEndpointProvider = koinInject<ServerEndpointProvider>()
 
     val userPreference by userSettingDataSource.preference.collectAsStateWithLifecycle(null)
-    val themeConfig = remember(userPreference) {
-        ThemeConfig(
-            themeBrand = userPreference?.themeBrand ?: ThemeBrand.MIUIX,
-            darkThemeConfig = userPreference?.darkThemeConfig ?: DarkThemeConfig.FOLLOW_SYSTEM,
-        )
-    }
+    val themeConfig =
+        remember(userPreference) {
+            ThemeConfig(
+                themeBrand = userPreference?.themeBrand ?: ThemeBrand.MIUIX,
+                darkThemeConfig = userPreference?.darkThemeConfig ?: DarkThemeConfig.FOLLOW_SYSTEM,
+            )
+        }
 
     // State-backed so a logged-out server switch recomposes media readers
     // (LocalServerBaseUrl is a compositionLocalOf, not static).

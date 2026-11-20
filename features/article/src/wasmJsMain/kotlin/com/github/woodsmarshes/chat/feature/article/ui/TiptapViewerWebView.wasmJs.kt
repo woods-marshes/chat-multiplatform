@@ -121,35 +121,42 @@ private fun TiptapViewerWebViewContent(
     }
 
     DisposableEffect(jsBridge, state) {
-        val scrollHandler = object : IJsMessageHandler {
-            override fun methodName(): String = "onScrollDirectionChanged"
+        val scrollHandler =
+            object : IJsMessageHandler {
+                override fun methodName(): String = "onScrollDirectionChanged"
 
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit,
-            ) {
-                val direction = runCatching {
-                    json.parseToJsonElement(message.params).jsonObject["direction"]?.jsonPrimitive?.content
-                }.getOrNull() ?: "up"
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit,
+                ) {
+                    val direction =
+                        runCatching {
+                            json
+                                .parseToJsonElement(message.params)
+                                .jsonObject["direction"]
+                                ?.jsonPrimitive
+                                ?.content
+                        }.getOrNull() ?: "up"
 
-                if (direction == "up") currentOnScrollUp() else currentOnScrollDown()
-                callback("ok")
+                    if (direction == "up") currentOnScrollUp() else currentOnScrollDown()
+                    callback("ok")
+                }
             }
-        }
 
-        val readyHandler = object : IJsMessageHandler {
-            override fun methodName(): String = "onViewerReady"
+        val readyHandler =
+            object : IJsMessageHandler {
+                override fun methodName(): String = "onViewerReady"
 
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit,
-            ) {
-                isJsReady = true
-                callback("ok")
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit,
+                ) {
+                    isJsReady = true
+                    callback("ok")
+                }
             }
-        }
 
         jsBridge.register(scrollHandler)
         jsBridge.register(readyHandler)

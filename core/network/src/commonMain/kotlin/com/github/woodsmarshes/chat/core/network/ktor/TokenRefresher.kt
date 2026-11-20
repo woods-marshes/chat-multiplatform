@@ -1,9 +1,9 @@
 package com.github.woodsmarshes.chat.core.network.ktor
 
-import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
-import com.github.woodsmarshes.chat.core.model.AuthToken
 import com.github.woodsmarshes.chat.core.contract.api.V1
 import com.github.woodsmarshes.chat.core.contract.dto.auth.AuthResponse
+import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
+import com.github.woodsmarshes.chat.core.model.AuthToken
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -22,11 +22,17 @@ import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 
 /** Expiry of a JWT, decoded from its payload without verifying the signature. */
-fun jwtExpiryEpochMs(token: String): Long? = runCatching {
-    val payload = token.substringAfter('.').substringBefore('.')
-    val json = decodeBase64Url(payload).decodeToString()
-    Regex("\"exp\"\\s*:\\s*(\\d+)").find(json)?.groupValues?.get(1)?.toLongOrNull()?.times(1000)
-}.getOrNull()
+fun jwtExpiryEpochMs(token: String): Long? =
+    runCatching {
+        val payload = token.substringAfter('.').substringBefore('.')
+        val json = decodeBase64Url(payload).decodeToString()
+        Regex("\"exp\"\\s*:\\s*(\\d+)")
+            .find(json)
+            ?.groupValues
+            ?.get(1)
+            ?.toLongOrNull()
+            ?.times(1000)
+    }.getOrNull()
 
 /** Minimal base64url decoder — enough for reading JWT payload claims. */
 private fun decodeBase64Url(data: String): ByteArray {
@@ -76,19 +82,29 @@ class RefreshUnauthorizedException(
  *    refresh from an old session from clearing a newly logged-in account or a
  *    same-account re-login.
  */
-class TokenRefresher(private val tokens: AuthTokenDataSource) {
-
+class TokenRefresher(
+    private val tokens: AuthTokenDataSource,
+) {
     private sealed interface Outcome {
-        data class Success(val response: AuthResponse) : Outcome
+        data class Success(
+            val response: AuthResponse,
+        ) : Outcome
+
         /** The server rejected the refresh token: the session is dead. */
         data object Dead : Outcome
+
         /** Offline, timeout or 5xx — stored tokens are kept untouched. */
         data object Transient : Outcome
     }
 
     private sealed interface RefreshResolution {
-        data class Refreshed(val accessToken: String, val refreshToken: String) : RefreshResolution
+        data class Refreshed(
+            val accessToken: String,
+            val refreshToken: String,
+        ) : RefreshResolution
+
         data object DeadOrSuperseded : RefreshResolution
+
         data object Transient : RefreshResolution
     }
 
@@ -107,12 +123,13 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
      */
     internal var executeRefreshRequest: suspend (client: HttpClient, refreshToken: String) -> AuthResponse =
         { client, refreshToken ->
-            client.post(V1.Auth.Refresh()) {
-                // Circuit-break the bearer plugin: without this the refresh
-                // call would carry (and 401-retry on) the same dead token.
-                attributes.put(AuthCircuitBreaker, Unit)
-                header(HttpHeaders.Authorization, "Bearer $refreshToken")
-            }.body()
+            client
+                .post(V1.Auth.Refresh()) {
+                    // Circuit-break the bearer plugin: without this the refresh
+                    // call would carry (and 401-retry on) the same dead token.
+                    attributes.put(AuthCircuitBreaker, Unit)
+                    header(HttpHeaders.Authorization, "Bearer $refreshToken")
+                }.body()
         }
 
     /**
@@ -124,9 +141,7 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
     suspend fun currentOrRefreshed(client: HttpClient): String? =
         currentOrRefreshedWith { refreshToken -> executeRefreshRequest(client, refreshToken) }
 
-    suspend fun currentOrRefreshedWith(
-        refreshRequest: suspend (refreshToken: String) -> AuthResponse,
-    ): String? {
+    suspend fun currentOrRefreshedWith(refreshRequest: suspend (refreshToken: String) -> AuthResponse): String? {
         val snapshot = tokens.currentSnapshot()
         val jwt = snapshot.jwtToken ?: return null
         val expiry = snapshot.expiryTimestamp
@@ -139,8 +154,14 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
         if (refresh.isNullOrEmpty()) return jwt
 
         return when (val resolution = refreshForSnapshot(snapshot.generation, refresh, null, refreshRequest)) {
-            is RefreshResolution.Refreshed -> resolution.accessToken
-            RefreshResolution.DeadOrSuperseded -> null
+            is RefreshResolution.Refreshed -> {
+                resolution.accessToken
+            }
+
+            RefreshResolution.DeadOrSuperseded -> {
+                null
+            }
+
             RefreshResolution.Transient -> {
                 // Keep using the old access token only if the same session
                 // generation is still active.
@@ -191,12 +212,13 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
         }
 
         return when (
-            val resolution = refreshForSnapshot(
-                expectedGeneration = snapshot.generation,
-                expectedRefreshToken = refresh,
-                requestAccessToken = requestAccessToken,
-                refreshRequest = refreshRequest,
-            )
+            val resolution =
+                refreshForSnapshot(
+                    expectedGeneration = snapshot.generation,
+                    expectedRefreshToken = refresh,
+                    requestAccessToken = requestAccessToken,
+                    refreshRequest = refreshRequest,
+                )
         ) {
             is RefreshResolution.Refreshed -> BearerTokensResult(resolution.accessToken, resolution.refreshToken)
             RefreshResolution.DeadOrSuperseded -> null
@@ -210,40 +232,42 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
         requestAccessToken: String?,
         refreshRequest: suspend (refreshToken: String) -> AuthResponse,
     ): RefreshResolution {
-        val (flight, isOwner) = mutex.withLock {
-            val latest = tokens.currentSnapshot()
-            if (latest.generation != expectedGeneration) {
-                return RefreshResolution.DeadOrSuperseded
-            }
-            val latestRefresh = latest.refreshToken
-            val latestJwt = latest.jwtToken
-            if (latestRefresh != expectedRefreshToken ||
-                (requestAccessToken != null && !latestJwt.isNullOrEmpty() && latestJwt != requestAccessToken)
-            ) {
-                return if (!latestJwt.isNullOrEmpty() && !latestRefresh.isNullOrEmpty()) {
-                    RefreshResolution.Refreshed(latestJwt, latestRefresh)
+        val (flight, isOwner) =
+            mutex.withLock {
+                val latest = tokens.currentSnapshot()
+                if (latest.generation != expectedGeneration) {
+                    return RefreshResolution.DeadOrSuperseded
+                }
+                val latestRefresh = latest.refreshToken
+                val latestJwt = latest.jwtToken
+                if (latestRefresh != expectedRefreshToken ||
+                    (requestAccessToken != null && !latestJwt.isNullOrEmpty() && latestJwt != requestAccessToken)
+                ) {
+                    return if (!latestJwt.isNullOrEmpty() && !latestRefresh.isNullOrEmpty()) {
+                        RefreshResolution.Refreshed(latestJwt, latestRefresh)
+                    } else {
+                        RefreshResolution.DeadOrSuperseded
+                    }
+                }
+
+                val existing = inFlight
+                if (existing != null &&
+                    existing.generation == expectedGeneration &&
+                    existing.refreshToken == expectedRefreshToken &&
+                    !existing.deferred.isCompleted
+                ) {
+                    existing to false
                 } else {
-                    RefreshResolution.DeadOrSuperseded
+                    val created =
+                        InFlightRefresh(
+                            generation = expectedGeneration,
+                            refreshToken = expectedRefreshToken,
+                            deferred = CompletableDeferred(),
+                        )
+                    inFlight = created
+                    created to true
                 }
             }
-
-            val existing = inFlight
-            if (existing != null &&
-                existing.generation == expectedGeneration &&
-                existing.refreshToken == expectedRefreshToken &&
-                !existing.deferred.isCompleted
-            ) {
-                existing to false
-            } else {
-                val created = InFlightRefresh(
-                    generation = expectedGeneration,
-                    refreshToken = expectedRefreshToken,
-                    deferred = CompletableDeferred(),
-                )
-                inFlight = created
-                created to true
-            }
-        }
 
         if (!isOwner) {
             return flight.deferred.await()
@@ -251,36 +275,43 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
 
         return try {
             val outcome = performRefreshRequest(expectedRefreshToken, refreshRequest)
-            val resolution = withContext(NonCancellable) {
-                when (outcome) {
-                    is Outcome.Success -> {
-                        val newAccess = outcome.response.accessToken
-                        val newRefresh = outcome.response.refreshToken ?: expectedRefreshToken
-                        val updated = tokens.updateTokenIfCurrent(
-                            expectedGeneration = expectedGeneration,
-                            expectedRefreshToken = expectedRefreshToken,
-                            token = AuthToken(
-                                jwtToken = newAccess,
-                                refreshToken = newRefresh,
-                                expiryTimestamp = jwtExpiryEpochMs(newAccess),
-                            ),
-                        )
-                        if (updated) {
-                            RefreshResolution.Refreshed(newAccess, newRefresh)
-                        } else {
+            val resolution =
+                withContext(NonCancellable) {
+                    when (outcome) {
+                        is Outcome.Success -> {
+                            val newAccess = outcome.response.accessToken
+                            val newRefresh = outcome.response.refreshToken ?: expectedRefreshToken
+                            val updated =
+                                tokens.updateTokenIfCurrent(
+                                    expectedGeneration = expectedGeneration,
+                                    expectedRefreshToken = expectedRefreshToken,
+                                    token =
+                                        AuthToken(
+                                            jwtToken = newAccess,
+                                            refreshToken = newRefresh,
+                                            expiryTimestamp = jwtExpiryEpochMs(newAccess),
+                                        ),
+                                )
+                            if (updated) {
+                                RefreshResolution.Refreshed(newAccess, newRefresh)
+                            } else {
+                                RefreshResolution.DeadOrSuperseded
+                            }
+                        }
+
+                        Outcome.Dead -> {
+                            tokens.clearIfCurrent(
+                                expectedGeneration = expectedGeneration,
+                                expectedRefreshToken = expectedRefreshToken,
+                            )
                             RefreshResolution.DeadOrSuperseded
                         }
+
+                        Outcome.Transient -> {
+                            RefreshResolution.Transient
+                        }
                     }
-                    Outcome.Dead -> {
-                        tokens.clearIfCurrent(
-                            expectedGeneration = expectedGeneration,
-                            expectedRefreshToken = expectedRefreshToken,
-                        )
-                        RefreshResolution.DeadOrSuperseded
-                    }
-                    Outcome.Transient -> RefreshResolution.Transient
                 }
-            }
             flight.deferred.complete(resolution)
             resolution
         } catch (t: Throwable) {
@@ -300,8 +331,8 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
     private suspend fun performRefreshRequest(
         refreshToken: String,
         refreshRequest: suspend (refreshToken: String) -> AuthResponse,
-    ): Outcome {
-        return try {
+    ): Outcome =
+        try {
             val response = refreshRequest(refreshToken)
             Outcome.Success(response)
         } catch (e: RefreshUnauthorizedException) {
@@ -313,8 +344,10 @@ class TokenRefresher(private val tokens: AuthTokenDataSource) {
         } catch (e: Exception) {
             Outcome.Transient
         }
-    }
 }
 
 /** Platform-neutral carrier for the bearer plugin's refreshed token pair. */
-data class BearerTokensResult(val accessToken: String, val refreshToken: String)
+data class BearerTokensResult(
+    val accessToken: String,
+    val refreshToken: String,
+)

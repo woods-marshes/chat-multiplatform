@@ -1,27 +1,29 @@
 package com.github.woodsmarshes.chat.core.network.ktor
 
-import com.github.michaelbull.result.*
+import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.CoroutineBindingScope
 import com.github.michaelbull.result.coroutines.runSuspendCatching
-import com.github.michaelbull.result.throwIf
+import com.github.michaelbull.result.getOrThrow
+import com.github.michaelbull.result.onErr
 import com.github.woodsmarshes.chat.core.common.utils.debug
 import com.github.woodsmarshes.chat.core.common.utils.error
 import com.github.woodsmarshes.chat.core.common.utils.verbose
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
+import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenDataSource
 import com.github.woodsmarshes.chat.core.datastore.AuthTokenSnapshot
 import com.github.woodsmarshes.chat.core.model.error.DomainError
-import com.github.woodsmarshes.chat.core.contract.serialization.ProjectJson
-import com.github.woodsmarshes.chat.core.contract.serialization.ProjectProtobuf
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.plugins.ClientRequestException
-import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.plugins.UserAgent
 import io.ktor.client.plugins.api.Send
 import io.ktor.client.plugins.api.createClientPlugin
@@ -77,10 +79,11 @@ class StaleRequestGenerationException(
     val requestGeneration: Long,
     val currentGeneration: Long,
 ) : IllegalStateException(
-    "Request bound to credential generation $requestGeneration cannot be sent under generation $currentGeneration"
-)
+        "Request bound to credential generation $requestGeneration cannot be sent under generation $currentGeneration",
+    )
 
 expect fun httpEngine(): HttpClientEngineFactory<*>
+
 fun createHttpClient(
     httpClientEngine: HttpClientEngine,
     serverEndpointProvider: ServerEndpointProvider,
@@ -103,11 +106,12 @@ fun createHttpClient(
     }
 
     install(Logging) {
-        logger = object : Logger {
-            override fun log(message: String) {
-                log.verbose(tag = "Logger Ktor =>", message = message)
+        logger =
+            object : Logger {
+                override fun log(message: String) {
+                    log.verbose(tag = "Logger Ktor =>", message = message)
+                }
             }
-        }
         level = LogLevel.INFO
         sanitizeHeader { header -> header == HttpHeaders.Authorization }
     }
@@ -149,7 +153,7 @@ fun createHttpClient(
                     request.attributes.getOrNull(OnRequestAuthBoundHookKey)?.onBound()
                 }
             }
-        }
+        },
     )
 
     install(Auth) {
@@ -177,19 +181,24 @@ fun createHttpClient(
             // The request's generation is strictly its bound snapshot's
             // generation — never re-derived from the token string.
             refreshTokens {
-                val boundSnapshot = response.call.request.attributes.getOrNull(RequestAuthSnapshotKey)
-                    ?: return@refreshTokens null
-                val sentAccessToken = response.call.request.headers[HttpHeaders.Authorization]
-                    ?.removePrefix("Bearer ")
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                tokenRefresher.refreshAfter401(
-                    client = client,
-                    requestGeneration = boundSnapshot.generation,
-                    requestAccessToken = sentAccessToken ?: boundSnapshot.jwtToken,
-                )?.let {
-                    io.ktor.client.plugins.auth.providers.BearerTokens(it.accessToken, it.refreshToken)
-                }
+                val boundSnapshot =
+                    response.call.request.attributes
+                        .getOrNull(RequestAuthSnapshotKey)
+                        ?: return@refreshTokens null
+                val sentAccessToken =
+                    response.call.request.headers[HttpHeaders.Authorization]
+                        ?.removePrefix("Bearer ")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                tokenRefresher
+                    .refreshAfter401(
+                        client = client,
+                        requestGeneration = boundSnapshot.generation,
+                        requestAccessToken = sentAccessToken ?: boundSnapshot.jwtToken,
+                    )?.let {
+                        io.ktor.client.plugins.auth.providers
+                            .BearerTokens(it.accessToken, it.refreshToken)
+                    }
             }
         }
     }
@@ -220,7 +229,7 @@ fun createHttpClient(
                 }
                 proceed(request)
             }
-        }
+        },
     )
 
     expectSuccess = true
@@ -233,30 +242,30 @@ fun createHttpClient(
             val exceptionResponse = serverException?.response ?: clientException?.response
             if (exceptionResponse == null) return@handleResponseExceptionWithRequest
             val requestUrl = exceptionResponse.call.request.url
-            val event: HttpErrorEvent = when (val statusCode = exceptionResponse.status) {
-                HttpStatusCode.Unauthorized ->  {
-                    log.error(tag = "HttpResponseValidator", message = "Unauthorized: $requestUrl")
-                    HttpErrorEvent.Unauthorized(
-                        requestUrl = requestUrl.toString()
-                    )
+            val event: HttpErrorEvent =
+                when (val statusCode = exceptionResponse.status) {
+                    HttpStatusCode.Unauthorized -> {
+                        log.error(tag = "HttpResponseValidator", message = "Unauthorized: $requestUrl")
+                        HttpErrorEvent.Unauthorized(
+                            requestUrl = requestUrl.toString(),
+                        )
+                    }
+
+                    else -> {
+                        HttpErrorEvent.GeneralHttpError(
+                            statusCode = statusCode,
+                            responseBody = exceptionResponse.bodyAsText(),
+                            requestUrl = requestUrl.toString(),
+                        )
+                    }
                 }
-                else -> {
-                    HttpErrorEvent.GeneralHttpError(
-                        statusCode = statusCode,
-                        responseBody = exceptionResponse.bodyAsText(),
-                        requestUrl = requestUrl.toString()
-                    )
-                }
-            }
             httpEventBus.sendError(event)
         }
     }
 }
 
-suspend inline fun <reified E : DomainError> Throwable.toDomainError(
-    fallback: (String?) -> E
-): Result<Nothing, E> {
-    return if (this is ResponseException) {
+suspend inline fun <reified E : DomainError> Throwable.toDomainError(fallback: (String?) -> E): Result<Nothing, E> =
+    if (this is ResponseException) {
         try {
             val errorBody = response.body<E>()
             Err(errorBody)
@@ -266,16 +275,16 @@ suspend inline fun <reified E : DomainError> Throwable.toDomainError(
     } else {
         Err(fallback(this.message))
     }
-}
+
 val log = KotlinLogging.logger {}
+
 suspend inline fun <T, reified E : DomainError> CoroutineBindingScope<E>.bindApi(
     noinline fallback: (String?) -> E,
-    crossinline block: suspend () -> T
-): T {
-    return runSuspendCatching {
+    crossinline block: suspend () -> T,
+): T =
+    runSuspendCatching {
         block()
     }.onErr { throwable ->
         log.info { "[bindApi] => ${throwable.message}" }
         throwable.toDomainError(fallback).bind()
     }.getOrThrow { IllegalStateException("bindApi: unreachable error state") }
-}

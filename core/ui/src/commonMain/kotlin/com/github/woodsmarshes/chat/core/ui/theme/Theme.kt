@@ -49,39 +49,43 @@ fun getMiuixTextStyles(fontFamily: FontFamily): TextStyles {
 }
 
 private val defaultM3Typography = Typography()
-fun getM3Typography(fontFamily: FontFamily) = Typography(
-    displayLarge = defaultM3Typography.displayLarge.copy(fontFamily = fontFamily),
-    displayMedium = defaultM3Typography.displayMedium.copy(fontFamily = fontFamily),
-    displaySmall = defaultM3Typography.displaySmall.copy(fontFamily = fontFamily),
-    headlineLarge = defaultM3Typography.headlineLarge.copy(fontFamily = fontFamily),
-    headlineMedium = defaultM3Typography.headlineMedium.copy(fontFamily = fontFamily),
-    headlineSmall = defaultM3Typography.headlineSmall.copy(fontFamily = fontFamily),
-    titleLarge = defaultM3Typography.titleLarge.copy(fontFamily = fontFamily),
-    titleMedium = defaultM3Typography.titleMedium.copy(fontFamily = fontFamily),
-    titleSmall = defaultM3Typography.titleSmall.copy(fontFamily = fontFamily),
-    bodyLarge = defaultM3Typography.bodyLarge.copy(fontFamily = fontFamily),
-    bodyMedium = defaultM3Typography.bodyMedium.copy(fontFamily = fontFamily),
-    bodySmall = defaultM3Typography.bodySmall.copy(fontFamily = fontFamily),
-    labelLarge = defaultM3Typography.labelLarge.copy(fontFamily = fontFamily),
-    labelMedium = defaultM3Typography.labelMedium.copy(fontFamily = fontFamily),
-    labelSmall = defaultM3Typography.labelSmall.copy(fontFamily = fontFamily)
-)
 
-private val miuixM3Shapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
-)
+fun getM3Typography(fontFamily: FontFamily) =
+    Typography(
+        displayLarge = defaultM3Typography.displayLarge.copy(fontFamily = fontFamily),
+        displayMedium = defaultM3Typography.displayMedium.copy(fontFamily = fontFamily),
+        displaySmall = defaultM3Typography.displaySmall.copy(fontFamily = fontFamily),
+        headlineLarge = defaultM3Typography.headlineLarge.copy(fontFamily = fontFamily),
+        headlineMedium = defaultM3Typography.headlineMedium.copy(fontFamily = fontFamily),
+        headlineSmall = defaultM3Typography.headlineSmall.copy(fontFamily = fontFamily),
+        titleLarge = defaultM3Typography.titleLarge.copy(fontFamily = fontFamily),
+        titleMedium = defaultM3Typography.titleMedium.copy(fontFamily = fontFamily),
+        titleSmall = defaultM3Typography.titleSmall.copy(fontFamily = fontFamily),
+        bodyLarge = defaultM3Typography.bodyLarge.copy(fontFamily = fontFamily),
+        bodyMedium = defaultM3Typography.bodyMedium.copy(fontFamily = fontFamily),
+        bodySmall = defaultM3Typography.bodySmall.copy(fontFamily = fontFamily),
+        labelLarge = defaultM3Typography.labelLarge.copy(fontFamily = fontFamily),
+        labelMedium = defaultM3Typography.labelMedium.copy(fontFamily = fontFamily),
+        labelSmall = defaultM3Typography.labelSmall.copy(fontFamily = fontFamily),
+    )
 
-private val defaultM3Shapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
-)
+private val miuixM3Shapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(6.dp),
+        small = RoundedCornerShape(10.dp),
+        medium = RoundedCornerShape(16.dp),
+        large = RoundedCornerShape(20.dp),
+        extraLarge = RoundedCornerShape(28.dp),
+    )
+
+private val defaultM3Shapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(4.dp),
+        small = RoundedCornerShape(8.dp),
+        medium = RoundedCornerShape(12.dp),
+        large = RoundedCornerShape(16.dp),
+        extraLarge = RoundedCornerShape(24.dp),
+    )
 
 @Composable
 fun AppTheme(
@@ -89,20 +93,22 @@ fun AppTheme(
     content: @Composable () -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
-    val isDark = when (themeConfig.darkThemeConfig) {
-        DarkThemeConfig.LIGHT -> false
-        DarkThemeConfig.DARK -> true
-        DarkThemeConfig.FOLLOW_SYSTEM -> systemDark
-    }
+    val isDark =
+        when (themeConfig.darkThemeConfig) {
+            DarkThemeConfig.LIGHT -> false
+            DarkThemeConfig.DARK -> true
+            DarkThemeConfig.FOLLOW_SYSTEM -> systemDark
+        }
 
     val lightFont = Font(Res.font.MiSans_Light, FontWeight.Light)
     val regularFont = Font(Res.font.MiSans_Regular, FontWeight.Normal)
     val italicFont = Font(Res.font.MiSans_Normal, FontWeight.Normal, FontStyle.Italic)
     val mediumFont = Font(Res.font.MiSans_Medium, FontWeight.Medium)
     val boldFont = Font(Res.font.MiSans_Bold, FontWeight.Bold)
-    val appFontFamily = remember(lightFont, regularFont, italicFont, mediumFont, boldFont) {
-        FontFamily(lightFont, regularFont, italicFont, mediumFont, boldFont)
-    }
+    val appFontFamily =
+        remember(lightFont, regularFont, italicFont, mediumFont, boldFont) {
+            FontFamily(lightFont, regularFont, italicFont, mediumFont, boldFont)
+        }
 
     val miuixTextStyles = remember(appFontFamily) { getMiuixTextStyles(appFontFamily) }
     val m3Typography = remember(appFontFamily) { getM3Typography(appFontFamily) }
@@ -110,16 +116,17 @@ fun AppTheme(
     val contentWithFontFallback = @Composable {
         CompositionLocalProvider(
             LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = appFontFamily),
-            content = content
+            content = content,
         )
     }
 
     when (themeConfig.themeBrand) {
         ThemeBrand.MATERIAL3 -> {
             val colorScheme = if (isDark) m3DarkColorScheme else m3LightColorScheme
-            val bridgedMiuixColors = remember(colorScheme, isDark) {
-                m3BridgedMiuixColors(colorScheme, isDark)
-            }
+            val bridgedMiuixColors =
+                remember(colorScheme, isDark) {
+                    m3BridgedMiuixColors(colorScheme, isDark)
+                }
             val bubbleColors = BubbleDefaults.material3Colors(isDark)
             val bubbleShapes = BubbleDefaults.material3Shapes()
             MiuixTheme(
@@ -142,19 +149,23 @@ fun AppTheme(
                 }
             }
         }
+
         else -> {
-            val mode = when (themeConfig.darkThemeConfig) {
-                DarkThemeConfig.LIGHT -> ColorSchemeMode.Light
-                DarkThemeConfig.DARK -> ColorSchemeMode.Dark
-                DarkThemeConfig.FOLLOW_SYSTEM -> ColorSchemeMode.System
-            }
-            val controller = remember(mode, isDark) {
-                ThemeController(colorSchemeMode = mode, isDark = isDark)
-            }
-            val bridgedM3ColorScheme = remember(controller, isDark) {
-                val miuixColors = if (isDark) controller.darkColors else controller.lightColors
-                miuixBridgedM3ColorScheme(miuixColors, isDark)
-            }
+            val mode =
+                when (themeConfig.darkThemeConfig) {
+                    DarkThemeConfig.LIGHT -> ColorSchemeMode.Light
+                    DarkThemeConfig.DARK -> ColorSchemeMode.Dark
+                    DarkThemeConfig.FOLLOW_SYSTEM -> ColorSchemeMode.System
+                }
+            val controller =
+                remember(mode, isDark) {
+                    ThemeController(colorSchemeMode = mode, isDark = isDark)
+                }
+            val bridgedM3ColorScheme =
+                remember(controller, isDark) {
+                    val miuixColors = if (isDark) controller.darkColors else controller.lightColors
+                    miuixBridgedM3ColorScheme(miuixColors, isDark)
+                }
             MaterialTheme(
                 colorScheme = bridgedM3ColorScheme,
                 typography = m3Typography,
@@ -177,4 +188,3 @@ fun AppTheme(
         }
     }
 }
-

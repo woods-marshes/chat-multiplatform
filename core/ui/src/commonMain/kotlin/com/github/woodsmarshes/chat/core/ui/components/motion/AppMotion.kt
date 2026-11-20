@@ -11,16 +11,16 @@ import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
 
 object AppMotion {
-    const val FeedbackMillis = 150
-    const val PageMillis = 260
-    const val SharedMillis = 320
+    const val FEEDBACK_MILLIS = 150
+    const val PAGE_MILLIS = 260
+    const val SHARED_MILLIS = 320
 
     /**
      * Full-screen spinners only appear if loading lingers longer than this;
      * Room-backed paging resolves within the first frame, so an immediate
      * spinner would flash on every chat open.
      */
-    const val LoadingRevealDelayMillis = 400L
+    const val LOADING_REVEAL_DELAY_MILLIS = 400L
 }
 
 val LocalAppSharedTransitionScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
@@ -32,7 +32,10 @@ val LocalAppSharedTransitionScope = staticCompositionLocalOf<SharedTransitionSco
  * keys on both sides would collide instead of animating.
  */
 @Composable
-fun Modifier.sharedElementBounds(key: String?, element: String): Modifier {
+fun Modifier.sharedElementBounds(
+    key: String?,
+    element: String,
+): Modifier {
     val scope = LocalAppSharedTransitionScope.current ?: return this
     if (key == null || isInListDetailScene()) return this
     val visibility = LocalNavAnimatedContentScope.current
@@ -40,24 +43,27 @@ fun Modifier.sharedElementBounds(key: String?, element: String): Modifier {
         sharedBounds(
             sharedContentState = rememberSharedContentState("$key/$element"),
             animatedVisibilityScope = visibility,
-            boundsTransform = { _, _ -> tween(AppMotion.SharedMillis) },
-            enter = fadeIn(tween(AppMotion.FeedbackMillis)),
-            exit = fadeOut(tween(AppMotion.FeedbackMillis)),
+            boundsTransform = { _, _ -> tween(AppMotion.SHARED_MILLIS) },
+            enter = fadeIn(tween(AppMotion.FEEDBACK_MILLIS)),
+            exit = fadeOut(tween(AppMotion.FEEDBACK_MILLIS)),
         )
     }
 }
 
 /** Bounds also support different text styles and composite avatar placeholders. */
 @Composable
-fun Modifier.sharedConversationBounds(conversationId: String?, element: String): Modifier =
-    sharedElementBounds(conversationId?.let { "conversation/$it" }, element)
+fun Modifier.sharedConversationBounds(
+    conversationId: String?,
+    element: String,
+): Modifier = sharedElementBounds(conversationId?.let { "conversation/$it" }, element)
 
 /** Contact/profile avatar+title flight; pairs ContactItem with ProfileScreen. */
 @Composable
-fun Modifier.sharedUserBounds(userId: String?, element: String): Modifier =
-    sharedElementBounds(userId?.let { "user/$it" }, element)
+fun Modifier.sharedUserBounds(
+    userId: String?,
+    element: String,
+): Modifier = sharedElementBounds(userId?.let { "user/$it" }, element)
 
 /** Settings personal card -> PROFILE detail header flight. */
 @Composable
-fun Modifier.sharedSettingsProfileBounds(element: String): Modifier =
-    sharedElementBounds("settings-profile", element)
+fun Modifier.sharedSettingsProfileBounds(element: String): Modifier = sharedElementBounds("settings-profile", element)

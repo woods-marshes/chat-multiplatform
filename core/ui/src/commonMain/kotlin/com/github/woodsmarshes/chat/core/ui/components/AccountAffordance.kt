@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.core.ui.components
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.Composable
 
 /**
  * Slot rendering the signed-in user's avatar inside top app bars.

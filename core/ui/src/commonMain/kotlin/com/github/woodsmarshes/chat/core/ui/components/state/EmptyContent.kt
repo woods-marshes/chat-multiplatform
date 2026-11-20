@@ -1,9 +1,4 @@
 package com.github.woodsmarshes.chat.core.ui.components.state
-import com.github.woodsmarshes.chat.core.ui.components.ChatAppButton
-import com.github.woodsmarshes.chat.core.ui.components.ButtonSize
-import com.github.woodsmarshes.chat.core.ui.components.ButtonStyle
-import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -19,12 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.github.woodsmarshes.chat.core.ui.components.ButtonSize
+import com.github.woodsmarshes.chat.core.ui.components.ButtonStyle
+import com.github.woodsmarshes.chat.core.ui.components.ChatAppButton
+import com.github.woodsmarshes.chat.core.ui.components.shimmer.ListSkeleton
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
-import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.VerticalSplit
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 
 @Composable
 fun EmptyContent(

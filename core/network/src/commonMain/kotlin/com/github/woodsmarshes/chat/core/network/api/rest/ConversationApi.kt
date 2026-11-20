@@ -1,13 +1,5 @@
 package com.github.woodsmarshes.chat.core.network.api.rest
 
-import com.github.woodsmarshes.chat.core.model.Conversation
-import com.github.woodsmarshes.chat.core.model.ConversationParticipant
-import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
-import com.github.woodsmarshes.chat.core.model.GroupProfile
-import com.github.woodsmarshes.chat.core.model.Message
-import com.github.woodsmarshes.chat.core.model.ParticipantSettings
-import com.github.woodsmarshes.chat.core.model.RequestStatus
-import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.contract.api.V1
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.ConversationResponse
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.CreateConversationRequest
@@ -16,12 +8,20 @@ import com.github.woodsmarshes.chat.core.contract.dto.conversation.InviteUserReq
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.InviteUsersRequest
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.JoinGroupRequest
 import com.github.woodsmarshes.chat.core.contract.dto.conversation.UpdateConversationSettingsRequest
-import com.github.woodsmarshes.chat.core.contract.dto.events.SyncHead
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncBatch
+import com.github.woodsmarshes.chat.core.contract.dto.events.SyncHead
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncScope
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncSnapshot
 import com.github.woodsmarshes.chat.core.contract.dto.events.SyncStateResponse
 import com.github.woodsmarshes.chat.core.contract.dto.message.ReadReportRequest
+import com.github.woodsmarshes.chat.core.model.Conversation
+import com.github.woodsmarshes.chat.core.model.ConversationParticipant
+import com.github.woodsmarshes.chat.core.model.GroupJoinRequest
+import com.github.woodsmarshes.chat.core.model.GroupProfile
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings
+import com.github.woodsmarshes.chat.core.model.RequestStatus
+import com.github.woodsmarshes.chat.core.model.User
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.resources.delete
@@ -32,12 +32,10 @@ import io.ktor.client.request.setBody
 import kotlin.uuid.Uuid
 
 class ConversationApi(
-    private val client: HttpClient
+    private val client: HttpClient,
 ) {
     // 搜索群组
-    suspend fun searchGroups(keyword: String): List<GroupProfile> {
-        return client.get(V1.Conversations.Search(keyword = keyword)).body()
-    }
+    suspend fun searchGroups(keyword: String): List<GroupProfile> = client.get(V1.Conversations.Search(keyword = keyword)).body()
 
     // 检查群组handle是否存在
     suspend fun checkExists(handle: String): Boolean {
@@ -46,21 +44,17 @@ class ConversationApi(
     }
 
     // 创建会话 (单聊/群聊)
-    suspend fun createConversation(req: CreateConversationRequest): Conversation {
-        return client.post(V1.Conversations()) {
-            setBody(req)
-        }.body()
-    }
+    suspend fun createConversation(req: CreateConversationRequest): Conversation =
+        client
+            .post(V1.Conversations()) {
+                setBody(req)
+            }.body()
 
     // 获取会话详情
-    suspend fun getDetail(id: Uuid): ConversationResponse {
-        return client.get(V1.Conversations.Id(id = id)).body()
-    }
+    suspend fun getDetail(id: Uuid): ConversationResponse = client.get(V1.Conversations.Id(id = id)).body()
 
     // 解散或删除会话
-    suspend fun deleteConversation(id: Uuid): Boolean {
-        return client.delete(V1.Conversations.Id(id = id)).status.value == 200
-    }
+    suspend fun deleteConversation(id: Uuid): Boolean = client.delete(V1.Conversations.Id(id = id)).status.value == 200
 
     // 获取成员列表
     suspend fun getParticipants(id: Uuid): List<Pair<ConversationParticipant, User>> {
@@ -69,56 +63,83 @@ class ConversationApi(
     }
 
     // 批量邀请用户入群
-    suspend fun inviteUsers(conversationId: Uuid, userIds: List<Uuid>): Boolean {
+    suspend fun inviteUsers(
+        conversationId: Uuid,
+        userIds: List<Uuid>,
+    ): Boolean {
         val parent = V1.Conversations.Id(id = conversationId)
-        return client.post(V1.Conversations.Id.InviteUsers(parent)) {
-            setBody(InviteUsersRequest(userIds))
-        }.status.value == 200
+        return client
+            .post(V1.Conversations.Id.InviteUsers(parent)) {
+                setBody(InviteUsersRequest(userIds))
+            }.status.value == 200
     }
 
     // 邀请单个用户入群
-    suspend fun inviteUser(conversationId: Uuid, userId: Uuid): Boolean {
-        return inviteUsers(conversationId, listOf(userId))
-    }
+    suspend fun inviteUser(
+        conversationId: Uuid,
+        userId: Uuid,
+    ): Boolean = inviteUsers(conversationId, listOf(userId))
 
     // 主动申请加入群组
-    suspend fun joinGroup(conversationId: Uuid, message: String? = null): Boolean {
+    suspend fun joinGroup(
+        conversationId: Uuid,
+        message: String? = null,
+    ): Boolean {
         val parent = V1.Conversations.Id(id = conversationId)
-        return client.post(V1.Conversations.Id.Join(parent)) {
-            setBody(JoinGroupRequest(message))
-        }.status.value == 200
+        return client
+            .post(V1.Conversations.Id.Join(parent)) {
+                setBody(JoinGroupRequest(message))
+            }.status.value == 200
     }
 
     // 退出群组
-    suspend fun leaveGroup(conversationId: Uuid, message: String? = null): Boolean {
+    suspend fun leaveGroup(
+        conversationId: Uuid,
+        message: String? = null,
+    ): Boolean {
         val parent = V1.Conversations.Id(id = conversationId)
-        return client.post(V1.Conversations.Id.Leave(parent))
+        return client
+            .post(V1.Conversations.Id.Leave(parent))
             .status.value == 200
     }
 
     // 更新群组设置 (仅Owner)
-    suspend fun updateGroupSettings(conversationId: Uuid, req: UpdateConversationSettingsRequest): Boolean {
+    suspend fun updateGroupSettings(
+        conversationId: Uuid,
+        req: UpdateConversationSettingsRequest,
+    ): Boolean {
         val idResource = V1.Conversations.Id(id = conversationId)
         val settingsResource = V1.Conversations.Id.Settings(idResource)
-        return client.put(V1.Conversations.Id.Settings.Group(settingsResource)) {
-            setBody(req)
-        }.status.value == 200
+        return client
+            .put(
+                V1.Conversations.Id.Settings
+                    .Group(settingsResource),
+            ) {
+                setBody(req)
+            }.status.value == 200
     }
 
     // 更新个人在该会话的设置 (置顶/免打扰/昵称)
-    suspend fun updatePersonalSettings(conversationId: Uuid, req: ParticipantSettings): Boolean {
+    suspend fun updatePersonalSettings(
+        conversationId: Uuid,
+        req: ParticipantSettings,
+    ): Boolean {
         val idResource = V1.Conversations.Id(id = conversationId)
         val settingsResource = V1.Conversations.Id.Settings(idResource)
-        return client.put(V1.Conversations.Id.Settings.Personal(settingsResource)) {
-            setBody(req)
-        }.status.value == 200
+        return client
+            .put(
+                V1.Conversations.Id.Settings
+                    .Personal(settingsResource),
+            ) {
+                setBody(req)
+            }.status.value == 200
     }
 
     // 获取历史消息
     suspend fun getMessages(
         conversationId: Uuid,
         limit: Int = 20,
-        beforeId: Uuid? = null
+        beforeId: Uuid? = null,
     ): List<Message> {
         val parent = V1.Conversations.Id(id = conversationId)
         return client.get(V1.Conversations.Id.Messages(parent, limit, beforeId)).body()
@@ -128,65 +149,71 @@ class ConversationApi(
     suspend fun searchMessages(
         conversationId: Uuid,
         keyword: String,
-        limit: Int = 20
+        limit: Int = 20,
     ): List<Message> {
         val idRes = V1.Conversations.Id(id = conversationId)
         val msgRes = V1.Conversations.Id.Messages(parent = idRes, limit = limit)
-        val searchRes = V1.Conversations.Id.Messages.Search(parent = msgRes, keyword = keyword)
+        val searchRes =
+            V1.Conversations.Id.Messages
+                .Search(parent = msgRes, keyword = keyword)
 
         return client.get(searchRes).body()
     }
 
     // Sync stream high-water marks for the authenticated user
-    suspend fun getSyncHeads(): SyncStateResponse.Heads =
-        client.get(V1.Sync.Heads()).body()
+    suspend fun getSyncHeads(): SyncStateResponse.Heads = client.get(V1.Sync.Heads()).body()
+
     // Incremental delta batch for a single sync stream
     suspend fun getSyncChanges(
         scope: SyncScope,
         id: Uuid,
         afterRevision: Long,
         limit: Int = 100,
-    ): SyncBatch {
-        return client.get(
-            V1.Sync.Changes(
-                scope = scope,
-                id = id,
-                afterRevision = afterRevision,
-                limit = limit,
-            )
-        ).body()
-    }
+    ): SyncBatch =
+        client
+            .get(
+                V1.Sync.Changes(
+                    scope = scope,
+                    id = id,
+                    afterRevision = afterRevision,
+                    limit = limit,
+                ),
+            ).body()
 
     // Consistent point-in-time snapshot for a single sync stream
     suspend fun getSyncSnapshot(
         scope: SyncScope,
         id: Uuid,
         limit: Int = 100,
-    ): SyncSnapshot {
-        return client.get(
-            V1.Sync.Snapshot(
-                scope = scope,
-                id = id,
-                limit = limit,
-            )
-        ).body()
-    }
+    ): SyncSnapshot =
+        client
+            .get(
+                V1.Sync.Snapshot(
+                    scope = scope,
+                    id = id,
+                    limit = limit,
+                ),
+            ).body()
 
     // 上报已读
-    suspend fun markAsRead(conversationId: Uuid, messageId: Uuid): Boolean {
+    suspend fun markAsRead(
+        conversationId: Uuid,
+        messageId: Uuid,
+    ): Boolean {
         val idRes = V1.Conversations.Id(id = conversationId)
         val readRes = V1.Conversations.Id.Read(parent = idRes)
 
-        val response = client.post(readRes) {
-            setBody(ReadReportRequest(messageId = messageId))
-        }
+        val response =
+            client.post(readRes) {
+                setBody(ReadReportRequest(messageId = messageId))
+            }
         return response.status.value in 200..299
     }
 
     // 获取该群的申请列表 (管理员视角)
     suspend fun getGroupJoinRequests(
         conversationId: Uuid,
-        status: RequestStatus = RequestStatus.PENDING
+        status: RequestStatus = RequestStatus.PENDING,
     ): List<GroupJoinRequest> {
         val idRes = V1.Conversations.Id(id = conversationId)
         val requestsRes = V1.Conversations.Id.Requests(parent = idRes, status = status)
@@ -197,14 +224,15 @@ class ConversationApi(
     // 处理群申请 (审批/拒绝)
     suspend fun handleGroupRequests(
         conversationId: Uuid,
-        requests: List<HandleGroupRequest>
+        requests: List<HandleGroupRequest>,
     ): Boolean {
         val idRes = V1.Conversations.Id(id = conversationId)
         val requestsRes = V1.Conversations.Id.Requests(parent = idRes)
 
-        val response = client.post(requestsRes) {
-            setBody(requests)
-        }
+        val response =
+            client.post(requestsRes) {
+                setBody(requests)
+            }
         return response.status.value in 200..299
     }
 }

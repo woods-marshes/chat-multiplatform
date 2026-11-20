@@ -24,7 +24,6 @@ data class ProfileUiState(
     val actionError: String? = null,
     val actionMessage: String? = null,
     val isStartingChat: Boolean = false,
-
     // Add friend dialog
     val showAddFriendDialog: Boolean = false,
     val addFriendMessage: String = "",
@@ -32,15 +31,11 @@ data class ProfileUiState(
     // A PENDING request towards this user already exists; the button turns
     // into a disabled state instead of allowing duplicate sends.
     val isFriendRequestPending: Boolean = false,
-
     // Edit remark dialog
     val showEditRemarkDialog: Boolean = false,
     val editRemarkValue: String = "",
-
     // Block confirm dialog
     val showBlockConfirmDialog: Boolean = false,
-
     // Delete friend confirm dialog
     val showDeleteFriendConfirmDialog: Boolean = false,
 )
-

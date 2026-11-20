@@ -16,15 +16,20 @@ import kotlinx.coroutines.launch
  * invite-friend flows: explicit alias beats cached nickname beats the user's
  * own display name.
  */
-internal fun toContactUiModel(contact: Contact, user: User): ContactUiModel = ContactUiModel(
-    id = user.id,
-    username = user.username,
-    displayName = contact.alias?.takeIf { it.isNotBlank() }
-        ?: contact.nickname?.takeIf { it.isNotBlank() }
-        ?: user.displayName,
-    avatarUrl = user.avatarUrl,
-    bio = user.bio,
-)
+internal fun toContactUiModel(
+    contact: Contact,
+    user: User,
+): ContactUiModel =
+    ContactUiModel(
+        id = user.id,
+        username = user.username,
+        displayName =
+            contact.alias?.takeIf { it.isNotBlank() }
+                ?: contact.nickname?.takeIf { it.isNotBlank() }
+                ?: user.displayName,
+        avatarUrl = user.avatarUrl,
+        bio = user.bio,
+    )
 
 /**
  * Debounced group-handle availability check shared by the create-group and
@@ -35,11 +40,14 @@ internal fun CoroutineScope.launchGroupHandleCheck(
     handle: String,
     repository: ConversationRepository,
     onResult: (isChecking: Boolean, isAvailable: Boolean?) -> Unit,
-): Job = launch {
-    delay(400)
-    repository.checkHandleExists(handle).onOk { exists ->
-        onResult(false, !exists)
-    }.onErr {
-        onResult(false, null)
+): Job =
+    launch {
+        delay(400)
+        repository
+            .checkHandleExists(handle)
+            .onOk { exists ->
+                onResult(false, !exists)
+            }.onErr {
+                onResult(false, null)
+            }
     }
-}

@@ -30,27 +30,28 @@ class ArticleListViewModel(
 
     /** 全部已发布文章 */
     val allArticles: Flow<PagingData<ArticleListUiModel>> =
-        articleRepository.getArticles(getMyArticle = false)
+        articleRepository
+            .getArticles(getMyArticle = false)
             .cachedIn(viewModelScope)
 
     /** 当前登录用户的文章 */
     @OptIn(ExperimentalCoroutinesApi::class)
     val myArticles: Flow<PagingData<ArticleListUiModel>> =
-        userRepository.getMeFlow()
-            .distinctUntilChanged()  // 只在用户信息发生变化时触发
+        userRepository
+            .getMeFlow()
+            .distinctUntilChanged() // 只在用户信息发生变化时触发
             .map { user -> user?.id } // 提取 id（可能为 null）
             .flatMapLatest { authorId ->
                 if (authorId != null) {
                     articleRepository.getArticles(
                         getMyArticle = true,
-                        authorId = authorId
+                        authorId = authorId,
                     )
                 } else {
                     // 用户未登录，返回空数据流
                     emptyFlow()
                 }
-            }
-            .cachedIn(viewModelScope)
+            }.cachedIn(viewModelScope)
 
     fun selectTab(index: Int) {
         _uiState.value = _uiState.value.copy(selectedTabIndex = index)

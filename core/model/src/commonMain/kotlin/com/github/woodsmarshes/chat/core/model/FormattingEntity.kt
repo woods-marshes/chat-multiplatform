@@ -22,28 +22,28 @@ sealed interface FormattingEntity {
     @SerialName("BOLD")
     data class Bold(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     @Serializable
     @SerialName("ITALIC")
     data class Italic(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     @Serializable
     @SerialName("STRIKETHROUGH") // 删除线
     data class Strikethrough(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     @Serializable
     @SerialName("SPOILER") // 剧透内容，点击后显示
     data class Spoiler(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     // --- 链接与代码 ---
@@ -52,7 +52,7 @@ sealed interface FormattingEntity {
     @SerialName("CODE") // 行内代码，如 `println()`
     data class Code(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     @Serializable
@@ -60,7 +60,8 @@ sealed interface FormattingEntity {
     data class Url(
         @ProtoNumber(1) override val offset: Int,
         @ProtoNumber(2) override val length: Int,
-        @ProtoNumber(3) val url: String // 实际跳转的链接
+        // 实际跳转的链接
+        @ProtoNumber(3) val url: String,
     ) : TextRange()
 
     // --- 社交与交互 ---
@@ -70,14 +71,15 @@ sealed interface FormattingEntity {
     data class Mention(
         @ProtoNumber(1) override val offset: Int,
         @ProtoNumber(2) override val length: Int,
-        @ProtoNumber(3) val userId: Uuid // 被提到的人的 ID
+        // 被提到的人的 ID
+        @ProtoNumber(3) val userId: Uuid,
     ) : TextRange()
 
     @Serializable
     @SerialName("MENTION_ALL") // @所有人
     data class MentionAll(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     @Serializable
@@ -85,14 +87,14 @@ sealed interface FormattingEntity {
     data class Hashtag(
         @ProtoNumber(1) override val offset: Int,
         @ProtoNumber(2) override val length: Int,
-        @ProtoNumber(3) val tag: String
+        @ProtoNumber(3) val tag: String,
     ) : TextRange()
 
     @Serializable
     @SerialName("BOT_COMMAND") // /commands
     data class BotCommand(
         @ProtoNumber(1) override val offset: Int,
-        @ProtoNumber(2) override val length: Int
+        @ProtoNumber(2) override val length: Int,
     ) : TextRange()
 
     // --- 结构性内容 (不基于特定文本范围，可选) ---
@@ -101,6 +103,6 @@ sealed interface FormattingEntity {
     @SerialName("BLOCK_QUOTE") // 消息正文中的引用块 (类似 Markdown 的 >)
     data class BlockQuote(
         @ProtoNumber(1) val text: String,
-        @ProtoNumber(2) val authorName: String? = null
+        @ProtoNumber(2) val authorName: String? = null,
     ) : FormattingEntity
 }

@@ -10,9 +10,10 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-
-
-fun formatMessageTime(instant: Instant, strings: com.github.woodsmarshes.chat.lyricist.Strings = getLocaleStrings()): String {
+fun formatMessageTime(
+    instant: Instant,
+    strings: com.github.woodsmarshes.chat.lyricist.Strings = getLocaleStrings(),
+): String {
     val timeZone = TimeZone.currentSystemDefault()
     val msgLocal = instant.toLocalDateTime(timeZone)
     val nowLocal = Clock.System.now().toLocalDateTime(timeZone)
@@ -21,25 +22,39 @@ fun formatMessageTime(instant: Instant, strings: com.github.woodsmarshes.chat.ly
     val nowDate = nowLocal.date
     val daysDiff = msgDate.daysUntil(nowDate) // 消息日期距今天多少天（正数表示过去）
 
-    val hour = msgLocal.time.hour.toString().padStart(2, '0')
-    val minute = msgLocal.time.minute.toString().padStart(2, '0')
+    val hour =
+        msgLocal.time.hour
+            .toString()
+            .padStart(2, '0')
+    val minute =
+        msgLocal.time.minute
+            .toString()
+            .padStart(2, '0')
     val timeStr = "$hour:$minute"
 
     return when (daysDiff) {
-        0 -> timeStr
-        1 -> strings.yesterdayFormat(timeStr)
+        0 -> {
+            timeStr
+        }
+
+        1 -> {
+            strings.yesterdayFormat(timeStr)
+        }
+
         in 2..6 -> {
-            val dayLabel = when (msgDate.dayOfWeek) {
-                DayOfWeek.MONDAY -> strings.monday
-                DayOfWeek.TUESDAY -> strings.tuesday
-                DayOfWeek.WEDNESDAY -> strings.wednesday
-                DayOfWeek.THURSDAY -> strings.thursday
-                DayOfWeek.FRIDAY -> strings.friday
-                DayOfWeek.SATURDAY -> strings.saturday
-                DayOfWeek.SUNDAY -> strings.sunday
-            }
+            val dayLabel =
+                when (msgDate.dayOfWeek) {
+                    DayOfWeek.MONDAY -> strings.monday
+                    DayOfWeek.TUESDAY -> strings.tuesday
+                    DayOfWeek.WEDNESDAY -> strings.wednesday
+                    DayOfWeek.THURSDAY -> strings.thursday
+                    DayOfWeek.FRIDAY -> strings.friday
+                    DayOfWeek.SATURDAY -> strings.saturday
+                    DayOfWeek.SUNDAY -> strings.sunday
+                }
             "$dayLabel $timeStr"
         }
+
         else -> {
             // 使用 monthDay 格式化月份和日期
             val month = msgDate.month.number.toString()

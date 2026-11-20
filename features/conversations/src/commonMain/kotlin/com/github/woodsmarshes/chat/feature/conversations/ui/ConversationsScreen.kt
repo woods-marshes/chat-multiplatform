@@ -1,6 +1,5 @@
 package com.github.woodsmarshes.chat.feature.conversations.ui
 
-import com.github.woodsmarshes.chat.core.model.GroupProfile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.ui.components.AppAlertDialog
 import com.github.woodsmarshes.chat.core.ui.components.AppFloatingActionButton
 import com.github.woodsmarshes.chat.core.ui.components.AppHorizontalDivider
@@ -93,19 +93,20 @@ fun ConversationsScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val inMultiPane = isInListDetailScene()
 
-    val avatarPickerLauncher = rememberFilePickerLauncher(
-        type = FileKitType.Image,
-        mode = FileKitMode.Single,
-        onResult = { file ->
-            if (file != null) {
-                scope.launch {
-                    runCatching { file.readBytes() }
-                        .onSuccess { bytes -> viewModel.onGroupAvatarSelected(bytes) }
-                        .onFailure { e -> log.warn(e) { "failed to read picked group avatar" } }
+    val avatarPickerLauncher =
+        rememberFilePickerLauncher(
+            type = FileKitType.Image,
+            mode = FileKitMode.Single,
+            onResult = { file ->
+                if (file != null) {
+                    scope.launch {
+                        runCatching { file.readBytes() }
+                            .onSuccess { bytes -> viewModel.onGroupAvatarSelected(bytes) }
+                            .onFailure { e -> log.warn(e) { "failed to read picked group avatar" } }
+                    }
                 }
-            }
-        },
-    )
+            },
+        )
 
     Scaffold(
         topBar = {
@@ -119,33 +120,44 @@ fun ConversationsScreen(
                 trailingAffordance = LocalAccountAffordance.current,
                 searchViewContent = {
                     when {
-                        uiState.isSearching && uiState.searchResults.isEmpty() -> LoadingContent(
-                            message = strings.loading,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        uiState.searchError != null && uiState.searchResults.isEmpty() -> ErrorContent(
-                            message = uiState.searchError ?: strings.searchFailed,
-                            modifier = Modifier.fillMaxSize(),
-                            onRetry = viewModel::retrySearch,
-                        )
-                        uiState.searchResults.isEmpty() -> EmptyContent(
-                            message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(
-                                items = uiState.searchResults,
-                                key = { it.id },
-                            ) { conv ->
-                                ConversationItem(
-                                    conversation = conv,
-                                    onClick = {
-                                        scope.launch {
-                                            searchBarState.animateToCollapsed()
-                                            uiState.searchProfiles[conv.id]?.let(onGroupInfoClick)
-                                        }
-                                    },
-                                )
+                        uiState.isSearching && uiState.searchResults.isEmpty() -> {
+                            LoadingContent(
+                                message = strings.loading,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        uiState.searchError != null && uiState.searchResults.isEmpty() -> {
+                            ErrorContent(
+                                message = uiState.searchError ?: strings.searchFailed,
+                                modifier = Modifier.fillMaxSize(),
+                                onRetry = viewModel::retrySearch,
+                            )
+                        }
+
+                        uiState.searchResults.isEmpty() -> {
+                            EmptyContent(
+                                message = if (searchQuery.isNotBlank()) strings.searchNoResults else strings.searchPrompt,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        else -> {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(
+                                    items = uiState.searchResults,
+                                    key = { it.id },
+                                ) { conv ->
+                                    ConversationItem(
+                                        conversation = conv,
+                                        onClick = {
+                                            scope.launch {
+                                                searchBarState.animateToCollapsed()
+                                                uiState.searchProfiles[conv.id]?.let(onGroupInfoClick)
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -169,9 +181,10 @@ fun ConversationsScreen(
             loadingContent = {
                 ListSkeleton(count = 8, skeleton = { ConversationSkeleton() })
             },
-            modifier = modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
             AppPullToRefreshBox(
                 isRefreshing = uiState.isRefreshing,
@@ -204,10 +217,11 @@ fun ConversationsScreen(
     }
 
     // ---- Create group dialog ----
-    val canConfirmCreate = !uiState.isCreating &&
-        uiState.groupName.isNotBlank() &&
-        !uiState.isCheckingHandle &&
-        (uiState.groupHandle.isBlank() || uiState.isHandleAvailable != false)
+    val canConfirmCreate =
+        !uiState.isCreating &&
+            uiState.groupName.isNotBlank() &&
+            !uiState.isCheckingHandle &&
+            (uiState.groupHandle.isBlank() || uiState.isHandleAvailable != false)
 
     AppAlertDialog(
         show = uiState.showCreateGroup,
@@ -224,10 +238,11 @@ fun ConversationsScreen(
         onDismiss = viewModel::dismissCreateGroup,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 460.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
         ) {
             val errorMsg = uiState.createError
             if (errorMsg != null) {
@@ -241,38 +256,42 @@ fun ConversationsScreen(
 
             // Group Avatar selector
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
-                    .clickable { avatarPickerLauncher.launch() }
-                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { avatarPickerLauncher.launch() }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (uiState.avatarBytes != null) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ),
+                    modifier =
+                        Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (uiState.avatarBytes != null) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = if (uiState.avatarBytes != null) {
-                            Icons.Default.Check
-                        } else {
-                            Icons.Default.PhotoCamera
-                        },
+                        imageVector =
+                            if (uiState.avatarBytes != null) {
+                                Icons.Default.Check
+                            } else {
+                                Icons.Default.PhotoCamera
+                            },
                         contentDescription = strings.changeAvatar,
-                        tint = if (uiState.avatarBytes != null) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        tint =
+                            if (uiState.avatarBytes != null) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -312,20 +331,22 @@ fun ConversationsScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (uiState.groupHandle.isNotBlank()) {
-                val statusText = when {
-                    uiState.isCheckingHandle -> strings.groupHandleChecking
-                    uiState.isHandleAvailable == true -> strings.groupHandleAvailable
-                    else -> null
-                }
+                val statusText =
+                    when {
+                        uiState.isCheckingHandle -> strings.groupHandleChecking
+                        uiState.isHandleAvailable == true -> strings.groupHandleAvailable
+                        else -> null
+                    }
                 if (statusText != null) {
                     Text(
                         text = statusText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (uiState.isHandleAvailable == true) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        color =
+                            if (uiState.isHandleAvailable == true) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                         modifier = Modifier.padding(top = 4.dp, start = 4.dp),
                     )
                 }
@@ -383,11 +404,12 @@ fun ConversationsScreen(
                 uiState.availableFriends.forEach { friend ->
                     val isSelected = friend.id in uiState.selectedMemberIds
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable { viewModel.onToggleMemberSelection(friend.id) }
-                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { viewModel.onToggleMemberSelection(friend.id) }
+                                .padding(vertical = 6.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         UserAvatar(
@@ -426,4 +448,3 @@ fun ConversationsScreen(
         }
     }
 }
-

@@ -30,47 +30,57 @@ fun RoleMicroBadge(
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
-    val label = when (role) {
-        ConversationRole.OWNER -> strings.roleOwner
-        ConversationRole.ADMIN -> strings.roleAdmin
-        else -> return
-    }
+    val label =
+        when (role) {
+            ConversationRole.OWNER -> strings.roleOwner
+            ConversationRole.ADMIN -> strings.roleAdmin
+            else -> return
+        }
 
     val themeConfig = LocalThemeConfig.current
-    val isDark = when (themeConfig.darkThemeConfig) {
-        DarkThemeConfig.LIGHT -> false
-        DarkThemeConfig.DARK -> true
-        DarkThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
-    }
+    val isDark =
+        when (themeConfig.darkThemeConfig) {
+            DarkThemeConfig.LIGHT -> false
+            DarkThemeConfig.DARK -> true
+            DarkThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
+        }
 
-    val (bgColor, textColor) = when (role) {
-        ConversationRole.OWNER -> {
-            val bg = Color(0xFFF59E0B).copy(alpha = if (isDark) 0.20f else 0.14f)
-            val fg = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
-            bg to fg
+    val (bgColor, textColor) =
+        when (role) {
+            ConversationRole.OWNER -> {
+                val bg = Color(0xFFF59E0B).copy(alpha = if (isDark) 0.20f else 0.14f)
+                val fg = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
+                bg to fg
+            }
+
+            ConversationRole.ADMIN -> {
+                val primary = MaterialTheme.colorScheme.primary
+                primary.copy(alpha = if (isDark) 0.18f else 0.12f) to primary
+            }
+
+            else -> {
+                return
+            }
         }
-        ConversationRole.ADMIN -> {
-            val primary = MaterialTheme.colorScheme.primary
-            primary.copy(alpha = if (isDark) 0.18f else 0.12f) to primary
-        }
-        else -> return
-    }
 
     Text(
         text = label,
         color = textColor,
-        style = LocalTextStyle.current.copy(
-            fontSize = 10.sp,
-            lineHeight = 11.sp,
-            fontWeight = FontWeight.Medium,
-            lineHeightStyle = LineHeightStyle(
-                alignment = LineHeightStyle.Alignment.Center,
-                trim = LineHeightStyle.Trim.Both,
+        style =
+            LocalTextStyle.current.copy(
+                fontSize = 10.sp,
+                lineHeight = 11.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeightStyle =
+                    LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both,
+                    ),
             ),
-        ),
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(bgColor)
-            .padding(horizontal = 5.dp, vertical = 1.5.dp),
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(bgColor)
+                .padding(horizontal = 5.dp, vertical = 1.5.dp),
     )
 }

@@ -34,5 +34,14 @@ fun mimeTypeToFileCategory(mimeType: String?): FileCategory {
 }
 
 enum class FileCategory {
-    IMAGE, VIDEO, AUDIO, PDF, ARCHIVE, DOCUMENT, SPREADSHEET, PRESENTATION, TEXT, OTHER
+    IMAGE,
+    VIDEO,
+    AUDIO,
+    PDF,
+    ARCHIVE,
+    DOCUMENT,
+    SPREADSHEET,
+    PRESENTATION,
+    TEXT,
+    OTHER,
 }

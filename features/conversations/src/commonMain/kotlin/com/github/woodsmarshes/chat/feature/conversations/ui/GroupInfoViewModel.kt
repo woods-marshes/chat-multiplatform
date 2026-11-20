@@ -7,11 +7,11 @@ import com.github.michaelbull.result.onOk
 import com.github.woodsmarshes.chat.core.data.repository.ContactRepository
 import com.github.woodsmarshes.chat.core.data.repository.ConversationRepository
 import com.github.woodsmarshes.chat.core.data.repository.UserRepository
-import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.GroupProfile
+import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.RequestStatus
 import com.github.woodsmarshes.chat.core.model.User
-import com.github.woodsmarshes.chat.core.model.ParticipantSettings
 import com.github.woodsmarshes.chat.core.model.error.ConversationError
 import com.github.woodsmarshes.chat.core.model.presentation.ContactUiModel
 import com.github.woodsmarshes.chat.core.model.presentation.SenderUser
@@ -37,7 +37,6 @@ class GroupInfoViewModel(
     private val contactRepository: ContactRepository,
     searchProfile: GroupProfile? = null,
 ) : ViewModel() {
-
     private val log = KotlinLogging.logger {}
 
     private val strings
@@ -46,19 +45,20 @@ class GroupInfoViewModel(
     private val parsedId = runCatching { Uuid.parse(conversationId) }.getOrNull()
 
     // A saved navigation snapshot is display-only; it never grants membership or permissions.
-    private val _uiState = MutableStateFlow(
-        searchProfile?.takeIf { it.conversationId == parsedId }?.let { profile ->
-            GroupInfoUiState(
-                conversationId = profile.conversationId.toString(),
-                name = profile.name,
-                handle = profile.handle,
-                avatarUrl = profile.avatarUrl,
-                description = profile.description,
-                settings = profile.settings,
-                isLoading = false,
-            )
-        } ?: GroupInfoUiState()
-    )
+    private val _uiState =
+        MutableStateFlow(
+            searchProfile?.takeIf { it.conversationId == parsedId }?.let { profile ->
+                GroupInfoUiState(
+                    conversationId = profile.conversationId.toString(),
+                    name = profile.name,
+                    handle = profile.handle,
+                    avatarUrl = profile.avatarUrl,
+                    description = profile.description,
+                    settings = profile.settings,
+                    isLoading = false,
+                )
+            } ?: GroupInfoUiState(),
+        )
     val uiState: StateFlow<GroupInfoUiState> = _uiState.asStateFlow()
 
     private var refreshJob: Job? = null
@@ -87,7 +87,7 @@ class GroupInfoViewModel(
                 userRepository.getMeFlow(),
                 conversationRepository.getMyParticipantFlow(conversationId),
             ) { profile, members, me, myParticipant ->
-                 {
+                {
                     if (profile != null) {
                         val meMember = me?.let { u -> members.find { it.id == u.id } }
                         val resolvedRole = myParticipant?.role ?: meMember?.role
@@ -130,13 +130,18 @@ class GroupInfoViewModel(
 
     private fun observeFriendsForInvite() {
         viewModelScope.launch {
-            contactRepository.getFriendsFlow()
+            contactRepository
+                .getFriendsFlow()
                 .catch { e -> log.warn(e) { "friends flow failed" } }
                 .collect { pairs ->
-                    val memberIds = _uiState.value.members.map { it.id }.toSet()
-                    val friends = pairs
-                        .filter { (_, user) -> user.id !in memberIds }
-                        .map { (contact, user) -> toContactUiModel(contact, user) }
+                    val memberIds =
+                        _uiState.value.members
+                            .map { it.id }
+                            .toSet()
+                    val friends =
+                        pairs
+                            .filter { (_, user) -> user.id !in memberIds }
+                            .map { (contact, user) -> toContactUiModel(contact, user) }
                     _uiState.update { it.copy(invitableFriends = friends) }
                 }
         }
@@ -150,34 +155,38 @@ class GroupInfoViewModel(
     fun refresh() {
         val conversationId = parsedId ?: return
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true) }
-            conversationRepository.refreshGroupDetail(conversationId).onErr { err ->
-                when {
-                    err is ConversationError.NotParticipant -> {
-                        if (_uiState.value.conversationId == null) {
+        refreshJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isRefreshing = true) }
+                conversationRepository.refreshGroupDetail(conversationId).onErr { err ->
+                    when {
+                        err is ConversationError.NotParticipant -> {
+                            if (_uiState.value.conversationId == null) {
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        notFound = true,
+                                    )
+                                }
+                            }
+                        }
+
+                        _uiState.value.conversationId == null -> {
                             _uiState.update {
                                 it.copy(
                                     isLoading = false,
-                                    notFound = true,
+                                    error = strings.groupLoadFailed,
                                 )
                             }
                         }
                     }
-                    _uiState.value.conversationId == null -> _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = strings.groupLoadFailed,
-                        )
-                    }
                 }
+                val role = _uiState.value.myRole
+                if (role == ConversationRole.OWNER || role == ConversationRole.ADMIN) {
+                    loadJoinRequests(conversationId)
+                }
+                _uiState.update { it.copy(isRefreshing = false) }
             }
-            val role = _uiState.value.myRole
-            if (role == ConversationRole.OWNER || role == ConversationRole.ADMIN) {
-                loadJoinRequests(conversationId)
-            }
-            _uiState.update { it.copy(isRefreshing = false) }
-        }
     }
 
     private fun loadJoinRequests(conversationId: Uuid) {
@@ -191,7 +200,8 @@ class GroupInfoViewModel(
 
     private fun observePendingJoinRequests(conversationId: Uuid) {
         viewModelScope.launch {
-            conversationRepository.observeGroupJoinRequests(conversationId, RequestStatus.PENDING)
+            conversationRepository
+                .observeGroupJoinRequests(conversationId, RequestStatus.PENDING)
                 .collect { pending ->
                     _uiState.update { it.copy(pendingJoinRequests = pending) }
                     pending.forEach { req ->
@@ -231,7 +241,10 @@ class GroupInfoViewModel(
     }
 
     fun confirmJoinWithMessage() {
-        val msg = _uiState.value.joinMessage.trim().ifEmpty { null }
+        val msg =
+            _uiState.value.joinMessage
+                .trim()
+                .ifEmpty { null }
         _uiState.update { it.copy(showJoinDialog = false) }
         joinGroup(message = msg)
     }
@@ -241,24 +254,27 @@ class GroupInfoViewModel(
         val current = _uiState.value
         if (current.isMember || current.isJoining) return
         joinJob?.cancel()
-        joinJob = viewModelScope.launch {
-            _uiState.update { it.copy(isJoining = true, actionError = null) }
-            conversationRepository.joinGroup(conversationId, message).onOk {
-                _uiState.update {
-                    it.copy(
-                        isJoining = false,
-                        actionMessage = if (it.settings.joinApprovalRequired) strings.groupApplySubmitted else null,
-                    )
-                }
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isJoining = false,
-                        actionError = strings.joinGroupFailed,
-                    )
-                }
+        joinJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isJoining = true, actionError = null) }
+                conversationRepository
+                    .joinGroup(conversationId, message)
+                    .onOk {
+                        _uiState.update {
+                            it.copy(
+                                isJoining = false,
+                                actionMessage = if (it.settings.joinApprovalRequired) strings.groupApplySubmitted else null,
+                            )
+                        }
+                    }.onErr {
+                        _uiState.update {
+                            it.copy(
+                                isJoining = false,
+                                actionError = strings.joinGroupFailed,
+                            )
+                        }
+                    }
             }
-        }
     }
 
     /**
@@ -277,34 +293,37 @@ class GroupInfoViewModel(
         val newSettings = transform(oldSettings)
         _uiState.update { render(it, newSettings) }
         viewModelScope.launch {
-            conversationRepository.updateMyParticipantSettings(
-                conversationId = conversationId,
-                settings = newSettings,
-            ).onOk {
-                onSuccess()
-            }.onErr {
-                _uiState.update { state ->
-                    render(state, oldSettings).copy(actionError = strings.authOperationFailed)
+            conversationRepository
+                .updateMyParticipantSettings(
+                    conversationId = conversationId,
+                    settings = newSettings,
+                ).onOk {
+                    onSuccess()
+                }.onErr {
+                    _uiState.update { state ->
+                        render(state, oldSettings).copy(actionError = strings.authOperationFailed)
+                    }
                 }
-            }
         }
     }
 
     // ---------------- Personal settings ----------------
 
-    fun togglePin(pinned: Boolean) = applyParticipantSettings(
-        transform = { it.copy(pinnedAt = if (pinned) Clock.System.now() else null) },
-        render = { state, settings ->
-            state.copy(isPinned = settings.pinnedAt != null, myParticipantSettings = settings)
-        },
-    )
+    fun togglePin(pinned: Boolean) =
+        applyParticipantSettings(
+            transform = { it.copy(pinnedAt = if (pinned) Clock.System.now() else null) },
+            render = { state, settings ->
+                state.copy(isPinned = settings.pinnedAt != null, myParticipantSettings = settings)
+            },
+        )
 
-    fun toggleMute(muted: Boolean) = applyParticipantSettings(
-        transform = { it.copy(enableNotification = !muted) },
-        render = { state, settings ->
-            state.copy(isMuted = !settings.enableNotification, myParticipantSettings = settings)
-        },
-    )
+    fun toggleMute(muted: Boolean) =
+        applyParticipantSettings(
+            transform = { it.copy(enableNotification = !muted) },
+            render = { state, settings ->
+                state.copy(isMuted = !settings.enableNotification, myParticipantSettings = settings)
+            },
+        )
 
     fun showEditNickname() {
         _uiState.update {
@@ -324,7 +343,10 @@ class GroupInfoViewModel(
     }
 
     fun saveMyNickname() {
-        val newNickname = _uiState.value.editNicknameValue.trim().ifEmpty { null }
+        val newNickname =
+            _uiState.value.editNicknameValue
+                .trim()
+                .ifEmpty { null }
         applyParticipantSettings(
             transform = { it.copy(nickname = newNickname) },
             render = { state, settings ->
@@ -343,11 +365,13 @@ class GroupInfoViewModel(
     fun uploadGroupAvatar(bytes: ByteArray) {
         val conversationId = parsedId ?: return
         viewModelScope.launch {
-            conversationRepository.uploadGroupAvatar(conversationId, bytes).onOk {
-                _uiState.update { it.copy(actionMessage = strings.avatarUploadSuccess) }
-            }.onErr {
-                _uiState.update { it.copy(actionError = strings.avatarUploadFailed) }
-            }
+            conversationRepository
+                .uploadGroupAvatar(conversationId, bytes)
+                .onOk {
+                    _uiState.update { it.copy(actionMessage = strings.avatarUploadSuccess) }
+                }.onErr {
+                    _uiState.update { it.copy(actionError = strings.avatarUploadFailed) }
+                }
         }
     }
 
@@ -396,9 +420,10 @@ class GroupInfoViewModel(
                 isHandleAvailable = null,
             )
         }
-        handleCheckJob = viewModelScope.launchGroupHandleCheck(cleaned, conversationRepository) { checking, available ->
-            _uiState.update { it.copy(isCheckingHandle = checking, isHandleAvailable = available) }
-        }
+        handleCheckJob =
+            viewModelScope.launchGroupHandleCheck(cleaned, conversationRepository) { checking, available ->
+                _uiState.update { it.copy(isCheckingHandle = checking, isHandleAvailable = available) }
+            }
     }
 
     fun onEditGroupDescriptionChanged(desc: String) {
@@ -414,28 +439,29 @@ class GroupInfoViewModel(
 
         _uiState.update { it.copy(isSavingGroup = true) }
         viewModelScope.launch {
-            conversationRepository.updateGroupProfile(
-                conversationId = conversationId,
-                name = name,
-                handle = state.editGroupHandle.trim().ifEmpty { null },
-                description = state.editGroupDescription.trim(),
-            ).onOk {
-                _uiState.update {
-                    it.copy(
-                        isSavingGroup = false,
-                        showEditGroupDialog = false,
-                        actionMessage = strings.profileSaved,
-                    )
+            conversationRepository
+                .updateGroupProfile(
+                    conversationId = conversationId,
+                    name = name,
+                    handle = state.editGroupHandle.trim().ifEmpty { null },
+                    description = state.editGroupDescription.trim(),
+                ).onOk {
+                    _uiState.update {
+                        it.copy(
+                            isSavingGroup = false,
+                            showEditGroupDialog = false,
+                            actionMessage = strings.profileSaved,
+                        )
+                    }
+                    refresh()
+                }.onErr {
+                    _uiState.update {
+                        it.copy(
+                            isSavingGroup = false,
+                            actionError = strings.profileSaveFailed,
+                        )
+                    }
                 }
-                refresh()
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isSavingGroup = false,
-                        actionError = strings.profileSaveFailed,
-                    )
-                }
-            }
         }
     }
 
@@ -445,11 +471,13 @@ class GroupInfoViewModel(
         val newSettings = oldSettings.copy(joinApprovalRequired = required)
         _uiState.update { it.copy(settings = newSettings) }
         viewModelScope.launch {
-            conversationRepository.updateGroupProfile(conversationId, settings = newSettings).onOk {
-                refresh()
-            }.onErr {
-                _uiState.update { it.copy(settings = oldSettings, actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .updateGroupProfile(conversationId, settings = newSettings)
+                .onOk {
+                    refresh()
+                }.onErr {
+                    _uiState.update { it.copy(settings = oldSettings, actionError = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -459,11 +487,13 @@ class GroupInfoViewModel(
         val newSettings = oldSettings.copy(allowMemberInvite = allowed)
         _uiState.update { it.copy(settings = newSettings) }
         viewModelScope.launch {
-            conversationRepository.updateGroupProfile(conversationId, settings = newSettings).onOk {
-                refresh()
-            }.onErr {
-                _uiState.update { it.copy(settings = oldSettings, actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .updateGroupProfile(conversationId, settings = newSettings)
+                .onOk {
+                    refresh()
+                }.onErr {
+                    _uiState.update { it.copy(settings = oldSettings, actionError = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -473,11 +503,13 @@ class GroupInfoViewModel(
         val newSettings = oldSettings.copy(muteAll = muteAll)
         _uiState.update { it.copy(settings = newSettings) }
         viewModelScope.launch {
-            conversationRepository.updateGroupProfile(conversationId, settings = newSettings).onOk {
-                refresh()
-            }.onErr {
-                _uiState.update { it.copy(settings = oldSettings, actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .updateGroupProfile(conversationId, settings = newSettings)
+                .onOk {
+                    refresh()
+                }.onErr {
+                    _uiState.update { it.copy(settings = oldSettings, actionError = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -493,18 +525,23 @@ class GroupInfoViewModel(
         _uiState.update { it.copy(showJoinRequestsSheet = false) }
     }
 
-    fun handleJoinRequest(requestId: Uuid, approve: Boolean) {
+    fun handleJoinRequest(
+        requestId: Uuid,
+        approve: Boolean,
+    ) {
         val conversationId = parsedId ?: return
         if (_uiState.value.isHandlingJoinRequest) return
         _uiState.update { it.copy(isHandlingJoinRequest = true) }
         viewModelScope.launch {
-            conversationRepository.handleGroupJoinRequest(conversationId, requestId, approve).onOk {
-                // The local ledger mirror in the repository updates
-                // pendingJoinRequests through the observed flow.
-                refresh()
-            }.onErr {
-                _uiState.update { it.copy(actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .handleGroupJoinRequest(conversationId, requestId, approve)
+                .onOk {
+                    // The local ledger mirror in the repository updates
+                    // pendingJoinRequests through the observed flow.
+                    refresh()
+                }.onErr {
+                    _uiState.update { it.copy(actionError = strings.authOperationFailed) }
+                }
             _uiState.update { it.copy(isHandlingJoinRequest = false) }
         }
     }
@@ -523,11 +560,12 @@ class GroupInfoViewModel(
 
     fun toggleInviteSelection(userId: Uuid) {
         _uiState.update { state ->
-            val updated = if (userId in state.selectedInviteIds) {
-                state.selectedInviteIds - userId
-            } else {
-                state.selectedInviteIds + userId
-            }
+            val updated =
+                if (userId in state.selectedInviteIds) {
+                    state.selectedInviteIds - userId
+                } else {
+                    state.selectedInviteIds + userId
+                }
             state.copy(selectedInviteIds = updated)
         }
     }
@@ -538,22 +576,24 @@ class GroupInfoViewModel(
         if (ids.isEmpty()) return
         _uiState.update { it.copy(isInviting = true) }
         viewModelScope.launch {
-            conversationRepository.inviteUsers(conversationId, ids).onOk {
-                _uiState.update {
-                    it.copy(
-                        isInviting = false,
-                        showInviteSheet = false,
-                        actionMessage = strings.profileSaved,
-                    )
+            conversationRepository
+                .inviteUsers(conversationId, ids)
+                .onOk {
+                    _uiState.update {
+                        it.copy(
+                            isInviting = false,
+                            showInviteSheet = false,
+                            actionMessage = strings.profileSaved,
+                        )
+                    }
+                }.onErr {
+                    _uiState.update {
+                        it.copy(
+                            isInviting = false,
+                            actionError = strings.authOperationFailed,
+                        )
+                    }
                 }
-            }.onErr {
-                _uiState.update {
-                    it.copy(
-                        isInviting = false,
-                        actionError = strings.authOperationFailed,
-                    )
-                }
-            }
         }
     }
 
@@ -584,12 +624,14 @@ class GroupInfoViewModel(
         val conversationId = parsedId ?: return
         _uiState.update { it.copy(showTransferOwnerSheet = false, pendingTransferTarget = null) }
         viewModelScope.launch {
-            conversationRepository.updateGroupProfile(conversationId, ownerId = newOwnerId).onOk {
-                _uiState.update { it.copy(actionMessage = strings.profileSaved) }
-                refresh()
-            }.onErr {
-                _uiState.update { it.copy(actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .updateGroupProfile(conversationId, ownerId = newOwnerId)
+                .onOk {
+                    _uiState.update { it.copy(actionMessage = strings.profileSaved) }
+                    refresh()
+                }.onErr {
+                    _uiState.update { it.copy(actionError = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -607,11 +649,13 @@ class GroupInfoViewModel(
         val conversationId = parsedId ?: return
         _uiState.update { it.copy(showLeaveConfirmDialog = false) }
         viewModelScope.launch {
-            conversationRepository.leaveGroup(conversationId).onOk {
-                onLeft()
-            }.onErr {
-                _uiState.update { it.copy(actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .leaveGroup(conversationId)
+                .onOk {
+                    onLeft()
+                }.onErr {
+                    _uiState.update { it.copy(actionError = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -627,12 +671,13 @@ class GroupInfoViewModel(
         val conversationId = parsedId ?: return
         _uiState.update { it.copy(showDissolveConfirmDialog = false) }
         viewModelScope.launch {
-            conversationRepository.deleteConversation(conversationId).onOk {
-                onDissolved()
-            }.onErr {
-                _uiState.update { it.copy(actionError = strings.authOperationFailed) }
-            }
+            conversationRepository
+                .deleteConversation(conversationId)
+                .onOk {
+                    onDissolved()
+                }.onErr {
+                    _uiState.update { it.copy(actionError = strings.authOperationFailed) }
+                }
         }
     }
 }
-

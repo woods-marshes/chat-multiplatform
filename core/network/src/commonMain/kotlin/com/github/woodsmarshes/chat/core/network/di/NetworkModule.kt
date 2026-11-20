@@ -21,30 +21,31 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
-val networkConfig = module {
-    single<NetworkConfig> { loadNetworkConfig() }
-}
-
-val networkModule = module {
-    singleOf(::HttpEventBusImpl) bind HttpEventBus::class
-    singleOf(::ServerEndpointProvider)
-    singleOf(::TokenRefresher)
-    single<HttpClient> {
-        createHttpClient(
-            httpClientEngine = httpEngine().create(),
-            serverEndpointProvider = get(),
-            authTokenDataSource = get(),
-            tokenRefresher = get(),
-            httpEventBus = get(),
-        )
+val networkConfig =
+    module {
+        single<NetworkConfig> { loadNetworkConfig() }
     }
-    singleOf(::AuthApi)
-    singleOf(::AdminApi)
-    singleOf(::ContactApi)
-    singleOf(::ConversationApi)
-    singleOf(::UserApi)
-    singleOf(::FileApi)
-    singleOf(::ArticleApi)
-    singleOf(::RealtimeApi)
 
-}
+val networkModule =
+    module {
+        singleOf(::HttpEventBusImpl) bind HttpEventBus::class
+        singleOf(::ServerEndpointProvider)
+        singleOf(::TokenRefresher)
+        single<HttpClient> {
+            createHttpClient(
+                httpClientEngine = httpEngine().create(),
+                serverEndpointProvider = get(),
+                authTokenDataSource = get(),
+                tokenRefresher = get(),
+                httpEventBus = get(),
+            )
+        }
+        singleOf(::AuthApi)
+        singleOf(::AdminApi)
+        singleOf(::ContactApi)
+        singleOf(::ConversationApi)
+        singleOf(::UserApi)
+        singleOf(::FileApi)
+        singleOf(::ArticleApi)
+        singleOf(::RealtimeApi)
+    }

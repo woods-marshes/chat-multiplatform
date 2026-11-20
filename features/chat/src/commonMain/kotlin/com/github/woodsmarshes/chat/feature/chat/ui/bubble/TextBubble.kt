@@ -41,40 +41,40 @@ fun TextBubble(
     val linkColor = if (isOwnMessage) bubbleColors.ownContent else bubbleColors.inputSendIconTint
     val shape = if (isOwnMessage) bubbleShapes.ownBubble else bubbleShapes.otherBubble
 
-    val annotatedText = remember(content.text, content.entities, textColor, linkColor) {
-        formatter.buildRichText(content.text, content.entities, textColor, linkColor)
-    }
+    val annotatedText =
+        remember(content.text, content.entities, textColor, linkColor) {
+            formatter.buildRichText(content.text, content.entities, textColor, linkColor)
+        }
 
     val textStyle = LocalTextStyle.current.copy(fontSize = 15.sp, lineHeight = 22.sp, color = textColor)
 
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
-    val combinedModifier = modifier
-        .clip(shape)
-        .background(bgColor)
-        .then(
-            if (sendStatus is MessageState.SendFailed && onRetry != null) {
-                Modifier.clickable { onRetry() }
-            } else {
-                Modifier
-            }
-        )
-        .then(
-            if (needsClickHandling(annotatedText)) {
-                Modifier.pointerInput(formatter) {
-                    detectTapGestures { tapOffset ->
-                        val layout = textLayoutResult ?: return@detectTapGestures
-                        val position = layout.getOffsetForPosition(tapOffset)
-                        if (position != -1) {
-                            handleAnnotationClick(annotatedText, position, formatter)
+    val combinedModifier =
+        modifier
+            .clip(shape)
+            .background(bgColor)
+            .then(
+                if (sendStatus is MessageState.SendFailed && onRetry != null) {
+                    Modifier.clickable { onRetry() }
+                } else {
+                    Modifier
+                },
+            ).then(
+                if (needsClickHandling(annotatedText)) {
+                    Modifier.pointerInput(formatter) {
+                        detectTapGestures { tapOffset ->
+                            val layout = textLayoutResult ?: return@detectTapGestures
+                            val position = layout.getOffsetForPosition(tapOffset)
+                            if (position != -1) {
+                                handleAnnotationClick(annotatedText, position, formatter)
+                            }
                         }
                     }
-                }
-            } else {
-                Modifier
-            }
-        )
-        .padding(horizontal = 12.dp, vertical = 8.dp)
+                } else {
+                    Modifier
+                },
+            ).padding(horizontal = 12.dp, vertical = 8.dp)
 
     BasicText(
         text = annotatedText,
@@ -84,23 +84,31 @@ fun TextBubble(
     )
 }
 
-private fun needsClickHandling(text: AnnotatedString): Boolean {
-    return text.getStringAnnotations(ANNOTATION_URL, 0, text.length).isNotEmpty() ||
+private fun needsClickHandling(text: AnnotatedString): Boolean =
+    text.getStringAnnotations(ANNOTATION_URL, 0, text.length).isNotEmpty() ||
         text.getStringAnnotations(ANNOTATION_MENTION, 0, text.length).isNotEmpty() ||
         text.getStringAnnotations(ANNOTATION_HASHTAG, 0, text.length).isNotEmpty()
-}
 
 private fun handleAnnotationClick(
     text: AnnotatedString,
     position: Int,
     formatter: MessageFormatter,
 ) {
-    text.getStringAnnotations(ANNOTATION_URL, position, position)
-        .firstOrNull()?.item?.let { formatter.onUrlClicked?.invoke(it) }
-    text.getStringAnnotations(ANNOTATION_MENTION, position, position)
-        .firstOrNull()?.item?.let { formatter.onMentionClicked?.invoke(it) }
-    text.getStringAnnotations(ANNOTATION_HASHTAG, position, position)
-        .firstOrNull()?.item?.let { formatter.onHashtagClicked?.invoke(it) }
+    text
+        .getStringAnnotations(ANNOTATION_URL, position, position)
+        .firstOrNull()
+        ?.item
+        ?.let { formatter.onUrlClicked?.invoke(it) }
+    text
+        .getStringAnnotations(ANNOTATION_MENTION, position, position)
+        .firstOrNull()
+        ?.item
+        ?.let { formatter.onMentionClicked?.invoke(it) }
+    text
+        .getStringAnnotations(ANNOTATION_HASHTAG, position, position)
+        .firstOrNull()
+        ?.item
+        ?.let { formatter.onHashtagClicked?.invoke(it) }
 }
 
 @Composable
@@ -108,10 +116,11 @@ fun rememberFormatter(
     onMentionClicked: ((userId: String) -> Unit)? = null,
     onUrlClicked: ((url: String) -> Unit)? = null,
     onHashtagClicked: ((tag: String) -> Unit)? = null,
-): MessageFormatter = remember(onMentionClicked, onUrlClicked, onHashtagClicked) {
-    MessageFormatter(
-        onMentionClicked = onMentionClicked,
-        onUrlClicked = onUrlClicked,
-        onHashtagClicked = onHashtagClicked,
-    )
-}
+): MessageFormatter =
+    remember(onMentionClicked, onUrlClicked, onHashtagClicked) {
+        MessageFormatter(
+            onMentionClicked = onMentionClicked,
+            onUrlClicked = onUrlClicked,
+            onHashtagClicked = onHashtagClicked,
+        )
+    }

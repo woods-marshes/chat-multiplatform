@@ -34,40 +34,44 @@ fun ReplyQuote(
     val bubbleColors = LocalBubbleColors.current
     val strings = LocalStrings.current
     val senderName = reply.sender?.displayName ?: reply.sender?.username ?: ""
-    val excerpt = if (reply.revokedAt != null) {
-        strings.messageRevoked
-    } else {
-        when (val content = reply.content) {
-            is TextContent -> content.text
-            is ImageContent -> strings.messagePreviewImage
-            is VideoContent -> strings.messagePreviewVideo
-            is AudioContent -> strings.messagePreviewAudio
-            is FileContent -> strings.messagePreviewFile
-            else -> ""
+    val excerpt =
+        if (reply.revokedAt != null) {
+            strings.messageRevoked
+        } else {
+            when (val content = reply.content) {
+                is TextContent -> content.text
+                is ImageContent -> strings.messagePreviewImage
+                is VideoContent -> strings.messagePreviewVideo
+                is AudioContent -> strings.messagePreviewAudio
+                is FileContent -> strings.messagePreviewFile
+                else -> ""
+            }
         }
-    }
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bubbleColors.inputFieldBackground)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(bubbleColors.inputFieldBackground)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Text(
             text = senderName,
-            style = LocalTextStyle.current.copy(
-                color = bubbleColors.senderNameColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-            ),
+            style =
+                LocalTextStyle.current.copy(
+                    color = bubbleColors.senderNameColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = excerpt,
-            style = LocalTextStyle.current.copy(
-                color = bubbleColors.timestampColor,
-                fontSize = 12.sp,
-            ),
+            style =
+                LocalTextStyle.current.copy(
+                    color = bubbleColors.timestampColor,
+                    fontSize = 12.sp,
+                ),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )

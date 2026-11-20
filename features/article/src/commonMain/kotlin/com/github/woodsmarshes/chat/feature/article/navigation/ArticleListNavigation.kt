@@ -5,15 +5,18 @@ import androidx.navigation3.runtime.NavKey
 import com.github.woodsmarshes.chat.feature.article.ui.ArticleDetailScreen
 import com.github.woodsmarshes.chat.feature.article.ui.ArticleListScreen
 import kotlinx.serialization.Serializable
-import kotlin.uuid.Uuid
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import kotlin.uuid.Uuid
 
 @Serializable
 data object ArticleListNavKey : NavKey
 
 @Serializable
-data class ArticleDetailNavKey(val id: Uuid, val authorId: Uuid) : NavKey
+data class ArticleDetailNavKey(
+    val id: Uuid,
+    val authorId: Uuid,
+) : NavKey
 
 fun EntryProviderScope<NavKey>.articleListEntry(
     onArticleClick: (id: Uuid, authorId: Uuid) -> Unit,
@@ -38,10 +41,11 @@ fun EntryProviderScope<NavKey>.articleDetailEntry(
     entry<ArticleDetailNavKey>(metadata = metadata) { key ->
         ArticleDetailScreen(
             articleId = key.id,
-            viewModel = koinViewModel(
-                key = "article_detail_${key.id}",
-                parameters = { parametersOf(key.id, key.authorId) },
-            ),
+            viewModel =
+                koinViewModel(
+                    key = "article_detail_${key.id}",
+                    parameters = { parametersOf(key.id, key.authorId) },
+                ),
             onBack = onBack,
             onEditClick = onEditClick,
         )

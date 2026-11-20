@@ -10,6 +10,6 @@ sealed class HttpErrorEvent {
     data class GeneralHttpError(
         val requestUrl: String,
         val statusCode: HttpStatusCode,
-        val responseBody: String
+        val responseBody: String,
     ) : HttpErrorEvent()
 }

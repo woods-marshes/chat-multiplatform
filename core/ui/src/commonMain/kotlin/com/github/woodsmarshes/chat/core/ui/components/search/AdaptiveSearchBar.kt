@@ -1,12 +1,13 @@
 package com.github.woodsmarshes.chat.core.ui.components.search
 
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -22,12 +23,10 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
-import androidx.compose.animation.core.spring
+import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,12 +44,37 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
+import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * A search bar state that deliberately skips saveable restoration.
+ *
+ * Nav entry decorators keep saveable state alive across top-level tab
+ * switches, so rememberSearchBarState() resurrects a search view the user
+ * left expanded — arriving on a tab with the search already open (and its
+ * old query firing behind the collapsed-looking bar) reads as a bug.
+ * Every arrival starts collapsed and empty; within one visit the state
+ * behaves normally.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun rememberFreshSearchBarState(): SearchBarState =
+    remember {
+        SearchBarState(
+            initialValue = SearchBarValue.Collapsed,
+            // Mirrors material3's standard-motion defaults (MotionScheme
+            // SlowSpatial / DefaultSpatial) — the public constructor
+            // requires the specs explicitly.
+            animationSpecForExpand = spring(dampingRatio = 0.9f, stiffness = 200f),
+            animationSpecForCollapse = spring(dampingRatio = 0.9f, stiffness = 700f),
+        )
+    }
 
 /**
  * Material 3 adaptive search bar following the official composition: a
@@ -89,30 +113,6 @@ import kotlin.time.Duration.Companion.milliseconds
  * @param onExpandedChange notified when the search view expands or collapses.
  * @param searchViewContent results rendered inside the expanded search view.
  */
-/**
- * A search bar state that deliberately skips saveable restoration.
- *
- * Nav entry decorators keep saveable state alive across top-level tab
- * switches, so rememberSearchBarState() resurrects a search view the user
- * left expanded — arriving on a tab with the search already open (and its
- * old query firing behind the collapsed-looking bar) reads as a bug.
- * Every arrival starts collapsed and empty; within one visit the state
- * behaves normally.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun rememberFreshSearchBarState(): SearchBarState =
-    remember {
-        SearchBarState(
-            initialValue = SearchBarValue.Collapsed,
-            // Mirrors material3's standard-motion defaults (MotionScheme
-            // SlowSpatial / DefaultSpatial) — the public constructor
-            // requires the specs explicitly.
-            animationSpecForExpand = spring(dampingRatio = 0.9f, stiffness = 200f),
-            animationSpecForCollapse = spring(dampingRatio = 0.9f, stiffness = 700f),
-        )
-    }
-
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
@@ -189,11 +189,12 @@ fun AdaptiveSearchBar(
             // the collapsed pill still expand via DetectClickFromInteractionSource,
             // and the expanded view's FocusRequester focuses the input field as soon
             // as expansion starts.
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusProperties {
-                    canFocus = state.targetValue == SearchBarValue.Expanded
-                },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .focusProperties {
+                        canFocus = state.targetValue == SearchBarValue.Expanded
+                    },
             placeholder = placeholder?.let { hint -> { Text(hint) } },
             leadingIcon = {
                 if (state.targetValue == SearchBarValue.Expanded) {
@@ -224,8 +225,10 @@ fun AdaptiveSearchBar(
                             )
                         }
                     }
-                    state.targetValue == SearchBarValue.Collapsed && trailingAffordance != null ->
+
+                    state.targetValue == SearchBarValue.Collapsed && trailingAffordance != null -> {
                         trailingAffordance()
+                    }
                 }
             },
         )
@@ -240,22 +243,24 @@ fun AdaptiveSearchBar(
     // expanded, the box is an ancestor of the focused input, so its preview
     // handler still sees (and ignores) unrelated keys.
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                val wantsExpand = event.type == KeyEventType.KeyDown &&
-                    state.targetValue == SearchBarValue.Collapsed &&
-                    ((event.key == Key.K && event.isCtrlPressed) || event.key == Key.Enter)
-                if (wantsExpand) {
-                    scope.launch { state.animateToExpanded() }
-                    true
-                } else {
-                    false
-                }
-            },
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    val wantsExpand =
+                        event.type == KeyEventType.KeyDown &&
+                            state.targetValue == SearchBarValue.Collapsed &&
+                            ((event.key == Key.K && event.isCtrlPressed) || event.key == Key.Enter)
+                    if (wantsExpand) {
+                        scope.launch { state.animateToExpanded() }
+                        true
+                    } else {
+                        false
+                    }
+                },
     ) {
         SearchBar(
             state = state,
@@ -266,8 +271,10 @@ fun AdaptiveSearchBar(
 
     // Expanded search view: docked popup on medium+ widths (keeps the detail
     // pane of a list-detail layout visible), full screen otherwise.
-    val useDockedSearch = currentWindowAdaptiveInfoV2().windowSizeClass
-        .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+    val useDockedSearch =
+        currentWindowAdaptiveInfoV2()
+            .windowSizeClass
+            .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
     // Expanded search owns a Dialog/Popup layout tree, not the navigation overlay's tree.
     CompositionLocalProvider(LocalAppSharedTransitionScope provides null) {
         if (useDockedSearch) {

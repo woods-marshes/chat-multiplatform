@@ -52,45 +52,62 @@ fun SearchScreen(
                 onNavigationIconClick = onBack,
                 searchViewContent = {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .windowInsetsPadding(WindowInsets.ime)
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .windowInsetsPadding(WindowInsets.ime),
                     ) {
                         val hasQuery = uiState.query.trim().length >= 2
                         when {
-                            uiState.isLoading && uiState.results.isEmpty() -> LoadingContent(
-                                message = strings.loading,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                            uiState.error != null && uiState.results.isEmpty() -> ErrorContent(
-                                message = uiState.error ?: strings.searchFailed,
-                                modifier = Modifier.fillMaxSize(),
-                                onRetry = viewModel::retry,
-                            )
-                            uiState.results.isEmpty() -> EmptyContent(
-                                message = if (hasQuery) strings.searchNoResults else strings.searchPrompt,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                items(
-                                    items = uiState.results,
-                                    key = { item ->
-                                        when (item) {
-                                            is SearchResultUiModel.Contact -> "contact_${item.contact.id}"
-                                            is SearchResultUiModel.Conversation -> "conv_${item.conversation.id}"
+                            uiState.isLoading && uiState.results.isEmpty() -> {
+                                LoadingContent(
+                                    message = strings.loading,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+
+                            uiState.error != null && uiState.results.isEmpty() -> {
+                                ErrorContent(
+                                    message = uiState.error ?: strings.searchFailed,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onRetry = viewModel::retry,
+                                )
+                            }
+
+                            uiState.results.isEmpty() -> {
+                                EmptyContent(
+                                    message = if (hasQuery) strings.searchNoResults else strings.searchPrompt,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+
+                            else -> {
+                                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                    items(
+                                        items = uiState.results,
+                                        key = { item ->
+                                            when (item) {
+                                                is SearchResultUiModel.Contact -> "contact_${item.contact.id}"
+                                                is SearchResultUiModel.Conversation -> "conv_${item.conversation.id}"
+                                            }
+                                        },
+                                        contentType = { it::class },
+                                    ) { result ->
+                                        when (result) {
+                                            is SearchResultUiModel.Contact -> {
+                                                ContactItem(
+                                                    contact = result.contact,
+                                                    onClick = { onOpenProfile(result.contact.id.toString()) },
+                                                )
+                                            }
+
+                                            is SearchResultUiModel.Conversation -> {
+                                                ConversationItem(
+                                                    conversation = result.conversation,
+                                                    onClick = { onOpenGroupInfo(result.conversation.id.toString()) },
+                                                )
+                                            }
                                         }
-                                    },
-                                    contentType = { it::class },
-                                ) { result ->
-                                    when (result) {
-                                        is SearchResultUiModel.Contact -> ContactItem(
-                                            contact = result.contact,
-                                            onClick = { onOpenProfile(result.contact.id.toString()) },
-                                        )
-                                        is SearchResultUiModel.Conversation -> ConversationItem(
-                                            conversation = result.conversation,
-                                            onClick = { onOpenGroupInfo(result.conversation.id.toString()) },
-                                        )
                                     }
                                 }
                             }
@@ -104,9 +121,10 @@ fun SearchScreen(
         // (which surfaces "not supported" in the expanded view above).
         EmptyContent(
             message = strings.searchPrompt,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
         )
     }
 }

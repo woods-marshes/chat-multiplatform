@@ -1,4 +1,4 @@
-package com.github.woodsmarshes.chat.feature.article_editor.model
+package com.github.woodsmarshes.chat.feature.articleeditor.model
 
 import kotlinx.serialization.Serializable
 

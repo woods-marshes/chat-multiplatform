@@ -4,7 +4,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.savedstate.serialization.SavedStateConfiguration
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
-import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
+import com.github.woodsmarshes.chat.feature.articleeditor.navigation.ArticleEditorNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ChatGroupInfoNavKey

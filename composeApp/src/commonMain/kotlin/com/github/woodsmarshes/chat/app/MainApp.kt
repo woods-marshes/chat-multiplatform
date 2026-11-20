@@ -1,8 +1,7 @@
 package com.github.woodsmarshes.chat.app
 
-import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -11,8 +10,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -31,9 +30,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -58,9 +57,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.NavEntry
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass
@@ -74,27 +75,21 @@ import com.github.woodsmarshes.chat.core.navigation.Navigator
 import com.github.woodsmarshes.chat.core.navigation.rememberNavigationState
 import com.github.woodsmarshes.chat.core.navigation.toEntries
 import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
-import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
+import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarState
+import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import com.github.woodsmarshes.chat.feature.auth.ui.AuthScreen
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
-import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
-import top.yukonga.miuix.kmp.basic.NavigationRail as MiuixNavigationRail
-import top.yukonga.miuix.kmp.basic.NavigationRailItem as MiuixNavigationRailItem
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
 import com.github.woodsmarshes.chat.feature.article.navigation.articleDetailEntry
 import com.github.woodsmarshes.chat.feature.article.navigation.articleListEntry
-import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
-import com.github.woodsmarshes.chat.feature.article_editor.navigation.editorEntry
+import com.github.woodsmarshes.chat.feature.articleeditor.navigation.ArticleEditorNavKey
+import com.github.woodsmarshes.chat.feature.articleeditor.navigation.editorEntry
+import com.github.woodsmarshes.chat.feature.auth.ui.AuthScreen
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
 import com.github.woodsmarshes.chat.feature.chat.navigation.chatEntry
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
@@ -117,6 +112,11 @@ import com.github.woodsmarshes.chat.feature.settings.navigation.OpenSourceLicens
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsDetailNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
+import top.yukonga.miuix.kmp.basic.NavigationRail as MiuixNavigationRail
+import top.yukonga.miuix.kmp.basic.NavigationRailItem as MiuixNavigationRailItem
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, kotlin.uuid.ExperimentalUuidApi::class)
 @Composable
@@ -124,7 +124,7 @@ fun MainApp(
     sessionManager: SessionManager,
     snackbarState: AppSnackbarState,
     modifier: Modifier = Modifier,
-    windowAdaptiveInfo: WindowAdaptiveInfo = currentWindowAdaptiveInfoV2()
+    windowAdaptiveInfo: WindowAdaptiveInfo = currentWindowAdaptiveInfoV2(),
 ) {
     val isLoggedIn by sessionManager.isLoggedIn.collectAsStateWithLifecycle()
     val sessionState by sessionManager.sessionState.collectAsStateWithLifecycle()
@@ -133,20 +133,27 @@ fun MainApp(
         targetState = isLoggedIn,
         transitionSpec = {
             when (initialState) {
-                null -> fadeIn() togetherWith fadeOut()
+                null -> {
+                    fadeIn() togetherWith fadeOut()
+                }
+
                 false if targetState == true -> {
                     (slideInHorizontally { width -> width } + fadeIn()) togetherWith
-                            (slideOutHorizontally { width -> -width } + fadeOut())
+                        (slideOutHorizontally { width -> -width } + fadeOut())
                 }
+
                 true if targetState == false -> {
                     (slideInHorizontally { width -> -width } + fadeIn()) togetherWith
-                            (slideOutHorizontally { width -> width } + fadeOut())
+                        (slideOutHorizontally { width -> width } + fadeOut())
                 }
-                else -> fadeIn() togetherWith fadeOut()
+
+                else -> {
+                    fadeIn() togetherWith fadeOut()
+                }
             }
         },
         label = "AuthTransition",
-        modifier = modifier
+        modifier = modifier,
     ) { currentState ->
         when (currentState) {
             null -> {
@@ -175,7 +182,7 @@ fun MainApp(
                     sessionManager = sessionManager,
                     snackbarState = snackbarState,
                     modifier = Modifier.fillMaxSize(),
-                    windowAdaptiveInfo = windowAdaptiveInfo
+                    windowAdaptiveInfo = windowAdaptiveInfo,
                 )
             }
         }
@@ -188,14 +195,15 @@ private fun MainContent(
     sessionManager: SessionManager,
     snackbarState: AppSnackbarState,
     modifier: Modifier,
-    windowAdaptiveInfo: WindowAdaptiveInfo
+    windowAdaptiveInfo: WindowAdaptiveInfo,
 ) {
     val topLevelKeys = setOf(ArticleListNavKey, ConversationsNavKey, ContactsNavKey, SettingsNavKey)
-    val navigationState = rememberNavigationState(
-        startKey = ConversationsNavKey,
-        topLevelKeys = topLevelKeys,
-        configuration = navConfiguration
-    )
+    val navigationState =
+        rememberNavigationState(
+            startKey = ConversationsNavKey,
+            topLevelKeys = topLevelKeys,
+            configuration = navConfiguration,
+        )
 
     val navigator = remember { Navigator(navigationState) }
 
@@ -203,14 +211,16 @@ private fun MainContent(
 
     val strings = LocalStrings.current
 
-    val listPaneMeta = remember {
-        ListDetailSceneStrategy.listPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
-    }
+    val listPaneMeta =
+        remember {
+            ListDetailSceneStrategy.listPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
+        }
     val settingsListPaneMeta = listPaneMeta
     val detailPaneMeta = remember { ListDetailSceneStrategy.detailPane() }
-    val extraPaneMeta = remember {
-        ListDetailSceneStrategy.extraPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
-    }
+    val extraPaneMeta =
+        remember {
+            ListDetailSceneStrategy.extraPane() + ListDetailSceneStrategy.preferredPaneSize(width = 320.dp)
+        }
 
     // Selecting a primary detail from the list replaces any open detail AND
     // dismisses any trailing extraPane (profile / group info) from the previous item.
@@ -229,7 +239,8 @@ private fun MainContent(
         val stack = navigationState.currentSubStack
         while (stack.lastOrNull().let {
                 it is ChatProfileNavKey || it is ChatGroupInfoNavKey || it is ChatEditProfileNavKey
-            }) {
+            }
+        ) {
             stack.removeAt(stack.lastIndex)
         }
         navigator.navigate(key)
@@ -242,133 +253,136 @@ private fun MainContent(
         openDetailFromList(ChatNavKey(conversationId, isGroup))
     }
 
-    val entryProvider = entryProvider {
-        conversationsEntry(
-            onNavigateToChat = { conversationId, isGroup, title, avatarUrl ->
-                openDetailFromList(ChatNavKey(conversationId, isGroup, title, avatarUrl))
-            },
-            onGroupInfoClick = { profile ->
-                // Picking a group from the search bar is a list-level selection:
-                // open it in the primary detailPane (replacing any previous chat)
-                // rather than in the trailing extraPane beside an unrelated chat.
-                openDetailFromList(GroupInfoNavKey(profile.conversationId.toString(), profile))
-            },
-            selectedConversationId = {
-                val stack = navigationState.subStacks[ConversationsNavKey]
-                stack?.lastOrNull {
-                    it is ChatNavKey || it is GroupInfoNavKey || it is ChatGroupInfoNavKey
-                }?.let {
-                    when (it) {
-                        is ChatNavKey -> it.conversationId
-                        is GroupInfoNavKey -> it.conversationId
-                        is ChatGroupInfoNavKey -> it.conversationId
+    val entryProvider =
+        entryProvider {
+            conversationsEntry(
+                onNavigateToChat = { conversationId, isGroup, title, avatarUrl ->
+                    openDetailFromList(ChatNavKey(conversationId, isGroup, title, avatarUrl))
+                },
+                onGroupInfoClick = { profile ->
+                    // Picking a group from the search bar is a list-level selection:
+                    // open it in the primary detailPane (replacing any previous chat)
+                    // rather than in the trailing extraPane beside an unrelated chat.
+                    openDetailFromList(GroupInfoNavKey(profile.conversationId.toString(), profile))
+                },
+                selectedConversationId = {
+                    val stack = navigationState.subStacks[ConversationsNavKey]
+                    stack
+                        ?.lastOrNull {
+                            it is ChatNavKey || it is GroupInfoNavKey || it is ChatGroupInfoNavKey
+                        }?.let {
+                            when (it) {
+                                is ChatNavKey -> it.conversationId
+                                is GroupInfoNavKey -> it.conversationId
+                                is ChatGroupInfoNavKey -> it.conversationId
+                                else -> null
+                            }
+                        }
+                },
+                metadata = listPaneMeta,
+            )
+            contactsEntry(
+                onNavigateToProfile = { openDetailFromList(ProfileNavKey(it)) },
+                selectedUserId = {
+                    val stack = navigationState.subStacks[ContactsNavKey]
+                    (stack?.lastOrNull { it is ProfileNavKey } as? ProfileNavKey)?.userId
+                },
+                metadata = listPaneMeta,
+            )
+            settingsEntry(
+                onBack = { navigator.goBack() },
+                onLogout = { sessionManager.logout() },
+                onCategoryClick = { category ->
+                    openDetailFromList(SettingsDetailNavKey(category))
+                },
+                onOpenLicenses = {
+                    navigator.navigate(OpenSourceLicensesNavKey)
+                },
+                selectedCategory = {
+                    val stack = navigationState.subStacks[SettingsNavKey]
+                    when (val top = stack?.lastOrNull { it is SettingsDetailNavKey || it is OpenSourceLicensesNavKey }) {
+                        is SettingsDetailNavKey -> top.category
+                        is OpenSourceLicensesNavKey -> SettingsCategory.ABOUT
                         else -> null
                     }
-                }
-            },
-            metadata = listPaneMeta,
-        )
-        contactsEntry(
-            onNavigateToProfile = { openDetailFromList(ProfileNavKey(it)) },
-            selectedUserId = {
-                val stack = navigationState.subStacks[ContactsNavKey]
-                (stack?.lastOrNull { it is ProfileNavKey } as? ProfileNavKey)?.userId
-            },
-            metadata = listPaneMeta,
-        )
-        settingsEntry(
-            onBack = { navigator.goBack() },
-            onLogout = { sessionManager.logout() },
-            onCategoryClick = { category ->
-                openDetailFromList(SettingsDetailNavKey(category))
-            },
-            onOpenLicenses = {
-                navigator.navigate(OpenSourceLicensesNavKey)
-            },
-            selectedCategory = {
-                val stack = navigationState.subStacks[SettingsNavKey]
-                when (val top = stack?.lastOrNull { it is SettingsDetailNavKey || it is OpenSourceLicensesNavKey }) {
-                    is SettingsDetailNavKey -> top.category
-                    is OpenSourceLicensesNavKey -> SettingsCategory.ABOUT
-                    else -> null
-                }
-            },
-            metadata = settingsListPaneMeta,
-            detailMetadata = detailPaneMeta,
-            extraMetadata = extraPaneMeta,
-        )
-        chatEntry(
-            onBack = { navigator.goBack() },
-            onNavigateToProfile = { openExtraPane(ChatProfileNavKey(it)) },
-            onNavigateToGroupInfo = { conversationId ->
-                openExtraPane(ChatGroupInfoNavKey(conversationId))
-            },
-            metadata = detailPaneMeta,
-        )
-        groupInfoEntry(
-            onBack = { navigator.goBack() },
-            onOpenChat = { conversationId ->
-                openChatFromInfo(conversationId, true)
-            },
-            detailMetadata = detailPaneMeta,
-            extraMetadata = extraPaneMeta,
-        )
-        profileEntry(
-            onBack = { navigator.goBack() },
-            onOpenChat = { conversationId ->
-                openChatFromInfo(conversationId, false)
-            },
-            onEditProfile = {
-                navigator.navigate(EditProfileNavKey)
-            },
-            onChatEditProfile = {
-                navigator.navigate(ChatEditProfileNavKey)
-            },
-            detailMetadata = detailPaneMeta,
-            extraMetadata = extraPaneMeta,
-        )
-        articleListEntry(
-            onArticleClick = { id, authorId ->
-                openDetailFromList(ArticleDetailNavKey(id, authorId))
-            },
-            onCreateClick = {
-                openDetailFromList(ArticleEditorNavKey())
-            },
-            selectedArticleId = {
-                val stack = navigationState.subStacks[ArticleListNavKey]
-                stack?.lastOrNull { it is ArticleDetailNavKey || it is ArticleEditorNavKey }?.let {
-                    when (it) {
-                        is ArticleDetailNavKey -> it.id
-                        is ArticleEditorNavKey -> it.id
-                        else -> null
+                },
+                metadata = settingsListPaneMeta,
+                detailMetadata = detailPaneMeta,
+                extraMetadata = extraPaneMeta,
+            )
+            chatEntry(
+                onBack = { navigator.goBack() },
+                onNavigateToProfile = { openExtraPane(ChatProfileNavKey(it)) },
+                onNavigateToGroupInfo = { conversationId ->
+                    openExtraPane(ChatGroupInfoNavKey(conversationId))
+                },
+                metadata = detailPaneMeta,
+            )
+            groupInfoEntry(
+                onBack = { navigator.goBack() },
+                onOpenChat = { conversationId ->
+                    openChatFromInfo(conversationId, true)
+                },
+                detailMetadata = detailPaneMeta,
+                extraMetadata = extraPaneMeta,
+            )
+            profileEntry(
+                onBack = { navigator.goBack() },
+                onOpenChat = { conversationId ->
+                    openChatFromInfo(conversationId, false)
+                },
+                onEditProfile = {
+                    navigator.navigate(EditProfileNavKey)
+                },
+                onChatEditProfile = {
+                    navigator.navigate(ChatEditProfileNavKey)
+                },
+                detailMetadata = detailPaneMeta,
+                extraMetadata = extraPaneMeta,
+            )
+            articleListEntry(
+                onArticleClick = { id, authorId ->
+                    openDetailFromList(ArticleDetailNavKey(id, authorId))
+                },
+                onCreateClick = {
+                    openDetailFromList(ArticleEditorNavKey())
+                },
+                selectedArticleId = {
+                    val stack = navigationState.subStacks[ArticleListNavKey]
+                    stack?.lastOrNull { it is ArticleDetailNavKey || it is ArticleEditorNavKey }?.let {
+                        when (it) {
+                            is ArticleDetailNavKey -> it.id
+                            is ArticleEditorNavKey -> it.id
+                            else -> null
+                        }
                     }
-                }
-            },
-            metadata = listPaneMeta,
-        )
-        articleDetailEntry(
-            onBack = { navigator.goBack() },
-            onEditClick = { id -> navigator.navigate(ArticleEditorNavKey(id)) },
-            metadata = detailPaneMeta,
-        )
-        editorEntry(
-            onBack = { navigator.goBack() },
-            // detail-pane metadata: keeps the editor inside a ListDetail scene.
-            // A plain (metadata-less) entry on top of the stack makes the next
-            // top-level switch fall back to a single-pane scene, which leaves
-            // the target tab's content uncomposed (blank screen on desktop).
-            metadata = detailPaneMeta,
-        )
-        searchEntry(
-            onBack = { navigator.goBack() },
-            onOpenProfile = { userId -> openDetailFromList(ProfileNavKey(userId)) },
-            onOpenGroupInfo = { conversationId -> openDetailFromList(GroupInfoNavKey(conversationId)) },
-            metadata = listPaneMeta,
-        )
-    }
+                },
+                metadata = listPaneMeta,
+            )
+            articleDetailEntry(
+                onBack = { navigator.goBack() },
+                onEditClick = { id -> navigator.navigate(ArticleEditorNavKey(id)) },
+                metadata = detailPaneMeta,
+            )
+            editorEntry(
+                onBack = { navigator.goBack() },
+                // detail-pane metadata: keeps the editor inside a ListDetail scene.
+                // A plain (metadata-less) entry on top of the stack makes the next
+                // top-level switch fall back to a single-pane scene, which leaves
+                // the target tab's content uncomposed (blank screen on desktop).
+                metadata = detailPaneMeta,
+            )
+            searchEntry(
+                onBack = { navigator.goBack() },
+                onOpenProfile = { userId -> openDetailFromList(ProfileNavKey(userId)) },
+                onOpenGroupInfo = { conversationId -> openDetailFromList(GroupInfoNavKey(conversationId)) },
+                metadata = listPaneMeta,
+            )
+        }
 
-    val isMediumOrLarger = windowAdaptiveInfo.windowSizeClass
-        .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
+    val isMediumOrLarger =
+        windowAdaptiveInfo.windowSizeClass
+            .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
 
     // Keep Settings in two-pane mode on medium/expanded windows by seeding
     // the default PROFILE detail entry whenever the Settings sub-stack has
@@ -392,13 +406,15 @@ private fun MainContent(
 
     val showNavigationSuite = isTopLevelRoute || isMediumOrLarger
 
-    val scaffoldState = rememberNavigationSuiteScaffoldState(
-        initialValue = if (showNavigationSuite) {
-            NavigationSuiteScaffoldValue.Visible
-        } else {
-            NavigationSuiteScaffoldValue.Hidden
-        }
-    )
+    val scaffoldState =
+        rememberNavigationSuiteScaffoldState(
+            initialValue =
+                if (showNavigationSuite) {
+                    NavigationSuiteScaffoldValue.Visible
+                } else {
+                    NavigationSuiteScaffoldValue.Hidden
+                },
+        )
 
     LaunchedEffect(showNavigationSuite) {
         if (showNavigationSuite) {
@@ -450,58 +466,69 @@ private fun MainContent(
             snackbarHost = {
                 AppSnackbarHost(
                     snackbarState = snackbarState,
-                    modifier = Modifier.windowInsetsPadding(
-                        WindowInsets.safeDrawing.exclude(WindowInsets.ime)
-                    )
+                    modifier =
+                        Modifier.windowInsetsPadding(
+                            WindowInsets.safeDrawing.exclude(WindowInsets.ime),
+                        ),
                 )
             },
-
         ) { padding ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .consumeWindowInsets(padding)
-                    .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
-                    )
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .consumeWindowInsets(padding)
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+                        ),
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            if (isMiuix) MiuixTheme.colorScheme.surface
-                            else MaterialTheme.colorScheme.background
-                        )
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                if (isMiuix) {
+                                    MiuixTheme.colorScheme.surface
+                                } else {
+                                    MaterialTheme.colorScheme.background
+                                },
+                            ),
                 ) {
                     val baseDirective = calculatePaneScaffoldDirective(windowAdaptiveInfo)
-                    val isExpandedOrWider = windowAdaptiveInfo.windowSizeClass
-                        .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
-                    val directive = remember(baseDirective, isExpandedOrWider) {
-                        baseDirective.copy(
-                            maxHorizontalPartitions = if (isExpandedOrWider) 3 else baseDirective.maxHorizontalPartitions,
-                            horizontalPartitionSpacerSize = 1.dp,
-                            defaultPanePreferredWidth = 320.dp,
+                    val isExpandedOrWider =
+                        windowAdaptiveInfo.windowSizeClass
+                            .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
+                    val directive =
+                        remember(baseDirective, isExpandedOrWider) {
+                            baseDirective.copy(
+                                maxHorizontalPartitions = if (isExpandedOrWider) 3 else baseDirective.maxHorizontalPartitions,
+                                horizontalPartitionSpacerSize = 1.dp,
+                                defaultPanePreferredWidth = 320.dp,
+                            )
+                        }
+                    val strategy =
+                        rememberListDetailSceneStrategy<NavKey>(
+                            // Compact windows use NavDisplay's single-pane scene and back transition.
+                            shouldHandleSinglePaneLayout = false,
+                            directive = directive,
                         )
-                    }
-                    val strategy = rememberListDetailSceneStrategy<NavKey>(
-                        // Compact windows use NavDisplay's single-pane scene and back transition.
-                        shouldHandleSinglePaneLayout = false,
-                        directive = directive,
-                    )
                     // Only root entries reserve the persistent outer bar's measured height.
                     // Details always retain full-height constraints, including during transitions.
-                    val currentEntries = navigationState.toEntries { key ->
-                        val entry = entryProvider(key)
-                        if (!isMediumOrLarger && key in navigationState.topLevelKeys) {
-                            NavEntry(navEntry = entry) {
-                                val entryPadding = PaddingValues(bottom = compactBarHeight)
-                                Box(Modifier.fillMaxSize().padding(entryPadding).consumeWindowInsets(entryPadding)) {
-                                    entry.Content()
+                    val currentEntries =
+                        navigationState.toEntries { key ->
+                            val entry = entryProvider(key)
+                            if (!isMediumOrLarger && key in navigationState.topLevelKeys) {
+                                NavEntry(navEntry = entry) {
+                                    val entryPadding = PaddingValues(bottom = compactBarHeight)
+                                    Box(Modifier.fillMaxSize().padding(entryPadding).consumeWindowInsets(entryPadding)) {
+                                        entry.Content()
+                                    }
                                 }
+                            } else {
+                                entry
                             }
-                        } else entry
-                    }
+                        }
 
                     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
                         CompositionLocalProvider(LocalAppSharedTransitionScope provides this) {

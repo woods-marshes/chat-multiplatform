@@ -10,7 +10,11 @@ import com.github.michaelbull.result.mapBoth
 import com.github.woodsmarshes.chat.core.model.AudioContent
 import com.github.woodsmarshes.chat.core.model.FileContent
 import com.github.woodsmarshes.chat.core.model.FileType
-import com.github.woodsmarshes.chat.core.model.FileType.*
+import com.github.woodsmarshes.chat.core.model.FileType.AUDIO
+import com.github.woodsmarshes.chat.core.model.FileType.AVATAR
+import com.github.woodsmarshes.chat.core.model.FileType.FILE
+import com.github.woodsmarshes.chat.core.model.FileType.IMAGE
+import com.github.woodsmarshes.chat.core.model.FileType.VIDEO
 import com.github.woodsmarshes.chat.core.model.ImageContent
 import com.github.woodsmarshes.chat.core.model.MediaContent
 import com.github.woodsmarshes.chat.core.model.VideoContent
@@ -66,7 +70,10 @@ private const val WAVEFORM_STAGE_CAP_MS = 60_000L
  * is exhausted — the caller fails or skips the stage instead of starting a
  * subprocess that could outlive the request deadline.
  */
-private fun stageTimeoutMs(deadlineNanos: Long, stageCapMs: Long): Long? {
+private fun stageTimeoutMs(
+    deadlineNanos: Long,
+    stageCapMs: Long,
+): Long? {
     val remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000
     if (remainingMs <= 0) return null
     return minOf(stageCapMs, remainingMs)
@@ -76,7 +83,7 @@ class FileService(
     private val uploadStore: TemporaryUploadStore,
     private val privateFileRepository: PrivateFileRepository,
     private val participantRepository: ConversationParticipantRepository,
-    private val maxImagePixels: Long = FileUploadConfig.maxImagePixels,
+    private val maxImagePixels: Long = FileUploadConfig.MAX_IMAGE_PIXELS,
     // Injectable so tests can isolate the filesystem instead of touching the
     // process working directory.
     private val uploadDir: String = "uploads",
@@ -90,11 +97,32 @@ class FileService(
 
     // Extensions that must never be served back from /uploads
     // (stored-XSS and malware vectors); such uploads are rejected.
-    private val BLOCKED_UPLOAD_EXTENSIONS = setOf(
-        "html", "htm", "xhtml", "xht", "svg", "js", "mjs", "css",
-        "php", "phtml", "jsp", "asp", "aspx",
-        "exe", "dll", "bat", "cmd", "com", "scr", "ps1", "vbs", "wsf", "sh",
-    )
+    private val blockedUploadExtensions =
+        setOf(
+            "html",
+            "htm",
+            "xhtml",
+            "xht",
+            "svg",
+            "js",
+            "mjs",
+            "css",
+            "php",
+            "phtml",
+            "jsp",
+            "asp",
+            "aspx",
+            "exe",
+            "dll",
+            "bat",
+            "cmd",
+            "com",
+            "scr",
+            "ps1",
+            "vbs",
+            "wsf",
+            "sh",
+        )
 
     fun sanitizeFileName(fileName: String): String? {
         // Reject path traversal attempts
@@ -141,16 +169,22 @@ class FileService(
      * @param referencedAvatarFileNames avatar file names the DB references.
      * @return number of files deleted.
      */
-    fun sweepOrphanFiles(referencedAvatarFileNames: Set<String>, minAgeMillis: Long): Int {
+    fun sweepOrphanFiles(
+        referencedAvatarFileNames: Set<String>,
+        minAgeMillis: Long,
+    ): Int {
         val now = System.currentTimeMillis()
+
         fun isStale(file: File): Boolean = file.isFile && now - file.lastModified() > minAgeMillis
 
         var deleted = 0
         val imageDir = File("$uploadDir/image")
-        val videoStems = File("$uploadDir/video").listFiles()
-            ?.map { it.nameWithoutExtension }
-            ?.toSet()
-            .orEmpty()
+        val videoStems =
+            File("$uploadDir/video")
+                .listFiles()
+                ?.map { it.nameWithoutExtension }
+                ?.toSet()
+                .orEmpty()
 
         File("$uploadDir/thumbnails").listFiles()?.forEach { thumb ->
             val original = File(imageDir, thumb.name.removePrefix("thumb_"))
@@ -187,12 +221,16 @@ class FileService(
      * the file was actually sent to. The mapping is recorded when the message
      * is persisted, so a leaked URL alone grants nothing.
      */
-    suspend fun resolveAuthorizedPrivateFile(fileName: String, requesterId: Uuid): File? {
+    suspend fun resolveAuthorizedPrivateFile(
+        fileName: String,
+        requesterId: Uuid,
+    ): File? {
         val conversations = privateFileRepository.getConversationsForFile(fileName)
         if (conversations.isEmpty()) return null
-        val isMember = conversations.any { conversationId ->
-            participantRepository.getConversationParticipant(requesterId, conversationId) != null
-        }
+        val isMember =
+            conversations.any { conversationId ->
+                participantRepository.getConversationParticipant(requesterId, conversationId) != null
+            }
         if (!isMember) return null
         return resolvePrivateFile(fileName)
     }
@@ -256,11 +294,15 @@ class FileService(
      * Validates the upload metadata and reserves the final on-disk path, so
      * the caller can stream bytes into place without buffering the whole body.
      */
-    fun stageUpload(fileType: FileType, rawFileName: String): Result<StagedUpload, FileError> {
-        val sanitized = sanitizeFileName(rawFileName)
-            ?: return Err(FileError.NoFileProvided)
+    fun stageUpload(
+        fileType: FileType,
+        rawFileName: String,
+    ): Result<StagedUpload, FileError> {
+        val sanitized =
+            sanitizeFileName(rawFileName)
+                ?: return Err(FileError.NoFileProvided)
         val extension = sanitized.substringAfterLast(".", "").lowercase()
-        if (extension in BLOCKED_UPLOAD_EXTENSIONS) {
+        if (extension in blockedUploadExtensions) {
             return Err(FileError.UnsupportedFormat)
         }
         val fileUuid = Uuid.random().toString()
@@ -273,7 +315,7 @@ class FileService(
                 fileType = fileType,
                 fileName = sanitized,
                 uniqueName = uniqueName,
-            )
+            ),
         )
     }
 
@@ -289,86 +331,118 @@ class FileService(
         mimeType: String,
         byteSize: Long,
         uploaderId: Uuid? = null,
-    ): Result<MediaContent, FileError> = withContext(Dispatchers.IO) {
-        try {
-            val result = coroutineBinding {
-                try {
-                    val url = if (staged.fileType == FILE) {
-                        "/v1/files/content/${staged.uniqueName}"
-                    } else {
-                        "/$uploadDir/${staged.fileType.name.lowercase()}/${staged.uniqueName}"
-                    }
+    ): Result<MediaContent, FileError> =
+        withContext(Dispatchers.IO) {
+            try {
+                val result =
+                    coroutineBinding {
+                        try {
+                            val url =
+                                if (staged.fileType == FILE) {
+                                    "/v1/files/content/${staged.uniqueName}"
+                                } else {
+                                    "/$uploadDir/${staged.fileType.name.lowercase()}/${staged.uniqueName}"
+                                }
 
-                    val media: MediaContent = when (staged.fileType) {
-                        FILE -> FileContent(url, staged.fileName, mimeType, byteSize)
-                        else -> {
-                            // Queue for a slot with a deadline: acquire()
-                            // suspends (no thread is pinned while waiting) and
-                            // a saturated media pipeline rejects the request
-                            // instead of letting it wait forever.
-                            try {
-                                withTimeout(MEDIA_QUEUE_TIMEOUT) { mediaProcessingSlots.acquire() }
-                            } catch (e: TimeoutCancellationException) {
-                                logger.warn("Media processing queue saturated; rejecting upload of {}", staged.fileName)
-                                Err(FileError.ProcessingFailed).bind()
-                            }
-                            try {
-                                withTimeout(MEDIA_PROCESSING_TIMEOUT) {
-                                    // One monotonic deadline governs every
-                                    // subprocess stage of this upload; each
-                                    // stage below runs under min(its own cap,
-                                    // the remaining budget), so stage limits
-                                    // cannot stack past the total.
-                                    val deadlineNanos = System.nanoTime() + MEDIA_PROCESSING_TIMEOUT.inWholeNanoseconds
-                                    when (staged.fileType) {
-                                        IMAGE -> processImage(staged.file, staged.fileName, staged.uniqueName, byteSize, mimeType).bind()
-                                        VIDEO -> processVideo(staged.file, staged.fileName, staged.uniqueName.substringBeforeLast("."), byteSize, mimeType, deadlineNanos).bind()
-                                        AUDIO -> processAudio(staged.file, staged.fileName, byteSize, mimeType, deadlineNanos).bind()
-                                        AVATAR -> {
-                                            processAvatar(staged.file, staged.fileName).bind()
-                                            ImageContent(
-                                                url = url,
-                                                fileName = staged.fileName,
-                                                width = 400,
-                                                height = 400,
-                                                size = staged.file.length(),
-                                                mimeType = "image/jpeg"
-                                            )
+                            val media: MediaContent =
+                                when (staged.fileType) {
+                                    FILE -> {
+                                        FileContent(url, staged.fileName, mimeType, byteSize)
+                                    }
+
+                                    else -> {
+                                        // Queue for a slot with a deadline: acquire()
+                                        // suspends (no thread is pinned while waiting) and
+                                        // a saturated media pipeline rejects the request
+                                        // instead of letting it wait forever.
+                                        try {
+                                            withTimeout(MEDIA_QUEUE_TIMEOUT) { mediaProcessingSlots.acquire() }
+                                        } catch (e: TimeoutCancellationException) {
+                                            logger.warn("Media processing queue saturated; rejecting upload of {}", staged.fileName)
+                                            Err(FileError.ProcessingFailed).bind()
                                         }
-                                        FILE -> error("unreachable")
+                                        try {
+                                            withTimeout(MEDIA_PROCESSING_TIMEOUT) {
+                                                // One monotonic deadline governs every
+                                                // subprocess stage of this upload; each
+                                                // stage below runs under min(its own cap,
+                                                // the remaining budget), so stage limits
+                                                // cannot stack past the total.
+                                                val deadlineNanos = System.nanoTime() + MEDIA_PROCESSING_TIMEOUT.inWholeNanoseconds
+                                                when (staged.fileType) {
+                                                    IMAGE -> {
+                                                        processImage(
+                                                            staged.file,
+                                                            staged.fileName,
+                                                            staged.uniqueName,
+                                                            byteSize,
+                                                            mimeType,
+                                                        ).bind()
+                                                    }
+
+                                                    VIDEO -> {
+                                                        processVideo(
+                                                            staged.file,
+                                                            staged.fileName,
+                                                            staged.uniqueName.substringBeforeLast("."),
+                                                            byteSize,
+                                                            mimeType,
+                                                            deadlineNanos,
+                                                        ).bind()
+                                                    }
+
+                                                    AUDIO -> {
+                                                        processAudio(staged.file, staged.fileName, byteSize, mimeType, deadlineNanos).bind()
+                                                    }
+
+                                                    AVATAR -> {
+                                                        processAvatar(staged.file, staged.fileName).bind()
+                                                        ImageContent(
+                                                            url = url,
+                                                            fileName = staged.fileName,
+                                                            width = 400,
+                                                            height = 400,
+                                                            size = staged.file.length(),
+                                                            mimeType = "image/jpeg",
+                                                        )
+                                                    }
+
+                                                    FILE -> {
+                                                        error("unreachable")
+                                                    }
+                                                }
+                                            }
+                                        } catch (e: TimeoutCancellationException) {
+                                            Err(FileError.ProcessingFailed).bind()
+                                        } finally {
+                                            mediaProcessingSlots.release()
+                                        }
                                     }
                                 }
-                            } catch (e: TimeoutCancellationException) {
-                                Err(FileError.ProcessingFailed).bind()
-                            } finally {
-                                mediaProcessingSlots.release()
+
+                            if (staged.fileType != FileType.AVATAR) {
+                                registerToTempStore(media, staged.file, uploaderId)
                             }
+
+                            media
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Err(FileError.Unknown(e.message)).bind()
                         }
                     }
-
-                    if (staged.fileType != FileType.AVATAR) {
-                        registerToTempStore(media, staged.file, uploaderId)
-                    }
-
-                    media
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Err(FileError.Unknown(e.message)).bind()
-                }
+                result.mapBoth(
+                    success = { },
+                    failure = { cleanupStagedUpload(staged) },
+                )
+                result
+            } catch (e: CancellationException) {
+                // Cancellation unwinds the binding before the failure cleanup
+                // above can run — the staged bytes would otherwise be orphaned.
+                cleanupStagedUpload(staged)
+                throw e
             }
-            result.mapBoth(
-                success = { },
-                failure = { cleanupStagedUpload(staged) },
-            )
-            result
-        } catch (e: CancellationException) {
-            // Cancellation unwinds the binding before the failure cleanup
-            // above can run — the staged bytes would otherwise be orphaned.
-            cleanupStagedUpload(staged)
-            throw e
         }
-    }
 
     /** Removes the staged bytes plus any derived thumbnail/cover artifacts. */
     private fun cleanupStagedUpload(staged: StagedUpload) {
@@ -380,11 +454,12 @@ class FileService(
      * Deterministic names of the artifacts a successful/failed media pass may
      * have produced; files that were never created are a no-op to delete.
      */
-    private fun derivedArtifactFiles(staged: StagedUpload): List<File> = when (staged.fileType) {
-        FileType.IMAGE -> listOf(File("$uploadDir/thumbnails", "thumb_${staged.uniqueName}"))
-        FileType.VIDEO -> listOf(File("$uploadDir/covers", "cover_${staged.uniqueName.substringBeforeLast(".")}.jpg"))
-        else -> emptyList()
-    }
+    private fun derivedArtifactFiles(staged: StagedUpload): List<File> =
+        when (staged.fileType) {
+            FileType.IMAGE -> listOf(File("$uploadDir/thumbnails", "thumb_${staged.uniqueName}"))
+            FileType.VIDEO -> listOf(File("$uploadDir/covers", "cover_${staged.uniqueName.substringBeforeLast(".")}.jpg"))
+            else -> emptyList()
+        }
 
     suspend fun uploadFile(
         fileType: FileType,
@@ -406,25 +481,30 @@ class FileService(
         return finalizeUpload(staged, mimeType, fileData.size.toLong(), uploaderId)
     }
 
-    private suspend fun processAvatar(file: File, fileName: String): Result<Unit, FileError> = withContext(Dispatchers.IO) {
-        // Avatars feed the same image decoder as photos: the 400x400 output
-        // size does not bound the decode, so the pixel budget applies here too.
-        checkImagePixelBudget(file, fileName)?.let { return@withContext Err(it) }
-        try {
-            Thumbnails.of(file)
-                .size(400, 400)
-                .crop(Positions.CENTER)
-                .outputFormat("jpg")
-                .outputQuality(1.0)
-                .toFile(file)
-            Ok(Unit)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            logger.error("Failed to process avatar", e)
-            Err(FileError.ProcessingFailed)
+    private suspend fun processAvatar(
+        file: File,
+        fileName: String,
+    ): Result<Unit, FileError> =
+        withContext(Dispatchers.IO) {
+            // Avatars feed the same image decoder as photos: the 400x400 output
+            // size does not bound the decode, so the pixel budget applies here too.
+            checkImagePixelBudget(file, fileName)?.let { return@withContext Err(it) }
+            try {
+                Thumbnails
+                    .of(file)
+                    .size(400, 400)
+                    .crop(Positions.CENTER)
+                    .outputFormat("jpg")
+                    .outputQuality(1.0)
+                    .toFile(file)
+                Ok(Unit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.error("Failed to process avatar", e)
+                Err(FileError.ProcessingFailed)
+            }
         }
-    }
 
     /**
      * Header-dimension precheck shared by every path that feeds an image
@@ -433,14 +513,20 @@ class FileService(
      * the decode cost. Returns the error to fail with, or null when the image
      * may be decoded.
      */
-    private fun checkImagePixelBudget(file: File, fileName: String): FileError? {
+    private fun checkImagePixelBudget(
+        file: File,
+        fileName: String,
+    ): FileError? {
         val dimensions = readImageDimensions(file) ?: return FileError.UnsupportedFormat
         val (width, height) = dimensions
         if (width <= 0 || height <= 0) return FileError.UnsupportedFormat
         if (width.toLong() * height > maxImagePixels) {
             logger.warn(
                 "Image rejected for {}: {}x{} exceeds the {} pixel cap",
-                fileName, width, height, maxImagePixels
+                fileName,
+                width,
+                height,
+                maxImagePixels,
             )
             return FileError.FileTooLarge
         }
@@ -452,108 +538,122 @@ class FileService(
      * data, so oversized images are rejected before claiming their decoded-
      * size memory. Null when the file is not a readable image.
      */
-    private fun readImageDimensions(file: File): Pair<Int, Int>? = try {
-        ImageIO.createImageInputStream(file)?.use { stream ->
-            val readers = ImageIO.getImageReaders(stream)
-            if (!readers.hasNext()) return null
-            val reader = readers.next()
-            try {
-                reader.input = stream
-                reader.getWidth(0) to reader.getHeight(0)
-            } finally {
-                reader.dispose()
+    private fun readImageDimensions(file: File): Pair<Int, Int>? =
+        try {
+            ImageIO.createImageInputStream(file)?.use { stream ->
+                val readers = ImageIO.getImageReaders(stream)
+                if (!readers.hasNext()) return null
+                val reader = readers.next()
+                try {
+                    reader.input = stream
+                    reader.getWidth(0) to reader.getHeight(0)
+                } finally {
+                    reader.dispose()
+                }
             }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            null
         }
-    } catch (e: Exception) {
-        if (e is CancellationException) throw e
-        null
-    }
 
     private suspend fun processImage(
         file: File,
         fileName: String,
         uniqueName: String,
         size: Long,
-        mimeType: String
-    ): Result<ImageContent, FileError> = coroutineScope {
-        // Guard the decode before any pixel data is read (shared with avatars).
-        checkImagePixelBudget(file, fileName)?.let { return@coroutineScope Err(it) }
+        mimeType: String,
+    ): Result<ImageContent, FileError> =
+        coroutineScope {
+            // Guard the decode before any pixel data is read (shared with avatars).
+            checkImagePixelBudget(file, fileName)?.let { return@coroutineScope Err(it) }
 
-        val img = withContext(Dispatchers.IO) {
-            try {
-                ImageIO.read(file)
-            } catch (e: Exception) {
-                null
-            }
-        } ?: return@coroutineScope Err(FileError.UnsupportedFormat)
+            val img =
+                withContext(Dispatchers.IO) {
+                    try {
+                        ImageIO.read(file)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: return@coroutineScope Err(FileError.UnsupportedFormat)
 
-        val width = img.width
-        val height = img.height
-        val ratio = width.toDouble() / height
-        val url = "/$uploadDir/image/$uniqueName"
+            val width = img.width
+            val height = img.height
+            val ratio = width.toDouble() / height
+            val url = "/$uploadDir/image/$uniqueName"
 
-        // Decode once: the blurhash source is scaled down eagerly and the
-        // thumbnail reuses the decoded image instead of re-reading and
-        // re-decoding the file from disk.
-        val blurSource = try {
-            Thumbnails.of(img).size(32, 32).asBufferedImage()
-        } catch (e: Exception) {
-            logger.error("Failed to scale BlurHash source for $fileName", e)
-            null
-        }
-
-        val thumbTask = async<String?>(Dispatchers.Default) {
-            val thumbName = "thumb_$uniqueName"
-            val thumbFile = File("$uploadDir/thumbnails", thumbName)
-            try {
-                when {
-                    ratio < 0.4 -> Thumbnails
-                        .of(img)
-                        .size(800, 2000)
-                        .crop(Positions.TOP_CENTER)
-                        .size(800, 1200)
-                        .toFile(thumbFile)
-                    ratio > 2.5 -> Thumbnails
-                        .of(img)
-                        .size(2000, 800)
-                        .crop(Positions.CENTER)
-                        .size(1200, 800)
-                        .toFile(thumbFile)
-                    else -> Thumbnails
-                        .of(img)
-                        .size(800, 800)
-                        .keepAspectRatio(true)
-                        .toFile(thumbFile)
+            // Decode once: the blurhash source is scaled down eagerly and the
+            // thumbnail reuses the decoded image instead of re-reading and
+            // re-decoding the file from disk.
+            val blurSource =
+                try {
+                    Thumbnails.of(img).size(32, 32).asBufferedImage()
+                } catch (e: Exception) {
+                    logger.error("Failed to scale BlurHash source for $fileName", e)
+                    null
                 }
-                "/$uploadDir/thumbnails/$thumbName"
-            } catch (e: Exception) {
-                logger.error("Failed to generate thumbnail for $fileName", e)
-                null
-            }
-        }
 
-        val blurHashTask = async<String?>(Dispatchers.Default) {
-            try {
-                blurSource?.let { BlurHashEncoder.encode(it, 4, 3) }
-            } catch (e: Exception) {
-                logger.error("Failed to encode BlurHash for $fileName", e)
-                null
-            }
-        }
+            val thumbTask =
+                async<String?>(Dispatchers.Default) {
+                    val thumbName = "thumb_$uniqueName"
+                    val thumbFile = File("$uploadDir/thumbnails", thumbName)
+                    try {
+                        when {
+                            ratio < 0.4 -> {
+                                Thumbnails
+                                    .of(img)
+                                    .size(800, 2000)
+                                    .crop(Positions.TOP_CENTER)
+                                    .size(800, 1200)
+                                    .toFile(thumbFile)
+                            }
 
-        Ok(
-            ImageContent(
-                url = url,
-                fileName = fileName,
-                width = width,
-                height = height,
-                size = size,
-                blurHash = blurHashTask.await(),
-                thumbnailUrl = thumbTask.await(),
-                mimeType = mimeType
+                            ratio > 2.5 -> {
+                                Thumbnails
+                                    .of(img)
+                                    .size(2000, 800)
+                                    .crop(Positions.CENTER)
+                                    .size(1200, 800)
+                                    .toFile(thumbFile)
+                            }
+
+                            else -> {
+                                Thumbnails
+                                    .of(img)
+                                    .size(800, 800)
+                                    .keepAspectRatio(true)
+                                    .toFile(thumbFile)
+                            }
+                        }
+                        "/$uploadDir/thumbnails/$thumbName"
+                    } catch (e: Exception) {
+                        logger.error("Failed to generate thumbnail for $fileName", e)
+                        null
+                    }
+                }
+
+            val blurHashTask =
+                async<String?>(Dispatchers.Default) {
+                    try {
+                        blurSource?.let { BlurHashEncoder.encode(it, 4, 3) }
+                    } catch (e: Exception) {
+                        logger.error("Failed to encode BlurHash for $fileName", e)
+                        null
+                    }
+                }
+
+            Ok(
+                ImageContent(
+                    url = url,
+                    fileName = fileName,
+                    width = width,
+                    height = height,
+                    size = size,
+                    blurHash = blurHashTask.await(),
+                    thumbnailUrl = thumbTask.await(),
+                    mimeType = mimeType,
+                ),
             )
-        )
-    }
+        }
 
     /**
      * Extracts the first video frame into [output] as a JPEG under a hard
@@ -561,32 +661,40 @@ class FileService(
      * holding the request or a processing slot. False when no cover was
      * produced.
      */
-    private fun extractVideoCover(videoFile: File, output: File, timeoutMs: Long): Boolean {
-        val ffmpegPath = try {
-            FfmpegExecutableResolver.resolve()
-        } catch (e: Exception) {
-            logger.warn("Failed to resolve ffmpeg executable for video cover extraction of {}", videoFile.name, e)
-            return false
-        }
-        val process = try {
-            ProcessBuilder(
-                ffmpegPath,
-                "-y",
-                "-i", videoFile.absolutePath,
-                "-vframes", "1",
-                "-an",
-                "-q:v", "2",
-                output.absolutePath,
-            )
-                .redirectErrorStream(true)
-                // ffmpeg logs to stderr; discarding the merged stream removes the
-                // pipe-full deadlock without a drain thread.
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                .start()
-        } catch (e: Exception) {
-            logger.warn("Failed to start ffmpeg for video cover extraction of {}", videoFile.name, e)
-            return false
-        }
+    private fun extractVideoCover(
+        videoFile: File,
+        output: File,
+        timeoutMs: Long,
+    ): Boolean {
+        val ffmpegPath =
+            try {
+                FfmpegExecutableResolver.resolve()
+            } catch (e: Exception) {
+                logger.warn("Failed to resolve ffmpeg executable for video cover extraction of {}", videoFile.name, e)
+                return false
+            }
+        val process =
+            try {
+                ProcessBuilder(
+                    ffmpegPath,
+                    "-y",
+                    "-i",
+                    videoFile.absolutePath,
+                    "-vframes",
+                    "1",
+                    "-an",
+                    "-q:v",
+                    "2",
+                    output.absolutePath,
+                ).redirectErrorStream(true)
+                    // ffmpeg logs to stderr; discarding the merged stream removes the
+                    // pipe-full deadlock without a drain thread.
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+            } catch (e: Exception) {
+                logger.warn("Failed to start ffmpeg for video cover extraction of {}", videoFile.name, e)
+                return false
+            }
         return try {
             if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly()
@@ -613,48 +721,54 @@ class FileService(
         size: Long,
         mimeType: String,
         deadlineNanos: Long,
-    ): Result<VideoContent, FileError> = coroutineBinding {
-        try {
-            val probeTimeoutMs = stageTimeoutMs(deadlineNanos, PROBE_STAGE_CAP_MS)
-                ?: Err(FileError.ProcessingFailed).bind()
-            val probe = withContext(Dispatchers.IO) { MediaProbe.probe(file, probeTimeoutMs) }
-            val info = when (probe) {
-                is MediaProbe.Outcome.Success -> probe.result
-                else -> {
-                    logger.warn("Media probe failed for {}: {}", fileName, probe)
-                    Err(FileError.ProcessingFailed).bind()
-                }
-            }
+    ): Result<VideoContent, FileError> =
+        coroutineBinding {
+            try {
+                val probeTimeoutMs =
+                    stageTimeoutMs(deadlineNanos, PROBE_STAGE_CAP_MS)
+                        ?: Err(FileError.ProcessingFailed).bind()
+                val probe = withContext(Dispatchers.IO) { MediaProbe.probe(file, probeTimeoutMs) }
+                val info =
+                    when (probe) {
+                        is MediaProbe.Outcome.Success -> {
+                            probe.result
+                        }
 
-            val coverFile = File("$uploadDir/covers", "cover_$fileUuid.jpg")
+                        else -> {
+                            logger.warn("Media probe failed for {}: {}", fileName, probe)
+                            Err(FileError.ProcessingFailed).bind()
+                        }
+                    }
 
-            val coverTimeoutMs = stageTimeoutMs(deadlineNanos, FFMPEG_COVER_TIMEOUT_MS)
-            if (coverTimeoutMs == null) {
-                logger.warn("Skipping cover extraction for {}: media budget exhausted", fileName)
-            } else {
-                withContext(Dispatchers.IO) {
-                    if (!extractVideoCover(file, coverFile, coverTimeoutMs)) {
-                        logger.warn("No cover extracted for {}", fileName)
+                val coverFile = File("$uploadDir/covers", "cover_$fileUuid.jpg")
+
+                val coverTimeoutMs = stageTimeoutMs(deadlineNanos, FFMPEG_COVER_TIMEOUT_MS)
+                if (coverTimeoutMs == null) {
+                    logger.warn("Skipping cover extraction for {}: media budget exhausted", fileName)
+                } else {
+                    withContext(Dispatchers.IO) {
+                        if (!extractVideoCover(file, coverFile, coverTimeoutMs)) {
+                            logger.warn("No cover extracted for {}", fileName)
+                        }
                     }
                 }
-            }
 
-            VideoContent(
-                url = "/$uploadDir/video/${file.name}",
-                fileName = fileName,
-                coverUrl = if (coverFile.exists()) "/$uploadDir/covers/${coverFile.name}" else null,
-                width = info.width ?: 0,
-                height = info.height ?: 0,
-                duration = info.durationMs,
-                size = size,
-                mimeType = mimeType
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Err(FileError.ProcessingFailed).bind()
+                VideoContent(
+                    url = "/$uploadDir/video/${file.name}",
+                    fileName = fileName,
+                    coverUrl = if (coverFile.exists()) "/$uploadDir/covers/${coverFile.name}" else null,
+                    width = info.width ?: 0,
+                    height = info.height ?: 0,
+                    duration = info.durationMs,
+                    size = size,
+                    mimeType = mimeType,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Err(FileError.ProcessingFailed).bind()
+            }
         }
-    }
 
     private suspend fun processAudio(
         file: File,
@@ -662,54 +776,72 @@ class FileService(
         size: Long,
         mimeType: String,
         deadlineNanos: Long,
-    ): Result<AudioContent, FileError> = coroutineBinding {
-        try {
-            val probeTimeoutMs = stageTimeoutMs(deadlineNanos, PROBE_STAGE_CAP_MS)
-                ?: Err(FileError.ProcessingFailed).bind()
-            val probe = withContext(Dispatchers.IO) { MediaProbe.probe(file, probeTimeoutMs) }
-            val info = when (probe) {
-                is MediaProbe.Outcome.Success -> probe.result
-                else -> {
-                    logger.warn("Media probe failed for {}: {}", fileName, probe)
-                    Err(FileError.ProcessingFailed).bind()
-                }
-            }
+    ): Result<AudioContent, FileError> =
+        coroutineBinding {
+            try {
+                val probeTimeoutMs =
+                    stageTimeoutMs(deadlineNanos, PROBE_STAGE_CAP_MS)
+                        ?: Err(FileError.ProcessingFailed).bind()
+                val probe = withContext(Dispatchers.IO) { MediaProbe.probe(file, probeTimeoutMs) }
+                val info =
+                    when (probe) {
+                        is MediaProbe.Outcome.Success -> {
+                            probe.result
+                        }
 
-            val waveformTimeoutMs = stageTimeoutMs(deadlineNanos, WAVEFORM_STAGE_CAP_MS)
-                ?: run {
-                    logger.warn("Failing audio upload for {}: media budget exhausted before waveform generation", fileName)
-                    Err(FileError.ProcessingFailed).bind()
-                }
-            val waveformData = withContext(Dispatchers.IO) {
-                try {
-                    WaveformGenerator.generate(file, info.durationMs, 80, waveformTimeoutMs)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    logger.error("Failed to generate waveform for $fileName", e)
-                    emptyList()
-                }
-            }
+                        else -> {
+                            logger.warn("Media probe failed for {}: {}", fileName, probe)
+                            Err(FileError.ProcessingFailed).bind()
+                        }
+                    }
 
-            AudioContent(
-                url = "/$uploadDir/audio/${file.name}",
-                fileName = fileName,
-                duration = info.durationMs,
-                waveform = waveformData,
-                size = size,
-                mimeType = mimeType
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Err(FileError.ProcessingFailed).bind()
+                val waveformTimeoutMs =
+                    stageTimeoutMs(deadlineNanos, WAVEFORM_STAGE_CAP_MS)
+                        ?: run {
+                            logger.warn("Failing audio upload for {}: media budget exhausted before waveform generation", fileName)
+                            Err(FileError.ProcessingFailed).bind()
+                        }
+                val waveformData =
+                    withContext(Dispatchers.IO) {
+                        try {
+                            WaveformGenerator.generate(file, info.durationMs, 80, waveformTimeoutMs)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            logger.error("Failed to generate waveform for $fileName", e)
+                            emptyList()
+                        }
+                    }
+
+                AudioContent(
+                    url = "/$uploadDir/audio/${file.name}",
+                    fileName = fileName,
+                    duration = info.durationMs,
+                    waveform = waveformData,
+                    size = size,
+                    mimeType = mimeType,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Err(FileError.ProcessingFailed).bind()
+            }
         }
-    }
 
-    private fun registerToTempStore(media: MediaContent, originalFile: File, uploaderId: Uuid?) {
+    private fun registerToTempStore(
+        media: MediaContent,
+        originalFile: File,
+        uploaderId: Uuid?,
+    ) {
         val paths = mutableListOf(originalFile.absolutePath)
         when (media) {
-            is ImageContent -> media.thumbnailUrl?.let { paths.add(toPhysicalPath(it)) }
-            is VideoContent -> media.coverUrl?.let { paths.add(toPhysicalPath(it)) }
+            is ImageContent -> {
+                media.thumbnailUrl?.let { paths.add(toPhysicalPath(it)) }
+            }
+
+            is VideoContent -> {
+                media.coverUrl?.let { paths.add(toPhysicalPath(it)) }
+            }
+
             else -> {}
         }
         uploadStore.register(media, paths, uploaderId)

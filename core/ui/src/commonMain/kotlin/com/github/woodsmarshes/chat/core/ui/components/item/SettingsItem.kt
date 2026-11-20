@@ -27,12 +27,12 @@ import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
-import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 
 @Composable
 fun SectionHeader(
@@ -51,9 +51,10 @@ fun SectionHeader(
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Medium,
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
         )
     }
 }
@@ -69,14 +70,15 @@ fun SettingsItem(
     trailing: @Composable (() -> Unit)? = null,
 ) {
     if (isMiuixTheme()) {
-        val titleColors = if (danger) {
-            BasicComponentColors(
-                color = MiuixTheme.colorScheme.error,
-                disabledColor = MiuixTheme.colorScheme.disabledOnSurface,
-            )
-        } else {
-            BasicComponentDefaults.titleColor()
-        }
+        val titleColors =
+            if (danger) {
+                BasicComponentColors(
+                    color = MiuixTheme.colorScheme.error,
+                    disabledColor = MiuixTheme.colorScheme.disabledOnSurface,
+                )
+            } else {
+                BasicComponentDefaults.titleColor()
+            }
         BasicComponent(
             title = title,
             summary = subtitle,
@@ -91,31 +93,33 @@ fun SettingsItem(
                     tint = if (danger) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
                 )
             },
-            endActions = if (trailing != null || onClick != null) {
-                {
-                    if (trailing != null) {
-                        trailing()
-                    } else if (onClick != null) {
-                        MiuixIcon(
-                            imageVector = MiuixIcons.Basic.ArrowRight,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                        )
+            endActions =
+                if (trailing != null || onClick != null) {
+                    {
+                        if (trailing != null) {
+                            trailing()
+                        } else if (onClick != null) {
+                            MiuixIcon(
+                                imageVector = MiuixIcons.Basic.ArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            )
+                        }
                     }
-                }
-            } else {
-                null
-            },
+                } else {
+                    null
+                },
         )
     } else {
         val titleColor = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
 
         Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .clickable(enabled = onClick != null) { onClick?.invoke() }
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = onClick != null) { onClick?.invoke() }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -189,11 +193,12 @@ fun SettingsItemWithSwitch(
             icon = icon,
             title = title,
             subtitle = subtitle,
-            modifier = modifier.toggleable(
-                value = checked,
-                role = Role.Switch,
-                onValueChange = onCheckedChange,
-            ),
+            modifier =
+                modifier.toggleable(
+                    value = checked,
+                    role = Role.Switch,
+                    onValueChange = onCheckedChange,
+                ),
             trailing = {
                 Switch(
                     checked = checked,
@@ -203,4 +208,3 @@ fun SettingsItemWithSwitch(
         )
     }
 }
-

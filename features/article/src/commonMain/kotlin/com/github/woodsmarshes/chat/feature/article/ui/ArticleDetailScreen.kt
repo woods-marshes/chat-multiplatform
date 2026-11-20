@@ -37,13 +37,15 @@ fun ArticleDetailScreen(
     var fabVisible by remember { mutableStateOf(true) }
 
     val article = uiState.article
-    val canEdit = article != null &&
-        (isOwnArticle || article.stats.allowCollaboration)
-    val editLabel = if (isOwnArticle) {
-        LocalStrings.current.articleEditFab
-    } else {
-        LocalStrings.current.articleCollaborativeEditFab
-    }
+    val canEdit =
+        article != null &&
+            (isOwnArticle || article.stats.allowCollaboration)
+    val editLabel =
+        if (isOwnArticle) {
+            LocalStrings.current.articleEditFab
+        } else {
+            LocalStrings.current.articleCollaborativeEditFab
+        }
 
     val inMultiPane = isInListDetailScene()
 
@@ -65,9 +67,10 @@ fun ArticleDetailScreen(
         },
     ) { innerPadding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
             when {
                 uiState.isLoading -> {
@@ -83,9 +86,10 @@ fun ArticleDetailScreen(
                 }
 
                 article != null -> {
-                    val jsonStr = remember(article) {
-                        ProjectJson.encodeToString(JsonElement.serializer(), article.content)
-                    }
+                    val jsonStr =
+                        remember(article) {
+                            ProjectJson.encodeToString(JsonElement.serializer(), article.content)
+                        }
                     TiptapViewerWebView(
                         jsonContentStr = jsonStr,
                         onScrollUp = { fabVisible = true },

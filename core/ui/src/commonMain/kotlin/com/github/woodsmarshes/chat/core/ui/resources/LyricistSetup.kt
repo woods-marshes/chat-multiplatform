@@ -13,9 +13,10 @@ import com.github.woodsmarshes.chat.lyricist.Strings
 import com.github.woodsmarshes.chat.lyricist.ZhStrings
 import kotlin.concurrent.Volatile
 
-public val LyricistStrings: Map<LanguageTag, Strings> = mapOf(
-    Locales.Zh to ZhStrings
-)
+public val LyricistStrings: Map<LanguageTag, Strings> =
+    mapOf(
+        Locales.Zh to ZhStrings,
+    )
 
 public val LocalStrings: ProvidableCompositionLocal<Strings> =
     staticCompositionLocalOf { ZhStrings }
@@ -26,14 +27,15 @@ private var currentLocaleStrings: Strings = ZhStrings
 @Composable
 public fun rememberLyricistStrings(
     defaultLanguageTag: LanguageTag = Locales.Zh,
-    currentLanguageTag: LanguageTag = androidx.compose.ui.text.intl.Locale.current.toLanguageTag(),
-): Lyricist<Strings> =
-    rememberStrings(LyricistStrings, defaultLanguageTag, currentLanguageTag)
+    currentLanguageTag: LanguageTag =
+        androidx.compose.ui.text.intl.Locale.current
+            .toLanguageTag(),
+): Lyricist<Strings> = rememberStrings(LyricistStrings, defaultLanguageTag, currentLanguageTag)
 
 @Composable
 public fun ProvideLyricistStrings(
     lyricist: Lyricist<Strings> = rememberLyricistStrings(),
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     val active = lyricist.strings
     SideEffect {

@@ -34,10 +34,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.IconButton as MiuixIconButton
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * Whether the current composable is rendered inside a multi-pane
@@ -92,11 +92,12 @@ fun ChatTopAppBar(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .height(64.dp)
-                    .padding(horizontal = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .height(64.dp)
+                        .padding(horizontal = 4.dp),
             ) {
                 Row(
                     modifier = Modifier.align(Alignment.CenterStart),
@@ -121,6 +122,7 @@ fun ChatTopAppBar(
                                 }
                             }
                         }
+
                         showCloseButton -> {
                             if (isMiuix) {
                                 MiuixIconButton(onClick = onBackClick) {
@@ -139,6 +141,7 @@ fun ChatTopAppBar(
                                 }
                             }
                         }
+
                         showBackButton -> {
                             if (isMiuix) {
                                 MiuixIconButton(onClick = onBackClick) {
@@ -168,9 +171,10 @@ fun ChatTopAppBar(
                         color = titleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(horizontal = 56.dp),
+                        modifier =
+                            Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 56.dp),
                     )
                 } else {
                     Text(
@@ -179,9 +183,10 @@ fun ChatTopAppBar(
                         color = titleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(horizontal = 56.dp),
+                        modifier =
+                            Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 56.dp),
                     )
                 }
 
@@ -218,4 +223,3 @@ fun ChatTopAppBar(
         }
     }
 }
-

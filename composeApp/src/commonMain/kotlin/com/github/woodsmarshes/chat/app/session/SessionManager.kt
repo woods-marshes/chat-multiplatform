@@ -415,7 +415,8 @@ class SessionManager(
                         } catch (t: Throwable) {
                             if (t is CancellationException) throw t
                             log.error(t) {
-                                "[SessionManager] delayed database close failed for user=${closeReq.userId} gen=${closeReq.resourceGeneration}"
+                                "[SessionManager] delayed database close failed for user=${closeReq.userId} " +
+                                    "gen=${closeReq.resourceGeneration}"
                             }
                             pendingCleanupRequired = true
                             recordStartFailedLocked(
@@ -554,7 +555,8 @@ class SessionManager(
                             } catch (t: Throwable) {
                                 if (t is CancellationException) throw t
                                 log.error(t) {
-                                    "[SessionManager] closing bound database failed while reconciling logged-out state for user=${dbIdentity.userId} gen=${dbIdentity.sessionGen}"
+                                    "[SessionManager] closing bound database failed while reconciling logged-out state " +
+                                        "for user=${dbIdentity.userId} gen=${dbIdentity.sessionGen}"
                                 }
                                 pendingCleanupRequired = true
                                 recordStartFailedLocked(
@@ -662,7 +664,8 @@ class SessionManager(
                                 } catch (t: Throwable) {
                                     if (t is CancellationException) throw t
                                     log.error(t) {
-                                        "[SessionManager] closing bound database failed during StartFailed recovery for user=${dbIdentity.userId} gen=${dbIdentity.sessionGen}"
+                                        "[SessionManager] closing bound database failed during StartFailed recovery " +
+                                            "for user=${dbIdentity.userId} gen=${dbIdentity.sessionGen}"
                                     }
                                     pendingCleanupRequired = true
                                     recordStartFailedLocked(

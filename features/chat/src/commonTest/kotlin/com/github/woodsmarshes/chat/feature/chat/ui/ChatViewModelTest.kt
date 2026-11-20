@@ -54,7 +54,6 @@ import kotlin.uuid.Uuid
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
-
     private val conversationId = Uuid.parse("00000000-0000-0000-0000-000000000001")
 
     private val sentMessages = mutableListOf<Pair<Uuid, MessageContent>>()
@@ -71,29 +70,32 @@ class ChatViewModelTest {
         conversationFlow: Flow<List<ConversationUiModel>> = emptyFlow(),
         block: (ChatViewModel) -> Unit,
     ) {
-        val messageRepository = FakeMessageRepository(
-            onSend = { id, content, replyTo ->
-                sentMessages += id to content
-                sentReplies += id to replyTo
-            },
-            onSendStarted = { sendInvocations++ },
-            onSendGate = { sendGate?.invoke() },
-            sendError = { sendError },
-            onTyping = { id, isTyping -> typingSignals += id to isTyping },
-            onRetry = { messageId -> retriedMessageIds += messageId },
-            onMarkAsRead = { id, messageId -> readReceipts += id to messageId },
-        )
+        val messageRepository =
+            FakeMessageRepository(
+                onSend = { id, content, replyTo ->
+                    sentMessages += id to content
+                    sentReplies += id to replyTo
+                },
+                onSendStarted = { sendInvocations++ },
+                onSendGate = { sendGate?.invoke() },
+                sendError = { sendError },
+                onTyping = { id, isTyping -> typingSignals += id to isTyping },
+                onRetry = { messageId -> retriedMessageIds += messageId },
+                onMarkAsRead = { id, messageId -> readReceipts += id to messageId },
+            )
         val userRepository = FakeUserRepository(MutableStateFlow(null))
-        val conversationRepository = FakeConversationRepository(
-            conversations = conversationFlow,
-        )
-        val vm = ChatViewModel(
-            conversationId = conversationId.toString(),
-            isGroup = true,
-            messageRepository = messageRepository,
-            userRepository = userRepository,
-            conversationRepository = conversationRepository,
-        )
+        val conversationRepository =
+            FakeConversationRepository(
+                conversations = conversationFlow,
+            )
+        val vm =
+            ChatViewModel(
+                conversationId = conversationId.toString(),
+                isGroup = true,
+                messageRepository = messageRepository,
+                userRepository = userRepository,
+                conversationRepository = conversationRepository,
+            )
         block(vm)
     }
 
@@ -102,13 +104,14 @@ class ChatViewModelTest {
         runTest {
             Dispatchers.setMain(UnconfinedTestDispatcher())
             try {
-                val vm = ChatViewModel(
-                    conversationId = "not-a-uuid",
-                    isGroup = false,
-                    messageRepository = FakeMessageRepository(),
-                    userRepository = FakeUserRepository(MutableStateFlow(null)),
-                    conversationRepository = FakeConversationRepository(),
-                )
+                val vm =
+                    ChatViewModel(
+                        conversationId = "not-a-uuid",
+                        isGroup = false,
+                        messageRepository = FakeMessageRepository(),
+                        userRepository = FakeUserRepository(MutableStateFlow(null)),
+                        conversationRepository = FakeConversationRepository(),
+                    )
                 assertNull(vm.chatHeader.value)
             } finally {
                 Dispatchers.resetMain()
@@ -123,16 +126,19 @@ class ChatViewModelTest {
             withViewModel { vm ->
                 val completed = testMessage("visible-completed")
                 val sending = testMessage("visible-sending").copy(sendStatus = MessageState.Sending)
-                val failed = testMessage("visible-failed").copy(
-                    sendStatus = MessageState.SendFailed("offline"),
-                )
-                val revoked = testMessage("visible-revoked").copy(
-                    revokedAt = Instant.fromEpochMilliseconds(1),
-                )
-                val foreignConversation = completed.copy(
-                    id = testMessage("foreign-id").id,
-                    conversationId = Uuid.parse("00000000-0000-0000-0000-000000000099"),
-                )
+                val failed =
+                    testMessage("visible-failed").copy(
+                        sendStatus = MessageState.SendFailed("offline"),
+                    )
+                val revoked =
+                    testMessage("visible-revoked").copy(
+                        revokedAt = Instant.fromEpochMilliseconds(1),
+                    )
+                val foreignConversation =
+                    completed.copy(
+                        id = testMessage("foreign-id").id,
+                        conversationId = Uuid.parse("00000000-0000-0000-0000-000000000099"),
+                    )
 
                 vm.onMessagesVisible(listOf(sending, failed, revoked, foreignConversation, completed, completed))
                 vm.onMessagesVisible(listOf(completed, completed))
@@ -148,22 +154,24 @@ class ChatViewModelTest {
     fun openingChatDoesNotAutomaticallyMarkLatestMessageRead() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
-            val latest = LastMessageInfo(
-                id = lastMessageId,
-                content = TextContent("latest message"),
-                renderType = MessageRenderType.TEXT,
-                createdAt = Instant.fromEpochMilliseconds(1),
-            )
+            val latest =
+                LastMessageInfo(
+                    id = lastMessageId,
+                    content = TextContent("latest message"),
+                    renderType = MessageRenderType.TEXT,
+                    createdAt = Instant.fromEpochMilliseconds(1),
+                )
             withViewModel(
-                conversationFlow = MutableStateFlow(
-                    listOf(
-                        ConversationUiModel(
-                            id = conversationId,
-                            type = com.github.woodsmarshes.chat.core.model.ConversationType.GROUP,
-                            lastMessage = latest,
+                conversationFlow =
+                    MutableStateFlow(
+                        listOf(
+                            ConversationUiModel(
+                                id = conversationId,
+                                type = com.github.woodsmarshes.chat.core.model.ConversationType.GROUP,
+                                lastMessage = latest,
+                            ),
                         ),
                     ),
-                ),
             ) {
                 assertTrue(readReceipts.isEmpty())
             }
@@ -205,7 +213,11 @@ class ChatViewModelTest {
                 assertEquals(2, vm.uiState.value.selectedMessages.size)
 
                 vm.toggleSelection(m1)
-                assertEquals(listOf(m2.id), vm.uiState.value.selectedMessages.map { it.id })
+                assertEquals(
+                    listOf(m2.id),
+                    vm.uiState.value.selectedMessages
+                        .map { it.id },
+                )
             }
         } finally {
             Dispatchers.resetMain()
@@ -220,7 +232,11 @@ class ChatViewModelTest {
                 val message = testMessage("reply-target")
 
                 vm.toggleReplyTo(message)
-                assertEquals(message.id, vm.uiState.value.replyToMessage?.id)
+                assertEquals(
+                    message.id,
+                    vm.uiState.value.replyToMessage
+                        ?.id,
+                )
 
                 vm.toggleReplyTo(message)
                 assertNull(vm.uiState.value.replyToMessage)
@@ -240,7 +256,11 @@ class ChatViewModelTest {
 
                 vm.toggleReplyTo(m1)
                 vm.toggleReplyTo(m2)
-                assertEquals(m2.id, vm.uiState.value.replyToMessage?.id)
+                assertEquals(
+                    m2.id,
+                    vm.uiState.value.replyToMessage
+                        ?.id,
+                )
             }
         } finally {
             Dispatchers.resetMain()
@@ -248,30 +268,34 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun forwardStagesMessagesAndSendsToTarget() = runTest {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-        try {
-            withViewModel { vm ->
-                val target = Uuid.parse("00000000-0000-0000-0000-000000000099")
-                val m1 = testMessage("f1")
-                val m2 = testMessage("f2")
+    fun forwardStagesMessagesAndSendsToTarget() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher())
+            try {
+                withViewModel { vm ->
+                    val target = Uuid.parse("00000000-0000-0000-0000-000000000099")
+                    val m1 = testMessage("f1")
+                    val m2 = testMessage("f2")
 
-                vm.startForward(listOf(m1, m2))
-                assertEquals(2, vm.uiState.value.forwardingMessages.size)
+                    vm.startForward(listOf(m1, m2))
+                    assertEquals(2, vm.uiState.value.forwardingMessages.size)
 
-                vm.forwardMessages(target)
-                // Unconfined dispatcher: the forward coroutine completes
-                // synchronously against the fakes.
-                assertEquals(
-                    listOf(target to m1.content, target to m2.content),
-                    sentMessages,
-                )
-                assertTrue(vm.uiState.value.forwardingMessages.isEmpty())
+                    vm.forwardMessages(target)
+                    // Unconfined dispatcher: the forward coroutine completes
+                    // synchronously against the fakes.
+                    assertEquals(
+                        listOf(target to m1.content, target to m2.content),
+                        sentMessages,
+                    )
+                    assertTrue(
+                        vm.uiState.value.forwardingMessages
+                            .isEmpty(),
+                    )
+                }
+            } finally {
+                Dispatchers.resetMain()
             }
-        } finally {
-            Dispatchers.resetMain()
         }
-    }
 
     @Test
     fun clearSelectionExitsSelectionMode() {
@@ -283,7 +307,10 @@ class ChatViewModelTest {
 
                 vm.clearSelection()
                 assertFalse(vm.uiState.value.selectionMode)
-                assertTrue(vm.uiState.value.selectedMessages.isEmpty())
+                assertTrue(
+                    vm.uiState.value.selectedMessages
+                        .isEmpty(),
+                )
             }
         } finally {
             Dispatchers.resetMain()
@@ -301,10 +328,11 @@ class ChatViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {
             withViewModel { vm ->
-                val failed = testMessage("failed").copy(
-                    content = TextContent("original text"),
-                    sendStatus = MessageState.SendFailed("offline"),
-                )
+                val failed =
+                    testMessage("failed").copy(
+                        content = TextContent("original text"),
+                        sendStatus = MessageState.SendFailed("offline"),
+                    )
                 vm.onInputChanged(TextFieldValue("unrelated draft"))
 
                 vm.retryMessage(failed)
@@ -345,66 +373,91 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun successfulSubmissionClearsUnchangedDraftAndReply() = pendingSubmission { vm, gate ->
-        gate.complete(Unit)
-        assertEquals("", vm.input.value.text)
-        assertNull(vm.uiState.value.replyToMessage)
-        assertFalse(vm.uiState.value.isSending)
-    }
+    fun successfulSubmissionClearsUnchangedDraftAndReply() =
+        pendingSubmission { vm, gate ->
+            gate.complete(Unit)
+            assertEquals("", vm.input.value.text)
+            assertNull(vm.uiState.value.replyToMessage)
+            assertFalse(vm.uiState.value.isSending)
+        }
 
     @Test
-    fun successfulSubmissionPreservesEditedDraftAndNewReply() = pendingSubmission { vm, gate ->
-        val nextReply = testMessage("next")
-        vm.onInputChanged(TextFieldValue("next draft"))
-        vm.setReplyTo(nextReply)
-        gate.complete(Unit)
-        assertEquals("next draft", vm.input.value.text)
-        assertEquals(nextReply.id, vm.uiState.value.replyToMessage?.id)
-        assertEquals(TextContent("original"), sentMessages.single().second)
-        assertEquals(testMessage("original reply").id, sentReplies.single().second)
-        assertEquals(true, typingSignals.last().second)
-    }
+    fun successfulSubmissionPreservesEditedDraftAndNewReply() =
+        pendingSubmission { vm, gate ->
+            val nextReply = testMessage("next")
+            vm.onInputChanged(TextFieldValue("next draft"))
+            vm.setReplyTo(nextReply)
+            gate.complete(Unit)
+            assertEquals("next draft", vm.input.value.text)
+            assertEquals(
+                nextReply.id,
+                vm.uiState.value.replyToMessage
+                    ?.id,
+            )
+            assertEquals(TextContent("original"), sentMessages.single().second)
+            assertEquals(testMessage("original reply").id, sentReplies.single().second)
+            assertEquals(true, typingSignals.last().second)
+        }
 
     @Test
-    fun editingBackToOriginalTextStillPreservesDraft() = pendingSubmission { vm, gate ->
-        vm.onInputChanged(TextFieldValue("changed"))
-        vm.onInputChanged(TextFieldValue("original"))
-        gate.complete(Unit)
-        assertEquals("original", vm.input.value.text)
-    }
+    fun editingBackToOriginalTextStillPreservesDraft() =
+        pendingSubmission { vm, gate ->
+            vm.onInputChanged(TextFieldValue("changed"))
+            vm.onInputChanged(TextFieldValue("original"))
+            gate.complete(Unit)
+            assertEquals("original", vm.input.value.text)
+        }
 
     @Test
-    fun selectionChangeDoesNotPreventSubmittedDraftCleanup() = pendingSubmission { vm, gate ->
-        vm.onInputChanged(TextFieldValue("original", androidx.compose.ui.text.TextRange(3)))
-        gate.complete(Unit)
-        assertEquals("", vm.input.value.text)
-    }
+    fun selectionChangeDoesNotPreventSubmittedDraftCleanup() =
+        pendingSubmission { vm, gate ->
+            vm.onInputChanged(
+                TextFieldValue(
+                    "original",
+                    androidx.compose.ui.text
+                        .TextRange(3),
+                ),
+            )
+            gate.complete(Unit)
+            assertEquals("", vm.input.value.text)
+        }
 
     @Test
-    fun reselectingOriginalReplyPreservesNewReplyIntent() = pendingSubmission { vm, gate ->
-        vm.clearReplyTo()
-        vm.setReplyTo(testMessage("original reply"))
-        gate.complete(Unit)
-        assertEquals(testMessage("original reply").id, vm.uiState.value.replyToMessage?.id)
-    }
+    fun reselectingOriginalReplyPreservesNewReplyIntent() =
+        pendingSubmission { vm, gate ->
+            vm.clearReplyTo()
+            vm.setReplyTo(testMessage("original reply"))
+            gate.complete(Unit)
+            assertEquals(
+                testMessage("original reply").id,
+                vm.uiState.value.replyToMessage
+                    ?.id,
+            )
+        }
 
     @Test
-    fun failedSubmissionPreservesDraftAndReply() = pendingSubmission { vm, gate ->
-        sendError = MessageError.PermissionDenied
-        gate.complete(Unit)
-        assertEquals("original", vm.input.value.text)
-        assertEquals(testMessage("original reply").id, vm.uiState.value.replyToMessage?.id)
-        assertFalse(vm.uiState.value.isSending)
-        assertTrue(vm.uiState.value.error != null)
-    }
+    fun failedSubmissionPreservesDraftAndReply() =
+        pendingSubmission { vm, gate ->
+            sendError = MessageError.PermissionDenied
+            gate.complete(Unit)
+            assertEquals("original", vm.input.value.text)
+            assertEquals(
+                testMessage("original reply").id,
+                vm.uiState.value.replyToMessage
+                    ?.id,
+            )
+            assertFalse(vm.uiState.value.isSending)
+            assertTrue(vm.uiState.value.error != null)
+        }
 
     @Test
-    fun emojiInsertionDuringSubmissionPreservesDraft() = pendingSubmission { vm, gate ->
-        vm.insertEmoji("🙂")
-        val draft = vm.input.value
-        gate.complete(Unit)
-        assertEquals(draft, vm.input.value)
-    }
+    fun emojiInsertionDuringSubmissionPreservesDraft() =
+        pendingSubmission { vm, gate ->
+            vm.insertEmoji("🙂")
+            val draft = vm.input.value
+            gate.complete(Unit)
+            assertEquals(draft, vm.input.value)
+        }
 
     private fun pendingSubmission(block: (ChatViewModel, CompletableDeferred<Unit>) -> Unit) {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -424,7 +477,13 @@ class ChatViewModelTest {
     }
 
     private fun testMessage(seed: String): MessageUiModel {
-        val hex = seed.hashCode().toUInt().toString(16).padStart(12, '0').take(12)
+        val hex =
+            seed
+                .hashCode()
+                .toUInt()
+                .toString(16)
+                .padStart(12, '0')
+                .take(12)
         val id = Uuid.parse("00000000-0000-0000-0000-$hex")
         return MessageUiModel(
             id = id,
@@ -453,28 +512,41 @@ private class FakeUserRepository(
     private val me: Flow<User?>,
 ) : UserRepository {
     override fun getMeFlow(): Flow<User?> = me
-    override suspend fun syncMe() = Ok(
-        User(
-            id = Uuid.NIL,
-            username = "",
-            email = null,
-            displayName = null,
-            avatarUrl = null,
-            bio = null,
-            createdAt = Instant.fromEpochMilliseconds(0),
-            updatedAt = Instant.fromEpochMilliseconds(0),
-            deletedAt = null,
+
+    override suspend fun syncMe() =
+        Ok(
+            User(
+                id = Uuid.NIL,
+                username = "",
+                email = null,
+                displayName = null,
+                avatarUrl = null,
+                bio = null,
+                createdAt = Instant.fromEpochMilliseconds(0),
+                updatedAt = Instant.fromEpochMilliseconds(0),
+                deletedAt = null,
+            ),
         )
-    )
-    override suspend fun updateMyProfile(displayName: String?, avatarUrl: String?, bio: String?) = syncMe()
+
+    override suspend fun updateMyProfile(
+        displayName: String?,
+        avatarUrl: String?,
+        bio: String?,
+    ) = syncMe()
+
     override fun getGlobalSettingsFlow(): Flow<UserSetting?> = emptyFlow()
+
     override suspend fun syncGlobalSettings() = error("not used")
+
     override suspend fun updateGlobalSettings(
         privacy: PrivacySetting?,
         preferences: UserPreference?,
     ) = error("not used")
+
     override suspend fun fetchUserDetail(userId: Uuid) = error("not used")
+
     override fun getUserFlow(userId: Uuid) = emptyFlow<User?>()
+
     override suspend fun searchUsers(keyword: String) = error("not used")
 }
 
@@ -484,8 +556,11 @@ private class FakeConversationRepository(
     private val conversations: Flow<List<ConversationUiModel>> = emptyFlow(),
 ) : ConversationRepository {
     override suspend fun getConversationListFlow() = conversations
+
     override suspend fun syncConversations() = Ok(Unit)
+
     override suspend fun createDirectChat(targetUserId: Uuid) = error("not used")
+
     override suspend fun createGroup(
         name: String,
         handle: String?,
@@ -494,7 +569,12 @@ private class FakeConversationRepository(
         settings: com.github.woodsmarshes.chat.core.model.GroupSettings?,
         memberIds: List<Uuid>,
     ) = error("not used")
-    override suspend fun joinGroup(id: Uuid, message: String?) = Ok(Unit)
+
+    override suspend fun joinGroup(
+        id: Uuid,
+        message: String?,
+    ) = Ok(Unit)
+
     override suspend fun updateGroupProfile(
         conversationId: Uuid,
         name: String?,
@@ -504,12 +584,24 @@ private class FakeConversationRepository(
         ownerId: Uuid?,
         settings: com.github.woodsmarshes.chat.core.model.GroupSettings?,
     ) = error("not used")
-    override suspend fun getParticipants(id: Uuid): Flow<List<Pair<com.github.woodsmarshes.chat.core.model.ConversationParticipant, User>>> = emptyFlow()
-    override suspend fun updateMyParticipantSettings(conversationId: Uuid, settings: ParticipantSettings) = Ok(Unit)
+
+    override suspend fun getParticipants(
+        id: Uuid,
+    ): Flow<List<Pair<com.github.woodsmarshes.chat.core.model.ConversationParticipant, User>>> = emptyFlow()
+
+    override suspend fun updateMyParticipantSettings(
+        conversationId: Uuid,
+        settings: ParticipantSettings,
+    ) = Ok(Unit)
+
     override suspend fun searchGroups(keyword: String) = error("not used")
+
     override fun getGroupProfileFlow(conversationId: Uuid) = emptyFlow<com.github.woodsmarshes.chat.core.model.GroupProfile?>()
+
     override fun getGroupMembersFlow(conversationId: Uuid) = members
+
     override suspend fun refreshGroupDetail(conversationId: Uuid) = Ok(Unit)
+
     override fun getConversationHeaderFlow(conversationId: Uuid) = header
 }
 
@@ -522,21 +614,29 @@ private class FakeMessageRepository(
     private val onRetry: (Uuid) -> Unit = {},
     private val onMarkAsRead: (Uuid, Uuid) -> Unit = { _, _ -> },
 ) : MessageRepository {
-    override val connectionState = kotlinx.coroutines.flow.MutableStateFlow<com.github.woodsmarshes.chat.core.model.ConnectionState>(com.github.woodsmarshes.chat.core.model.ConnectionState.Connected)
+    override val connectionState =
+        kotlinx.coroutines.flow.MutableStateFlow<com.github.woodsmarshes.chat.core.model.ConnectionState>(
+            com.github.woodsmarshes.chat.core.model.ConnectionState.Connected,
+        )
 
     override suspend fun startSession() = Unit
+
     override suspend fun stopSession() = Unit
+
     override suspend fun retryPendingMessages() = Unit
+
     override suspend fun retryMessage(messageId: Uuid): com.github.michaelbull.result.Result<Unit, MessageError> {
         onRetry(messageId)
         return Ok(Unit)
     }
+
     override fun getMessages(
         ownUserId: Uuid,
         conversationId: Uuid,
         isGroup: Boolean,
         limit: Int,
     ): Flow<PagingData<MessageUiModel>> = emptyFlow()
+
     override suspend fun sendMessage(
         conversationId: Uuid,
         content: MessageContent,
@@ -548,12 +648,22 @@ private class FakeMessageRepository(
         onSend(conversationId, content, replyToMessageId)
         return Ok(Unit)
     }
+
     override suspend fun revokeMessage(messageId: Uuid) = Ok(Unit)
-    override suspend fun markAsRead(conversationId: Uuid, messageId: Uuid) {
+
+    override suspend fun markAsRead(
+        conversationId: Uuid,
+        messageId: Uuid,
+    ) {
         onMarkAsRead(conversationId, messageId)
     }
+
     override fun getTypingUsersFlow(conversationId: Uuid) = MutableStateFlow(emptyMap<Uuid, Long>())
-    override suspend fun sendTyping(conversationId: Uuid, isTyping: Boolean) {
+
+    override suspend fun sendTyping(
+        conversationId: Uuid,
+        isTyping: Boolean,
+    ) {
         onTyping(conversationId, isTyping)
     }
 }

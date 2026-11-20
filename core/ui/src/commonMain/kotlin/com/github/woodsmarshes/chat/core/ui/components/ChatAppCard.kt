@@ -12,8 +12,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 
 @Composable
 fun ChatAppCard(
@@ -45,17 +45,20 @@ fun ChatAppCard(
     } else {
         val shape = RoundedCornerShape(cornerRadius)
         Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .then(
-                    if (onClick != null) Modifier.clickable(onClick = onClick)
-                    else Modifier
-                ),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                    .then(
+                        if (onClick != null) {
+                            Modifier.clickable(onClick = onClick)
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             content()
         }
     }
 }
-

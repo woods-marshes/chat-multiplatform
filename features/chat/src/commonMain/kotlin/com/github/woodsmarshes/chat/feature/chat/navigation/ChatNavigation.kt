@@ -24,10 +24,11 @@ fun EntryProviderScope<NavKey>.chatEntry(
 ) {
     entry<ChatNavKey>(metadata = metadata) { key ->
         ChatScreen(
-            viewModel = koinViewModel(
-                key = "chat_${key.conversationId}",
-                parameters = { parametersOf(key.conversationId, key.isGroup) },
-            ),
+            viewModel =
+                koinViewModel(
+                    key = "chat_${key.conversationId}",
+                    parameters = { parametersOf(key.conversationId, key.isGroup) },
+                ),
             onProfileClick = onNavigateToProfile,
             onGroupInfoClick = onNavigateToGroupInfo,
             onBack = onBack,

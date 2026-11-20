@@ -3,17 +3,16 @@ package com.github.woodsmarshes.chat.core.ui.theme
 import com.github.woodsmarshes.chat.core.model.DarkThemeConfig
 import com.github.woodsmarshes.chat.core.model.ThemeBrand
 import com.github.woodsmarshes.chat.core.ui.components.avatar.resolveMediaUrl
-import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
 
 class ThemeAdaptationTest {
-
     @Test
     fun themeConfigIdentifiesMiuixAndMaterial3Modes() {
         assertTrue(ThemeConfig(themeBrand = ThemeBrand.MIUIX).isMiuix)

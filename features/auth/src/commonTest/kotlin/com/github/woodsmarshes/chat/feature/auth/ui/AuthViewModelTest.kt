@@ -5,10 +5,10 @@ import com.github.michaelbull.result.Ok
 import com.github.michaelbull.result.Result
 import com.github.woodsmarshes.chat.core.data.repository.AuthRepository
 import com.github.woodsmarshes.chat.core.datastore.ServerConfigStore
-import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
-import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.error.AuthError
+import com.github.woodsmarshes.chat.core.network.ktor.NetworkConfig
+import com.github.woodsmarshes.chat.core.network.ktor.ServerEndpointProvider
 import com.github.woodsmarshes.chat.feature.auth.model.AuthMode
 import com.github.woodsmarshes.chat.feature.auth.model.AuthScreenState
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +35,6 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
-
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -91,60 +90,63 @@ class AuthViewModelTest {
      * while the login call is waiting on the network.
      */
     @Test
-    fun submittingTwiceOnlyAuthenticatesOnce() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val repository = FakeAuthRepository()
-        val vm = AuthViewModel(repository, testEndpointProvider())
+    fun submittingTwiceOnlyAuthenticatesOnce() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            val repository = FakeAuthRepository()
+            val vm = AuthViewModel(repository, testEndpointProvider())
 
-        vm.updateEmail("user@example.com")
-        vm.updatePassword("secret1")
+            vm.updateEmail("user@example.com")
+            vm.updatePassword("secret1")
 
-        vm.submit()
-        assertEquals(AuthScreenState.Loading, vm.uiState.value.screenState)
-        vm.submit()
+            vm.submit()
+            assertEquals(AuthScreenState.Loading, vm.uiState.value.screenState)
+            vm.submit()
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertEquals(1, repository.loginCalls.size, "a second tap must not start a second login request")
-        assertEquals(AuthScreenState.Success(repository.user), vm.uiState.value.screenState)
-    }
-
-    @Test
-    fun failedLoginRevertsTheServerSelectionAndNeverPersistsIt() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val store = RecordingServerConfigStore()
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
-        val repository = FakeAuthRepository().apply { loginResult = Err(AuthError.InvalidCredentials) }
-        val vm = AuthViewModel(repository, provider)
-
-        vm.updateServerAddress("https://other.example.com")
-        vm.updateEmail("user@example.com")
-        vm.updatePassword("secret1")
-        vm.submit()
-        advanceUntilIdle()
-
-        assertEquals(NetworkConfig.forDevelopment(), provider.current)
-        assertEquals(emptyList(), store.writes)
-        assertIs<AuthScreenState.Error>(vm.uiState.value.screenState)
-    }
+            assertEquals(1, repository.loginCalls.size, "a second tap must not start a second login request")
+            assertEquals(AuthScreenState.Success(repository.user), vm.uiState.value.screenState)
+        }
 
     @Test
-    fun successfulLoginPersistsTheServerSelection() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val store = RecordingServerConfigStore()
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
-        val vm = AuthViewModel(FakeAuthRepository(), provider)
+    fun failedLoginRevertsTheServerSelectionAndNeverPersistsIt() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            val store = RecordingServerConfigStore()
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+            val repository = FakeAuthRepository().apply { loginResult = Err(AuthError.InvalidCredentials) }
+            val vm = AuthViewModel(repository, provider)
 
-        vm.updateServerAddress("https://other.example.com")
-        vm.updateEmail("user@example.com")
-        vm.updatePassword("secret1")
-        vm.submit()
-        advanceUntilIdle()
+            vm.updateServerAddress("https://other.example.com")
+            vm.updateEmail("user@example.com")
+            vm.updatePassword("secret1")
+            vm.submit()
+            advanceUntilIdle()
 
-        assertEquals(listOf("https://other.example.com:443"), store.writes)
-        assertEquals("other.example.com", provider.current.host)
-        assertIs<AuthScreenState.Success>(vm.uiState.value.screenState)
-    }
+            assertEquals(NetworkConfig.forDevelopment(), provider.current)
+            assertEquals(emptyList(), store.writes)
+            assertIs<AuthScreenState.Error>(vm.uiState.value.screenState)
+        }
+
+    @Test
+    fun successfulLoginPersistsTheServerSelection() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            val store = RecordingServerConfigStore()
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+            val vm = AuthViewModel(FakeAuthRepository(), provider)
+
+            vm.updateServerAddress("https://other.example.com")
+            vm.updateEmail("user@example.com")
+            vm.updatePassword("secret1")
+            vm.submit()
+            advanceUntilIdle()
+
+            assertEquals(listOf("https://other.example.com:443"), store.writes)
+            assertEquals("other.example.com", provider.current.host)
+            assertIs<AuthScreenState.Success>(vm.uiState.value.screenState)
+        }
 
     @Test
     fun authUiStateToStringRedactsPasswordFields() {
@@ -162,13 +164,16 @@ class AuthViewModelTest {
         assertTrue(stateText.contains("<redacted>"))
     }
 
-    private fun testEndpointProvider() = ServerEndpointProvider(
-        seed = NetworkConfig.forDevelopment(),
-        serverConfigDataSource = object : ServerConfigStore {
-            override suspend fun currentServerBaseUrl(): String? = null
-            override suspend fun setServerBaseUrl(url: String) = Unit
-        },
-    )
+    private fun testEndpointProvider() =
+        ServerEndpointProvider(
+            seed = NetworkConfig.forDevelopment(),
+            serverConfigDataSource =
+                object : ServerConfigStore {
+                    override suspend fun currentServerBaseUrl(): String? = null
+
+                    override suspend fun setServerBaseUrl(url: String) = Unit
+                },
+        )
 
     private class RecordingServerConfigStore : ServerConfigStore {
         val writes = mutableListOf<String>()
@@ -181,18 +186,18 @@ class AuthViewModelTest {
     }
 
     private class FakeAuthRepository : AuthRepository {
-
-        val user = User(
-            id = Uuid.parse("00000000-0000-0000-0000-000000000001"),
-            username = "tester",
-            email = "user@example.com",
-            displayName = "Tester",
-            avatarUrl = null,
-            bio = null,
-            createdAt = Instant.fromEpochMilliseconds(0),
-            updatedAt = Instant.fromEpochMilliseconds(0),
-            deletedAt = null,
-        )
+        val user =
+            User(
+                id = Uuid.parse("00000000-0000-0000-0000-000000000001"),
+                username = "tester",
+                email = "user@example.com",
+                displayName = "Tester",
+                avatarUrl = null,
+                bio = null,
+                createdAt = Instant.fromEpochMilliseconds(0),
+                updatedAt = Instant.fromEpochMilliseconds(0),
+                deletedAt = null,
+            )
 
         val loginCalls = mutableListOf<Pair<String, String>>()
 
@@ -202,7 +207,10 @@ class AuthViewModelTest {
 
         override fun observeIsLoggedIn(): Flow<Boolean> = MutableStateFlow(false)
 
-        override suspend fun login(email: String, password: String): Result<User, AuthError> {
+        override suspend fun login(
+            email: String,
+            password: String,
+        ): Result<User, AuthError> {
             loginCalls += email to password
             return loginResult
         }

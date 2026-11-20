@@ -65,28 +65,30 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val strings = LocalStrings.current
     val inMultiPane = isInListDetailScene()
-    val normalizedSelected = when (selectedCategory) {
-        SettingsCategory.LICENSES -> SettingsCategory.ABOUT
-        else -> selectedCategory
-    }
+    val normalizedSelected =
+        when (selectedCategory) {
+            SettingsCategory.LICENSES -> SettingsCategory.ABOUT
+            else -> selectedCategory
+        }
     val activeCategory = if (inMultiPane) (normalizedSelected ?: SettingsCategory.PROFILE) else null
 
-    val themeSubtitle = buildString {
-        append(
-            when (uiState.themeBrand) {
-                ThemeBrand.MATERIAL3 -> strings.themeMaterial3
-                else -> strings.themeMiuix
-            }
-        )
-        append(" · ")
-        append(
-            when (uiState.darkThemeConfig) {
-                DarkThemeConfig.FOLLOW_SYSTEM -> strings.followSystem
-                DarkThemeConfig.LIGHT -> strings.lightMode
-                DarkThemeConfig.DARK -> strings.darkModeLabel
-            }
-        )
-    }
+    val themeSubtitle =
+        buildString {
+            append(
+                when (uiState.themeBrand) {
+                    ThemeBrand.MATERIAL3 -> strings.themeMaterial3
+                    else -> strings.themeMiuix
+                },
+            )
+            append(" · ")
+            append(
+                when (uiState.darkThemeConfig) {
+                    DarkThemeConfig.FOLLOW_SYSTEM -> strings.followSystem
+                    DarkThemeConfig.LIGHT -> strings.lightMode
+                    DarkThemeConfig.DARK -> strings.darkModeLabel
+                },
+            )
+        }
 
     Scaffold(
         modifier = modifier,
@@ -96,14 +98,15 @@ fun SettingsScreen(
                 showBackButton = false,
                 showAccountAffordance = inMultiPane,
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .consumeWindowInsets(padding)
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .consumeWindowInsets(padding)
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState()),
         ) {
             PersonalProfileCard(
                 uiState = uiState,
@@ -170,37 +173,43 @@ private fun PersonalProfileCard(
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
-    val displayTitle = uiState.displayName.ifEmpty {
-        uiState.username.ifEmpty { strings.settingsCategoryProfile }
-    }
-    val containerColor = if (selected) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-    }
-    val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-    val secondaryTextColor = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val displayTitle =
+        uiState.displayName.ifEmpty {
+            uiState.username.ifEmpty { strings.settingsCategoryProfile }
+        }
+    val containerColor =
+        if (selected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        }
+    val contentColor =
+        if (selected) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val secondaryTextColor =
+        if (selected) {
+            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = containerColor,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             UserAvatar(
@@ -240,10 +249,11 @@ private fun PersonalProfileCard(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -269,38 +279,43 @@ private fun SettingsCategoryItem(
     showChevron: Boolean = true,
 ) {
     val isMiuix = isMiuixTheme()
-    val backgroundColor = when {
-        selected && isMiuix -> MiuixTheme.colorScheme.tertiaryContainer
-        selected -> MaterialTheme.colorScheme.secondaryContainer
-        else -> Color.Transparent
-    }
-    val titleColor = when {
-        danger -> MaterialTheme.colorScheme.error
-        selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer
-        selected -> MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    val subtitleColor = when {
-        selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.78f)
-        selected -> MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val iconTint = when {
-        danger -> MaterialTheme.colorScheme.error
-        selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer
-        selected -> MaterialTheme.colorScheme.onSecondaryContainer
-        isMiuix -> MiuixTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val backgroundColor =
+        when {
+            selected && isMiuix -> MiuixTheme.colorScheme.tertiaryContainer
+            selected -> MaterialTheme.colorScheme.secondaryContainer
+            else -> Color.Transparent
+        }
+    val titleColor =
+        when {
+            danger -> MaterialTheme.colorScheme.error
+            selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer
+            selected -> MaterialTheme.colorScheme.onSecondaryContainer
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+    val subtitleColor =
+        when {
+            selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.78f)
+            selected -> MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.78f)
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    val iconTint =
+        when {
+            danger -> MaterialTheme.colorScheme.error
+            selected && isMiuix -> MiuixTheme.colorScheme.onTertiaryContainer
+            selected -> MaterialTheme.colorScheme.onSecondaryContainer
+            isMiuix -> MiuixTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(if (isMiuix) 16.dp else 12.dp))
+                .background(backgroundColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

@@ -1,8 +1,8 @@
 package com.github.woodsmarshes.chat.feature.conversations.navigation
 
-import com.github.woodsmarshes.chat.core.model.GroupProfile
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import com.github.woodsmarshes.chat.core.model.GroupProfile
 import com.github.woodsmarshes.chat.feature.conversations.ui.ConversationsScreen
 import kotlinx.serialization.Serializable
 

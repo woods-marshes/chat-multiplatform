@@ -11,7 +11,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ServerEndpointTest {
-
     private class FakeStore(
         var value: String? = null,
         var failRead: Boolean = false,
@@ -33,8 +32,7 @@ class ServerEndpointTest {
         }
     }
 
-    private fun parse(raw: String): NetworkConfig =
-        parseServerAddress(raw).getOrElse { error("expected '$raw' to parse: ${it.message}") }
+    private fun parse(raw: String): NetworkConfig = parseServerAddress(raw).getOrElse { error("expected '$raw' to parse: ${it.message}") }
 
     @Test
     fun bareHostDefaultsToTlsOnPort443() {
@@ -113,164 +111,175 @@ class ServerEndpointTest {
     }
 
     @Test
-    fun ensureLoadedAppliesPersistedSelection() = runTest {
-        val store = FakeStore(value = "https://chat.example.com")
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+    fun ensureLoadedAppliesPersistedSelection() =
+        runTest {
+            val store = FakeStore(value = "https://chat.example.com")
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
 
-        provider.ensureLoaded()
+            provider.ensureLoaded()
 
-        assertEquals(NetworkConfig("chat.example.com", 443, useTls = true), provider.current)
-        assertEquals("https://chat.example.com:443", provider.current.baseUrl)
-    }
-
-    @Test
-    fun ensureLoadedIsIdempotent() = runTest {
-        val store = FakeStore(value = "https://a.example.com")
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
-
-        provider.ensureLoaded()
-        store.value = "https://b.example.com"
-        provider.ensureLoaded()
-
-        assertEquals(1, store.reads)
-        assertEquals("a.example.com", provider.current.host)
-    }
+            assertEquals(NetworkConfig("chat.example.com", 443, useTls = true), provider.current)
+            assertEquals("https://chat.example.com:443", provider.current.baseUrl)
+        }
 
     @Test
-    fun ensureLoadedKeepsSeedWhenStoreIsEmptyCorruptOrFailing() = runTest {
-        val seed = NetworkConfig.forDevelopment()
+    fun ensureLoadedIsIdempotent() =
+        runTest {
+            val store = FakeStore(value = "https://a.example.com")
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
 
-        val empty = ServerEndpointProvider(seed, FakeStore(value = null))
-        empty.ensureLoaded()
-        assertEquals(seed, empty.current)
+            provider.ensureLoaded()
+            store.value = "https://b.example.com"
+            provider.ensureLoaded()
 
-        val corrupt = ServerEndpointProvider(seed, FakeStore(value = "not a host:port:extra"))
-        corrupt.ensureLoaded()
-        assertEquals(seed, corrupt.current)
-
-        val failing = ServerEndpointProvider(seed, FakeStore(failRead = true))
-        failing.ensureLoaded()
-        assertEquals(seed, failing.current)
-    }
+            assertEquals(1, store.reads)
+            assertEquals("a.example.com", provider.current.host)
+        }
 
     @Test
-    fun stageAppliesInMemoryAndCommitPersists() = runTest {
-        val store = FakeStore()
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+    fun ensureLoadedKeepsSeedWhenStoreIsEmptyCorruptOrFailing() =
+        runTest {
+            val seed = NetworkConfig.forDevelopment()
 
-        val result = provider.stage("HTTPS://Chat.Example.com:8443/")
+            val empty = ServerEndpointProvider(seed, FakeStore(value = null))
+            empty.ensureLoaded()
+            assertEquals(seed, empty.current)
 
-        val endpoint = assertNotNull(result.getOrNull())
-        assertEquals(NetworkConfig("chat.example.com", 8443, useTls = true), endpoint)
-        assertEquals(provider.current, endpoint)
-        assertNull(store.value, "staging must not touch persistent storage")
-        assertEquals(0, store.writes)
+            val corrupt = ServerEndpointProvider(seed, FakeStore(value = "not a host:port:extra"))
+            corrupt.ensureLoaded()
+            assertEquals(seed, corrupt.current)
 
-        provider.commitStaged()
-
-        assertEquals("https://chat.example.com:8443", store.value)
-        assertEquals(1, store.writes)
-        assertEquals(serverKeyFor(endpoint), provider.currentServerKey)
-    }
+            val failing = ServerEndpointProvider(seed, FakeStore(failRead = true))
+            failing.ensureLoaded()
+            assertEquals(seed, failing.current)
+        }
 
     @Test
-    fun stageRejectsInvalidInputWithoutTouchingStoreOrMemory() = runTest {
-        val seed = NetworkConfig.forDevelopment()
-        val store = FakeStore()
-        val provider = ServerEndpointProvider(seed, store)
-        provider.ensureLoaded()
+    fun stageAppliesInMemoryAndCommitPersists() =
+        runTest {
+            val store = FakeStore()
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
 
-        val result = provider.stage("http://example.com/path")
+            val result = provider.stage("HTTPS://Chat.Example.com:8443/")
 
-        assertIs<IllegalArgumentException>(result.exceptionOrNull())
-        assertEquals(seed, provider.current)
-        assertNull(store.value)
-        assertEquals(0, store.writes)
-    }
+            val endpoint = assertNotNull(result.getOrNull())
+            assertEquals(NetworkConfig("chat.example.com", 8443, useTls = true), endpoint)
+            assertEquals(provider.current, endpoint)
+            assertNull(store.value, "staging must not touch persistent storage")
+            assertEquals(0, store.writes)
 
-    @Test
-    fun revertStagedRestoresThePreviouslyPersistedEndpoint() = runTest {
-        val seed = NetworkConfig.forDevelopment()
-        val store = FakeStore()
-        val provider = ServerEndpointProvider(seed, store)
+            provider.commitStaged()
 
-        provider.stage("https://other.example.com")
-        assertEquals("other.example.com", provider.current.host)
-
-        provider.revertStaged()
-
-        assertEquals(seed, provider.current)
-        assertNull(store.value, "a reverted selection must never be written")
-        assertEquals(0, store.writes)
-    }
+            assertEquals("https://chat.example.com:8443", store.value)
+            assertEquals(1, store.writes)
+            assertEquals(serverKeyFor(endpoint), provider.currentServerKey)
+        }
 
     @Test
-    fun revertStagedRestoresTheAddressLoadedFromStorage() = runTest {
-        val store = FakeStore(value = "https://saved.example.com")
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
-        provider.ensureLoaded()
+    fun stageRejectsInvalidInputWithoutTouchingStoreOrMemory() =
+        runTest {
+            val seed = NetworkConfig.forDevelopment()
+            val store = FakeStore()
+            val provider = ServerEndpointProvider(seed, store)
+            provider.ensureLoaded()
 
-        provider.stage("https://typo.example.com")
-        provider.revertStaged()
+            val result = provider.stage("http://example.com/path")
 
-        assertEquals("saved.example.com", provider.current.host)
-        assertEquals("https://saved.example.com", store.value)
-    }
-
-    @Test
-    fun revertStagedIsNoOpWithoutAStagedSelection() = runTest {
-        val seed = NetworkConfig.forDevelopment()
-        val store = FakeStore()
-        val provider = ServerEndpointProvider(seed, store)
-
-        provider.commitStaged()
-        provider.revertStaged()
-
-        assertEquals(seed, provider.current)
-        assertEquals(1, store.writes)
-    }
+            assertIs<IllegalArgumentException>(result.exceptionOrNull())
+            assertEquals(seed, provider.current)
+            assertNull(store.value)
+            assertEquals(0, store.writes)
+        }
 
     @Test
-    fun commitStagedReportsWriteFailureButKeepsTheAuthenticatedEndpoint() = runTest {
-        val seed = NetworkConfig.forDevelopment()
-        val store = FakeStore(failWrite = true)
-        val provider = ServerEndpointProvider(seed, store)
+    fun revertStagedRestoresThePreviouslyPersistedEndpoint() =
+        runTest {
+            val seed = NetworkConfig.forDevelopment()
+            val store = FakeStore()
+            val provider = ServerEndpointProvider(seed, store)
 
-        provider.stage("https://chat.example.com")
-        val result = provider.commitStaged()
+            provider.stage("https://other.example.com")
+            assertEquals("other.example.com", provider.current.host)
 
-        assertIs<IOException>(result.exceptionOrNull())
-        assertEquals("chat.example.com", provider.current.host)
-    }
+            provider.revertStaged()
 
-    @Test
-    fun stageMarksProviderLoadedSoLaterEnsureLoadedCannotRevertSelection() = runTest {
-        val store = FakeStore(value = "https://stale.example.com")
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
-
-        provider.stage("https://fresh.example.com")
-        provider.ensureLoaded()
-
-        assertEquals("fresh.example.com", provider.current.host)
-        // stage() loads the persisted endpoint first, so the store is read
-        // exactly once — by stage itself, not by the later ensureLoaded.
-        assertEquals(1, store.reads)
-    }
+            assertEquals(seed, provider.current)
+            assertNull(store.value, "a reverted selection must never be written")
+            assertEquals(0, store.writes)
+        }
 
     @Test
-    fun stageBeforeEnsureLoadedStillRevertsToTheStoredEndpoint() = runTest {
-        val store = FakeStore(value = "https://saved.example.com")
-        val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+    fun revertStagedRestoresTheAddressLoadedFromStorage() =
+        runTest {
+            val store = FakeStore(value = "https://saved.example.com")
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+            provider.ensureLoaded()
 
-        // No ensureLoaded() call: stage must load storage itself so the
-        // revert target is the persisted address, not the compile-time seed.
-        provider.stage("https://typo.example.com")
-        provider.revertStaged()
+            provider.stage("https://typo.example.com")
+            provider.revertStaged()
 
-        assertEquals("saved.example.com", provider.current.host)
-        assertEquals("https://saved.example.com", store.value)
-        assertEquals(0, store.writes)
-    }
+            assertEquals("saved.example.com", provider.current.host)
+            assertEquals("https://saved.example.com", store.value)
+        }
+
+    @Test
+    fun revertStagedIsNoOpWithoutAStagedSelection() =
+        runTest {
+            val seed = NetworkConfig.forDevelopment()
+            val store = FakeStore()
+            val provider = ServerEndpointProvider(seed, store)
+
+            provider.commitStaged()
+            provider.revertStaged()
+
+            assertEquals(seed, provider.current)
+            assertEquals(1, store.writes)
+        }
+
+    @Test
+    fun commitStagedReportsWriteFailureButKeepsTheAuthenticatedEndpoint() =
+        runTest {
+            val seed = NetworkConfig.forDevelopment()
+            val store = FakeStore(failWrite = true)
+            val provider = ServerEndpointProvider(seed, store)
+
+            provider.stage("https://chat.example.com")
+            val result = provider.commitStaged()
+
+            assertIs<IOException>(result.exceptionOrNull())
+            assertEquals("chat.example.com", provider.current.host)
+        }
+
+    @Test
+    fun stageMarksProviderLoadedSoLaterEnsureLoadedCannotRevertSelection() =
+        runTest {
+            val store = FakeStore(value = "https://stale.example.com")
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+
+            provider.stage("https://fresh.example.com")
+            provider.ensureLoaded()
+
+            assertEquals("fresh.example.com", provider.current.host)
+            // stage() loads the persisted endpoint first, so the store is read
+            // exactly once — by stage itself, not by the later ensureLoaded.
+            assertEquals(1, store.reads)
+        }
+
+    @Test
+    fun stageBeforeEnsureLoadedStillRevertsToTheStoredEndpoint() =
+        runTest {
+            val store = FakeStore(value = "https://saved.example.com")
+            val provider = ServerEndpointProvider(NetworkConfig.forDevelopment(), store)
+
+            // No ensureLoaded() call: stage must load storage itself so the
+            // revert target is the persisted address, not the compile-time seed.
+            provider.stage("https://typo.example.com")
+            provider.revertStaged()
+
+            assertEquals("saved.example.com", provider.current.host)
+            assertEquals("https://saved.example.com", store.value)
+            assertEquals(0, store.writes)
+        }
 
     @Test
     fun hostIsNormalizedToLowercase() {

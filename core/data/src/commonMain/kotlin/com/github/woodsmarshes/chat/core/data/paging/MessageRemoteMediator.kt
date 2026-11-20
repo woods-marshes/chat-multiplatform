@@ -42,7 +42,8 @@ class MessageRemoteMediator(
         expectedGeneration: Long,
         actualGeneration: Long,
     ) : IllegalStateException(
-            "Timeline window generation changed for $conversationId during history load (expected=$expectedGeneration, actual=$actualGeneration)",
+            "Timeline window generation changed for $conversationId during history load " +
+                "(expected=$expectedGeneration, actual=$actualGeneration)",
         )
 
     override suspend fun loadInSession(

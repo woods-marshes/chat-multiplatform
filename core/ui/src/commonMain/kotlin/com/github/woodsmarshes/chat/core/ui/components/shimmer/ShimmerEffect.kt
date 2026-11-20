@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
  * Shared animation clock so a whole skeleton list animates on one timeline
  * instead of spawning one [rememberInfiniteTransition] per skeleton bar.
  */
-class ShimmerClock(val progress: State<Float>)
+class ShimmerClock(
+    val progress: State<Float>,
+)
 
 /**
  * Provided by list-level skeletons ([ListSkeleton]); individual skeleton bars
@@ -41,15 +43,17 @@ val LocalShimmerClock = staticCompositionLocalOf<ShimmerClock?> { null }
 @Composable
 fun rememberShimmerClock(): ShimmerClock {
     val transition = rememberInfiniteTransition(label = "shimmer")
-    val progress = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1300, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "shimmerProgress",
-    )
+    val progress =
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 1300, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "shimmerProgress",
+        )
     return remember { ShimmerClock(progress) }
 }
 
@@ -73,33 +77,36 @@ fun Modifier.shimmer(
     // Remembered: the default list is rebuilt on every call, so a bare
     // `colors ?: listOf(...)` would invalidate the brush's remember key each
     // recomposition and rebuild the gradient.
-    val shimmerColors = remember(colors, colorScheme) {
-        colors ?: listOf(
-            colorScheme.surfaceContainerHighest.copy(alpha = 0.45f),
-            colorScheme.surfaceContainerLow.copy(alpha = 0.9f),
-            colorScheme.surfaceContainerHighest.copy(alpha = 0.45f),
-        )
-    }
+    val shimmerColors =
+        remember(colors, colorScheme) {
+            colors ?: listOf(
+                colorScheme.surfaceContainerHighest.copy(alpha = 0.45f),
+                colorScheme.surfaceContainerLow.copy(alpha = 0.9f),
+                colorScheme.surfaceContainerHighest.copy(alpha = 0.45f),
+            )
+        }
     val density = LocalDensity.current
     val cornerPx = with(density) { cornerRadius.toPx() }
     val gradientLengthPx = with(density) { 320.dp.toPx() }
-    val brush = remember(shimmerColors, gradientLengthPx) {
-        Brush.linearGradient(
-            colors = shimmerColors,
-            start = Offset.Zero,
-            end = Offset(gradientLengthPx, 0f),
-        )
-    }
-    return drawWithCache {
-        val totalDistance = size.width + gradientLengthPx
-        val outline = Path().apply {
-            addRoundRect(
-                RoundRect(
-                    rect = Rect(Offset.Zero, size),
-                    cornerRadius = CornerRadius(cornerPx, cornerPx),
-                )
+    val brush =
+        remember(shimmerColors, gradientLengthPx) {
+            Brush.linearGradient(
+                colors = shimmerColors,
+                start = Offset.Zero,
+                end = Offset(gradientLengthPx, 0f),
             )
         }
+    return drawWithCache {
+        val totalDistance = size.width + gradientLengthPx
+        val outline =
+            Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        rect = Rect(Offset.Zero, size),
+                        cornerRadius = CornerRadius(cornerPx, cornerPx),
+                    ),
+                )
+            }
         onDrawWithContent {
             val currentProgress = resolvedClock.progress.value
             val startX = -gradientLengthPx + totalDistance * currentProgress

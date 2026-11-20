@@ -27,18 +27,20 @@ internal fun CompactNavigationLayout(
 ) {
     val visibility by animateFloatAsState(
         targetValue = if (showNavigation) 1f else 0f,
-        animationSpec = tween(AppMotion.PageMillis),
+        animationSpec = tween(AppMotion.PAGE_MILLIS),
         label = "CompactNavigationVisibility",
     )
     SubcomposeLayout(modifier.fillMaxSize()) { constraints ->
-        val navigationPlaceable = subcompose(CompactSlot.Navigation) {
-            Box(Modifier.then(if (showNavigation) Modifier else Modifier.semantics { hideFromAccessibility() })) {
-                navigation()
-            }
-        }.single().measure(constraints.copy(minHeight = 0))
-        val contentPlaceable = subcompose(CompactSlot.Content) {
-            content(navigationPlaceable.height.toDp())
-        }.single().measure(Constraints.fixed(constraints.maxWidth, constraints.maxHeight))
+        val navigationPlaceable =
+            subcompose(CompactSlot.Navigation) {
+                Box(Modifier.then(if (showNavigation) Modifier else Modifier.semantics { hideFromAccessibility() })) {
+                    navigation()
+                }
+            }.single().measure(constraints.copy(minHeight = 0))
+        val contentPlaceable =
+            subcompose(CompactSlot.Content) {
+                content(navigationPlaceable.height.toDp())
+            }.single().measure(Constraints.fixed(constraints.maxWidth, constraints.maxHeight))
         layout(constraints.maxWidth, constraints.maxHeight) {
             contentPlaceable.placeRelative(0, 0)
             if (visibility > 0f) {
@@ -51,5 +53,8 @@ internal fun CompactNavigationLayout(
     }
 }
 
-internal fun compactBarTop(containerHeight: Int, barHeight: Int, visibility: Float): Int =
-    containerHeight - (barHeight * visibility.coerceIn(0f, 1f)).roundToInt()
+internal fun compactBarTop(
+    containerHeight: Int,
+    barHeight: Int,
+    visibility: Float,
+): Int = containerHeight - (barHeight * visibility.coerceIn(0f, 1f)).roundToInt()

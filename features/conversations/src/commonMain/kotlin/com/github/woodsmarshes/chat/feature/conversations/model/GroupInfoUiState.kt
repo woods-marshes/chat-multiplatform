@@ -38,15 +38,12 @@ data class GroupInfoUiState(
     val actionError: String? = null,
     val actionMessage: String? = null,
     val isJoining: Boolean = false,
-
     // Join application dialog (when joinApprovalRequired == true)
     val showJoinDialog: Boolean = false,
     val joinMessage: String = "",
-
     // Personal in-group nickname dialog
     val showEditNicknameDialog: Boolean = false,
     val editNicknameValue: String = "",
-
     // OWNER: Edit group profile dialog
     val showEditGroupDialog: Boolean = false,
     val editGroupName: String = "",
@@ -55,27 +52,22 @@ data class GroupInfoUiState(
     val isHandleAvailable: Boolean? = null,
     val editGroupDescription: String = "",
     val isSavingGroup: Boolean = false,
-
     // OWNER / ADMIN: Pending join requests
     val pendingJoinRequests: List<GroupJoinRequest> = emptyList(),
     val requestUsers: Map<Uuid, User> = emptyMap(),
     val showJoinRequestsSheet: Boolean = false,
     // While an approve/reject call is in flight; buttons stay disabled.
     val isHandlingJoinRequest: Boolean = false,
-
     // Invite friends sheet
     val showInviteSheet: Boolean = false,
     val invitableFriends: List<ContactUiModel> = emptyList(),
     val selectedInviteIds: Set<Uuid> = emptySet(),
     val isInviting: Boolean = false,
-
     // OWNER: Transfer ownership sheet
     val showTransferOwnerSheet: Boolean = false,
     // Two-step confirm: the member picked for transfer, before confirmation.
     val pendingTransferTarget: SenderUser? = null,
-
     // Confirm dialogs
     val showLeaveConfirmDialog: Boolean = false,
     val showDissolveConfirmDialog: Boolean = false,
 )
-

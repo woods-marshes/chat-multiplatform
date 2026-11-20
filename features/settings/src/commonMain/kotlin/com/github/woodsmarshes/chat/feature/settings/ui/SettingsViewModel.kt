@@ -16,15 +16,15 @@ import com.github.woodsmarshes.chat.core.model.UserPreference
 import com.github.woodsmarshes.chat.core.ui.resources.getLocaleStrings
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsUiState
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -32,7 +32,6 @@ class SettingsViewModel(
     private val userRepository: UserRepository,
     private val userSettingDataSource: UserSettingDataSource,
 ) : ViewModel() {
-
     private val log = KotlinLogging.logger {}
     private val strings = getLocaleStrings()
 
@@ -47,6 +46,7 @@ class SettingsViewModel(
     private var privacyWriter: Job? = null
     private val preferenceMutex = Mutex()
     private var hasInitializedProfileForm = false
+
     // Last preference snapshot actually persisted; the revert path mirrors it
     // back into the UI when a write is rejected.
     private var confirmedPreference: UserPreference? = null
@@ -72,8 +72,9 @@ class SettingsViewModel(
                     _uiState.update { state ->
                         val name = user.displayName.orEmpty()
                         val userBio = user.bio.orEmpty()
-                        val shouldSyncForm = !hasInitializedProfileForm ||
-                            (state.editDisplayName == state.displayName && state.editBio == state.bio)
+                        val shouldSyncForm =
+                            !hasInitializedProfileForm ||
+                                (state.editDisplayName == state.displayName && state.editBio == state.bio)
                         hasInitializedProfileForm = true
                         state.copy(
                             userId = user.id.toString(),
@@ -156,29 +157,30 @@ class SettingsViewModel(
                     profileError = null,
                 )
             }
-            userRepository.updateMyProfile(
-                displayName = newDisplayName,
-                bio = newBio,
-            ).onOk { updatedUser ->
-                _uiState.update {
-                    it.copy(
-                        isSavingProfile = false,
-                        displayName = updatedUser.displayName.orEmpty(),
-                        bio = updatedUser.bio.orEmpty(),
-                        editDisplayName = updatedUser.displayName.orEmpty(),
-                        editBio = updatedUser.bio.orEmpty(),
-                        profileMessage = strings.profileSaved,
-                    )
+            userRepository
+                .updateMyProfile(
+                    displayName = newDisplayName,
+                    bio = newBio,
+                ).onOk { updatedUser ->
+                    _uiState.update {
+                        it.copy(
+                            isSavingProfile = false,
+                            displayName = updatedUser.displayName.orEmpty(),
+                            bio = updatedUser.bio.orEmpty(),
+                            editDisplayName = updatedUser.displayName.orEmpty(),
+                            editBio = updatedUser.bio.orEmpty(),
+                            profileMessage = strings.profileSaved,
+                        )
+                    }
+                }.onErr { err ->
+                    log.error { "[SettingsVM] updateMyProfile failed: $err" }
+                    _uiState.update {
+                        it.copy(
+                            isSavingProfile = false,
+                            profileError = strings.profileSaveFailed,
+                        )
+                    }
                 }
-            }.onErr { err ->
-                log.error { "[SettingsVM] updateMyProfile failed: $err" }
-                _uiState.update {
-                    it.copy(
-                        isSavingProfile = false,
-                        profileError = strings.profileSaveFailed,
-                    )
-                }
-            }
         }
     }
 
@@ -192,23 +194,25 @@ class SettingsViewModel(
                     profileError = null,
                 )
             }
-            userRepository.uploadMyAvatar(bytes).onOk { url ->
-                _uiState.update {
-                    it.copy(
-                        isUploadingAvatar = false,
-                        avatarUrl = url,
-                        profileMessage = strings.avatarUploadSuccess,
-                    )
+            userRepository
+                .uploadMyAvatar(bytes)
+                .onOk { url ->
+                    _uiState.update {
+                        it.copy(
+                            isUploadingAvatar = false,
+                            avatarUrl = url,
+                            profileMessage = strings.avatarUploadSuccess,
+                        )
+                    }
+                }.onErr { err ->
+                    log.error { "[SettingsVM] uploadMyAvatar failed: $err" }
+                    _uiState.update {
+                        it.copy(
+                            isUploadingAvatar = false,
+                            profileError = strings.avatarUploadFailed,
+                        )
+                    }
                 }
-            }.onErr { err ->
-                log.error { "[SettingsVM] uploadMyAvatar failed: $err" }
-                _uiState.update {
-                    it.copy(
-                        isUploadingAvatar = false,
-                        profileError = strings.avatarUploadFailed,
-                    )
-                }
-            }
         }
     }
 
@@ -242,11 +246,9 @@ class SettingsViewModel(
 
     fun setAllowStrangerChat(allow: Boolean) = persistPrivacy(privacy.copy(allowStrangerChat = allow))
 
-    fun setFriendRequestPolicy(policy: FriendRequestPolicy) =
-        persistPrivacy(privacy.copy(friendRequestPolicy = policy))
+    fun setFriendRequestPolicy(policy: FriendRequestPolicy) = persistPrivacy(privacy.copy(friendRequestPolicy = policy))
 
-    fun setProfileVisibility(visibility: ProfileVisibility) =
-        persistPrivacy(privacy.copy(profileVisibility = visibility))
+    fun setProfileVisibility(visibility: ProfileVisibility) = persistPrivacy(privacy.copy(profileVisibility = visibility))
 
     private fun renderPrivacy(value: PrivacySetting) {
         _uiState.update {
@@ -266,52 +268,58 @@ class SettingsViewModel(
         privacyRevision++
         renderPrivacy(next)
         if (privacyWriter?.isActive == true) return
-        privacyWriter = viewModelScope.launch {
-            while (true) {
-                val revision = privacyRevision
-                val requested = privacy
-                userRepository.updateGlobalSettings(privacy = requested)
-                    .onOk { success ->
-                        if (success) confirmedPrivacy = requested
-                        else if (revision == privacyRevision) {
-                            privacy = confirmedPrivacy
-                            renderPrivacy(privacy)
+        privacyWriter =
+            viewModelScope.launch {
+                while (true) {
+                    val revision = privacyRevision
+                    val requested = privacy
+                    userRepository
+                        .updateGlobalSettings(privacy = requested)
+                        .onOk { success ->
+                            if (success) {
+                                confirmedPrivacy = requested
+                            } else if (revision == privacyRevision) {
+                                privacy = confirmedPrivacy
+                                renderPrivacy(privacy)
+                            }
+                        }.onErr { error ->
+                            log.error { "[SettingsVM] privacy update failed: $error" }
+                            if (revision == privacyRevision) {
+                                privacy = confirmedPrivacy
+                                renderPrivacy(privacy)
+                            }
                         }
-                    }
-                    .onErr { error ->
-                        log.error { "[SettingsVM] privacy update failed: $error" }
-                        if (revision == privacyRevision) {
-                            privacy = confirmedPrivacy
-                            renderPrivacy(privacy)
-                        }
-                    }
-                if (revision == privacyRevision) break
+                    if (revision == privacyRevision) break
+                }
             }
-        }
     }
 
     private fun saveThemePreference() {
         val state = _uiState.value
         viewModelScope.launch {
-            val success = try {
-                val identity = preferenceIdentity.await()
-                preferenceMutex.withLock {
-                    userSettingDataSource.updateGlobalSettingsIfCurrent(
-                        expected = identity,
-                        privacy = null,
-                        updatedAt = kotlin.time.Clock.System.now(),
-                        preference = UserPreference(
-                            themeBrand = state.themeBrand,
-                            darkThemeConfig = state.darkThemeConfig,
-                            notificationSound = state.notificationSound,
+            val success =
+                try {
+                    val identity = preferenceIdentity.await()
+                    preferenceMutex.withLock {
+                        userSettingDataSource.updateGlobalSettingsIfCurrent(
+                            expected = identity,
+                            privacy = null,
+                            updatedAt =
+                                kotlin.time.Clock.System
+                                    .now(),
+                            preference =
+                                UserPreference(
+                                    themeBrand = state.themeBrand,
+                                    darkThemeConfig = state.darkThemeConfig,
+                                    notificationSound = state.notificationSound,
+                                ),
                         )
-                    )
+                    }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    log.error(e) { "[SettingsVM] preference write failed" }
+                    false
                 }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                log.error(e) { "[SettingsVM] preference write failed" }
-                false
-            }
             if (!success) {
                 // The write never landed: mirror the last persisted preference
                 // back into the UI so a flipped toggle is not shown as saved.

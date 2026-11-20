@@ -16,25 +16,30 @@ import kotlin.test.assertIs
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatInitialPagingStateTest {
     @Test
-    fun waitingForIdentityIsLoadingAndRealEmptyResultRemainsEmpty() = runTest {
-        val presenter = object : PagingDataPresenter<MessageUiModel>(UnconfinedTestDispatcher(testScheduler)) {
-            override suspend fun presentPagingDataEvent(event: PagingDataEvent<MessageUiModel>) = Unit
+    fun waitingForIdentityIsLoadingAndRealEmptyResultRemainsEmpty() =
+        runTest {
+            val presenter =
+                object : PagingDataPresenter<MessageUiModel>(UnconfinedTestDispatcher(testScheduler)) {
+                    override suspend fun presentPagingDataEvent(event: PagingDataEvent<MessageUiModel>) = Unit
+                }
+            presenter.collectFrom(pendingMessagePage())
+            assertEquals(0, presenter.snapshot().size)
+            assertIs<LoadState.Loading>(presenter.loadStateFlow.value?.refresh)
+
+            presenter.collectFrom(
+                PagingData.empty(
+                    sourceLoadStates =
+                        LoadStates(
+                            refresh = LoadState.NotLoading(false),
+                            prepend = LoadState.NotLoading(true),
+                            append = LoadState.NotLoading(true),
+                        ),
+                ),
+            )
+            assertEquals(0, presenter.snapshot().size)
+            assertIs<LoadState.NotLoading>(presenter.loadStateFlow.value?.refresh)
+
+            presenter.collectFrom(pendingMessagePage())
+            assertIs<LoadState.Loading>(presenter.loadStateFlow.value?.refresh)
         }
-        presenter.collectFrom(pendingMessagePage())
-        assertEquals(0, presenter.snapshot().size)
-        assertIs<LoadState.Loading>(presenter.loadStateFlow.value?.refresh)
-
-        presenter.collectFrom(PagingData.empty(
-            sourceLoadStates = LoadStates(
-                refresh = LoadState.NotLoading(false),
-                prepend = LoadState.NotLoading(true),
-                append = LoadState.NotLoading(true),
-            ),
-        ))
-        assertEquals(0, presenter.snapshot().size)
-        assertIs<LoadState.NotLoading>(presenter.loadStateFlow.value?.refresh)
-
-        presenter.collectFrom(pendingMessagePage())
-        assertIs<LoadState.Loading>(presenter.loadStateFlow.value?.refresh)
-    }
 }

@@ -1,22 +1,39 @@
 package com.github.woodsmarshes.chat.service
 
+import com.github.michaelbull.result.Err
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.coroutines.coroutineBinding
-import com.github.michaelbull.result.Err
-import com.github.woodsmarshes.chat.repository.ReadCursorUpdate
-import com.github.woodsmarshes.chat.repository.MessageRepository
-import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
-import com.github.woodsmarshes.chat.core.model.*
+import com.github.woodsmarshes.chat.core.model.AudioContent
+import com.github.woodsmarshes.chat.core.model.ContactStatus
+import com.github.woodsmarshes.chat.core.model.ConversationParticipant
+import com.github.woodsmarshes.chat.core.model.ConversationRole
+import com.github.woodsmarshes.chat.core.model.ConversationType
+import com.github.woodsmarshes.chat.core.model.FileContent
+import com.github.woodsmarshes.chat.core.model.ImageContent
+import com.github.woodsmarshes.chat.core.model.MediaContent
+import com.github.woodsmarshes.chat.core.model.Message
+import com.github.woodsmarshes.chat.core.model.MessageCategory
+import com.github.woodsmarshes.chat.core.model.MessageContent
+import com.github.woodsmarshes.chat.core.model.MessageRenderType
+import com.github.woodsmarshes.chat.core.model.MessageSenderContext
+import com.github.woodsmarshes.chat.core.model.SimpleUser
+import com.github.woodsmarshes.chat.core.model.System
+import com.github.woodsmarshes.chat.core.model.TextContent
+import com.github.woodsmarshes.chat.core.model.User
+import com.github.woodsmarshes.chat.core.model.VideoContent
 import com.github.woodsmarshes.chat.core.model.error.MessageError
 import com.github.woodsmarshes.chat.events.EventBus
 import com.github.woodsmarshes.chat.events.MessageEvent
 import com.github.woodsmarshes.chat.exceptions.AppException
 import com.github.woodsmarshes.chat.repository.ContactRepository
+import com.github.woodsmarshes.chat.repository.ConversationParticipantRepository
 import com.github.woodsmarshes.chat.repository.GroupProfileRepository
+import com.github.woodsmarshes.chat.repository.MessageRepository
+import com.github.woodsmarshes.chat.repository.ReadCursorUpdate
 import com.github.woodsmarshes.chat.repository.UserSettingRepository
 import com.github.woodsmarshes.chat.repository.sanitizedForBroadcast
-import kotlin.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class MessageService(
@@ -28,7 +45,6 @@ class MessageService(
     private val eventBus: EventBus,
     private val attachments: AttachmentLifecycle,
 ) {
-    
     /**
      * 发送消息
      */
@@ -38,204 +54,229 @@ class MessageService(
         content: MessageContent,
         replyToMessageId: Uuid? = null,
         requestId: String,
-    ): Result<Message, MessageError> = coroutineBinding {
-        // 检查用户是否在会话中
-        val ( participant, user, conversation ) = conversationParticipantRepository.getParticipantContext(
-            userId = userId,
-            conversationId = conversationId,
-        )  ?: Err(MessageError.NotParticipant).bind()
-
-        if (conversation.deletedAt != null) {
-            Err(MessageError.ConversationDeleted).bind()
-        }
-
-        when (conversation.type) {
-            ConversationType.GROUP -> {
-                participant.mutedUntil?.let {
-                    if (it > Clock.System.now()) Err(MessageError.ConversationMuted).bind()
-                }
-                groupProfileRepository.getGroupProfile(conversationId)?.settings?.muteAll?.let {
-                    if (it) Err(MessageError.ConversationMuted).bind()
-                }
-            }
-            ConversationType.PRIVATE -> {
-                val contacts = contactRepository.getContactPairByConversation(
+    ): Result<Message, MessageError> =
+        coroutineBinding {
+            // 检查用户是否在会话中
+            val (participant, user, conversation) =
+                conversationParticipantRepository.getParticipantContext(
                     userId = userId,
                     conversationId = conversationId,
-                )
+                ) ?: Err(MessageError.NotParticipant).bind()
 
-                // 检查是否被拉黑
-                if (contacts?.let { (c1, c2) ->
-                        c1.status == ContactStatus.BLOCKED || c2.status == ContactStatus.BLOCKED
-                    } == true) {
-                    Err(MessageError.UserBlocked).bind()
-                }
-                // 如果不是好友，双方都需要允许陌生人聊天
-                if (contacts == null || contacts.let { (c1, c2) ->
-                        c1.status == ContactStatus.DELETED || c2.status == ContactStatus.DELETED
-                    }) {
-                    userSettingRepository.getSettings(userId)?.privacy?.allowStrangerChat?.let {
-                        if (!it) Err(MessageError.StrangerChatDenied).bind()
+            if (conversation.deletedAt != null) {
+                Err(MessageError.ConversationDeleted).bind()
+            }
+
+            when (conversation.type) {
+                ConversationType.GROUP -> {
+                    participant.mutedUntil?.let {
+                        if (it > Clock.System.now()) Err(MessageError.ConversationMuted).bind()
                     }
-                    val peerId = conversationParticipantRepository
-                        .getPrivateConversationOtherParticipantsWithUser(userId, conversationId)
-                        ?.second
-                        ?.id
-                        ?: Err(MessageError.ConversationNotFound).bind()
-                    userSettingRepository.getSettings(peerId)?.privacy?.allowStrangerChat?.let {
-                        if (!it) Err(MessageError.StrangerChatDenied).bind()
+                    groupProfileRepository.getGroupProfile(conversationId)?.settings?.muteAll?.let {
+                        if (it) Err(MessageError.ConversationMuted).bind()
+                    }
+                }
+
+                ConversationType.PRIVATE -> {
+                    val contacts =
+                        contactRepository.getContactPairByConversation(
+                            userId = userId,
+                            conversationId = conversationId,
+                        )
+
+                    // 检查是否被拉黑
+                    if (contacts?.let { (c1, c2) ->
+                            c1.status == ContactStatus.BLOCKED || c2.status == ContactStatus.BLOCKED
+                        } == true
+                    ) {
+                        Err(MessageError.UserBlocked).bind()
+                    }
+                    // 如果不是好友，双方都需要允许陌生人聊天
+                    if (contacts == null ||
+                        contacts.let { (c1, c2) ->
+                            c1.status == ContactStatus.DELETED || c2.status == ContactStatus.DELETED
+                        }
+                    ) {
+                        userSettingRepository.getSettings(userId)?.privacy?.allowStrangerChat?.let {
+                            if (!it) Err(MessageError.StrangerChatDenied).bind()
+                        }
+                        val peerId =
+                            conversationParticipantRepository
+                                .getPrivateConversationOtherParticipantsWithUser(userId, conversationId)
+                                ?.second
+                                ?.id
+                                ?: Err(MessageError.ConversationNotFound).bind()
+                        userSettingRepository.getSettings(peerId)?.privacy?.allowStrangerChat?.let {
+                            if (!it) Err(MessageError.StrangerChatDenied).bind()
+                        }
                     }
                 }
             }
-        }
-        val parsedRequestId = Uuid.parseOrNull(requestId)
-            ?: Err(MessageError.InvalidContent).bind()
-        if (content is System) {
-            // System events are server-authored; accepting them from a client
-            // would let anyone forge audit entries such as "X joined".
-            Err(MessageError.InvalidContent).bind()
-        }
-
-        // Idempotency has to run before the temporary upload is consumed: an
-        // outbox resend of a media message would otherwise be rejected with
-        // MediaExpired, because the first attempt already confirmed the upload.
-        val persisted = messageRepository.findMessageByRequestId(
-            requestId = parsedRequestId,
-            conversationId = conversationId,
-            senderId = userId,
-        )
-        if (persisted != null) {
-            if (!isIdempotentPayloadMatch(persisted, content, replyToMessageId)) {
+            val parsedRequestId =
+                Uuid.parseOrNull(requestId)
+                    ?: Err(MessageError.InvalidContent).bind()
+            if (content is System) {
+                // System events are server-authored; accepting them from a client
+                // would let anyone forge audit entries such as "X joined".
                 Err(MessageError.InvalidContent).bind()
             }
-            return@coroutineBinding persisted.withSenderContext(user, participant)
-        }
 
-        val privateFileName = (content as? FileContent)
-            ?.url
-            ?.takeIf { it.startsWith( com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX) }
-            ?.substringAfterLast('/')
-
-        val persistBlock: suspend () -> Message = {
-            val trustedContent = if (content is MediaContent) {
-                attachments.resolveTrustedMedia(content, userId)
-                    ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
-            } else {
-                content
+            // Idempotency has to run before the temporary upload is consumed: an
+            // outbox resend of a media message would otherwise be rejected with
+            // MediaExpired, because the first attempt already confirmed the upload.
+            val persisted =
+                messageRepository.findMessageByRequestId(
+                    requestId = parsedRequestId,
+                    conversationId = conversationId,
+                    senderId = userId,
+                )
+            if (persisted != null) {
+                if (!isIdempotentPayloadMatch(persisted, content, replyToMessageId)) {
+                    Err(MessageError.InvalidContent).bind()
+                }
+                return@coroutineBinding persisted.withSenderContext(user, participant)
             }
-            val inserted = messageRepository.insertMessage(
-                conversationId = conversationId,
-                senderId = userId,
-                content = trustedContent,
-                category = MessageCategory.NORMAL,
-                renderType = determineRenderType(trustedContent),
-                replyToMessageId = replyToMessageId,
-                requestId = parsedRequestId
-            ) ?: Err(MessageError.OperationFailed).bind()
 
-            if (!inserted.second) {
-                // A concurrent duplicate won the race: return its row and leave
-                // the single broadcast to the winner.
-                inserted.first.withSenderContext(user, participant)
-            } else {
-                val message = inserted.first.withSenderContext(user, participant)
-                eventBus.publishMessageEvent(
-                    MessageEvent.SendMessage(
-                        message = message,
+            val privateFileName =
+                (content as? FileContent)
+                    ?.url
+                    ?.takeIf { it.startsWith(com.github.woodsmarshes.chat.utils.PRIVATE_FILE_URL_PREFIX) }
+                    ?.substringAfterLast('/')
+
+            val persistBlock: suspend () -> Message = {
+                val trustedContent =
+                    if (content is MediaContent) {
+                        attachments.resolveTrustedMedia(content, userId)
+                            ?: Err(MessageError.MediaExpired).bind() // 如果找不到，说明 URL 无效或文件已过期
+                    } else {
+                        content
+                    }
+                val inserted =
+                    messageRepository.insertMessage(
                         conversationId = conversationId,
                         senderId = userId,
-                        timestamp = Clock.System.now(),
-                        requestId = requestId,
-                    )
-                )
-                message
-            }
-        }
+                        content = trustedContent,
+                        category = MessageCategory.NORMAL,
+                        renderType = determineRenderType(trustedContent),
+                        replyToMessageId = replyToMessageId,
+                        requestId = parsedRequestId,
+                    ) ?: Err(MessageError.OperationFailed).bind()
 
-        try {
-            if (privateFileName != null) {
-                attachments.withAttachmentLock(privateFileName) {
+                if (!inserted.second) {
+                    // A concurrent duplicate won the race: return its row and leave
+                    // the single broadcast to the winner.
+                    inserted.first.withSenderContext(user, participant)
+                } else {
+                    val message = inserted.first.withSenderContext(user, participant)
+                    eventBus.publishMessageEvent(
+                        MessageEvent.SendMessage(
+                            message = message,
+                            conversationId = conversationId,
+                            senderId = userId,
+                            timestamp = Clock.System.now(),
+                            requestId = requestId,
+                        ),
+                    )
+                    message
+                }
+            }
+
+            try {
+                if (privateFileName != null) {
+                    attachments.withAttachmentLock(privateFileName) {
+                        persistBlock()
+                    }
+                } else {
                     persistBlock()
                 }
-            } else {
-                persistBlock()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AppException) {
+                // The repository translates constraint failures into domain
+                // errors at the SQL boundary; surface them as ordinary Errs.
+                Err(e.error as? MessageError ?: MessageError.OperationFailed).bind()
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: AppException) {
-            // The repository translates constraint failures into domain
-            // errors at the SQL boundary; surface them as ordinary Errs.
-            Err(e.error as? MessageError ?: MessageError.OperationFailed).bind()
         }
-    }
 
     /**
      * 撤回消息
      */
-    suspend fun withdrawMessage(userId: Uuid, messageId: Uuid): Result<Message, MessageError> = coroutineBinding {
-        val (messageContext, participant, conversation) = messageRepository.getMessageRevokeContext(userId, messageId)
-            ?: Err(MessageError.MessageNotFound).bind()
+    suspend fun withdrawMessage(
+        userId: Uuid,
+        messageId: Uuid,
+    ): Result<Message, MessageError> =
+        coroutineBinding {
+            val (messageContext, participant, conversation) =
+                messageRepository.getMessageRevokeContext(userId, messageId)
+                    ?: Err(MessageError.MessageNotFound).bind()
 
-        val (senderId, message) = messageContext
+            val (senderId, message) = messageContext
 
-        val canRevoke = senderId == userId ||
-                participant.role in setOf(ConversationRole.ADMIN, ConversationRole.OWNER)
+            val canRevoke =
+                senderId == userId ||
+                    participant.role in setOf(ConversationRole.ADMIN, ConversationRole.OWNER)
 
-        if (!canRevoke) {
-            Err(MessageError.PermissionDenied).bind()
-        }
+            if (!canRevoke) {
+                Err(MessageError.PermissionDenied).bind()
+            }
 
-        val revoked = messageRepository.revokeMessage(messageId)
-        if (!revoked && message.revokedAt == null) {
-            // Failing on a live message is a real error; failing on an
-            // already-revoked one is a retried request and must succeed.
-            Err(MessageError.RevokeFailed).bind()
-        }
+            val revoked = messageRepository.revokeMessage(messageId)
+            if (!revoked && message.revokedAt == null) {
+                // Failing on a live message is a real error; failing on an
+                // already-revoked one is a retried request and must succeed.
+                Err(MessageError.RevokeFailed).bind()
+            }
 
-        attachments.gcAfterWithdraw(message)
+            attachments.gcAfterWithdraw(message)
 
-        // 发布撤回事件
-        eventBus.publishMessageEvent(
-            MessageEvent.WithdrawMessage(
-                messageId = messageId,
-                conversationId = conversation.id,
-                senderId = userId,
-                timestamp = Clock.System.now()
+            // 发布撤回事件
+            eventBus.publishMessageEvent(
+                MessageEvent.WithdrawMessage(
+                    messageId = messageId,
+                    conversationId = conversation.id,
+                    senderId = userId,
+                    timestamp = Clock.System.now(),
+                ),
             )
-        )
 
-        message.copy(
-            content = TextContent("Message withdrawn"),
-            category = MessageCategory.SYSTEM
-        )
-    }
+            message.copy(
+                content = TextContent("Message withdrawn"),
+                category = MessageCategory.SYSTEM,
+            )
+        }
 
     /**
      * 根据ID获取消息
      */
-    suspend fun getMessageById(messageId: Uuid, userId: Uuid): Result<Message, MessageError> = coroutineBinding {
-        val message = messageRepository.getMessageById(messageId)
-            ?: Err(MessageError.MessageNotFound).bind()
+    suspend fun getMessageById(
+        messageId: Uuid,
+        userId: Uuid,
+    ): Result<Message, MessageError> =
+        coroutineBinding {
+            val message =
+                messageRepository.getMessageById(messageId)
+                    ?: Err(MessageError.MessageNotFound).bind()
 
-        checkIfUserInConversation(conversationId = message.conversationId, userId = userId).bind()
+            checkIfUserInConversation(conversationId = message.conversationId, userId = userId).bind()
 
-        message
-    }
+            message
+        }
 
     suspend fun getHistory(
         userId: Uuid,
         conversationId: Uuid,
         limit: Int,
         beforeId: Uuid?,
-    ): Result<List<Message>, MessageError> = coroutineBinding {
-        checkIfUserInConversation(conversationId = conversationId, userId = userId).bind()
+    ): Result<List<Message>, MessageError> =
+        coroutineBinding {
+            checkIfUserInConversation(conversationId = conversationId, userId = userId).bind()
 
-        messageRepository.getHistory(
-            conversationId = conversationId,
-            limit = limit,
-            beforeId = beforeId,
-        )
-    }
+            messageRepository.getHistory(
+                conversationId = conversationId,
+                limit = limit,
+                beforeId = beforeId,
+            )
+        }
 
     /**
      * 搜索消息（独立接口）
@@ -244,37 +285,50 @@ class MessageService(
         userId: Uuid,
         conversationId: Uuid,
         keyword: String,
-        limit: Int = 20
-    ): Result<List<Message>, MessageError> = coroutineBinding {
-        checkIfUserInConversation(conversationId = conversationId, userId = userId).bind()
+        limit: Int = 20,
+    ): Result<List<Message>, MessageError> =
+        coroutineBinding {
+            checkIfUserInConversation(conversationId = conversationId, userId = userId).bind()
 
-        messageRepository.searchMessages(conversationId, keyword, limit)
-    }
+            messageRepository.searchMessages(conversationId, keyword, limit)
+        }
 
     // 更新已读的消息
-    suspend fun markAsRead(conversationId: Uuid, userId: Uuid, messageId: Uuid): Result<Unit, MessageError> = coroutineBinding {
-        val result = conversationParticipantRepository.updateReadLastMessage(
-            userId = userId, conversationId = conversationId, messageId = messageId
-        )
-        if (result.outcome == ReadCursorUpdate.ADVANCED) {
-            // The unread comes from the same transaction as the cursor update,
-            // so the sync journal and this broadcast always carry one value.
-            val unreadCount = result.unreadCount.toInt()
-            eventBus.publishMessageEvent(
-                MessageEvent.ReadMessage(
-                    messageId = messageId,
+    suspend fun markAsRead(
+        conversationId: Uuid,
+        userId: Uuid,
+        messageId: Uuid,
+    ): Result<Unit, MessageError> =
+        coroutineBinding {
+            val result =
+                conversationParticipantRepository.updateReadLastMessage(
+                    userId = userId,
                     conversationId = conversationId,
-                    readerId = userId,
-                    unreadCount = unreadCount,
-                    timestamp = Clock.System.now()
+                    messageId = messageId,
                 )
-            )
-        } else if (result.outcome == ReadCursorUpdate.INVALID) {
-            Err(MessageError.MessageNotFound).bind()
+            if (result.outcome == ReadCursorUpdate.ADVANCED) {
+                // The unread comes from the same transaction as the cursor update,
+                // so the sync journal and this broadcast always carry one value.
+                val unreadCount = result.unreadCount.toInt()
+                eventBus.publishMessageEvent(
+                    MessageEvent.ReadMessage(
+                        messageId = messageId,
+                        conversationId = conversationId,
+                        readerId = userId,
+                        unreadCount = unreadCount,
+                        timestamp = Clock.System.now(),
+                    ),
+                )
+            } else if (result.outcome == ReadCursorUpdate.INVALID) {
+                Err(MessageError.MessageNotFound).bind()
+            }
         }
-    }
 
-    suspend fun onUserTyping(senderId: Uuid, conversationId: Uuid, isTyping: Boolean) {
+    suspend fun onUserTyping(
+        senderId: Uuid,
+        conversationId: Uuid,
+        isTyping: Boolean,
+    ) {
         // Membership guard: otherwise any authenticated user could spoof
         // typing indicators into a conversation they do not belong to.
         if (conversationParticipantRepository.getConversationParticipant(senderId, conversationId) == null) {
@@ -285,17 +339,21 @@ class MessageService(
                 conversationId = conversationId,
                 userId = senderId,
                 isTyping = isTyping,
-                timestamp = Clock.System.now()
-            )
+                timestamp = Clock.System.now(),
+            ),
         )
     }
 
-    private suspend fun checkIfUserInConversation(conversationId: Uuid, userId: Uuid): Result<Unit, MessageError> = coroutineBinding {
-        val participant = conversationParticipantRepository.getConversationParticipant(userId = userId, conversationId = conversationId)
-        if (participant == null) {
-            Err(MessageError.NotParticipant).bind()
+    private suspend fun checkIfUserInConversation(
+        conversationId: Uuid,
+        userId: Uuid,
+    ): Result<Unit, MessageError> =
+        coroutineBinding {
+            val participant = conversationParticipantRepository.getConversationParticipant(userId = userId, conversationId = conversationId)
+            if (participant == null) {
+                Err(MessageError.NotParticipant).bind()
+            }
         }
-    }
 
     private fun isIdempotentPayloadMatch(
         persisted: Message,
@@ -303,47 +361,53 @@ class MessageService(
         requestedReplyToMessageId: Uuid?,
     ): Boolean {
         if (persisted.category != MessageCategory.NORMAL) return false
-        val replyMatches = persisted.replyTo?.id == requestedReplyToMessageId ||
-            (persisted.replyTo == null && requestedReplyToMessageId != null)
+        val replyMatches =
+            persisted.replyTo?.id == requestedReplyToMessageId ||
+                (persisted.replyTo == null && requestedReplyToMessageId != null)
         if (!replyMatches) return false
         if (persisted.revokedAt != null) return true
         return persisted.content == requestedContent ||
-            (persisted.content is MediaContent &&
-                requestedContent is MediaContent &&
-                (persisted.content as MediaContent).url == requestedContent.url &&
-                (persisted.content as MediaContent).fileName == requestedContent.fileName)
+            (
+                persisted.content is MediaContent &&
+                    requestedContent is MediaContent &&
+                    (persisted.content as MediaContent).url == requestedContent.url &&
+                    (persisted.content as MediaContent).fileName == requestedContent.fileName
+            )
     }
 
     private fun Message.withSenderContext(
         user: User,
         participant: ConversationParticipant,
-    ): Message = copy(
-        sender = SimpleUser(
-            id = user.id,
-            username = user.username,
-            displayName = participant.settings.nickname ?: user.displayName,
-            avatarUrl = user.avatarUrl,
-            createdAt = user.createdAt,
-            updatedAt = user.updatedAt,
-            deletedAt = user.deletedAt,
-            role = user.role
-        ),
-        senderContext = MessageSenderContext(
-            conversationRole = participant.role,
-            participantSettings = participant.settings.sanitizedForBroadcast(),
-            joinedAt = participant.joinedAt,
-            lastReadMessageId = null,
-            mutedUntil = participant.mutedUntil
+    ): Message =
+        copy(
+            sender =
+                SimpleUser(
+                    id = user.id,
+                    username = user.username,
+                    displayName = participant.settings.nickname ?: user.displayName,
+                    avatarUrl = user.avatarUrl,
+                    createdAt = user.createdAt,
+                    updatedAt = user.updatedAt,
+                    deletedAt = user.deletedAt,
+                    role = user.role,
+                ),
+            senderContext =
+                MessageSenderContext(
+                    conversationRole = participant.role,
+                    participantSettings = participant.settings.sanitizedForBroadcast(),
+                    joinedAt = participant.joinedAt,
+                    lastReadMessageId = null,
+                    mutedUntil = participant.mutedUntil,
+                ),
         )
-    )
 
-    private fun determineRenderType(content: MessageContent): MessageRenderType = when (content) {
-        is TextContent -> MessageRenderType.TEXT
-        is ImageContent -> MessageRenderType.IMAGE
-        is VideoContent -> MessageRenderType.VIDEO
-        is AudioContent -> MessageRenderType.AUDIO
-        is FileContent -> MessageRenderType.FILE
-        else -> MessageRenderType.OTHER
-    }
-
+    private fun determineRenderType(content: MessageContent): MessageRenderType =
+        when (content) {
+            is TextContent -> MessageRenderType.TEXT
+            is ImageContent -> MessageRenderType.IMAGE
+            is VideoContent -> MessageRenderType.VIDEO
+            is AudioContent -> MessageRenderType.AUDIO
+            is FileContent -> MessageRenderType.FILE
+            else -> MessageRenderType.OTHER
+        }
 }

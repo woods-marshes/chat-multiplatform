@@ -55,16 +55,22 @@ class ChatInitialContentTest {
 
     @Test
     fun capturedEntrySequenceNeverDisplaysEmpty() {
-        val sequence = listOf(
-            0 to states(aggregate = LoadState.Loading, source = LoadState.Loading, mediator = null),
-            0 to states(source = LoadState.Loading),
-            0 to states(aggregate = LoadState.Loading, source = LoadState.Loading, mediator = LoadState.Loading),
-            20 to states(aggregate = LoadState.Loading, mediator = LoadState.Loading),
-            20 to states(),
-        )
+        val sequence =
+            listOf(
+                0 to states(aggregate = LoadState.Loading, source = LoadState.Loading, mediator = null),
+                0 to states(source = LoadState.Loading),
+                0 to states(aggregate = LoadState.Loading, source = LoadState.Loading, mediator = LoadState.Loading),
+                20 to states(aggregate = LoadState.Loading, mediator = LoadState.Loading),
+                20 to states(),
+            )
         assertEquals(
-            listOf(ChatInitialContent.Loading, ChatInitialContent.Loading, ChatInitialContent.Loading,
-                ChatInitialContent.Messages, ChatInitialContent.Messages),
+            listOf(
+                ChatInitialContent.Loading,
+                ChatInitialContent.Loading,
+                ChatInitialContent.Loading,
+                ChatInitialContent.Messages,
+                ChatInitialContent.Messages,
+            ),
             sequence.map { (count, loadStates) -> chatInitialContent(count, loadStates) },
         )
     }

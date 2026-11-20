@@ -98,17 +98,22 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
-import com.github.woodsmarshes.chat.core.ui.components.motion.sharedSettingsProfileBounds
 import com.github.woodsmarshes.chat.core.ui.components.item.SectionHeader
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItem
 import com.github.woodsmarshes.chat.core.ui.components.item.SettingsItemWithSwitch
+import com.github.woodsmarshes.chat.core.ui.components.motion.sharedSettingsProfileBounds
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
 import com.github.woodsmarshes.chat.feature.settings.AppBuildInfo
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsUiState
+import com.github.woodsmarshes.chat.feature.settings.ui.detail.AboutSettingsContent
+import com.github.woodsmarshes.chat.feature.settings.ui.detail.AppearanceSettingsContent
+import com.github.woodsmarshes.chat.feature.settings.ui.detail.NotificationsPrivacySettingsContent
+import com.github.woodsmarshes.chat.feature.settings.ui.detail.OpenSourceLicensesContent
+import com.github.woodsmarshes.chat.feature.settings.ui.detail.ProfileEditContent
+import com.github.woodsmarshes.chat.feature.settings.ui.detail.RadioSettingRow
 import com.github.woodsmarshes.chat.features.settings.resources.Res
-import com.github.woodsmarshes.chat.resources.Res as CoreUiRes
 import com.github.woodsmarshes.chat.resources.app_icon
 import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 import com.mikepenz.aboutlibraries.ui.compose.produceLibraries
@@ -122,15 +127,10 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.github.woodsmarshes.chat.resources.Res as CoreUiRes
 import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
 import top.yukonga.miuix.kmp.basic.RadioButton as MiuixRadioButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.github.woodsmarshes.chat.feature.settings.ui.detail.ProfileEditContent
-import com.github.woodsmarshes.chat.feature.settings.ui.detail.AppearanceSettingsContent
-import com.github.woodsmarshes.chat.feature.settings.ui.detail.RadioSettingRow
-import com.github.woodsmarshes.chat.feature.settings.ui.detail.NotificationsPrivacySettingsContent
-import com.github.woodsmarshes.chat.feature.settings.ui.detail.AboutSettingsContent
-import com.github.woodsmarshes.chat.feature.settings.ui.detail.OpenSourceLicensesContent
 
 @Composable
 fun SettingsDetailScreen(
@@ -155,13 +155,14 @@ fun SettingsDetailScreen(
         }
     }
 
-    val title = when (category) {
-        SettingsCategory.PROFILE -> strings.editProfile
-        SettingsCategory.APPEARANCE -> strings.settingsCategoryAppearance
-        SettingsCategory.NOTIFICATIONS_PRIVACY -> strings.settingsCategoryNotifications
-        SettingsCategory.ABOUT -> strings.settingsCategoryAbout
-        SettingsCategory.LICENSES -> strings.openSourceLicenses
-    }
+    val title =
+        when (category) {
+            SettingsCategory.PROFILE -> strings.editProfile
+            SettingsCategory.APPEARANCE -> strings.settingsCategoryAppearance
+            SettingsCategory.NOTIFICATIONS_PRIVACY -> strings.settingsCategoryNotifications
+            SettingsCategory.ABOUT -> strings.settingsCategoryAbout
+            SettingsCategory.LICENSES -> strings.openSourceLicenses
+        }
 
     // Sub-pages (LICENSES under ABOUT, or PROFILE edit pushed from ProfileScreen)
     // always show a back button even in multi-pane mode so the user can pop back
@@ -180,41 +181,56 @@ fun SettingsDetailScreen(
         snackbarHost = { AppSnackbarHost(snackbarHostState) },
     ) { padding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .consumeWindowInsets(padding)
-                .padding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .consumeWindowInsets(padding)
+                    .padding(padding),
             contentAlignment = Alignment.TopCenter,
         ) {
             when (category) {
-                SettingsCategory.PROFILE -> ProfileEditContent(
-                    uiState = uiState,
-                    onDisplayNameChange = viewModel::onEditDisplayNameChange,
-                    onBioChange = viewModel::onEditBioChange,
-                    onSaveProfile = viewModel::saveProfile,
-                    onUploadAvatar = viewModel::uploadAvatar,
-                    onLogout = onLogout,
-                    snackbarHostState = snackbarHostState,
-                )
-                SettingsCategory.APPEARANCE -> AppearanceSettingsContent(
-                    uiState = uiState,
-                    onThemeBrandChange = viewModel::setThemeBrand,
-                    onDarkThemeConfigChange = viewModel::setDarkThemeConfig,
-                )
-                SettingsCategory.NOTIFICATIONS_PRIVACY -> NotificationsPrivacySettingsContent(
-                    uiState = uiState,
-                    onNotificationSoundChange = viewModel::setNotificationSound,
-                    onShowOnlineStatusChange = viewModel::setShowOnlineStatus,
-                    onAllowSearchChange = viewModel::setAllowSearch,
-                    onAllowStrangerChatChange = viewModel::setAllowStrangerChat,
-                    onFriendRequestPolicyChange = viewModel::setFriendRequestPolicy,
-                    onProfileVisibilityChange = viewModel::setProfileVisibility,
-                )
-                SettingsCategory.ABOUT -> AboutSettingsContent(
-                    onOpenLicenses = onOpenLicenses,
-                    snackbarHostState = snackbarHostState,
-                )
-                SettingsCategory.LICENSES -> OpenSourceLicensesContent()
+                SettingsCategory.PROFILE -> {
+                    ProfileEditContent(
+                        uiState = uiState,
+                        onDisplayNameChange = viewModel::onEditDisplayNameChange,
+                        onBioChange = viewModel::onEditBioChange,
+                        onSaveProfile = viewModel::saveProfile,
+                        onUploadAvatar = viewModel::uploadAvatar,
+                        onLogout = onLogout,
+                        snackbarHostState = snackbarHostState,
+                    )
+                }
+
+                SettingsCategory.APPEARANCE -> {
+                    AppearanceSettingsContent(
+                        uiState = uiState,
+                        onThemeBrandChange = viewModel::setThemeBrand,
+                        onDarkThemeConfigChange = viewModel::setDarkThemeConfig,
+                    )
+                }
+
+                SettingsCategory.NOTIFICATIONS_PRIVACY -> {
+                    NotificationsPrivacySettingsContent(
+                        uiState = uiState,
+                        onNotificationSoundChange = viewModel::setNotificationSound,
+                        onShowOnlineStatusChange = viewModel::setShowOnlineStatus,
+                        onAllowSearchChange = viewModel::setAllowSearch,
+                        onAllowStrangerChatChange = viewModel::setAllowStrangerChat,
+                        onFriendRequestPolicyChange = viewModel::setFriendRequestPolicy,
+                        onProfileVisibilityChange = viewModel::setProfileVisibility,
+                    )
+                }
+
+                SettingsCategory.ABOUT -> {
+                    AboutSettingsContent(
+                        onOpenLicenses = onOpenLicenses,
+                        snackbarHostState = snackbarHostState,
+                    )
+                }
+
+                SettingsCategory.LICENSES -> {
+                    OpenSourceLicensesContent()
+                }
             }
         }
     }

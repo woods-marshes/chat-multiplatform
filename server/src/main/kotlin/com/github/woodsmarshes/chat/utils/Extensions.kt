@@ -31,11 +31,11 @@ suspend fun <T> dbQuery(block: suspend () -> T): T =
  */
 suspend fun <T> inTransaction(block: suspend () -> T): T = dbQuery(block)
 
-
 fun ApplicationCall.extractUserId(): Uuid {
     val principal = this.principal<JWTPrincipal>()
-    val claim = principal?.getClaim(Keys.USER_ID, String::class)
-        ?: throw AuthenticationException("Invalid or missing User ID in Token")
+    val claim =
+        principal?.getClaim(Keys.USER_ID, String::class)
+            ?: throw AuthenticationException("Invalid or missing User ID in Token")
     return Uuid.parseOrNull(claim)
         ?: throw AuthenticationException("Invalid User ID in Token")
 }
@@ -45,6 +45,7 @@ fun ApplicationCall.extractUserIdFromWebSocket(): Uuid? {
     val idString = principal?.getClaim(Keys.USER_ID, String::class).toString()
     return Uuid.parseOrNull(idString)
 }
+
 /**
  * The auth_sessions id carried by the access token's session claim, used to
  * mark "this device" in session listings. Null for tokens issued before the

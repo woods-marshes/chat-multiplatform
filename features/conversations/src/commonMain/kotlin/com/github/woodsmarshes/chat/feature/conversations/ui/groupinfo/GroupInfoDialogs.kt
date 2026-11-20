@@ -39,7 +39,10 @@ import com.github.woodsmarshes.chat.feature.conversations.ui.GroupInfoViewModel
  */
 
 @Composable
-internal fun JoinMessageDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel) {
+internal fun JoinMessageDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+) {
     val strings = LocalStrings.current
     AppAlertDialog(
         show = uiState.showJoinDialog,
@@ -62,15 +65,19 @@ internal fun JoinMessageDialog(uiState: GroupInfoUiState, viewModel: GroupInfoVi
             text = "${uiState.joinMessage.length}/100",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .align(Alignment.End)
-                .padding(top = 4.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.End)
+                    .padding(top = 4.dp),
         )
     }
 }
 
 @Composable
-internal fun EditNicknameDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel) {
+internal fun EditNicknameDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+) {
     val strings = LocalStrings.current
     AppAlertDialog(
         show = uiState.showEditNicknameDialog,
@@ -93,12 +100,16 @@ internal fun EditNicknameDialog(uiState: GroupInfoUiState, viewModel: GroupInfoV
 }
 
 @Composable
-internal fun EditGroupDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel) {
+internal fun EditGroupDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+) {
     val strings = LocalStrings.current
-    val canSaveGroup = !uiState.isSavingGroup &&
-        uiState.editGroupName.isNotBlank() &&
-        !uiState.isCheckingHandle &&
-        (uiState.editGroupHandle.isBlank() || uiState.isHandleAvailable != false)
+    val canSaveGroup =
+        !uiState.isSavingGroup &&
+            uiState.editGroupName.isNotBlank() &&
+            !uiState.isCheckingHandle &&
+            (uiState.editGroupHandle.isBlank() || uiState.isHandleAvailable != false)
 
     AppAlertDialog(
         show = uiState.showEditGroupDialog,
@@ -128,20 +139,22 @@ internal fun EditGroupDialog(uiState: GroupInfoUiState, viewModel: GroupInfoView
             modifier = Modifier.fillMaxWidth(),
         )
         if (uiState.editGroupHandle.isNotBlank() && uiState.editGroupHandle != uiState.handle.orEmpty()) {
-            val statusText = when {
-                uiState.isCheckingHandle -> strings.groupHandleChecking
-                uiState.isHandleAvailable == true -> strings.groupHandleAvailable
-                else -> null
-            }
+            val statusText =
+                when {
+                    uiState.isCheckingHandle -> strings.groupHandleChecking
+                    uiState.isHandleAvailable == true -> strings.groupHandleAvailable
+                    else -> null
+                }
             if (statusText != null) {
                 Text(
                     text = statusText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (uiState.isHandleAvailable == true) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color =
+                        if (uiState.isHandleAvailable == true) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     modifier = Modifier.padding(top = 4.dp, start = 4.dp),
                 )
             }
@@ -158,7 +171,10 @@ internal fun EditGroupDialog(uiState: GroupInfoUiState, viewModel: GroupInfoView
 }
 
 @Composable
-internal fun JoinRequestsSheet(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel) {
+internal fun JoinRequestsSheet(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+) {
     val strings = LocalStrings.current
     AppModalBottomSheet(
         show = uiState.showJoinRequestsSheet,
@@ -174,17 +190,19 @@ internal fun JoinRequestsSheet(uiState: GroupInfoUiState, viewModel: GroupInfoVi
             )
         } else {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 uiState.pendingJoinRequests.forEach { req ->
                     val applicant = uiState.requestUsers[req.applicantId]
-                    val displayName = applicant?.displayName?.ifEmpty { null }
-                        ?: applicant?.username
-                        ?: req.applicantId.toString().take(8)
+                    val displayName =
+                        applicant?.displayName?.ifEmpty { null }
+                            ?: applicant?.username
+                            ?: req.applicantId.toString().take(8)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -233,7 +251,10 @@ internal fun JoinRequestsSheet(uiState: GroupInfoUiState, viewModel: GroupInfoVi
 }
 
 @Composable
-internal fun InviteFriendsDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel) {
+internal fun InviteFriendsDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+) {
     val strings = LocalStrings.current
     AppAlertDialog(
         show = uiState.showInviteSheet,
@@ -253,19 +274,21 @@ internal fun InviteFriendsDialog(uiState: GroupInfoUiState, viewModel: GroupInfo
             )
         } else {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
             ) {
                 uiState.invitableFriends.forEach { friend ->
                     val isSelected = friend.id in uiState.selectedInviteIds
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable { viewModel.toggleInviteSelection(friend.id) }
-                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { viewModel.toggleInviteSelection(friend.id) }
+                                .padding(vertical = 6.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         UserAvatar(
@@ -297,7 +320,10 @@ internal fun InviteFriendsDialog(uiState: GroupInfoUiState, viewModel: GroupInfo
 }
 
 @Composable
-internal fun TransferOwnershipDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel) {
+internal fun TransferOwnershipDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+) {
     val strings = LocalStrings.current
     AppAlertDialog(
         show = uiState.showTransferOwnerSheet,
@@ -317,9 +343,10 @@ internal fun TransferOwnershipDialog(uiState: GroupInfoUiState, viewModel: Group
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = strings.groupTransferConfirmFmt(
-                        transferTarget.displayName?.ifEmpty { null } ?: transferTarget.username
-                    ),
+                    text =
+                        strings.groupTransferConfirmFmt(
+                            transferTarget.displayName?.ifEmpty { null } ?: transferTarget.username,
+                        ),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -339,18 +366,20 @@ internal fun TransferOwnershipDialog(uiState: GroupInfoUiState, viewModel: Group
             }
         } else {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
             ) {
                 candidates.forEach { candidate ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable { viewModel.onTransferCandidateSelected(candidate) }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { viewModel.onTransferCandidateSelected(candidate) }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         UserAvatar(
@@ -378,7 +407,11 @@ internal fun TransferOwnershipDialog(uiState: GroupInfoUiState, viewModel: Group
 }
 
 @Composable
-internal fun LeaveGroupDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel, onBack: () -> Unit) {
+internal fun LeaveGroupDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+    onBack: () -> Unit,
+) {
     val strings = LocalStrings.current
     AppAlertDialog(
         show = uiState.showLeaveConfirmDialog,
@@ -394,7 +427,11 @@ internal fun LeaveGroupDialog(uiState: GroupInfoUiState, viewModel: GroupInfoVie
 }
 
 @Composable
-internal fun DissolveGroupDialog(uiState: GroupInfoUiState, viewModel: GroupInfoViewModel, onBack: () -> Unit) {
+internal fun DissolveGroupDialog(
+    uiState: GroupInfoUiState,
+    viewModel: GroupInfoViewModel,
+    onBack: () -> Unit,
+) {
     val strings = LocalStrings.current
     AppAlertDialog(
         show = uiState.showDissolveConfirmDialog,

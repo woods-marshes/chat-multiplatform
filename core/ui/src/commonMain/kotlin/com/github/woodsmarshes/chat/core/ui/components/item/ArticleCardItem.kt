@@ -22,12 +22,12 @@ import com.github.woodsmarshes.chat.core.model.ArticleStatus
 import com.github.woodsmarshes.chat.core.model.presentation.ArticleListUiModel
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import top.yukonga.miuix.kmp.basic.Card as MiuixCard
-import top.yukonga.miuix.kmp.basic.CardColors as MiuixCardColors
-import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlin.uuid.Uuid
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.CardColors as MiuixCardColors
+import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
 
 /**
  * Renders article cards into a [LazyListScope] with per-item keys.
@@ -87,15 +87,17 @@ fun ArticleCardItem(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = when (article.status) {
-                        ArticleStatus.DRAFT -> LocalStrings.current.articleStatusDraft
-                        ArticleStatus.PUBLISHED -> LocalStrings.current.articleStatusPublished
-                    },
+                    text =
+                        when (article.status) {
+                            ArticleStatus.DRAFT -> LocalStrings.current.articleStatusDraft
+                            ArticleStatus.PUBLISHED -> LocalStrings.current.articleStatusPublished
+                        },
                     style = MaterialTheme.typography.labelSmall,
-                    color = when (article.status) {
-                        ArticleStatus.PUBLISHED -> MaterialTheme.colorScheme.primary
-                        ArticleStatus.DRAFT -> MaterialTheme.colorScheme.error
-                    },
+                    color =
+                        when (article.status) {
+                            ArticleStatus.PUBLISHED -> MaterialTheme.colorScheme.primary
+                            ArticleStatus.DRAFT -> MaterialTheme.colorScheme.error
+                        },
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
@@ -108,18 +110,20 @@ fun ArticleCardItem(
     }
 
     if (isMiuixTheme()) {
-        val colors = if (selected) {
-            MiuixCardColors(
-                color = MiuixTheme.colorScheme.tertiaryContainer,
-                contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
-            )
-        } else {
-            MiuixCardDefaults.defaultColors()
-        }
+        val colors =
+            if (selected) {
+                MiuixCardColors(
+                    color = MiuixTheme.colorScheme.tertiaryContainer,
+                    contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
+                )
+            } else {
+                MiuixCardDefaults.defaultColors()
+            }
         MiuixCard(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
             colors = colors,
             pressFeedbackType = PressFeedbackType.Sink,
             showIndication = true,
@@ -129,17 +133,19 @@ fun ArticleCardItem(
         }
     } else {
         Card(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 6.dp)
-                .clickable(onClick = onClick),
-            colors = if (selected) {
-                CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                )
-            } else {
-                CardDefaults.cardColors()
-            },
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+                    .clickable(onClick = onClick),
+            colors =
+                if (selected) {
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    )
+                } else {
+                    CardDefaults.cardColors()
+                },
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         ) {
             cardContent()

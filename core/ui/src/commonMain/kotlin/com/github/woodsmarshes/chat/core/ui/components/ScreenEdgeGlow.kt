@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
@@ -22,13 +22,13 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.delay
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun ScreenEdgeGlow(
@@ -57,58 +57,62 @@ fun ScreenEdgeGlow(
         initialValue = 0.85f,
         // InfiniteTransition settles at this dim value when the system disables animations.
         targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Pulse"
+        animationSpec =
+            infiniteRepeatable(
+                animation = tween(1500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+        label = "Pulse",
     )
 
     Box(modifier = modifier.fillMaxSize()) {
-
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(24.dp)
-                .drawWithCache {
-                    val strokePx = 16.dp.toPx()
-                    val inset = strokePx / 2f
-                    onDrawBehind {
-                        drawRoundRect(
-                            color = color,
-                            topLeft = Offset(inset, inset),
-                            size = Size(
-                                width = size.width - strokePx,
-                                height = size.height - strokePx,
-                            ),
-                            style = Stroke(width = strokePx),
-                            alpha = pulseAlpha * haloAlpha,
-                            cornerRadius = CornerRadius(maxOf(0f, cornerRadius.toPx() - inset)),
-                        )
-                    }
-                }
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .blur(24.dp)
+                    .drawWithCache {
+                        val strokePx = 16.dp.toPx()
+                        val inset = strokePx / 2f
+                        onDrawBehind {
+                            drawRoundRect(
+                                color = color,
+                                topLeft = Offset(inset, inset),
+                                size =
+                                    Size(
+                                        width = size.width - strokePx,
+                                        height = size.height - strokePx,
+                                    ),
+                                style = Stroke(width = strokePx),
+                                alpha = pulseAlpha * haloAlpha,
+                                cornerRadius = CornerRadius(maxOf(0f, cornerRadius.toPx() - inset)),
+                            )
+                        }
+                    },
         )
 
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithCache {
-                    val strokePx = 3.5.dp.toPx()
-                    val inset = strokePx / 2f
-                    onDrawBehind {
-                        drawRoundRect(
-                            color = color,
-                            topLeft = Offset(inset, inset),
-                            size = Size(
-                                width = size.width - strokePx,
-                                height = size.height - strokePx,
-                            ),
-                            style = Stroke(width = strokePx),
-                            alpha = pulseAlpha * coreAlpha,
-                            cornerRadius = CornerRadius(maxOf(0f, cornerRadius.toPx() - inset)),
-                        )
-                    }
-                }
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .drawWithCache {
+                        val strokePx = 3.5.dp.toPx()
+                        val inset = strokePx / 2f
+                        onDrawBehind {
+                            drawRoundRect(
+                                color = color,
+                                topLeft = Offset(inset, inset),
+                                size =
+                                    Size(
+                                        width = size.width - strokePx,
+                                        height = size.height - strokePx,
+                                    ),
+                                style = Stroke(width = strokePx),
+                                alpha = pulseAlpha * coreAlpha,
+                                cornerRadius = CornerRadius(maxOf(0f, cornerRadius.toPx() - inset)),
+                            )
+                        }
+                    },
         )
     }
 }

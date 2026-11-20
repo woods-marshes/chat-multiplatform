@@ -85,17 +85,17 @@ import com.github.woodsmarshes.chat.core.ui.components.ChatConversationTopBar
 import com.github.woodsmarshes.chat.core.ui.components.ChatTopAppBar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.isInListDetailScene
-import com.github.woodsmarshes.chat.core.ui.components.motion.AppMotion
-import com.github.woodsmarshes.chat.feature.chat.ui.bubble.MessageFormatter
-import com.github.woodsmarshes.chat.feature.chat.ui.bubble.messageItems
-import com.github.woodsmarshes.chat.feature.chat.ui.input.ChatInputBar
 import com.github.woodsmarshes.chat.core.ui.components.item.ConversationItem
+import com.github.woodsmarshes.chat.core.ui.components.motion.AppMotion
 import com.github.woodsmarshes.chat.core.ui.components.state.EmptyContent
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.components.state.LoadingContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
-import kotlinx.coroutines.delay
+import com.github.woodsmarshes.chat.feature.chat.ui.bubble.MessageFormatter
+import com.github.woodsmarshes.chat.feature.chat.ui.bubble.messageItems
+import com.github.woodsmarshes.chat.feature.chat.ui.input.ChatInputBar
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -122,12 +122,13 @@ fun ChatScreen(
     // instance on every host recomposition; keying remember on it would rebuild
     // the formatter (and restart every bubble's pointerInput) each time.
     val currentOnProfileClick by rememberUpdatedState(onProfileClick)
-    val formatter = remember(uriHandler) {
-        MessageFormatter(
-            onUrlClicked = { runCatching { uriHandler.openUri(it) } },
-            onMentionClicked = { userId -> currentOnProfileClick(userId) },
-        )
-    }
+    val formatter =
+        remember(uriHandler) {
+            MessageFormatter(
+                onUrlClicked = { runCatching { uriHandler.openUri(it) } },
+                onMentionClicked = { userId -> currentOnProfileClick(userId) },
+            )
+        }
     val coroutineScope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -154,15 +155,15 @@ fun ChatScreen(
             } else {
                 listState.layoutInfo.visibleItemsInfo.mapNotNull { itemInfo ->
                     if (itemInfo.index !in 0 until lazyMessages.itemCount) return@mapNotNull null
-                    lazyMessages.peek(itemInfo.index)
+                    lazyMessages
+                        .peek(itemInfo.index)
                         ?.takeIf {
                             it.revokedAt == null &&
                                 it.sendStatus == MessageState.Completed
                         }
                 }
             }
-        }
-            .map { visible -> visible.distinctBy { it.id } }
+        }.map { visible -> visible.distinctBy { it.id } }
             .distinctUntilChanged()
             .filter { it.isNotEmpty() }
             .collect(viewModel::onMessagesVisible)
@@ -173,6 +174,7 @@ fun ChatScreen(
     // Rapid arrivals and the FAB race the same animation: cancel the previous
     // scrollToItem instead of letting two runs fight over the scroll position.
     var scrollToTopJob by remember { mutableStateOf<Job?>(null) }
+
     fun animateScrollToLatest() {
         scrollToTopJob?.cancel()
         scrollToTopJob = coroutineScope.launch { listState.animateScrollToItem(0) }
@@ -182,8 +184,12 @@ fun ChatScreen(
     LaunchedEffect(lazyMessages, listState, lifecycleState) {
         if (lifecycleState != Lifecycle.State.RESUMED) return@LaunchedEffect
         var previousMessageId: String? = null
-        snapshotFlow { lazyMessages.itemSnapshotList.items.firstOrNull()?.id?.toString() }
-            .filter { it != null }
+        snapshotFlow {
+            lazyMessages.itemSnapshotList.items
+                .firstOrNull()
+                ?.id
+                ?.toString()
+        }.filter { it != null }
             .distinctUntilChanged()
             .collect { messageId ->
                 val previous = previousMessageId
@@ -225,22 +231,26 @@ fun ChatScreen(
 
     // Stable message-list callbacks: recreated only when their captures
     // actually change, so LazyColumn items can skip recomposition.
-    val selectedIds = remember(uiState.selectedMessages) {
-        uiState.selectedMessages.map { it.id }.toSet()
-    }
-    val onRetryCallback: (MessageUiModel) -> Unit = remember(viewModel) {
-        { message: MessageUiModel -> viewModel.retryMessage(message) }
-    }
-    val onReplyCallback: (MessageUiModel) -> Unit = remember(viewModel) {
-        { message: MessageUiModel -> viewModel.toggleReplyTo(message) }
-    }
-    val onAvatarClickCallback: (MessageUiModel) -> Unit = remember(onProfileClick) {
-        { message: MessageUiModel ->
-            message.sender?.id?.let { senderId ->
-                onProfileClick(senderId.toString())
+    val selectedIds =
+        remember(uiState.selectedMessages) {
+            uiState.selectedMessages.map { it.id }.toSet()
+        }
+    val onRetryCallback: (MessageUiModel) -> Unit =
+        remember(viewModel) {
+            { message: MessageUiModel -> viewModel.retryMessage(message) }
+        }
+    val onReplyCallback: (MessageUiModel) -> Unit =
+        remember(viewModel) {
+            { message: MessageUiModel -> viewModel.toggleReplyTo(message) }
+        }
+    val onAvatarClickCallback: (MessageUiModel) -> Unit =
+        remember(onProfileClick) {
+            { message: MessageUiModel ->
+                message.sender?.id?.let { senderId ->
+                    onProfileClick(senderId.toString())
+                }
             }
         }
-    }
     val menuContentCallback: @Composable (MessageUiModel, () -> Unit) -> Unit =
         remember(viewModel, clipboard, snackbarHostState, coroutineScope, strings) {
             { message: MessageUiModel, dismiss: () -> Unit ->
@@ -280,9 +290,10 @@ fun ChatScreen(
         topBar = {
             if (uiState.selectionMode) {
                 ChatTopAppBar(
-                    title = LocalStrings.current.selectedCountFmt(
-                        uiState.selectedMessages.size.toString(),
-                    ),
+                    title =
+                        LocalStrings.current.selectedCountFmt(
+                            uiState.selectedMessages.size.toString(),
+                        ),
                     showBackButton = true,
                     onBackClick = viewModel::clearSelection,
                 )
@@ -294,68 +305,87 @@ fun ChatScreen(
                 val memberCount by viewModel.memberCount.collectAsStateWithLifecycle()
                 val strings = LocalStrings.current
                 val header = chatHeader
-            val typing = typingUsers
-            // Subtitle: typing indicator wins over the member count.
-            val subtitle = when {
-                typing.isNotEmpty() && header?.isGroup == true ->
-                    typing.map { it.displayName?.ifEmpty { null } ?: it.username }
-                        .joinToString("、") + " " + strings.typingLabel
-                typing.isNotEmpty() -> strings.typingLabel
-                header?.isGroup == true && memberCount != null ->
-                    strings.memberCountFmt(memberCount.toString())
-                else -> null
-            }
-            val openDetails: (() -> Unit)? = when {
-                header == null -> null
-                header.isGroup -> {
-                    val conversationId = header.conversationId.toString()
-                    val action: () -> Unit = { onGroupInfoClick(conversationId) }
-                    action
-                }
-                header.peerUserId != null -> {
-                    val peerId = header.peerUserId.toString()
-                    val action: () -> Unit = { onProfileClick(peerId) }
-                    action
-                }
-                else -> null
-            }
-            val inMultiPane = isInListDetailScene()
-            ChatConversationTopBar(
-                title = header?.title ?: initialTitle.orEmpty(),
-                subtitle = subtitle,
-                avatarName = header?.title ?: initialTitle.orEmpty(),
-                avatarUrl = if (header != null) header.avatarUrl else initialAvatarUrl,
-                conversationId = header?.conversationId?.toString() ?: conversationId,
-                showAvatar = header != null || initialTitle != null,
-                onBack = onBack,
-                showBackButton = !inMultiPane,
-                onHeaderClick = openDetails,
-                actions = {
-                    if (openDetails != null && header != null) {
-                        Box {
-                            IconButton(onClick = { headerMenuExpanded = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = strings.menuCd,
-                                )
-                            }
-                            AppDropdownMenu(
-                                expanded = headerMenuExpanded,
-                                onDismissRequest = { headerMenuExpanded = false },
-                            ) {
-                                AppDropdownMenuItem(
-                                    text = if (header.isGroup) strings.groupInfoTitle else strings.profileTitle,
-                                    leadingIcon = if (header.isGroup) Icons.Default.Info else Icons.Default.Person,
-                                    onClick = {
-                                        headerMenuExpanded = false
-                                        openDetails.invoke()
-                                    },
-                                )
-                            }
+                val typing = typingUsers
+                // Subtitle: typing indicator wins over the member count.
+                val subtitle =
+                    when {
+                        typing.isNotEmpty() && header?.isGroup == true -> {
+                            typing
+                                .map { it.displayName?.ifEmpty { null } ?: it.username }
+                                .joinToString("、") + " " + strings.typingLabel
+                        }
+
+                        typing.isNotEmpty() -> {
+                            strings.typingLabel
+                        }
+
+                        header?.isGroup == true && memberCount != null -> {
+                            strings.memberCountFmt(memberCount.toString())
+                        }
+
+                        else -> {
+                            null
                         }
                     }
-                },
-            )
+                val openDetails: (() -> Unit)? =
+                    when {
+                        header == null -> {
+                            null
+                        }
+
+                        header.isGroup -> {
+                            val conversationId = header.conversationId.toString()
+                            val action: () -> Unit = { onGroupInfoClick(conversationId) }
+                            action
+                        }
+
+                        header.peerUserId != null -> {
+                            val peerId = header.peerUserId.toString()
+                            val action: () -> Unit = { onProfileClick(peerId) }
+                            action
+                        }
+
+                        else -> {
+                            null
+                        }
+                    }
+                val inMultiPane = isInListDetailScene()
+                ChatConversationTopBar(
+                    title = header?.title ?: initialTitle.orEmpty(),
+                    subtitle = subtitle,
+                    avatarName = header?.title ?: initialTitle.orEmpty(),
+                    avatarUrl = if (header != null) header.avatarUrl else initialAvatarUrl,
+                    conversationId = header?.conversationId?.toString() ?: conversationId,
+                    showAvatar = header != null || initialTitle != null,
+                    onBack = onBack,
+                    showBackButton = !inMultiPane,
+                    onHeaderClick = openDetails,
+                    actions = {
+                        if (openDetails != null && header != null) {
+                            Box {
+                                IconButton(onClick = { headerMenuExpanded = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = strings.menuCd,
+                                    )
+                                }
+                                AppDropdownMenu(
+                                    expanded = headerMenuExpanded,
+                                    onDismissRequest = { headerMenuExpanded = false },
+                                ) {
+                                    AppDropdownMenuItem(
+                                        text = if (header.isGroup) strings.groupInfoTitle else strings.profileTitle,
+                                        leadingIcon = if (header.isGroup) Icons.Default.Info else Icons.Default.Person,
+                                        onClick = {
+                                            headerMenuExpanded = false
+                                            openDetails.invoke()
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    },
+                )
             }
         },
         bottomBar = {
@@ -370,9 +400,10 @@ fun ChatScreen(
                         )
                     },
                     onCopy = {
-                        val text = uiState.selectedMessages
-                            .mapNotNull { (it.content as? TextContent)?.text }
-                            .joinToString("\n")
+                        val text =
+                            uiState.selectedMessages
+                                .mapNotNull { (it.content as? TextContent)?.text }
+                                .joinToString("\n")
                         clipboard.setText(AnnotatedString(text))
                         viewModel.clearSelection()
                         coroutineScope.launch {
@@ -384,8 +415,9 @@ fun ChatScreen(
             } else {
                 val draftInput by viewModel.input.collectAsStateWithLifecycle()
                 Box(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface)
+                    modifier =
+                        Modifier
+                            .background(MaterialTheme.colorScheme.surface),
                 ) {
                     ChatInputBar(
                         value = draftInput,
@@ -403,16 +435,17 @@ fun ChatScreen(
         },
     ) { padding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .consumeWindowInsets(padding)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .consumeWindowInsets(padding),
         ) {
             val initialContent = chatInitialContent(lazyMessages.itemCount, lazyMessages.loadState)
             var showInitialLoading by remember { mutableStateOf(false) }
             LaunchedEffect(initialContent) {
                 showInitialLoading = false
                 if (initialContent == ChatInitialContent.Loading) {
-                    delay(AppMotion.LoadingRevealDelayMillis)
+                    delay(AppMotion.LOADING_REVEAL_DELAY_MILLIS)
                     showInitialLoading = true
                 }
             }
@@ -424,6 +457,7 @@ fun ChatScreen(
                         )
                     }
                 }
+
                 ChatInitialContent.Error -> {
                     ErrorContent(
                         message = strings.loadFailed,
@@ -431,21 +465,24 @@ fun ChatScreen(
                         onRetry = { lazyMessages.retry() },
                     )
                 }
+
                 ChatInitialContent.Empty -> {
                     EmptyContent(
                         message = strings.noMessages,
                         modifier = Modifier.fillMaxSize().padding(padding),
                     )
                 }
+
                 ChatInitialContent.Messages -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = padding.calculateStartPadding(LocalLayoutDirection.current),
-                            end = padding.calculateEndPadding(LocalLayoutDirection.current),
-                            top = padding.calculateTopPadding(),
-                            bottom = padding.calculateBottomPadding() + 8.dp
-                        ),
+                        contentPadding =
+                            PaddingValues(
+                                start = padding.calculateStartPadding(LocalLayoutDirection.current),
+                                end = padding.calculateEndPadding(LocalLayoutDirection.current),
+                                top = padding.calculateTopPadding(),
+                                bottom = padding.calculateBottomPadding() + 8.dp,
+                            ),
                         state = listState,
                         reverseLayout = true,
                         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
@@ -477,6 +514,7 @@ fun ChatScreen(
                                     }
                                 }
                             }
+
                             is LoadState.Error -> {
                                 item(key = "append_error") {
                                     Box(
@@ -493,6 +531,7 @@ fun ChatScreen(
                                     }
                                 }
                             }
+
                             else -> {}
                         }
                     }
@@ -503,12 +542,13 @@ fun ChatScreen(
                 visible = showScrollToBottomFab,
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = 16.dp,
-                        bottom = padding.calculateBottomPadding() + 16.dp
-                    )
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = 16.dp,
+                            bottom = padding.calculateBottomPadding() + 16.dp,
+                        ),
             ) {
                 Surface(
                     onClick = {
@@ -519,24 +559,24 @@ fun ChatScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     tonalElevation = 4.dp,
                     shadowElevation = 4.dp,
-                    modifier = Modifier.height(40.dp)
+                    modifier = Modifier.height(40.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.Center
+                        horizontalArrangement = Arrangement.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = strings.scrollToBottomCd,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                         if (unreadCount.value > 0) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = if (unreadCount.value > 99) "99+" else unreadCount.value.toString(),
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                     }
@@ -570,11 +610,12 @@ private fun SelectionActionBar(
         tonalElevation = 3.dp,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(64.dp)
-                .padding(horizontal = 8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(64.dp)
+                    .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SelectionAction(
@@ -611,23 +652,32 @@ private fun SelectionAction(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 8.dp),
+        modifier =
+            modifier
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (enabled) MaterialTheme.colorScheme.onSurface
-            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            tint =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                },
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface
-            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            color =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                },
         )
     }
 }

@@ -1,7 +1,9 @@
 package com.github.woodsmarshes.chat.repository
 
 import com.github.woodsmarshes.chat.core.model.ContactStatus
-import com.github.woodsmarshes.chat.core.model.ProfileVisibility.*
+import com.github.woodsmarshes.chat.core.model.ProfileVisibility.FRIENDS
+import com.github.woodsmarshes.chat.core.model.ProfileVisibility.PRIVATE
+import com.github.woodsmarshes.chat.core.model.ProfileVisibility.PUBLIC
 import com.github.woodsmarshes.chat.core.model.User
 import com.github.woodsmarshes.chat.core.model.UserRole
 import com.github.woodsmarshes.chat.repository.database.schema.Contacts
@@ -12,13 +14,13 @@ import com.github.woodsmarshes.chat.repository.database.schema.UserSettings
 import com.github.woodsmarshes.chat.repository.database.schema.Users
 import com.github.woodsmarshes.chat.utils.dbQuery
 import org.jetbrains.exposed.v1.core.Op
-import org.jetbrains.exposed.v1.core.and
-import org.jetbrains.exposed.v1.core.isNotNull
-import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.innerJoin
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
 import org.jetbrains.exposed.v1.core.neq
@@ -33,7 +35,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
-interface UserRepository{
+interface UserRepository {
     suspend fun insertUser(
         username: String,
         email: String,
@@ -46,12 +48,15 @@ interface UserRepository{
         userId: Uuid,
         displayName: String? = null,
         avatarUrl: String? = null,
-        bio: String? = null
+        bio: String? = null,
     ): User?
 
     suspend fun deleteUser(userId: Uuid): Boolean
 
-    suspend fun getUserProfileForViewer(targetUserId: Uuid, viewerId: Uuid): User?
+    suspend fun getUserProfileForViewer(
+        targetUserId: Uuid,
+        viewerId: Uuid,
+    ): User?
 
     suspend fun findAuthInfoByEmail(email: String): UserAuthInfo?
 
@@ -59,15 +64,21 @@ interface UserRepository{
 
     suspend fun getUsersById(userIds: List<Uuid>): List<User>
 
-    suspend fun getPrivateConversationOtherUser(userId: Uuid, conversationIds: List<Uuid>): List<Pair<Uuid, User>>
+    suspend fun getPrivateConversationOtherUser(
+        userId: Uuid,
+        conversationIds: List<Uuid>,
+    ): List<Pair<Uuid, User>>
 
     suspend fun getUsers(): List<User>
 
-    suspend fun changeUserRole(userId: Uuid, userRole: UserRole): Boolean
+    suspend fun changeUserRole(
+        userId: Uuid,
+        userRole: UserRole,
+    ): Boolean
 
     suspend fun checkExists(
         email: String? = null,
-        username: String? = null
+        username: String? = null,
     ): Boolean
 
     suspend fun searchUsers(keyword: String): List<User>
@@ -92,9 +103,16 @@ interface UserRepository{
     suspend fun countAdmins(): Long
 
     /** Sets or clears the soft-ban timestamp; null unbans. */
-    suspend fun setBannedAt(userId: Uuid, bannedAt: Instant?): Boolean
+    suspend fun setBannedAt(
+        userId: Uuid,
+        bannedAt: Instant?,
+    ): Boolean
 
-    suspend fun updatePassword(userId: Uuid, passwordHash: String, salt: String): Boolean
+    suspend fun updatePassword(
+        userId: Uuid,
+        passwordHash: String,
+        salt: String,
+    ): Boolean
 
     /** Promotes every non-admin user whose email is in [emails] (lowercase). Returns rows updated. */
     suspend fun promoteByEmails(emails: Set<String>): Int
@@ -113,123 +131,144 @@ class UserDataSourceImpl : UserRepository {
         passwordHash: String,
         salt: String,
         role: UserRole,
-    ): User? = dbQuery {
-        Users.insert {
-            it[this.username] = username
-            it[this.email] = email
-            it[createdAt] = Clock.System.now()
-            it[updatedAt] = Clock.System.now()
-            it[this.passwordHash] = passwordHash
-            it[this.salt] = salt
-            it[this.role] = role
-        }.resultedValues
-            ?.singleOrNull()
-            ?.toUser()
-    }
+    ): User? =
+        dbQuery {
+            Users
+                .insert {
+                    it[this.username] = username
+                    it[this.email] = email
+                    it[createdAt] = Clock.System.now()
+                    it[updatedAt] = Clock.System.now()
+                    it[this.passwordHash] = passwordHash
+                    it[this.salt] = salt
+                    it[this.role] = role
+                }.resultedValues
+                ?.singleOrNull()
+                ?.toUser()
+        }
 
     override suspend fun updateUser(
         userId: Uuid,
         displayName: String?,
         avatarUrl: String?,
         bio: String?,
-    ): User? = dbQuery {
-        // updateReturning has no H2 implementation (it throws
-        // UnsupportedByDialectException for the dev/test dialect), so the
-        // plain update + re-read keeps the same contract on both dialects.
-        val updated = Users.update(where = { Users.id eq userId }) {
-            displayName?.let { displayName -> it[Users.displayName] = displayName }
-            avatarUrl?.let { avatarUrl -> it[Users.avatarUrl] = avatarUrl }
-            bio?.let { bio -> it[Users.bio] = bio }
-            it[updatedAt] = Clock.System.now()
+    ): User? =
+        dbQuery {
+            // updateReturning has no H2 implementation (it throws
+            // UnsupportedByDialectException for the dev/test dialect), so the
+            // plain update + re-read keeps the same contract on both dialects.
+            val updated =
+                Users.update(where = { Users.id eq userId }) {
+                    displayName?.let { displayName -> it[Users.displayName] = displayName }
+                    avatarUrl?.let { avatarUrl -> it[Users.avatarUrl] = avatarUrl }
+                    bio?.let { bio -> it[Users.bio] = bio }
+                    it[updatedAt] = Clock.System.now()
+                }
+            if (updated > 0) getUserById(userId) else null
         }
-        if (updated > 0) getUserById(userId) else null
-    }
 
-    override suspend fun deleteUser(userId: Uuid) = dbQuery {
-        Users.deleteWhere {
-            id eq userId
-        } > 0
-    }
+    override suspend fun deleteUser(userId: Uuid) =
+        dbQuery {
+            Users.deleteWhere {
+                id eq userId
+            } > 0
+        }
 
     override suspend fun getUserProfileForViewer(
         targetUserId: Uuid,
-        viewerId: Uuid
-    ): User? = dbQuery {
-        (Users innerJoin UserSettings)
-            .selectAll()
-            .where { Users.id eq targetUserId }
-            .singleOrNull()
-            ?.let { row ->
-                val user = row.toUser()
-                val privacy = row[UserSettings.profileVisibility]
-                val shouldHideEmail = (privacy == PRIVATE) ||
-                        (privacy == FRIENDS && !areFriends(targetUserId, viewerId))
+        viewerId: Uuid,
+    ): User? =
+        dbQuery {
+            (Users innerJoin UserSettings)
+                .selectAll()
+                .where { Users.id eq targetUserId }
+                .singleOrNull()
+                ?.let { row ->
+                    val user = row.toUser()
+                    val privacy = row[UserSettings.profileVisibility]
+                    val shouldHideEmail =
+                        (privacy == PRIVATE) ||
+                            (privacy == FRIENDS && !areFriends(targetUserId, viewerId))
 
-                if (shouldHideEmail) user.copy(email = null) else user
-            }
-    }
+                    if (shouldHideEmail) user.copy(email = null) else user
+                }
+        }
 
     // Friendship requires an actual FRIEND row: a BLOCKED or DELETED entry
     // must not count, or FRIENDS-visible profiles would leak the email to
     // users the owner has blocked. Mirrors ContactRepository.areFriends.
-    private suspend fun areFriends(userId1: Uuid, userId2: Uuid): Boolean = dbQuery {
-        Contacts.selectAll()
-            .where {
-                (Contacts.userId eq userId1) and (Contacts.contactId eq userId2) and
+    private suspend fun areFriends(
+        userId1: Uuid,
+        userId2: Uuid,
+    ): Boolean =
+        dbQuery {
+            Contacts
+                .selectAll()
+                .where {
+                    (Contacts.userId eq userId1) and (Contacts.contactId eq userId2) and
                         (Contacts.status eq ContactStatus.FRIEND)
-            }
-            .limit(1)
-            .count() > 0
-    }
+                }.limit(1)
+                .count() > 0
+        }
 
-    override suspend fun findAuthInfoByEmail(email: String): UserAuthInfo? = dbQuery {
-        Users.selectAll()
-            .where { Users.email eq email }
-            .map { it.toUserAuthInfo() }
-            .singleOrNull()
-    }
+    override suspend fun findAuthInfoByEmail(email: String): UserAuthInfo? =
+        dbQuery {
+            Users
+                .selectAll()
+                .where { Users.email eq email }
+                .map { it.toUserAuthInfo() }
+                .singleOrNull()
+        }
 
-    override suspend fun getUserById(userId: Uuid) = dbQuery {
-        Users.selectAll()
-            .where { Users.id eq userId }
-            .map { it.toUser() }
-            .singleOrNull()
-    }
+    override suspend fun getUserById(userId: Uuid) =
+        dbQuery {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .map { it.toUser() }
+                .singleOrNull()
+        }
 
-    override suspend fun getUsersById(userIds: List<Uuid>): List<User> = dbQuery {
-        Users.selectAll()
-            .where { Users.id inList userIds }
-            .map { it.toUser() }
-    }
+    override suspend fun getUsersById(userIds: List<Uuid>): List<User> =
+        dbQuery {
+            Users
+                .selectAll()
+                .where { Users.id inList userIds }
+                .map { it.toUser() }
+        }
 
     override suspend fun getPrivateConversationOtherUser(
         userId: Uuid,
-        conversationIds: List<Uuid>
-    ): List<Pair<Uuid, User>> = dbQuery {
-        ConversationParticipants
-            .innerJoin(
-                otherTable = Users,
-                onColumn = { ConversationParticipants.userId },
-                otherColumn = { Users.id },
-                additionalConstraint = { Users.id neq userId },
-            )
-            .selectAll()
-            .where {
-                ConversationParticipants.conversationId inList conversationIds
-            }
-            .map { it[ConversationParticipants.conversationId].value to it.toUser() }
-    }
+        conversationIds: List<Uuid>,
+    ): List<Pair<Uuid, User>> =
+        dbQuery {
+            ConversationParticipants
+                .innerJoin(
+                    otherTable = Users,
+                    onColumn = { ConversationParticipants.userId },
+                    otherColumn = { Users.id },
+                    additionalConstraint = { Users.id neq userId },
+                ).selectAll()
+                .where {
+                    ConversationParticipants.conversationId inList conversationIds
+                }.map { it[ConversationParticipants.conversationId].value to it.toUser() }
+        }
 
-    override suspend fun getUsers(): List<User> = dbQuery {
-        Users.selectAll().map { it.toUser() }
-    }
+    override suspend fun getUsers(): List<User> =
+        dbQuery {
+            Users.selectAll().map { it.toUser() }
+        }
 
-    override suspend fun changeUserRole(userId: Uuid, userRole: UserRole): Boolean = dbQuery {
-        Users.update({ Users.id eq userId }) {
-            it[updatedAt] = Clock.System.now()
-            it[role] = userRole
-        } > 0
-    }
+    override suspend fun changeUserRole(
+        userId: Uuid,
+        userRole: UserRole,
+    ): Boolean =
+        dbQuery {
+            Users.update({ Users.id eq userId }) {
+                it[updatedAt] = Clock.System.now()
+                it[role] = userRole
+            } > 0
+        }
 
     override suspend fun checkExists(
         email: String?,
@@ -244,10 +283,11 @@ class UserDataSourceImpl : UserRepository {
             // AND here would let "existing username + new email" slip through
             // the check and die on the unique index with a 500.
             query.andWhere {
-                val conditions = buildList {
-                    email?.let { add(Users.email eq it) }
-                    username?.let { add(Users.username eq it) }
-                }
+                val conditions =
+                    buildList {
+                        email?.let { add(Users.email eq it) }
+                        username?.let { add(Users.username eq it) }
+                    }
                 conditions.reduce { acc, op -> acc or op }
             }
             query
@@ -267,19 +307,22 @@ class UserDataSourceImpl : UserRepository {
                 .selectAll()
                 .where {
                     // Keyword match AND opt-in searchability, never either alone.
-                    val textMatches = (Users.username.lowerCase() like pattern) or
+                    val textMatches =
+                        (Users.username.lowerCase() like pattern) or
                             (Users.email.lowerCase() like pattern) or
                             (Users.displayName.lowerCase() like pattern)
                     textMatches and (UserSettings.allowSearch eq true)
-                }
-                .orderBy(Users.username, SortOrder.ASC)
+                }.orderBy(Users.username, SortOrder.ASC)
                 .limit(20)
                 .map {
                     when (it[UserSettings.profileVisibility]) {
-                        PUBLIC -> it.toUser()
+                        PUBLIC -> {
+                            it.toUser()
+                        }
+
                         else -> {
                             it.toUser().copy(
-                                email = null
+                                email = null,
                             )
                         }
                     }
@@ -287,19 +330,22 @@ class UserDataSourceImpl : UserRepository {
         }
     }
 
-    override suspend fun listReferencedAvatarFileNames(): Set<String> = dbQuery {
-        val userRefs = Users
-            .select(Users.avatarUrl)
-            .where { Users.avatarUrl.isNotNull() }
-            .map { it[Users.avatarUrl] }
-        val groupRefs = GroupProfiles
-            .select(GroupProfiles.avatarUrl)
-            .where { GroupProfiles.avatarUrl.isNotNull() }
-            .map { it[GroupProfiles.avatarUrl] }
-        (userRefs + groupRefs)
-            .mapNotNull { url -> url?.substringAfterLast('/')?.takeIf { name -> name.isNotEmpty() } }
-            .toSet()
-    }
+    override suspend fun listReferencedAvatarFileNames(): Set<String> =
+        dbQuery {
+            val userRefs =
+                Users
+                    .select(Users.avatarUrl)
+                    .where { Users.avatarUrl.isNotNull() }
+                    .map { it[Users.avatarUrl] }
+            val groupRefs =
+                GroupProfiles
+                    .select(GroupProfiles.avatarUrl)
+                    .where { GroupProfiles.avatarUrl.isNotNull() }
+                    .map { it[GroupProfiles.avatarUrl] }
+            (userRefs + groupRefs)
+                .mapNotNull { url -> url?.substringAfterLast('/')?.takeIf { name -> name.isNotEmpty() } }
+                .toSet()
+        }
 
     override suspend fun listUsersPaged(
         keyword: String?,
@@ -307,87 +353,107 @@ class UserDataSourceImpl : UserRepository {
         banned: Boolean?,
         page: Int,
         limit: Int,
-    ): PagedUsers = dbQuery {
-        var condition: Op<Boolean> = Op.TRUE
-        keyword?.trim()?.takeIf { it.isNotEmpty() }?.let { kw ->
-            val pattern = "%${escapeLike(kw.lowercase())}%"
-            condition = condition and (
-                (Users.username.lowerCase() like pattern) or
-                    (Users.email.lowerCase() like pattern) or
-                    (Users.displayName.lowerCase() like pattern)
+    ): PagedUsers =
+        dbQuery {
+            var condition: Op<Boolean> = Op.TRUE
+            keyword?.trim()?.takeIf { it.isNotEmpty() }?.let { kw ->
+                val pattern = "%${escapeLike(kw.lowercase())}%"
+                condition = condition and (
+                    (Users.username.lowerCase() like pattern) or
+                        (Users.email.lowerCase() like pattern) or
+                        (Users.displayName.lowerCase() like pattern)
                 )
+            }
+            role?.let { condition = condition and (Users.role eq it) }
+            banned?.let { isBanned ->
+                condition = condition and if (isBanned) Users.bannedAt.isNotNull() else Users.bannedAt.isNull()
+            }
+            val total = Users.selectAll().where { condition }.count()
+            val items =
+                Users
+                    .selectAll()
+                    .where { condition }
+                    .orderBy(Users.createdAt, SortOrder.DESC)
+                    .limit(limit)
+                    .offset(((page - 1).toLong()) * limit)
+                    .map { it.toUser() }
+            PagedUsers(items = items, total = total)
         }
-        role?.let { condition = condition and (Users.role eq it) }
-        banned?.let { isBanned ->
-            condition = condition and if (isBanned) Users.bannedAt.isNotNull() else Users.bannedAt.isNull()
+
+    override suspend fun countAdmins(): Long =
+        dbQuery {
+            Users.selectAll().where { Users.role eq UserRole.ADMIN }.count()
         }
-        val total = Users.selectAll().where { condition }.count()
-        val items = Users.selectAll()
-            .where { condition }
-            .orderBy(Users.createdAt, SortOrder.DESC)
-            .limit(limit)
-            .offset(((page - 1).toLong()) * limit)
-            .map { it.toUser() }
-        PagedUsers(items = items, total = total)
-    }
 
-    override suspend fun countAdmins(): Long = dbQuery {
-        Users.selectAll().where { Users.role eq UserRole.ADMIN }.count()
-    }
-
-    override suspend fun setBannedAt(userId: Uuid, bannedAt: Instant?): Boolean = dbQuery {
-        Users.update({ Users.id eq userId }) {
-            it[Users.bannedAt] = bannedAt
-            it[updatedAt] = Clock.System.now()
-        } > 0
-    }
-
-    override suspend fun updatePassword(userId: Uuid, passwordHash: String, salt: String): Boolean = dbQuery {
-        Users.update({ Users.id eq userId }) {
-            it[Users.passwordHash] = passwordHash
-            it[Users.salt] = salt
-            it[updatedAt] = Clock.System.now()
-        } > 0
-    }
-
-    override suspend fun promoteByEmails(emails: Set<String>): Int = dbQuery {
-        if (emails.isEmpty()) return@dbQuery 0
-        Users.update({
-            (Users.email.lowerCase() inList emails) and (Users.role neq UserRole.ADMIN)
-        }) {
-            it[role] = UserRole.ADMIN
-            it[updatedAt] = Clock.System.now()
+    override suspend fun setBannedAt(
+        userId: Uuid,
+        bannedAt: Instant?,
+    ): Boolean =
+        dbQuery {
+            Users.update({ Users.id eq userId }) {
+                it[Users.bannedAt] = bannedAt
+                it[updatedAt] = Clock.System.now()
+            } > 0
         }
-    }
 
-    override suspend fun getUserAdminStats(userId: Uuid): UserAdminStats = dbQuery {
-        val conversationCount = ConversationParticipants.selectAll()
-            .where { ConversationParticipants.userId eq userId }
-            .count()
-        val messageCount = Messages.selectAll()
-            .where { Messages.senderId eq userId }
-            .count()
-        UserAdminStats(conversationCount = conversationCount, messageCount = messageCount)
-    }
+    override suspend fun updatePassword(
+        userId: Uuid,
+        passwordHash: String,
+        salt: String,
+    ): Boolean =
+        dbQuery {
+            Users.update({ Users.id eq userId }) {
+                it[Users.passwordHash] = passwordHash
+                it[Users.salt] = salt
+                it[updatedAt] = Clock.System.now()
+            } > 0
+        }
 
-    override suspend fun getUserStats(): UserStats = dbQuery {
-        val total = Users.selectAll().count()
-        val admins = Users.selectAll().where { Users.role eq UserRole.ADMIN }.count()
-        val banned = Users.selectAll().where { Users.bannedAt.isNotNull() }.count()
-        UserStats(total = total, admins = admins, banned = banned)
-    }
+    override suspend fun promoteByEmails(emails: Set<String>): Int =
+        dbQuery {
+            if (emails.isEmpty()) return@dbQuery 0
+            Users.update({
+                (Users.email.lowerCase() inList emails) and (Users.role neq UserRole.ADMIN)
+            }) {
+                it[role] = UserRole.ADMIN
+                it[updatedAt] = Clock.System.now()
+            }
+        }
+
+    override suspend fun getUserAdminStats(userId: Uuid): UserAdminStats =
+        dbQuery {
+            val conversationCount =
+                ConversationParticipants
+                    .selectAll()
+                    .where { ConversationParticipants.userId eq userId }
+                    .count()
+            val messageCount =
+                Messages
+                    .selectAll()
+                    .where { Messages.senderId eq userId }
+                    .count()
+            UserAdminStats(conversationCount = conversationCount, messageCount = messageCount)
+        }
+
+    override suspend fun getUserStats(): UserStats =
+        dbQuery {
+            val total = Users.selectAll().count()
+            val admins = Users.selectAll().where { Users.role eq UserRole.ADMIN }.count()
+            val banned = Users.selectAll().where { Users.bannedAt.isNotNull() }.count()
+            UserStats(total = total, admins = admins, banned = banned)
+        }
 }
 
 /** Escapes `%`, `_` and the escape char for a LIKE pattern. */
-private fun escapeLike(value: String): String =
-    value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+private fun escapeLike(value: String): String = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 data class UserAuthInfo(
     val userId: Uuid,
     val passwordHash: String,
     val salt: String,
-    val domainUser: User
+    val domainUser: User,
 )
+
 data class PagedUsers(
     val items: List<User>,
     val total: Long,

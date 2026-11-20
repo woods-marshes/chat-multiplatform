@@ -5,12 +5,15 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.github.woodsmarshes.chat.base.ServerConfig
 import com.github.woodsmarshes.chat.base.UserAccessCache
 import com.github.woodsmarshes.chat.utils.Keys
-import io.ktor.http.*
-import io.ktor.http.auth.*
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
-import io.ktor.server.response.*
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.auth.AuthScheme
+import io.ktor.http.auth.HttpAuthHeader
+import io.ktor.server.application.Application
+import io.ktor.server.auth.authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.auth.parseAuthorizationHeader
+import io.ktor.server.response.respond
 import org.koin.ktor.ext.inject
 import kotlin.uuid.Uuid
 
@@ -27,7 +30,7 @@ fun Application.configureSecurity() {
                     .require(Algorithm.HMAC256(config.secret))
                     .withAudience(config.audience)
                     .withIssuer(config.issuer)
-                    .build()
+                    .build(),
             )
             validate { credential ->
                 if (!credential.payload.audience.contains(config.audience)) return@validate null
@@ -35,8 +38,11 @@ fun Application.configureSecurity() {
                 // a ban only takes effect here: the cached ban state rejects
                 // the token within the cache TTL (or immediately after an
                 // explicit invalidate on ban/unban).
-                val userId = credential.payload.getClaim(Keys.USER_ID).asString()
-                    ?.let { Uuid.parseOrNull(it) }
+                val userId =
+                    credential.payload
+                        .getClaim(Keys.USER_ID)
+                        .asString()
+                        ?.let { Uuid.parseOrNull(it) }
                 if (userId != null && userAccessCache.isBanned(userId)) return@validate null
                 JWTPrincipal(credential.payload)
             }
@@ -53,7 +59,9 @@ fun Application.configureSecurity() {
                     header.takeIf {
                         it.authScheme == AuthScheme.Bearer && it is HttpAuthHeader.Single
                     }
-                } else if (call.request.local.uri.startsWith(WS_PATH)) {
+                } else if (call.request.local.uri
+                        .startsWith(WS_PATH)
+                ) {
                     call.request.queryParameters["access_token"]?.let { token ->
                         HttpAuthHeader.Single(AuthScheme.Bearer, token)
                     }

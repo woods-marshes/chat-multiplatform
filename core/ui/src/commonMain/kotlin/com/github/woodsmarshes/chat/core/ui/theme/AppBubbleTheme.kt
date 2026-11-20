@@ -12,13 +12,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * null-checks; a proper implementation MUST be provided via
  * [com.github.woodsmarshes.chat.core.ui.theme.AppTheme].
  */
-val LocalBubbleColors = staticCompositionLocalOf<BubbleColorTokens> {
-    BubbleDefaultTokens.colors
-}
+val LocalBubbleColors =
+    staticCompositionLocalOf<BubbleColorTokens> {
+        BubbleDefaultTokens.colors
+    }
 
-val LocalBubbleShapes = staticCompositionLocalOf<ShapeTokens> {
-    BubbleDefaultTokens.shapes
-}
+val LocalBubbleShapes =
+    staticCompositionLocalOf<ShapeTokens> {
+        BubbleDefaultTokens.shapes
+    }
 
 /**
  * Fallback default tokens used when no theme provider is in the tree.
@@ -38,35 +40,33 @@ object BubbleDefaultTokens {
  * - [material3Colors] / [material3Shapes] derive from the canonical [ColorTokens].
  */
 object BubbleDefaults {
-
     @Composable
-    fun miuixColors(): BubbleColorTokens = with(MiuixTheme.colorScheme) {
-        BubbleColorTokens(
-            ownBackground = primary,
-            ownContent = onPrimary,
-            otherBackground = surfaceContainerHigh,
-            otherContent = onSurface,
-            timestampColor = onSurfaceVariantSummary,
-            senderNameColor = onSurfaceSecondary,
-            iconTint = onSurfaceSecondary,
-            inputBarBackground = surface.copy(alpha = 0.96f),
-            inputFieldBackground = surfaceContainer,
-            inputFieldContent = onSurfaceContainer,
-            inputFieldPlaceholder = onSurfaceVariantSummary,
-            inputIconTint = onSurfaceSecondary,
-            inputSendIconTint = primary,
-            panelBackground = surface,
-            errorColor = error,
-            surfaceColor = surface,
-            onSurfaceColor = onSurface,
-        )
-    }
+    fun miuixColors(): BubbleColorTokens =
+        with(MiuixTheme.colorScheme) {
+            BubbleColorTokens(
+                ownBackground = primary,
+                ownContent = onPrimary,
+                otherBackground = surfaceContainerHigh,
+                otherContent = onSurface,
+                timestampColor = onSurfaceVariantSummary,
+                senderNameColor = onSurfaceSecondary,
+                iconTint = onSurfaceSecondary,
+                inputBarBackground = surface.copy(alpha = 0.96f),
+                inputFieldBackground = surfaceContainer,
+                inputFieldContent = onSurfaceContainer,
+                inputFieldPlaceholder = onSurfaceVariantSummary,
+                inputIconTint = onSurfaceSecondary,
+                inputSendIconTint = primary,
+                panelBackground = surface,
+                errorColor = error,
+                surfaceColor = surface,
+                onSurfaceColor = onSurface,
+            )
+        }
 
-    fun material3Colors(isDark: Boolean): BubbleColorTokens =
-        if (isDark) ColorTokens.dark().bubble else ColorTokens.light().bubble
+    fun material3Colors(isDark: Boolean): BubbleColorTokens = if (isDark) ColorTokens.dark().bubble else ColorTokens.light().bubble
 
     fun miuixShapes(): ShapeTokens = ShapeDefaults.Miuix
 
     fun material3Shapes(): ShapeTokens = ShapeDefaults.Default
 }
-

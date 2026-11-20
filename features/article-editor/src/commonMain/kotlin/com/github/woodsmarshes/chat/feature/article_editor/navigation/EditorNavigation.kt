@@ -1,13 +1,15 @@
-package com.github.woodsmarshes.chat.feature.article_editor.navigation
+package com.github.woodsmarshes.chat.feature.articleeditor.navigation
 
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
-import com.github.woodsmarshes.chat.feature.article_editor.ui.ArticleEditorScreen
+import com.github.woodsmarshes.chat.feature.articleeditor.ui.ArticleEditorScreen
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
 @Serializable
-data class ArticleEditorNavKey(val id: Uuid? = null) : NavKey
+data class ArticleEditorNavKey(
+    val id: Uuid? = null,
+) : NavKey
 
 fun EntryProviderScope<NavKey>.editorEntry(
     onBack: () -> Unit,

@@ -25,9 +25,10 @@ internal fun buildViewerRenderScript(
     val encoded = Base64.encode(jsonContentStr.encodeToByteArray())
     val contentExpr = "decodeURIComponent(escape(window.atob(\"$encoded\")))"
     return if (requestId != null) {
-        val escapedRequestId = requestId
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
+        val escapedRequestId =
+            requestId
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
         "window.__viewerShell.renderContent($contentExpr, \"$escapedRequestId\");"
     } else {
         "window.__viewerShell.renderContent($contentExpr);"

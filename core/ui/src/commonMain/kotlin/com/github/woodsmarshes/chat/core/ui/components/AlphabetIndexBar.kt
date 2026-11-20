@@ -39,20 +39,23 @@ fun AlphabetIndexBar(
     val currentOnLetterSelected by rememberUpdatedState(onLetterSelected)
 
     val minSlotPx = with(density) { 16.dp.toPx() }
-    val maxVisibleCount = if (containerHeightPx > 0 && minSlotPx > 0f) {
-        (containerHeightPx / minSlotPx).toInt().coerceAtLeast(1)
-    } else {
-        letters.size
-    }
-    val step = if (maxVisibleCount >= letters.size) {
-        1
-    } else {
-        ((letters.size + maxVisibleCount - 1) / maxVisibleCount).coerceAtLeast(1)
-    }
+    val maxVisibleCount =
+        if (containerHeightPx > 0 && minSlotPx > 0f) {
+            (containerHeightPx / minSlotPx).toInt().coerceAtLeast(1)
+        } else {
+            letters.size
+        }
+    val step =
+        if (maxVisibleCount >= letters.size) {
+            1
+        } else {
+            ((letters.size + maxVisibleCount - 1) / maxVisibleCount).coerceAtLeast(1)
+        }
 
-    val visibleLetters = remember(letters, step) {
-        letters.filterIndexed { index, _ -> index % step == 0 || index == letters.lastIndex }
-    }
+    val visibleLetters =
+        remember(letters, step) {
+            letters.filterIndexed { index, _ -> index % step == 0 || index == letters.lastIndex }
+        }
 
     fun selectAtY(y: Float) {
         if (containerHeightPx <= 0 || visibleLetters.isEmpty()) return
@@ -62,23 +65,23 @@ fun AlphabetIndexBar(
     }
 
     Column(
-        modifier = modifier
-            .widthIn(min = 32.dp)
-            .fillMaxHeight()
-            .padding(vertical = 8.dp, horizontal = 4.dp)
-            .onSizeChanged { containerHeightPx = it.height }
-            .pointerInput(visibleLetters) {
-                detectTapGestures { offset -> selectAtY(offset.y) }
-            }
-            .pointerInput(visibleLetters) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset -> selectAtY(offset.y) },
-                    onVerticalDrag = { change, _ ->
-                        change.consume()
-                        selectAtY(change.position.y)
-                    },
-                )
-            },
+        modifier =
+            modifier
+                .widthIn(min = 32.dp)
+                .fillMaxHeight()
+                .padding(vertical = 8.dp, horizontal = 4.dp)
+                .onSizeChanged { containerHeightPx = it.height }
+                .pointerInput(visibleLetters) {
+                    detectTapGestures { offset -> selectAtY(offset.y) }
+                }.pointerInput(visibleLetters) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset -> selectAtY(offset.y) },
+                        onVerticalDrag = { change, _ ->
+                            change.consume()
+                            selectAtY(change.position.y)
+                        },
+                    )
+                },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceEvenly,
     ) {
@@ -96,4 +99,3 @@ fun AlphabetIndexBar(
         }
     }
 }
-

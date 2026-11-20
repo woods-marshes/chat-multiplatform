@@ -25,7 +25,6 @@ class SearchViewModel(
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
-
     private val log = KotlinLogging.logger {}
 
     // User-facing strings for ViewModel-produced messages (no CompositionLocal here).
@@ -42,11 +41,12 @@ class SearchViewModel(
         // waiting for the debounced flow to catch up.
         if (query.trim().length < 2) {
             searchJob?.cancel()
-            _uiState.value = _uiState.value.copy(
-                results = emptyList(),
-                isLoading = false,
-                error = null,
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    results = emptyList(),
+                    isLoading = false,
+                    error = null,
+                )
         }
     }
 
@@ -59,11 +59,12 @@ class SearchViewModel(
     fun onSearchQuery(query: String) {
         searchJob?.cancel()
         if (query.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                results = emptyList(),
-                isLoading = false,
-                error = null,
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    results = emptyList(),
+                    isLoading = false,
+                    error = null,
+                )
             return
         }
         performSearch(query)
@@ -79,57 +80,66 @@ class SearchViewModel(
 
     private fun performSearch(query: String) {
         searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            when (searchType) {
-                SearchType.CONTACT -> runContactSearch(query)
-                SearchType.CONVERSATION -> runConversationSearch(query)
+        searchJob =
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+                when (searchType) {
+                    SearchType.CONTACT -> runContactSearch(query)
+                    SearchType.CONVERSATION -> runConversationSearch(query)
+                }
             }
-        }
     }
 
     private suspend fun runContactSearch(query: String) {
-        userRepository.searchUsers(query).onOk { users ->
-            _uiState.value = _uiState.value.copy(
-                results = users.map { user ->
-                    SearchResultUiModel.Contact(
-                        ContactUiModel(
-                            id = user.id,
-                            username = user.username,
-                            displayName = user.displayName,
-                            avatarUrl = user.avatarUrl,
-                            bio = user.bio,
-                        )
+        userRepository
+            .searchUsers(query)
+            .onOk { users ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        results =
+                            users.map { user ->
+                                SearchResultUiModel.Contact(
+                                    ContactUiModel(
+                                        id = user.id,
+                                        username = user.username,
+                                        displayName = user.displayName,
+                                        avatarUrl = user.avatarUrl,
+                                        bio = user.bio,
+                                    ),
+                                )
+                            },
+                        isLoading = false,
                     )
-                },
-                isLoading = false,
-            )
-        }.onErr { err ->
-            log.error { "[SearchVM] user search failed: $err" }
-            _uiState.value = _uiState.value.copy(isLoading = false, error = strings.searchFailed)
-        }
+            }.onErr { err ->
+                log.error { "[SearchVM] user search failed: $err" }
+                _uiState.value = _uiState.value.copy(isLoading = false, error = strings.searchFailed)
+            }
     }
 
     private suspend fun runConversationSearch(query: String) {
-        conversationRepository.searchGroups(query).onOk { groups ->
-            _uiState.value = _uiState.value.copy(
-                results = groups.map { group ->
-                    SearchResultUiModel.Conversation(
-                        ConversationUiModel(
-                            id = group.conversationId,
-                            type = ConversationType.GROUP,
-                            name = group.name,
-                            avatarUrl = group.avatarUrl,
-                            description = group.description,
-                            handle = group.handle,
-                        )
+        conversationRepository
+            .searchGroups(query)
+            .onOk { groups ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        results =
+                            groups.map { group ->
+                                SearchResultUiModel.Conversation(
+                                    ConversationUiModel(
+                                        id = group.conversationId,
+                                        type = ConversationType.GROUP,
+                                        name = group.name,
+                                        avatarUrl = group.avatarUrl,
+                                        description = group.description,
+                                        handle = group.handle,
+                                    ),
+                                )
+                            },
+                        isLoading = false,
                     )
-                },
-                isLoading = false,
-            )
-        }.onErr { err ->
-            log.error { "[SearchVM] group search failed: $err" }
-            _uiState.value = _uiState.value.copy(isLoading = false, error = strings.searchFailed)
-        }
+            }.onErr { err ->
+                log.error { "[SearchVM] group search failed: $err" }
+                _uiState.value = _uiState.value.copy(isLoading = false, error = strings.searchFailed)
+            }
     }
 }

@@ -34,12 +34,12 @@ import dev.nucleusframework.webview.web.rememberWebViewNavigator
 import dev.nucleusframework.webview.web.rememberWebViewState
 import dev.nucleusframework.webview.web.windows.WindowsWebView2NativeWebView
 import io.github.oshai.kotlinlogging.KotlinLogging
-import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.util.UUID
 
 private val json = Json { ignoreUnknownKeys = true }
 private val log = KotlinLogging.logger {}
@@ -60,10 +60,11 @@ actual fun TiptapViewerWebView(
         preparationFailed = false
         resources = null
         try {
-            resources = prepareDesktopWebViewResources(
-                shellName = "viewer",
-                content = Res.readBytes("files/viewer.html"),
-            )
+            resources =
+                prepareDesktopWebViewResources(
+                    shellName = "viewer",
+                    content = Res.readBytes("files/viewer.html"),
+                )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -154,64 +155,73 @@ private fun TiptapViewerWebViewContent(
 
     DisposableEffect(jsBridge, state) {
         var active = true
-        val scrollHandler = object : IJsMessageHandler {
-            override fun methodName(): String = "onScrollDirectionChanged"
+        val scrollHandler =
+            object : IJsMessageHandler {
+                override fun methodName(): String = "onScrollDirectionChanged"
 
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit,
-            ) {
-                val direction = runCatching {
-                    json.parseToJsonElement(message.params).jsonObject["direction"]?.jsonPrimitive?.content
-                }.getOrNull() ?: "up"
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit,
+                ) {
+                    val direction =
+                        runCatching {
+                            json
+                                .parseToJsonElement(message.params)
+                                .jsonObject["direction"]
+                                ?.jsonPrimitive
+                                ?.content
+                        }.getOrNull() ?: "up"
 
-                if (active) {
-                    if (direction == "up") currentOnScrollUp() else currentOnScrollDown()
-                }
-                callback("ok")
-            }
-        }
-
-        val readyHandler = object : IJsMessageHandler {
-            override fun methodName(): String = "onViewerReady"
-
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit,
-            ) {
-                log.info { "[viewer:$sessionId] bridge ready" }
-                if (active) isJsReady = true
-                callback("ok")
-            }
-        }
-
-        val contentResultHandler = object : IJsMessageHandler {
-            override fun methodName(): String = "onViewerContentResult"
-
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit,
-            ) {
-                val result = runCatching {
-                    val payload = json.parseToJsonElement(message.params).jsonObject
-                    payload["requestId"]?.jsonPrimitive?.content to
-                        payload["status"]?.jsonPrimitive?.content
-                }.getOrNull()
-                val id = result?.first
-                val status = result?.second
-                if (active && id == currentRequestId) {
-                    when (status) {
-                        "committed" -> completedRequestId = id
-                        "failed" -> failedRequestId = id
+                    if (active) {
+                        if (direction == "up") currentOnScrollUp() else currentOnScrollDown()
                     }
-                    log.info { "[viewer:$sessionId] content request=$id status=$status" }
+                    callback("ok")
                 }
-                callback("ok")
             }
-        }
+
+        val readyHandler =
+            object : IJsMessageHandler {
+                override fun methodName(): String = "onViewerReady"
+
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit,
+                ) {
+                    log.info { "[viewer:$sessionId] bridge ready" }
+                    if (active) isJsReady = true
+                    callback("ok")
+                }
+            }
+
+        val contentResultHandler =
+            object : IJsMessageHandler {
+                override fun methodName(): String = "onViewerContentResult"
+
+                override fun handle(
+                    message: JsMessage,
+                    navigator: WebViewNavigator?,
+                    callback: (String) -> Unit,
+                ) {
+                    val result =
+                        runCatching {
+                            val payload = json.parseToJsonElement(message.params).jsonObject
+                            payload["requestId"]?.jsonPrimitive?.content to
+                                payload["status"]?.jsonPrimitive?.content
+                        }.getOrNull()
+                    val id = result?.first
+                    val status = result?.second
+                    if (active && id == currentRequestId) {
+                        when (status) {
+                            "committed" -> completedRequestId = id
+                            "failed" -> failedRequestId = id
+                        }
+                        log.info { "[viewer:$sessionId] content request=$id status=$status" }
+                    }
+                    callback("ok")
+                }
+            }
         jsBridge.register(contentResultHandler)
         jsBridge.register(scrollHandler)
         jsBridge.register(readyHandler)
@@ -273,15 +283,17 @@ private fun TiptapViewerWebViewContent(
         }
         if (!isJsReady || completedRequestId != requestId) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center,
             ) {
                 val strings = LocalStrings.current
-                val hasError = (!isJsReady && readyTimedOut) ||
-                    failedRequestId == requestId ||
-                    timedOutRequestId == requestId
+                val hasError =
+                    (!isJsReady && readyTimedOut) ||
+                        failedRequestId == requestId ||
+                        timedOutRequestId == requestId
                 if (hasError) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(

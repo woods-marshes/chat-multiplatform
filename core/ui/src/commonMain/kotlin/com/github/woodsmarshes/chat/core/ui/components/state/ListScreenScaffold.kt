@@ -22,12 +22,13 @@ internal fun resolveListScreenState(
     isLoading: Boolean,
     hasError: Boolean,
     isEmpty: Boolean,
-): ListScreenState = when {
-    isLoading && isEmpty -> ListScreenState.LOADING
-    hasError && isEmpty -> ListScreenState.ERROR
-    isEmpty -> ListScreenState.EMPTY
-    else -> ListScreenState.CONTENT
-}
+): ListScreenState =
+    when {
+        isLoading && isEmpty -> ListScreenState.LOADING
+        hasError && isEmpty -> ListScreenState.ERROR
+        isEmpty -> ListScreenState.EMPTY
+        else -> ListScreenState.CONTENT
+    }
 
 /**
  * Shared Loading / Error / Empty / Content scaffold for list screens.
@@ -51,11 +52,13 @@ fun ListScreenScaffold(
     loadingContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    when (resolveListScreenState(
-        isLoading = isLoading,
-        hasError = error != null,
-        isEmpty = isEmpty,
-    )) {
+    when (
+        resolveListScreenState(
+            isLoading = isLoading,
+            hasError = error != null,
+            isEmpty = isEmpty,
+        )
+    ) {
         ListScreenState.LOADING -> {
             if (loadingContent != null) {
                 Box(modifier = modifier) { loadingContent() }
@@ -66,16 +69,25 @@ fun ListScreenScaffold(
                 )
             }
         }
-        ListScreenState.ERROR -> ErrorContent(
-            message = error ?: "",
-            onRetry = onRetry,
-            retryLabel = LocalStrings.current.retry,
-            modifier = modifier,
-        )
-        ListScreenState.EMPTY -> EmptyContent(
-            message = emptyMessage,
-            modifier = modifier,
-        )
-        ListScreenState.CONTENT -> Box(modifier = modifier) { content() }
+
+        ListScreenState.ERROR -> {
+            ErrorContent(
+                message = error ?: "",
+                onRetry = onRetry,
+                retryLabel = LocalStrings.current.retry,
+                modifier = modifier,
+            )
+        }
+
+        ListScreenState.EMPTY -> {
+            EmptyContent(
+                message = emptyMessage,
+                modifier = modifier,
+            )
+        }
+
+        ListScreenState.CONTENT -> {
+            Box(modifier = modifier) { content() }
+        }
     }
 }

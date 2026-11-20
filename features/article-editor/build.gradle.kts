@@ -8,7 +8,7 @@ plugins {
 kotlin {
     if (project.extra["enableAndroid"] as Boolean) {
         extensions.configure<com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryExtension> {
-            namespace = "com.github.woodsmarshes.chat.feature.article_editor"
+            namespace = "com.github.woodsmarshes.chat.feature.articleeditor"
         }
     }
 
@@ -41,7 +41,7 @@ kotlin {
 
 compose.resources {
     publicResClass = true
-    packageOfResClass = "com.github.woodsmarshes.chat.features.article_editor.resources"
+    packageOfResClass = "com.github.woodsmarshes.chat.features.articleeditor.resources"
     generateResClass = always
 }
 

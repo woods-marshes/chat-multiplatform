@@ -7,14 +7,18 @@ import io.ktor.server.application.install
 import io.ktor.server.plugins.cors.routing.CORS
 
 fun main(args: Array<String>) =
-    io.ktor.server.netty.EngineMain.main(args)
-
+    io.ktor.server.netty.EngineMain
+        .main(args)
 
 fun Application.module() {
     configureFrameworks()
     configureSerialization()
     install(CORS) {
-        val isDev = this@module.environment.config.propertyOrNull("ktor.development")?.getString() == "true"
+        val isDev =
+            this@module
+                .environment.config
+                .propertyOrNull("ktor.development")
+                ?.getString() == "true"
         if (isDev) {
             anyHost()
         } else {

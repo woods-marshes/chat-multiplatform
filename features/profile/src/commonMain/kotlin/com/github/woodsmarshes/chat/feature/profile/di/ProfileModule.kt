@@ -4,6 +4,7 @@ import com.github.woodsmarshes.chat.feature.profile.ui.ProfileViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
-val profileModule = module {
-    viewModel { (userId: String) -> ProfileViewModel(userId, get(), get(), get()) }
-}
+val profileModule =
+    module {
+        viewModel { (userId: String) -> ProfileViewModel(userId, get(), get(), get()) }
+    }

@@ -30,7 +30,6 @@ class ContactsViewModel(
     private val userRepository: UserRepository,
     private val conversationRepository: ConversationRepository,
 ) : ViewModel() {
-
     private val strings
         get() = getLocaleStrings()
 
@@ -60,46 +59,52 @@ class ContactsViewModel(
 
     private fun observeFriends() {
         observeFriendsJob?.cancel()
-        observeFriendsJob = viewModelScope.launch {
-            contactRepository.getFriendsFlow()
-                .onStart { _uiState.update { it.copy(isLoading = it.contacts.isEmpty(), error = null) } }
-                .catch { e ->
-                    log.error(e) { "[Contacts] loading friends failed" }
-                    _uiState.update { it.copy(isLoading = false, error = strings.loadFailed) }
-                }
-                .collect { pairs ->
-                    val contacts = pairs.map { (contact, user) ->
-                        ContactUiModel(
-                            id = user.id,
-                            username = user.username,
-                            displayName = contact.alias?.takeIf { it.isNotBlank() }
-                                ?: contact.nickname?.takeIf { it.isNotBlank() }
-                                ?: user.displayName,
-                            avatarUrl = user.avatarUrl,
-                            bio = user.bio,
-                        )
+        observeFriendsJob =
+            viewModelScope.launch {
+                contactRepository
+                    .getFriendsFlow()
+                    .onStart { _uiState.update { it.copy(isLoading = it.contacts.isEmpty(), error = null) } }
+                    .catch { e ->
+                        log.error(e) { "[Contacts] loading friends failed" }
+                        _uiState.update { it.copy(isLoading = false, error = strings.loadFailed) }
+                    }.collect { pairs ->
+                        val contacts =
+                            pairs.map { (contact, user) ->
+                                ContactUiModel(
+                                    id = user.id,
+                                    username = user.username,
+                                    displayName =
+                                        contact.alias?.takeIf { it.isNotBlank() }
+                                            ?: contact.nickname?.takeIf { it.isNotBlank() }
+                                            ?: user.displayName,
+                                    avatarUrl = user.avatarUrl,
+                                    bio = user.bio,
+                                )
+                            }
+                        _uiState.update { it.copy(contacts = contacts, isLoading = false, error = null) }
                     }
-                    _uiState.update { it.copy(contacts = contacts, isLoading = false, error = null) }
-                }
-        }
+            }
     }
 
     private fun observeBlockedContacts() {
         viewModelScope.launch {
-            contactRepository.getBlockedContactsFlow()
+            contactRepository
+                .getBlockedContactsFlow()
                 .catch { e -> log.warn(e) { "[Contacts] observing blocked contacts failed" } }
                 .collect { pairs ->
-                    val blocked = pairs.map { (contact, user) ->
-                        ContactUiModel(
-                            id = user.id,
-                            username = user.username,
-                            displayName = contact.alias?.takeIf { it.isNotBlank() }
-                                ?: contact.nickname?.takeIf { it.isNotBlank() }
-                                ?: user.displayName,
-                            avatarUrl = user.avatarUrl,
-                            bio = user.bio,
-                        )
-                    }
+                    val blocked =
+                        pairs.map { (contact, user) ->
+                            ContactUiModel(
+                                id = user.id,
+                                username = user.username,
+                                displayName =
+                                    contact.alias?.takeIf { it.isNotBlank() }
+                                        ?: contact.nickname?.takeIf { it.isNotBlank() }
+                                        ?: user.displayName,
+                                avatarUrl = user.avatarUrl,
+                                bio = user.bio,
+                            )
+                        }
                     _uiState.update { it.copy(blockedContacts = blocked) }
                 }
         }
@@ -116,16 +121,18 @@ class ContactsViewModel(
                 log.warn(e) { "[Contacts] observing friend requests failed" }
             }.collect { (requests, me) ->
                 val myId = me?.id
-                val received = if (myId != null) {
-                    requests.filter { it.receiverId == myId }
-                } else {
-                    emptyList()
-                }
-                val sent = if (myId != null) {
-                    requests.filter { it.senderId == myId }
-                } else {
-                    emptyList()
-                }
+                val received =
+                    if (myId != null) {
+                        requests.filter { it.receiverId == myId }
+                    } else {
+                        emptyList()
+                    }
+                val sent =
+                    if (myId != null) {
+                        requests.filter { it.senderId == myId }
+                    } else {
+                        emptyList()
+                    }
                 val pendingCount = received.count { it.status == RequestStatus.PENDING }
                 _uiState.update {
                     it.copy(
@@ -134,9 +141,10 @@ class ContactsViewModel(
                         pendingReceivedCount = pendingCount,
                     )
                 }
-                val userIdsToFetch = (received.map { it.senderId } + sent.map { it.receiverId })
-                    .distinct()
-                    .filter { it !in _uiState.value.requestUsers }
+                val userIdsToFetch =
+                    (received.map { it.senderId } + sent.map { it.receiverId })
+                        .distinct()
+                        .filter { it !in _uiState.value.requestUsers }
                 if (userIdsToFetch.isNotEmpty()) {
                     val resolved = mutableMapOf<Uuid, User>()
                     userIdsToFetch.forEach { uid ->
@@ -186,7 +194,9 @@ class ContactsViewModel(
                         pendingGroupRequestCount = incoming.count { it.status == RequestStatus.PENDING },
                     )
                 }
-                incoming.map { it.applicantId }.distinct()
+                incoming
+                    .map { it.applicantId }
+                    .distinct()
                     .filter { it !in _uiState.value.requestUsers }
                     .forEach { uid ->
                         viewModelScope.launch {
@@ -195,7 +205,9 @@ class ContactsViewModel(
                             }
                         }
                     }
-                incoming.map { it.conversationId }.distinct()
+                incoming
+                    .map { it.conversationId }
+                    .distinct()
                     .filter { it !in _uiState.value.groupNames }
                     .forEach { cid ->
                         viewModelScope.launch { resolveGroupName(convRepo, cid) }
@@ -205,7 +217,9 @@ class ContactsViewModel(
         viewModelScope.launch {
             convRepo.observeSentGroupRequests().collect { sent ->
                 _uiState.update { it.copy(sentGroupRequests = sent) }
-                sent.map { it.conversationId }.distinct()
+                sent
+                    .map { it.conversationId }
+                    .distinct()
                     .filter { it !in _uiState.value.groupNames }
                     .forEach { cid ->
                         viewModelScope.launch { resolveGroupName(convRepo, cid) }
@@ -214,7 +228,10 @@ class ContactsViewModel(
         }
     }
 
-    private suspend fun resolveGroupName(convRepo: ConversationRepository, conversationId: Uuid) {
+    private suspend fun resolveGroupName(
+        convRepo: ConversationRepository,
+        conversationId: Uuid,
+    ) {
         val cached = convRepo.getGroupProfileFlow(conversationId).firstOrNull()
         if (cached != null) {
             _uiState.update { it.copy(groupNames = it.groupNames + (conversationId to cached.name)) }
@@ -273,24 +290,31 @@ class ContactsViewModel(
         _uiState.update { it.copy(newFriendsTabIndex = index) }
     }
 
-    fun handleFriendRequest(requestId: Uuid, approve: Boolean) {
+    fun handleFriendRequest(
+        requestId: Uuid,
+        approve: Boolean,
+    ) {
         viewModelScope.launch {
-            contactRepository.handleFriendRequest(requestId, approve).onOk {
-                contactRepository.syncFriends()
-                contactRepository.syncContactRequests()
-            }.onErr {
-                _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
-            }
+            contactRepository
+                .handleFriendRequest(requestId, approve)
+                .onOk {
+                    contactRepository.syncFriends()
+                    contactRepository.syncContactRequests()
+                }.onErr {
+                    _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
+                }
         }
     }
 
     fun cancelFriendRequest(requestId: Uuid) {
         viewModelScope.launch {
-            contactRepository.cancelFriendRequest(requestId).onOk {
-                contactRepository.syncContactRequests()
-            }.onErr {
-                _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
-            }
+            contactRepository
+                .cancelFriendRequest(requestId)
+                .onOk {
+                    contactRepository.syncContactRequests()
+                }.onErr {
+                    _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -309,14 +333,20 @@ class ContactsViewModel(
         _uiState.update { it.copy(groupNotificationsTabIndex = index) }
     }
 
-    fun handleGroupJoinRequest(conversationId: Uuid, requestId: Uuid, approve: Boolean) {
+    fun handleGroupJoinRequest(
+        conversationId: Uuid,
+        requestId: Uuid,
+        approve: Boolean,
+    ) {
         val convRepo = conversationRepository
         viewModelScope.launch {
-            convRepo.handleGroupJoinRequest(conversationId, requestId, approve).onOk {
-                refreshGroupNotifications()
-            }.onErr {
-                _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
-            }
+            convRepo
+                .handleGroupJoinRequest(conversationId, requestId, approve)
+                .onOk {
+                    refreshGroupNotifications()
+                }.onErr {
+                    _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -332,11 +362,13 @@ class ContactsViewModel(
 
     fun unblockUser(userId: Uuid) {
         viewModelScope.launch {
-            contactRepository.unblockUser(userId).onOk {
-                contactRepository.syncFriends()
-            }.onErr {
-                _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
-            }
+            contactRepository
+                .unblockUser(userId)
+                .onOk {
+                    contactRepository.syncFriends()
+                }.onErr {
+                    _uiState.update { it.copy(actionMessage = strings.authOperationFailed) }
+                }
         }
     }
 
@@ -356,27 +388,31 @@ class ContactsViewModel(
             return
         }
         lastSearchQuery = query
-        searchJob = viewModelScope.launch {
-            _uiState.update { it.copy(isSearching = true, searchError = null) }
-            userRepository.searchUsers(query).onOk { users ->
-                _uiState.update {
-                    it.copy(
-                        searchResults = users.map { user ->
-                            ContactUiModel(
-                                id = user.id,
-                                username = user.username,
-                                displayName = user.displayName,
-                                avatarUrl = user.avatarUrl,
-                                bio = user.bio,
+        searchJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(isSearching = true, searchError = null) }
+                userRepository
+                    .searchUsers(query)
+                    .onOk { users ->
+                        _uiState.update {
+                            it.copy(
+                                searchResults =
+                                    users.map { user ->
+                                        ContactUiModel(
+                                            id = user.id,
+                                            username = user.username,
+                                            displayName = user.displayName,
+                                            avatarUrl = user.avatarUrl,
+                                            bio = user.bio,
+                                        )
+                                    },
+                                isSearching = false,
                             )
-                        },
-                        isSearching = false,
-                    )
-                }
-            }.onErr {
-                _uiState.update { it.copy(isSearching = false, searchError = strings.searchFailed) }
+                        }
+                    }.onErr {
+                        _uiState.update { it.copy(isSearching = false, searchError = strings.searchFailed) }
+                    }
             }
-        }
     }
 
     /** Re-runs the search for the last query (error retry affordance). */
@@ -386,4 +422,3 @@ class ContactsViewModel(
         }
     }
 }
-

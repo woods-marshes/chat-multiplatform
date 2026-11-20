@@ -11,11 +11,11 @@ interface HttpEventBus {
 }
 
 class HttpEventBusImpl : HttpEventBus {
-    private val _channel = Channel<HttpErrorEvent>(Channel.UNLIMITED)
+    private val channel = Channel<HttpErrorEvent>(Channel.UNLIMITED)
 
-    override val errorEvents: Flow<HttpErrorEvent> = _channel.receiveAsFlow()
+    override val errorEvents: Flow<HttpErrorEvent> = channel.receiveAsFlow()
 
     override suspend fun sendError(event: HttpErrorEvent) {
-        _channel.send(event)
+        channel.send(event)
     }
 }

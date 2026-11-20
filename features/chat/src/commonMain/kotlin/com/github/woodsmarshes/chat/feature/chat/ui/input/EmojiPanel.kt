@@ -22,14 +22,57 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.woodsmarshes.chat.core.ui.theme.LocalBubbleColors
 
-private val commonEmojis = listOf(
-    "😀", "😂", "🤣", "😊", "😍", "🥰", "😘", "😜",
-    "🤔", "😅", "😢", "😭", "😤", "🥺", "😱", "🤯",
-    "👍", "👎", "👏", "🙌", "💪", "🔥", "⭐", "❤️",
-    "💔", "🎉", "🎂", "🍰", "☕", "🍕", "🎵", "📷",
-    "🏠", "✈️", "🚗", "⏰", "💰", "💡", "📌", "✅",
-    "❌", "⚠️", "💯", "🙏", "🤝", "👋", "🫡", "💀",
-)
+private val commonEmojis =
+    listOf(
+        "😀",
+        "😂",
+        "🤣",
+        "😊",
+        "😍",
+        "🥰",
+        "😘",
+        "😜",
+        "🤔",
+        "😅",
+        "😢",
+        "😭",
+        "😤",
+        "🥺",
+        "😱",
+        "🤯",
+        "👍",
+        "👎",
+        "👏",
+        "🙌",
+        "💪",
+        "🔥",
+        "⭐",
+        "❤️",
+        "💔",
+        "🎉",
+        "🎂",
+        "🍰",
+        "☕",
+        "🍕",
+        "🎵",
+        "📷",
+        "🏠",
+        "✈️",
+        "🚗",
+        "⏰",
+        "💰",
+        "💡",
+        "📌",
+        "✅",
+        "❌",
+        "⚠️",
+        "💯",
+        "🙏",
+        "🤝",
+        "👋",
+        "🫡",
+        "💀",
+    )
 
 @Composable
 fun EmojiPanel(
@@ -40,10 +83,11 @@ fun EmojiPanel(
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 48.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .background(bubbleColors.panelBackground)
-            .padding(4.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(bubbleColors.panelBackground)
+                .padding(4.dp),
         contentPadding = PaddingValues(4.dp),
     ) {
         items(
@@ -51,10 +95,11 @@ fun EmojiPanel(
             key = { it },
         ) { emoji ->
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onEmojiSelected(emoji) },
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onEmojiSelected(emoji) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

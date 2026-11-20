@@ -1,4 +1,4 @@
-package com.github.woodsmarshes.chat.feature.article_editor.ui
+package com.github.woodsmarshes.chat.feature.articleeditor.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
-import com.github.woodsmarshes.chat.features.article_editor.resources.Res
+import com.github.woodsmarshes.chat.features.articleeditor.resources.Res
 import dev.nucleusframework.webview.jsbridge.IJsMessageHandler
 import dev.nucleusframework.webview.jsbridge.JsMessage
 import dev.nucleusframework.webview.jsbridge.rememberWebViewJsBridge
@@ -107,62 +107,75 @@ actual fun TiptapEditorWebView(
         }
 
         DisposableEffect(jsBridge, state) {
-            val titleHandler = object : IJsMessageHandler {
-                override fun methodName(): String = "onTitleChanged"
+            val titleHandler =
+                object : IJsMessageHandler {
+                    override fun methodName(): String = "onTitleChanged"
 
-                override fun handle(
-                    message: JsMessage,
-                    navigator: WebViewNavigator?,
-                    callback: (String) -> Unit,
-                ) {
-                    // A malformed payload must be dropped, not turned into an empty title:
-                    // the fallback would be persisted as the article title on the next save.
-                    val title = runCatching {
-                        json.parseToJsonElement(message.params).jsonObject["title"]?.jsonPrimitive?.content
-                    }.getOrNull()
-                    if (title == null) {
-                        log.warn { "[editor] ignoring malformed onTitleChanged payload" }
-                    } else {
-                        currentOnTitleChanged(title)
+                    override fun handle(
+                        message: JsMessage,
+                        navigator: WebViewNavigator?,
+                        callback: (String) -> Unit,
+                    ) {
+                        // A malformed payload must be dropped, not turned into an empty title:
+                        // the fallback would be persisted as the article title on the next save.
+                        val title =
+                            runCatching {
+                                json
+                                    .parseToJsonElement(message.params)
+                                    .jsonObject["title"]
+                                    ?.jsonPrimitive
+                                    ?.content
+                            }.getOrNull()
+                        if (title == null) {
+                            log.warn { "[editor] ignoring malformed onTitleChanged payload" }
+                        } else {
+                            currentOnTitleChanged(title)
+                        }
+                        callback("ok")
                     }
-                    callback("ok")
                 }
-            }
 
-            val contentHandler = object : IJsMessageHandler {
-                override fun methodName(): String = "onContentChanged"
+            val contentHandler =
+                object : IJsMessageHandler {
+                    override fun methodName(): String = "onContentChanged"
 
-                override fun handle(
-                    message: JsMessage,
-                    navigator: WebViewNavigator?,
-                    callback: (String) -> Unit,
-                ) {
-                    // A malformed payload must be dropped, not replaced with "{}": the fallback
-                    // would become the article body on the next save and wipe the real content.
-                    val jsonStr = runCatching {
-                        json.parseToJsonElement(message.params).jsonObject["json"]?.jsonPrimitive?.content
-                    }.getOrNull()
-                    if (jsonStr == null) {
-                        log.warn { "[editor] ignoring malformed onContentChanged payload" }
-                    } else {
-                        currentOnContentChanged(jsonStr)
+                    override fun handle(
+                        message: JsMessage,
+                        navigator: WebViewNavigator?,
+                        callback: (String) -> Unit,
+                    ) {
+                        // A malformed payload must be dropped, not replaced with "{}": the fallback
+                        // would become the article body on the next save and wipe the real content.
+                        val jsonStr =
+                            runCatching {
+                                json
+                                    .parseToJsonElement(message.params)
+                                    .jsonObject["json"]
+                                    ?.jsonPrimitive
+                                    ?.content
+                            }.getOrNull()
+                        if (jsonStr == null) {
+                            log.warn { "[editor] ignoring malformed onContentChanged payload" }
+                        } else {
+                            currentOnContentChanged(jsonStr)
+                        }
+                        callback("ok")
                     }
-                    callback("ok")
                 }
-            }
 
-            val readyHandler = object : IJsMessageHandler {
-                override fun methodName(): String = "onEditorReady"
+            val readyHandler =
+                object : IJsMessageHandler {
+                    override fun methodName(): String = "onEditorReady"
 
-                override fun handle(
-                    message: JsMessage,
-                    navigator: WebViewNavigator?,
-                    callback: (String) -> Unit,
-                ) {
-                    isJsReady = true
-                    callback("ok")
+                    override fun handle(
+                        message: JsMessage,
+                        navigator: WebViewNavigator?,
+                        callback: (String) -> Unit,
+                    ) {
+                        isJsReady = true
+                        callback("ok")
+                    }
                 }
-            }
 
             jsBridge.register(titleHandler)
             jsBridge.register(contentHandler)
@@ -179,15 +192,16 @@ actual fun TiptapEditorWebView(
         // Only inject once when JS is ready — NEVER re-inject while user is typing
         LaunchedEffect(isJsReady) {
             if (isJsReady) {
-                val jsCall = buildEditorInitializeScript(
-                    initialTitle = initialTitle,
-                    initialJsonStr = initialJsonStr,
-                    collabUrl = collabUrl,
-                    roomId = roomId,
-                    token = token,
-                    userInfoName = userInfoName,
-                    userInfoColor = userInfoColor,
-                )
+                val jsCall =
+                    buildEditorInitializeScript(
+                        initialTitle = initialTitle,
+                        initialJsonStr = initialJsonStr,
+                        collabUrl = collabUrl,
+                        roomId = roomId,
+                        token = token,
+                        userInfoName = userInfoName,
+                        userInfoColor = userInfoColor,
+                    )
                 navigator.evaluateJavaScript(jsCall)
             }
         }

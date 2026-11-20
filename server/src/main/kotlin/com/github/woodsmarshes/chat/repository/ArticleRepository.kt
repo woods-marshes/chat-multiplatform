@@ -64,7 +64,6 @@ interface ArticleRepository {
 }
 
 class ArticleDataSourceImpl : ArticleRepository {
-
     override suspend fun create(
         authorId: Uuid,
         title: String?,
@@ -72,58 +71,63 @@ class ArticleDataSourceImpl : ArticleRepository {
         status: ArticleStatus,
         excerpt: String?,
         coverImage: String?,
-    ): Article? = dbQuery {
-        val now = Clock.System.now()
-        Articles.insert {
-            it[this.title] = title ?: ""
-            it[this.content] = content
-            it[this.authorId] = authorId
-            it[this.status] = status
-            it[this.excerpt] = excerpt
-            it[this.createdAt] = now
-            it[this.updatedAt] = now
-            it[this.coverImage] = coverImage
+    ): Article? =
+        dbQuery {
+            val now = Clock.System.now()
+            Articles
+                .insert {
+                    it[this.title] = title ?: ""
+                    it[this.content] = content
+                    it[this.authorId] = authorId
+                    it[this.status] = status
+                    it[this.excerpt] = excerpt
+                    it[this.createdAt] = now
+                    it[this.updatedAt] = now
+                    it[this.coverImage] = coverImage
+                }.resultedValues
+                ?.singleOrNull()
+                ?.toArticle(
+                    Users
+                        .selectAll()
+                        .where { Users.id eq authorId }
+                        .map { it.toSimpleUser() }
+                        .singleOrNull(),
+                )
         }
-            .resultedValues
-            ?.singleOrNull()
-            ?.toArticle(
-                Users
-                    .selectAll()
-                    .where { Users.id eq authorId }
-                    .map{ it.toSimpleUser() }
-                    .singleOrNull()
-            )
-    }
 
-    override suspend fun getById(id: Uuid): Article? = dbQuery {
-        (Articles innerJoin Users)
-            .selectAll()
-            .where {
-                Articles.id eq id
-            }
-            .map { it.toArticle() }
-            .singleOrNull()
-    }
+    override suspend fun getById(id: Uuid): Article? =
+        dbQuery {
+            (Articles innerJoin Users)
+                .selectAll()
+                .where {
+                    Articles.id eq id
+                }.map { it.toArticle() }
+                .singleOrNull()
+        }
 
     override suspend fun listAll(
         beforeId: Uuid?,
         limit: Int,
         getMyArticle: Boolean,
         authorId: Uuid?,
-    ): List<Article> = dbQuery {
-        val query = (Articles innerJoin Users)
-            .selectAll()
-            .where {
-                Articles.deletedAt.isNull()
+    ): List<Article> =
+        dbQuery {
+            val query =
+                (Articles innerJoin Users)
+                    .selectAll()
+                    .where {
+                        Articles.deletedAt.isNull()
+                    }
+            if (!getMyArticle) {
+                query.andWhere { Articles.status eq ArticleStatus.PUBLISHED }
             }
-        if (!getMyArticle) { query.andWhere { Articles.status eq ArticleStatus.PUBLISHED } }
-        beforeId?.let { query.andWhere { Articles.id less it } }
-        authorId?.let { query.andWhere { Articles.authorId eq it } }
-        query
-            .orderBy(Articles.id, SortOrder.DESC)
-            .limit(limit)
-            .map { it.toArticle() }
-    }
+            beforeId?.let { query.andWhere { Articles.id less it } }
+            authorId?.let { query.andWhere { Articles.authorId eq it } }
+            query
+                .orderBy(Articles.id, SortOrder.DESC)
+                .limit(limit)
+                .map { it.toArticle() }
+        }
 
     override suspend fun update(
         id: Uuid,
@@ -132,23 +136,25 @@ class ArticleDataSourceImpl : ArticleRepository {
         status: ArticleStatus?,
         excerpt: String?,
         coverImage: String?,
-    ): Boolean = dbQuery {
-        val now = Clock.System.now()
-        Articles.update(where = { Articles.id eq id }) {
-            if (title != null) it[this.title] = title
-            if (content != null) it[this.content] = content
-            if (status != null) it[this.status] = status
-            if (excerpt != null) it[this.excerpt] = excerpt
-            if (coverImage != null) it[this.coverImage] = coverImage
-            it[this.updatedAt] = now
-            if (status == ArticleStatus.PUBLISHED) {
-                it[Articles.publishedAt] = coalesce(
-                    Articles.publishedAt,
-                    timestampParam(now)
-                )
-            }
-        } > 0
-    }
+    ): Boolean =
+        dbQuery {
+            val now = Clock.System.now()
+            Articles.update(where = { Articles.id eq id }) {
+                if (title != null) it[this.title] = title
+                if (content != null) it[this.content] = content
+                if (status != null) it[this.status] = status
+                if (excerpt != null) it[this.excerpt] = excerpt
+                if (coverImage != null) it[this.coverImage] = coverImage
+                it[this.updatedAt] = now
+                if (status == ArticleStatus.PUBLISHED) {
+                    it[Articles.publishedAt] =
+                        coalesce(
+                            Articles.publishedAt,
+                            timestampParam(now),
+                        )
+                }
+            } > 0
+        }
 
     override suspend fun save(
         existing: Article?,
@@ -159,48 +165,50 @@ class ArticleDataSourceImpl : ArticleRepository {
         status: ArticleStatus,
         excerpt: String?,
         coverImage: String?,
-    ): Article? = dbQuery {
-        val now = Clock.System.now()
+    ): Article? =
+        dbQuery {
+            val now = Clock.System.now()
 
-        if (existing != null) {
-            Articles.update(where = { Articles.id eq id }) {
-                it[this.status] = status
-                it[this.updatedAt] = now
-                if (content != null) it[this.content] = content
-                if (title != null) it[this.title] = title
-                if (excerpt != null) it[this.excerpt] = excerpt
-                if (coverImage != null) it[this.coverImage] = coverImage
-                if (status == ArticleStatus.PUBLISHED) {
-                    it[Articles.publishedAt] = existing.publishedAt ?: now
+            if (existing != null) {
+                Articles.update(where = { Articles.id eq id }) {
+                    it[this.status] = status
+                    it[this.updatedAt] = now
+                    if (content != null) it[this.content] = content
+                    if (title != null) it[this.title] = title
+                    if (excerpt != null) it[this.excerpt] = excerpt
+                    if (coverImage != null) it[this.coverImage] = coverImage
+                    if (status == ArticleStatus.PUBLISHED) {
+                        it[Articles.publishedAt] = existing.publishedAt ?: now
+                    }
+                }
+            } else {
+                if (content == null) return@dbQuery null
+                val pubAt = if (status == ArticleStatus.PUBLISHED) now else null
+                Articles.insert {
+                    it[this.id] = id
+                    it[this.title] = title ?: ""
+                    it[this.content] = content
+                    it[this.authorId] = userId
+                    it[this.status] = status
+                    it[this.excerpt] = excerpt
+                    it[this.createdAt] = now
+                    it[this.updatedAt] = now
+                    it[this.publishedAt] = pubAt
+                    it[this.coverImage] = coverImage
                 }
             }
-        } else {
-            if (content == null) return@dbQuery null
-            val pubAt = if (status == ArticleStatus.PUBLISHED) now else null
-            Articles.insert {
-                it[this.id] = id
-                it[this.title] = title ?: ""
-                it[this.content] = content
-                it[this.authorId] = userId
-                it[this.status] = status
-                it[this.excerpt] = excerpt
-                it[this.createdAt] = now
-                it[this.updatedAt] = now
-                it[this.publishedAt] = pubAt
-                it[this.coverImage] = coverImage
-            }
+
+            (Articles innerJoin Users)
+                .selectAll()
+                .where { Articles.id eq id }
+                .map { it.toArticle() }
+                .singleOrNull()
         }
 
-        (Articles innerJoin Users)
-            .selectAll()
-            .where { Articles.id eq id }
-            .map { it.toArticle() }
-            .singleOrNull()
-    }
-
-    override suspend fun delete(id: Uuid): Boolean = dbQuery {
-        Articles.update(where = { Articles.id eq id }) {
-            it[this.deletedAt] = Clock.System.now()
-        } > 0
-    }
+    override suspend fun delete(id: Uuid): Boolean =
+        dbQuery {
+            Articles.update(where = { Articles.id eq id }) {
+                it[this.deletedAt] = Clock.System.now()
+            } > 0
+        }
 }

@@ -6,7 +6,9 @@ import com.github.woodsmarshes.chat.feature.profile.ui.ProfileScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ProfileNavKey(val userId: String) : NavKey
+data class ProfileNavKey(
+    val userId: String,
+) : NavKey
 
 /**
  * Contextual user-profile route opened from inside an active [ChatScreen];
@@ -15,7 +17,9 @@ data class ProfileNavKey(val userId: String) : NavKey
  * primary `detailPane`.
  */
 @Serializable
-data class ChatProfileNavKey(val userId: String) : NavKey
+data class ChatProfileNavKey(
+    val userId: String,
+) : NavKey
 
 fun EntryProviderScope<NavKey>.profileEntry(
     onBack: () -> Unit,

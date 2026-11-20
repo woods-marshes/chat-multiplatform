@@ -1,9 +1,9 @@
 package com.github.woodsmarshes.chat.app
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -11,6 +11,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,18 +24,20 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.WindowAdaptiveInfo
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
@@ -40,30 +47,23 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
-import androidx.compose.material3.adaptive.WindowAdaptiveInfo
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass
 import com.github.woodsmarshes.chat.app.navigation.AppTransitions
@@ -77,48 +77,48 @@ import com.github.woodsmarshes.chat.core.navigation.Navigator
 import com.github.woodsmarshes.chat.core.navigation.rememberNavigationState
 import com.github.woodsmarshes.chat.core.navigation.toEntries
 import com.github.woodsmarshes.chat.core.ui.components.AppProgressIndicator
+import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
 import com.github.woodsmarshes.chat.core.ui.components.avatar.UserAvatar
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarHost
 import com.github.woodsmarshes.chat.core.ui.components.feedback.AppSnackbarState
-import com.github.woodsmarshes.chat.core.ui.components.LocalAccountAffordance
 import com.github.woodsmarshes.chat.core.ui.components.motion.LocalAppSharedTransitionScope
 import com.github.woodsmarshes.chat.core.ui.components.state.ErrorContent
 import com.github.woodsmarshes.chat.core.ui.resources.LocalStrings
 import com.github.woodsmarshes.chat.core.ui.theme.isMiuixTheme
-import com.github.woodsmarshes.chat.feature.article.navigation.articleDetailEntry
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleDetailNavKey
-import com.github.woodsmarshes.chat.feature.article.navigation.articleListEntry
 import com.github.woodsmarshes.chat.feature.article.navigation.ArticleListNavKey
-import com.github.woodsmarshes.chat.feature.article_editor.navigation.ArticleEditorNavKey
-import com.github.woodsmarshes.chat.feature.article_editor.navigation.editorEntry
+import com.github.woodsmarshes.chat.feature.article.navigation.articleDetailEntry
+import com.github.woodsmarshes.chat.feature.article.navigation.articleListEntry
+import com.github.woodsmarshes.chat.feature.articleeditor.navigation.ArticleEditorNavKey
+import com.github.woodsmarshes.chat.feature.articleeditor.navigation.editorEntry
 import com.github.woodsmarshes.chat.feature.auth.ui.AuthScreen
-import com.github.woodsmarshes.chat.feature.chat.navigation.chatEntry
 import com.github.woodsmarshes.chat.feature.chat.navigation.ChatNavKey
-import com.github.woodsmarshes.chat.feature.contacts.navigation.contactsEntry
+import com.github.woodsmarshes.chat.feature.chat.navigation.chatEntry
 import com.github.woodsmarshes.chat.feature.contacts.navigation.ContactsNavKey
+import com.github.woodsmarshes.chat.feature.contacts.navigation.contactsEntry
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ChatGroupInfoNavKey
-import com.github.woodsmarshes.chat.feature.conversations.navigation.conversationsEntry
 import com.github.woodsmarshes.chat.feature.conversations.navigation.ConversationsNavKey
-import com.github.woodsmarshes.chat.feature.conversations.navigation.groupInfoEntry
 import com.github.woodsmarshes.chat.feature.conversations.navigation.GroupInfoNavKey
+import com.github.woodsmarshes.chat.feature.conversations.navigation.conversationsEntry
+import com.github.woodsmarshes.chat.feature.conversations.navigation.groupInfoEntry
 import com.github.woodsmarshes.chat.feature.profile.navigation.ChatProfileNavKey
-import com.github.woodsmarshes.chat.feature.profile.navigation.profileEntry
 import com.github.woodsmarshes.chat.feature.profile.navigation.ProfileNavKey
-import com.github.woodsmarshes.chat.feature.search.navigation.searchEntry
+import com.github.woodsmarshes.chat.feature.profile.navigation.profileEntry
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchNavKey
 import com.github.woodsmarshes.chat.feature.search.navigation.SearchType
+import com.github.woodsmarshes.chat.feature.search.navigation.searchEntry
 import com.github.woodsmarshes.chat.feature.settings.model.SettingsCategory
 import com.github.woodsmarshes.chat.feature.settings.navigation.ChatEditProfileNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.EditProfileNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.OpenSourceLicensesNavKey
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsDetailNavKey
-import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
 import com.github.woodsmarshes.chat.feature.settings.navigation.SettingsNavKey
+import com.github.woodsmarshes.chat.feature.settings.navigation.settingsEntry
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationRail as MiuixNavigationRail
 import top.yukonga.miuix.kmp.basic.NavigationRailItem as MiuixNavigationRailItem
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun AppNavigationChrome(
@@ -136,7 +136,6 @@ internal fun AppNavigationChrome(
     val strings = LocalStrings.current
     Box(modifier = modifier) {
         CompositionLocalProvider(LocalAccountAffordance provides accountAffordance) {
-
             if (!isMediumOrLarger) {
                 CompactNavigationLayout(
                     showNavigation = showNavigationSuite,
@@ -204,8 +203,12 @@ internal fun AppNavigationChrome(
                                 onClick = { selectTopLevelItem(item.navKey) },
                                 icon = {
                                     Icon(
-                                        imageVector = if (selected) item.selectedIcon
-                                        else item.unselectedIcon,
+                                        imageVector =
+                                            if (selected) {
+                                                item.selectedIcon
+                                            } else {
+                                                item.unselectedIcon
+                                            },
                                         contentDescription = item.label(strings),
                                     )
                                 },
@@ -232,13 +235,14 @@ internal fun AccountRailFooter(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .navigationBarsPadding()
-            .padding(start = 10.dp, bottom = 12.dp)
-            .width(60.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = openProfile)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+        modifier =
+            modifier
+                .navigationBarsPadding()
+                .padding(start = 10.dp, bottom = 12.dp)
+                .width(60.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = openProfile)
+                .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         UserAvatar(
@@ -248,8 +252,9 @@ internal fun AccountRailFooter(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = currentUser?.displayName?.ifEmpty { null }
-                ?: currentUser?.username ?: "",
+            text =
+                currentUser?.displayName?.ifEmpty { null }
+                    ?: currentUser?.username ?: "",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
