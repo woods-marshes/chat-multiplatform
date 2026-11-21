@@ -39,6 +39,11 @@ dependencyResolutionManagement {
             }
         }
 
+        // Google's Maven Central mirror. repo.maven.apache.org sits behind
+        // Cloudflare and intermittently fails from GitHub-hosted runners,
+        // which breaks resolution of newly added dependencies. The mirror
+        // serves byte-identical artifacts; mavenCentral() stays as fallback.
+        maven("https://maven-central.storage-download.googleapis.com/maven2/")
         mavenCentral()
         maven("https://packages.confluent.io/maven/")
         maven("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/kotlin-js-wrappers")
